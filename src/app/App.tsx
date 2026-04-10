@@ -7,6 +7,7 @@ import { AuthProvider } from "../features/auth/auth";
 
 export function App() {
   const queryClient = useMemo(() => new QueryClient(), []);
+  const basename = import.meta.env.BASE_URL;
 
   useEffect(() => {
     registerSW({ immediate: true });
@@ -15,7 +16,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>

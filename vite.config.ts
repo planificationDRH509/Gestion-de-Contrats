@@ -3,7 +3,10 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { localSqliteApiPlugin } from "./server/localSqliteApi";
 
+const basePath = process.env.VITE_BASE_PATH ?? "/";
+
 export default defineConfig({
+  base: basePath,
   plugins: [
     localSqliteApiPlugin(),
     react(),
@@ -17,23 +20,23 @@ export default defineConfig({
         theme_color: "#f7f5f2",
         background_color: "#f7f5f2",
         display: "standalone",
-        scope: "/",
-        start_url: "/",
+        scope: basePath,
+        start_url: basePath,
         icons: [
           {
-            src: "/icons/icon-192.png",
+            src: `${basePath}icons/icon-192.png`,
             sizes: "192x192",
             type: "image/png"
           },
           {
-            src: "/icons/icon-512.png",
+            src: `${basePath}icons/icon-512.png`,
             sizes: "512x512",
             type: "image/png"
           }
         ]
       },
       workbox: {
-        navigateFallback: "/index.html",
+        navigateFallback: `${basePath}index.html`,
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === "document",

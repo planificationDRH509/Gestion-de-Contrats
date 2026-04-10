@@ -9,6 +9,16 @@ npm install
 npm run dev
 ```
 
+## Deployment GitHub Pages
+
+Le deploiement est automatique via GitHub Actions (`.github/workflows/deploy-pages.yml`) a chaque push sur `main`.
+
+URL attendue :
+- `https://planificationDRH509.github.io/Gestion-de-Contrats/`
+
+Note importante :
+- GitHub Pages heberge uniquement le front-end statique. Les routes locales `/api/local/*` (SQLite local + backup SQL + verif MSPP) ne sont pas disponibles en ligne.
+
 Identifiants par defaut (mode local) :
 - utilisateur : `admin`
 - mot de passe : `admin`
