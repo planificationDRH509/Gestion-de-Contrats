@@ -21,17 +21,39 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const AUTH_KEY = "contribution_auth";
 
 function loadSession(): AuthUser | null {
-  const raw = localStorage.getItem(AUTH_KEY);
-  if (!raw) return null;
-  return JSON.parse(raw) as AuthUser;
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.id !== "string" ||
+      typeof parsed.username !== "string" ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.workspaceId !== "string" ||
+      typeof parsed.workspaceName !== "string"
+    ) {
+      localStorage.removeItem(AUTH_KEY);
+      return null;
+    }
+    return parsed as AuthUser;
+  } catch {
+    localStorage.removeItem(AUTH_KEY);
+    return null;
+  }
 }
 
 function saveSession(user: AuthUser | null) {
-  if (!user) {
-    localStorage.removeItem(AUTH_KEY);
-    return;
+  try {
+    if (!user) {
+      localStorage.removeItem(AUTH_KEY);
+      return;
+    }
+    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  } catch {
+    // Ignore storage write errors (private mode/quota).
   }
-  localStorage.setItem(AUTH_KEY, JSON.stringify(user));
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
