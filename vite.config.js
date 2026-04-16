@@ -36,6 +36,8 @@ export default defineConfig({
             },
             workbox: {
                 navigateFallback: "".concat(basePath, "index.html"),
+                globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+                maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6MB to accommodate large fonts
                 runtimeCaching: [
                     {
                         urlPattern: function (_a) {
@@ -45,7 +47,10 @@ export default defineConfig({
                         handler: "NetworkFirst",
                         options: {
                             cacheName: "pages",
-                            expiration: { maxEntries: 20 }
+                            expiration: {
+                                maxEntries: 20,
+                                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                            }
                         }
                     },
                     {
@@ -56,7 +61,27 @@ export default defineConfig({
                         handler: "StaleWhileRevalidate",
                         options: {
                             cacheName: "assets",
-                            expiration: { maxEntries: 50 }
+                            expiration: {
+                                maxEntries: 100,
+                                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                            }
+                        }
+                    },
+                    {
+                        urlPattern: function (_a) {
+                            var request = _a.request;
+                            return request.destination === "font";
+                        },
+                        handler: "CacheFirst",
+                        options: {
+                            cacheName: "fonts",
+                            expiration: {
+                                maxEntries: 20,
+                                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200]
+                            }
                         }
                     },
                     {
@@ -67,7 +92,10 @@ export default defineConfig({
                         handler: "CacheFirst",
                         options: {
                             cacheName: "images",
-                            expiration: { maxEntries: 50 }
+                            expiration: {
+                                maxEntries: 100,
+                                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                            }
                         }
                     }
                 ]

@@ -596,7 +596,7 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, body, workspaceId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, target, previousNif, nifOwner, saved, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_1, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, statement, updatedCount, _i, contractIds_1, contractId, result, body, workspaceId, contractIds, status_2, timestamp, statement, updatedCount, _b, contractIds_2, contractId, result, body, workspaceId, contractIds, durationMonths, timestamp, statement, updatedCount, _c, contractIds_3, contractId, result, body, id, workspaceId, timestamp, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, timestamp, operator, history_2, changes, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2;
+        var db, method, url, pathname, dump, timestamp, filename, rows, body, workspaceId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, target, previousNif, nifOwner, saved, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_1, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, statement, updatedCount, _i, contractIds_1, contractId, result, body, workspaceId, contractIds, status_2, timestamp, statement, updatedCount, _b, contractIds_2, contractId, result, body, workspaceId, contractIds, durationMonths, timestamp, statement, updatedCount, _c, contractIds_3, contractId, result, body, id, workspaceId, timestamp, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, timestamp, operator, history_2, changes, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
         var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
         return __generator(this, function (_r) {
             switch (_r.label) {
@@ -1329,7 +1329,65 @@ function handleApiRequest(req, res) {
                         throw new HttpError(500, "Erreur de sync autocompletion." + err.message);
                     }
                     return [2 /*return*/];
-                case 28: throw new HttpError(404, "Route API locale introuvable.");
+                case 28:
+                    if (!(pathname === "".concat(API_PREFIX, "/mspp/verify") && method === "GET")) return [3 /*break*/, 34];
+                    searchParams = url.searchParams;
+                    nifParam = searchParams.get("nif");
+                    if (!nifParam) {
+                        res.statusCode = 400;
+                        res.setHeader("Content-Type", "text/html; charset=utf-8");
+                        res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
+                        return [2 /*return*/];
+                    }
+                    _r.label = 29;
+                case 29:
+                    _r.trys.push([29, 32, , 33]);
+                    rawNif = nifParam.replace(/\D/g, "");
+                    nifFormatted = rawNif;
+                    if (rawNif.length === 10) {
+                        nifFormatted = rawNif.replace(/(\d{3})(\d{3})(\d{3})(\d{1})/, "$1-$2-$3-$4");
+                    }
+                    msppUrl = "https://mspp.gouv.ht/verification-permis";
+                    formData = new URLSearchParams();
+                    formData.append("nif", nifFormatted);
+                    return [4 /*yield*/, fetch(msppUrl, {
+                            method: "POST",
+                            body: formData,
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                "User-Agent": "Mozilla/5.0 (compatible)"
+                            }
+                        })];
+                case 30:
+                    msppRes = _r.sent();
+                    return [4 /*yield*/, msppRes.text()];
+                case 31:
+                    html = _r.sent();
+                    // Convert relative URLs to absolute URLs so CSS and images load correctly
+                    html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
+                    html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
+                    // Rewrite the form to stay inside our iframe via GET, so user can re-search and see new results
+                    html = html.replace(/<form method="post" action="https:\/\/mspp\.gouv\.ht\/verification-permis"/i, '<form method="get" action="/api/local/mspp/verify"');
+                    // In case the replacement above didn't catch it due to spacing
+                    html = html.replace(/action="https:\/\/mspp\.gouv\.ht\/verification-permis"/i, 'action="/api/local/mspp/verify"');
+                    html = html.replace(/method="post"[^>]*action="\/api\/local\/mspp\/verify"/i, 'method="get" action="/api/local/mspp/verify"');
+                    // Pre-fill the input
+                    html = html.replace('id="nif"', "id=\"nif\" value=\"".concat(nifFormatted, "\""));
+                    injectedStyle = "\n      <style>\n        .site-header, \n        .site-footer, \n        #toolbar-administration,\n        /* Try to hide any other top navs if any */\n        header, footer {\n          display: none !important;\n        }\n        body {\n          padding-top: 0 !important;\n          margin-top: 0 !important;\n          background-color: transparent !important;\n        }\n        .main-container {\n          padding-top: 20px !important;\n        }\n      </style>\n      </head>\n      ";
+                    html = html.replace('</head>', injectedStyle);
+                    res.statusCode = 200;
+                    res.setHeader("Content-Type", "text/html; charset=utf-8");
+                    res.setHeader("Cache-Control", "no-store");
+                    res.end(html);
+                    return [3 /*break*/, 33];
+                case 32:
+                    err_1 = _r.sent();
+                    res.statusCode = 500;
+                    res.setHeader("Content-Type", "text/html; charset=utf-8");
+                    res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));
+                    return [3 /*break*/, 33];
+                case 33: return [2 /*return*/];
+                case 34: throw new HttpError(404, "Route API locale introuvable.");
             }
         });
     });
