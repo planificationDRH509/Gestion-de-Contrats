@@ -13,6 +13,7 @@ import { DraftHtmlPage } from "../features/settings/DraftHtmlPage";
 import { SuggestionsSettingsPage } from "../features/settings/SuggestionsSettingsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { BackupSqlPage } from "../features/settings/BackupSqlPage";
+import { UserManagementPage } from "../features/settings/UserManagementPage";
 
 export function AppRoutes() {
   return (
@@ -39,6 +40,7 @@ export function AppRoutes() {
         <Route path="parametres/draft-html" element={<DraftHtmlPage />} />
         <Route path="parametres/suggestions" element={<SuggestionsSettingsPage />} />
         <Route path="parametres/backup-sql" element={<BackupSqlPage />} />
+        <Route path="parametres/utilisateurs" element={<UserManagementPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/app/contrats" replace />} />
     </Routes>

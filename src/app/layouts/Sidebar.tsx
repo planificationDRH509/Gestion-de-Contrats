@@ -14,7 +14,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true }: SidebarProps) {
   const { user, logout, switchWorkspace } = useAuth();
-  const workspaces = listLocalWorkspaces();
+  const workspaces = listLocalWorkspaces().filter(w => user?.allowedWorkspaces?.includes(w.id));
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
   useEffect(() => {

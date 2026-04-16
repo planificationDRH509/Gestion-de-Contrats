@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_users: {
+        Row: {
+          created_at: string | null
+          full_name: string
+          id: string
+          password: string
+          updated_at: string | null
+          username: string
+          workspaces: string[]
+        }
+        Insert: {
+          created_at?: string | null
+          full_name: string
+          id?: string
+          password: string
+          updated_at?: string | null
+          username: string
+          workspaces?: string[]
+        }
+        Update: {
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          password?: string
+          updated_at?: string | null
+          username?: string
+          workspaces?: string[]
+        }
+        Relationships: []
+      }
       autocompletion: {
         Row: {
           address_keywords: string | null
@@ -28,13 +58,13 @@ export type Database = {
         }
         Insert: {
           address_keywords?: string | null
-          created_at: string
+          created_at?: string
           default_salary?: number | null
           id: string
           label: string
           order_index?: number
           type: string
-          updated_at: string
+          updated_at?: string
           workspace_id: string
         }
         Update: {
@@ -175,29 +205,29 @@ export type Database = {
           deleted_at: string | null
           focal_point: string | null
           id: string
-          id_contrat: string | null
+          id_contrat: string[] | null
           is_ephemeral: boolean
           name: string
           priority: string
           roadmap_sheet_number: string | null
-          updated_at: string
-          workspace_id: string
+          updated_at: string | null
+          workspace_id: string | null
         }
         Insert: {
           comment?: string | null
           contract_target_count?: number
-          created_at: string
+          created_at?: string
           deadline_date?: string | null
           deleted_at?: string | null
           focal_point?: string | null
           id: string
-          id_contrat?: string | null
+          id_contrat?: string[] | null
           is_ephemeral?: boolean
           name: string
           priority?: string
           roadmap_sheet_number?: string | null
-          updated_at: string
-          workspace_id: string
+          updated_at?: string | null
+          workspace_id?: string | null
         }
         Update: {
           comment?: string | null
@@ -207,13 +237,13 @@ export type Database = {
           deleted_at?: string | null
           focal_point?: string | null
           id?: string
-          id_contrat?: string | null
+          id_contrat?: string[] | null
           is_ephemeral?: boolean
           name?: string
           priority?: string
           roadmap_sheet_number?: string | null
-          updated_at?: string
-          workspace_id?: string
+          updated_at?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {

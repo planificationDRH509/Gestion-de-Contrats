@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
-import { getDefaultWorkspace } from "../../data/local/workspaces";
+import { listLocalWorkspaces, getDefaultWorkspace } from "../../data/local/workspaces";
+import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 
 export type AuthUser = {
   id: string;
@@ -7,6 +8,7 @@ export type AuthUser = {
   name: string;
   workspaceId: string;
   workspaceName: string;
+  allowedWorkspaces: string[]; // Added this
 };
 
 type AuthContextValue = {
@@ -32,7 +34,8 @@ function loadSession(): AuthUser | null {
       typeof parsed.username !== "string" ||
       typeof parsed.name !== "string" ||
       typeof parsed.workspaceId !== "string" ||
-      typeof parsed.workspaceName !== "string"
+      typeof parsed.workspaceName !== "string" ||
+      !Array.isArray(parsed.allowedWorkspaces)
     ) {
       localStorage.removeItem(AUTH_KEY);
       return null;
@@ -63,16 +66,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       login: async (username: string, password: string) => {
-        if (username !== "admin" || password !== "admin") {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from("app_users")
+          .select("*")
+          .eq("username", username)
+          .eq("password", password)
+          .single();
+
+        if (error || !data) {
+          console.error("Login error:", error);
           return false;
         }
-        const workspace = getDefaultWorkspace();
+
+        const allowedWorkspaces = data.workspaces || [];
+        // Default to first allowed workspace or the global default
+        const defaultWp = listLocalWorkspaces().find(w => allowedWorkspaces.includes(w.id)) || getDefaultWorkspace();
+
         const sessionUser: AuthUser = {
-          id: "local-admin",
-          username: "admin",
-          name: "Administrateur",
-          workspaceId: workspace.id,
-          workspaceName: workspace.name
+          id: data.id,
+          username: data.username,
+          name: data.full_name,
+          workspaceId: defaultWp.id,
+          workspaceName: defaultWp.name,
+          allowedWorkspaces: allowedWorkspaces
         };
         setUser(sessionUser);
         saveSession(sessionUser);
@@ -84,6 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       switchWorkspace: (workspaceId: string, workspaceName: string) => {
         if (!user) return;
+        // Check if user is allowed to access this workspace
+        if (!user.allowedWorkspaces.includes(workspaceId)) {
+          console.warn(`Tentative d'accès non autorisée à l'espace: ${workspaceName}`);
+          return;
+        }
         const updatedUser = { ...user, workspaceId, workspaceName };
         setUser(updatedUser);
         saveSession(updatedUser);

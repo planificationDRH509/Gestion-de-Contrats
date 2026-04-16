@@ -159,3 +159,13 @@ export type UpdateDossierInput = {
   focalPoint?: string | null;
   roadmapSheetNumber?: string | null;
 };
+
+export type AppUser = {
+  id: string;
+  username: string;
+  password?: string;
+  fullName: string;
+  workspaces: string[];
+  createdAt: string;
+  updatedAt: string;
+};

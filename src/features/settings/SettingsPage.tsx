@@ -26,6 +26,12 @@ export function SettingsPage() {
           title="Backup SQL"
           description="Exportez la base SQLite locale en fichier SQL pour sauvegarde."
         />
+        <SettingsCard
+          to="/app/parametres/utilisateurs"
+          icon="group"
+          title="Utilisateurs"
+          description="Gérez les comptes utilisateurs et leurs permissions d'accès aux espaces de travail."
+        />
       </div>
     </div>
   );
