@@ -1,5 +1,6 @@
 import { Contract } from "../../data/types";
 import { formatCurrency } from "../../lib/format";
+import { loadSuggestions } from "../../data/local/suggestionsDb";
 
 export type ContractTemplate = {
   html: string;
@@ -579,6 +580,35 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     11: "ONZE", 12: "DOUZE"
   };
 
+  const suggestions = loadSuggestions();
+  const positionMatch = suggestions.positions.find(p => p.label.toLowerCase() === contract.position.toLowerCase());
+  const assignmentMatch = suggestions.institutions.find(i => i.label.toLowerCase() === contract.assignment.toLowerCase());
+  const addressMatch = suggestions.addresses.find(a => a.label.toLowerCase() === contract.address.toLowerCase());
+
+  let positionLabel = contract.position;
+  if (isFeminine && positionMatch?.labelFeminine) {
+    positionLabel = positionMatch.labelFeminine;
+  }
+  if (positionMatch?.prefix) {
+    positionLabel = `${positionMatch.prefix}${positionLabel}`;
+  }
+
+  let assignmentLabel = contract.assignment;
+  if (isFeminine && assignmentMatch?.labelFeminine) {
+    assignmentLabel = assignmentMatch.labelFeminine;
+  }
+  if (assignmentMatch?.prefix) {
+    assignmentLabel = `${assignmentMatch.prefix}${assignmentLabel}`;
+  }
+
+  let addressLabel = contract.address;
+  if (isFeminine && addressMatch?.labelFeminine) {
+    addressLabel = addressMatch.labelFeminine;
+  }
+  if (addressMatch?.prefix) {
+    addressLabel = `${addressMatch.prefix}${addressLabel}`;
+  }
+
   return {
     contract_id: contract.id,
     first_name: contract.firstName,
@@ -589,15 +619,16 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     identifiee_identifie: isFeminine ? "identifiée" : "identifié",
     denommee_denomme: isFeminine ? "dénommée" : "dénommé",
     contractant_legal: isFeminine ? "la << Contractante >>" : "le << Contractant >>",
+    contractant_label: isFeminine ? "Contractante" : "Contractant",
     La_Le_Contractant: isFeminine ? "La contractante" : "Le contractant",
     la_le_contractant: isFeminine ? "la contractante" : "le contractant",
     Elle_Il: isFeminine ? "Elle" : "Il",
     elle_il: isFeminine ? "elle" : "il",
-    address: contract.address,
+    address: addressLabel,
     nif: contract.nif ?? "",
     ninu: contract.ninu ?? "",
-    position: contract.position,
-    assignment: contract.assignment,
+    position: positionLabel,
+    assignment: assignmentLabel,
     salary_number: formatCurrency(contract.salaryNumber),
     salary_number_raw: contract.salaryNumber.toString(),
     salary_text: contract.salaryText,
