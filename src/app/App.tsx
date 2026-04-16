@@ -62,11 +62,16 @@ export function App() {
       new QueryClient({
         defaultOptions: {
           queries: {
-            gcTime: 1000 * 60 * 60 * 24 * 7, // Keep in memory for 7 days
-            staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
+            gcTime: 1000 * 60 * 60 * 24 * 30, // Persist in memory for 30 days
+            staleTime: 1000 * 60 * 60, // Data is fresh for 1 hour (less noise)
             retry: 1,
             refetchOnWindowFocus: false,
+            // Re-fetch even if we think we are offline (will fail but show cache)
+            networkMode: 'always', 
           },
+          mutations: {
+            networkMode: 'always',
+          }
         },
       }),
     []

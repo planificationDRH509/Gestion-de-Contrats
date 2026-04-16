@@ -140,7 +140,7 @@ export function ContractsListPage() {
     setPage(1);
   };
 
-  const { data, isLoading } = useContractsList({
+  const queryParams = {
     workspaceId,
     query: query.trim() ? query : undefined,
     sort,
@@ -154,7 +154,21 @@ export function ContractsListPage() {
     dateFilterDate: dateFilterMode === "day" ? dateFilterDate : undefined,
     dateFilterStart: dateFilterMode === "range" ? dateFilterStart : undefined,
     dateFilterEnd: dateFilterMode === "range" ? dateFilterEnd : undefined
-  });
+  };
+
+  const { data, isLoading } = useContractsList(queryParams);
+
+  // Prefetch next page for a smoother offline experience
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (data?.hasMore) {
+      const nextPageParams = { ...queryParams, page: page + 1 };
+      queryClient.prefetchQuery({
+        queryKey: ["contracts", nextPageParams],
+        queryFn: () => getDataProvider().contracts.list(nextPageParams),
+      });
+    }
+  }, [data, page, queryParams, queryClient]);
 
   const printJob = usePrintJob();
   const assignToDossier = useAssignContractsToDossier();

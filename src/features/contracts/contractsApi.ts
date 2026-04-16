@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
@@ -16,7 +16,8 @@ const provider = getDataProvider();
 export function useContractsList(params: ContractListParams) {
   return useQuery({
     queryKey: ["contracts", params],
-    queryFn: () => provider.contracts.list(params)
+    queryFn: () => provider.contracts.list(params),
+    placeholderData: keepPreviousData,
   });
 }
 
