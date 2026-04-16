@@ -273,7 +273,7 @@ export function StatisticsPage() {
               <div>
                 <div className="stat-label">Sexe Ratio (H/F)</div>
                 <div className="stat-value">
-                  {contracts.filter(c => c.gender === 'Homme').length} / {contracts.filter(c => c.gender === 'Femme').length}
+                  {contracts.filter(c => (c.gender as any) === 'Homme').length} / {contracts.filter(c => (c.gender as any) === 'Femme').length}
                 </div>
               </div>
             </div>

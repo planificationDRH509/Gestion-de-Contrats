@@ -140,18 +140,18 @@ export function ContractEditPage() {
   useEffect(() => {
     if (!data) return;
     reset({
-      gender: data.gender ?? "",
-      firstName: data.firstName ?? "",
-      lastName: data.lastName ?? "",
-      nif: data.nif ?? "",
-      ninu: data.ninu ?? "",
-      salaryNumber: data.salaryNumber?.toString() ?? "",
-      salaryText: data.salaryText ?? "",
-      position: data.position ?? "",
-      assignment: data.assignment ?? "",
-      address: data.address ?? "",
-      dossierId: data.dossierId ?? "",
-      durationMonths: data.durationMonths ?? 12
+      gender: (data.gender as string) || "Homme",
+      firstName: data.firstName || "",
+      lastName: data.lastName || "",
+      nif: data.nif || "",
+      ninu: data.ninu || "",
+      salaryNumber: (data.salaryNumber || 0).toString(),
+      salaryText: data.salaryText || "",
+      position: data.position || "",
+      assignment: data.assignment || "",
+      address: data.address || "",
+      dossierId: data.dossierId || "",
+      durationMonths: data.durationMonths || 12
     });
   }, [data, reset]);
 

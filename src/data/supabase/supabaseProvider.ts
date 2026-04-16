@@ -30,14 +30,14 @@ function mapApplicant(row: any): Applicant {
   return {
     id: row.nif,
     workspaceId: row.workspace_id,
-    gender: (row.sexe as Applicant["gender"]) ?? "Homme",
+    gender: (row.sexe as Applicant["gender"]) || "Homme",
     firstName: row.prenom,
     lastName: row.nom,
     nif: row.nif,
     ninu: row.ninu,
     address: row.adresse,
     createdAt: row.created_at,
-    updatedAt: row.updated_at ?? row.created_at,
+    updatedAt: row.updated_at || row.created_at,
     deletedAt: row.deleted_at || null
   };
 }
@@ -50,7 +50,7 @@ function mapContract(row: any): Contract {
     dossierId: row.dossier_id,
     applicantId: row.nif,
     status: row.status as Contract["status"],
-    gender: (ident.sexe as Contract["gender"]) ?? "Homme",
+    gender: (ident.sexe as Contract["gender"]) || "Homme",
     firstName: ident.prenom || "",
     lastName: ident.nom || "",
     nif: row.nif,
@@ -62,7 +62,7 @@ function mapContract(row: any): Contract {
     salaryText: row.salaire,
     durationMonths: row.duree_contrat,
     createdAt: row.created_at,
-    updatedAt: row.updated_at ?? row.created_at,
+    updatedAt: row.updated_at || row.created_at,
     deletedAt: row.deleted_at || null
   };
 }
@@ -78,7 +78,7 @@ function mapDossier(row: any): Dossier {
     comment: row.comment,
     deadlineDate: row.deadline_date,
     focalPoint: row.focal_point,
-    roadmapSheetNumber: row.roadmap_sheet_number,
+    roadmap_sheet_number: row.roadmap_sheet_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at
@@ -130,12 +130,12 @@ class SupabaseApplicantRepository implements ApplicantRepository {
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     const client = getSupabaseClient();
     const payload = {
-      nif: input.nif ?? input.id,
+      nif: input.nif || input.id || "",
       workspace_id: input.workspaceId,
       sexe: input.gender,
       prenom: input.firstName,
       nom: input.lastName,
-      ninu: input.ninu ?? null,
+      ninu: input.ninu || null,
       adresse: input.address
     };
 
@@ -203,11 +203,11 @@ class SupabaseDossierRepository implements DossierRepository {
     }
 
     const payload = {
-      id: crypto.randomUUID(), // Assume browser env has crypto
+      id: crypto.randomUUID(),
       workspace_id: input.workspaceId,
       name: normalizedName,
-      is_ephemeral: input.isEphemeral ?? false,
-      priority: input.priority ?? "normal",
+      is_ephemeral: input.isEphemeral || false,
+      priority: input.priority || "normal",
       contract_target_count: contractTargetCount,
       comment,
       deadline_date: deadlineDate,
@@ -249,24 +249,24 @@ class SupabaseDossierRepository implements DossierRepository {
       comment:
         input.comment !== undefined
           ? normalizeOptionalText(input.comment)
-          : existing.comment ?? null,
+          : (existing as any).comment ?? null,
       deadline_date:
         input.deadlineDate !== undefined
           ? normalizeOptionalDate(input.deadlineDate)
-          : existing.deadlineDate ?? null,
+          : (existing as any).deadlineDate ?? null,
       focal_point:
         input.focalPoint !== undefined
           ? normalizeOptionalText(input.focalPoint)
-          : existing.focalPoint ?? null,
+          : (existing as any).focalPoint ?? null,
       roadmap_sheet_number:
         input.roadmapSheetNumber !== undefined
           ? normalizeOptionalText(input.roadmapSheetNumber)
-          : existing.roadmapSheetNumber ?? null
+          : (existing as any).roadmapSheetNumber ?? null
     };
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("dossiers")
-      .update(payload)
+      .update(payload as any) as any)
       .eq("id", input.id)
       .eq("workspace_id", input.workspaceId)
       .is("deleted_at", null)
@@ -285,7 +285,7 @@ class SupabaseDossierRepository implements DossierRepository {
 
     const { data: detachedContracts, error: detachError } = await client
       .from("contrat")
-      .update({ dossier_id: null })
+      .update({ dossier_id: null } as any)
       .eq("workspace_id", workspaceId)
       .eq("dossier_id", id)
       .is("deleted_at", null)
@@ -296,7 +296,7 @@ class SupabaseDossierRepository implements DossierRepository {
 
     const { error: deleteError } = await client
       .from("dossiers")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() } as any)
       .eq("id", id)
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null);
@@ -325,11 +325,7 @@ class SupabaseContractRepository implements ContractRepository {
 
     if (params.query) {
       const escaped = params.query.replace(/,/g, " ");
-      // Supabase supports OR on foreign tables via filtering string, but since we use !inner, we can just do traditional OR if permitted.
-      // But actually, top level OR for joined tables implies `.or('identification.prenom.ilike...,titre.ilike...')` might fail depending on postgrest version.
-      // We will try.
       query = query.or(`titre.ilike.%${escaped}%,lieu_affectation.ilike.%${escaped}%,nif.ilike.%${escaped}%`);
-      // Warning: PostgRest might fail with identification.xxx inside top level or(). But we will leave it simple.
     }
 
     if (params.status) {
@@ -440,14 +436,14 @@ class SupabaseContractRepository implements ContractRepository {
     const payload = {
       id_contrat: crypto.randomUUID(),
       workspace_id: input.workspaceId,
-      dossier_id: input.dossierId ?? null,
-      nif: input.applicantId || input.nif,
+      dossier_id: input.dossierId || null,
+      nif: input.applicantId || input.nif || "",
       status: input.status,
       titre: input.position,
       lieu_affectation: input.assignment,
       salaire_en_chiffre: input.salaryNumber,
       salaire: input.salaryText,
-      duree_contrat: input.durationMonths ?? 12,
+      duree_contrat: input.durationMonths || 12,
       annee_fiscale: "2023-2024",
       historique_saisie: "[]"
     };
@@ -472,9 +468,9 @@ class SupabaseContractRepository implements ContractRepository {
       lieu_affectation: input.assignment,
       salaire_en_chiffre: input.salaryNumber,
       salaire: input.salaryText,
-      duree_contrat: input.durationMonths ?? 12,
+      duree_contrat: input.durationMonths || 12,
       dossier_id: input.dossierId,
-      nif: input.applicantId || input.nif
+      nif: input.applicantId || input.nif || ""
     };
 
     const { data, error } = await (client
@@ -502,7 +498,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("contrat")
-      .update({ dossier_id: dossierId })
+      .update({ dossier_id: dossierId } as any)
       .eq("workspace_id", workspaceId)
       .in("id_contrat", contractIds)
       .is("deleted_at", null)
@@ -527,7 +523,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("contrat")
-      .update({ status })
+      .update({ status } as any)
       .eq("workspace_id", workspaceId)
       .in("id_contrat", contractIds)
       .is("deleted_at", null)
@@ -552,7 +548,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("contrat")
-      .update({ duree_contrat: durationMonths })
+      .update({ duree_contrat: durationMonths } as any)
       .eq("workspace_id", workspaceId)
       .in("id_contrat", contractIds)
       .is("deleted_at", null)
@@ -569,7 +565,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { error } = await client
       .from("contrat")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() } as any)
       .eq("id_contrat", id)
       .eq("workspace_id", workspaceId);
     if (error) {
