@@ -22,6 +22,15 @@ import {
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
 
+function normalize(str: string): string {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function ContractNewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -105,16 +114,16 @@ export function ContractNewPage() {
 
   // ── Autocomplete items ──────────────────────────────
   const addressItems: AutocompleteItem[] = useMemo(() => {
-    const q = (addressValue || "").toLowerCase();
+    const q = normalize(addressValue || "");
     return allAddresses
-      .filter(a => a.label.toLowerCase().includes(q))
+      .filter(a => normalize(a.label).includes(q))
       .map((a) => ({ id: a.id, label: a.label }));
   }, [allAddresses, addressValue]);
 
   const positionItems: AutocompleteItem[] = useMemo(() => {
-    const q = (positionValue || "").toLowerCase();
+    const q = normalize(positionValue || "");
     return allPositions
-      .filter(p => p.label.toLowerCase().includes(q))
+      .filter(p => normalize(p.label).includes(q))
       .map((p) => ({
         id: p.id,
         label: p.label,
@@ -123,10 +132,10 @@ export function ContractNewPage() {
   }, [allPositions, positionValue]);
 
   const assignmentItems: AutocompleteItem[] = useMemo(() => {
-    const q = (assignmentValue || "").toLowerCase();
+    const q = normalize(assignmentValue || "");
     return allInstitutions
       .filter(i => {
-        const matchesQ = i.label.toLowerCase().includes(q);
+        const matchesQ = normalize(i.label).includes(q);
         return matchesQ;
       })
       .map((i) => ({

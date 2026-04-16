@@ -5,7 +5,7 @@ import {
   useAddAddress, useAddPosition, useAddInstitution 
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
-
+import { loadSuggestions } from "../../data/local/suggestionsDb";
 
 type Tab = "addresses" | "positions" | "institutions";
 
@@ -14,13 +14,14 @@ export function SuggestionsSettingsPage() {
 
   return (
     <div>
-      <div className="section-header">
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div className="section-title">Suggestions & Auto-complétion</div>
           <p className="helper-text" style={{ marginTop: 4 }}>
             Gérez les listes de suggestions partagées via Supabase.
           </p>
         </div>
+        <MigrateButton />
       </div>
 
       <div className="suggestions-tabs">
@@ -41,6 +42,46 @@ export function SuggestionsSettingsPage() {
         {tab === "institutions" && <InstitutionsPanel />}
       </div>
     </div>
+  );
+}
+
+function MigrateButton() {
+  const { user } = useAuth();
+  const workspaceId = user?.workspaceId || "";
+  const addAddress = useAddAddress();
+  const addPosition = useAddPosition();
+  const addInstitution = useAddInstitution();
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  async function handleMigrate() {
+    if (!confirm("Voulez-vous importer vos suggestions locales vers Supabase ? Cela peut créer des doublons.")) return;
+    setIsMigrating(true);
+    try {
+      const localDb = loadSuggestions();
+      for (const a of localDb.addresses) {
+        await addAddress.mutateAsync({ workspaceId, label: a.label });
+      }
+      for (const p of localDb.positions) {
+        await addPosition.mutateAsync({ workspaceId, label: p.label, defaultSalary: p.defaultSalary });
+      }
+      for (const i of localDb.institutions) {
+        await addInstitution.mutateAsync({ workspaceId, label: i.label, addressKeywords: i.addressKeywords });
+      }
+      alert("Migration terminée avec succès !");
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Une erreur est survenue pendant la migration.");
+    } finally {
+      setIsMigrating(false);
+    }
+  }
+
+  return (
+    <button className="btn btn-secondary" onClick={handleMigrate} disabled={isMigrating} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span className="material-symbols-rounded">{isMigrating ? "sync" : "cloud_upload"}</span>
+      {isMigrating ? "Importation..." : "Importer les suggestions locales"}
+    </button>
   );
 }
 
