@@ -1242,7 +1242,7 @@ export function ContractsListPage() {
                           {/* Comment button / inline editor */}
                           {commentOpen === contract.id ? (
                             <div className="contract-comment-editor" style={{ position: "relative" }}>
-                              <span className="material-symbols-rounded" style={{ fontSize: "14px", color: "var(--accent)", flexShrink: 0 }}>edit</span>
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px", color: "var(--accent)", flexShrink: 0 }}>chat_bubble</span>
                               <input
                                 ref={commentInputRef}
                                 type="text"
@@ -1251,15 +1251,34 @@ export function ContractsListPage() {
                                 placeholder="Ajouter un commentaire… (# pour tag)"
                                 onChange={e => handleCommentInput(contract.id, e.target.value)}
                                 onKeyDown={e => {
-                                  if (e.key === "Enter") { e.preventDefault(); saveComment(contract.id); }
-                                  if (e.key === "Escape") { setCommentOpen(null); setTagSuggestions([]); }
-                                }}
-                                onBlur={() => setTimeout(() => {
-                                  if (!document.activeElement?.closest(".tag-suggestion-list")) {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
                                     saveComment(contract.id);
                                   }
-                                }, 150)}
+                                  if (e.key === "Escape") {
+                                    setCommentOpen(null);
+                                    setTagSuggestions([]);
+                                  }
+                                }}
                               />
+                              <div className="comment-editor-actions" style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+                                <button
+                                  type="button"
+                                  className="comment-action-btn save"
+                                  onClick={(e) => { e.stopPropagation(); saveComment(contract.id); }}
+                                  title="Enregistrer"
+                                >
+                                  <span className="material-symbols-rounded">check</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="comment-action-btn cancel"
+                                  onClick={(e) => { e.stopPropagation(); setCommentOpen(null); setTagSuggestions([]); }}
+                                  title="Annuler"
+                                >
+                                  <span className="material-symbols-rounded">close</span>
+                                </button>
+                              </div>
                               {tagSuggestions.length > 0 && (
                                 <ul className="tag-suggestion-list">
                                   {tagSuggestions.map(tag => (

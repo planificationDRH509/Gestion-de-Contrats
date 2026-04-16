@@ -968,6 +968,38 @@ img {
   padding: 2px 0;
 }
 
+.comment-action-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--ink-muted);
+}
+
+.comment-action-btn span {
+  font-size: 16px;
+}
+
+.comment-action-btn:hover {
+  background: var(--panel-muted);
+}
+
+.comment-action-btn.save:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.comment-action-btn.cancel:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
 .tag-suggestion-list {
   position: absolute;
   top: calc(100% + 6px);
