@@ -3,6 +3,7 @@ import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
   ContractListParams,
+  ContractListResult,
   ContractStatus,
   CreateContractInput,
   UpdateContractInput,
@@ -69,10 +70,34 @@ export function useUpdateContractComment() {
   return useMutation({
     mutationFn: ({ id, workspaceId, commentaire }: { id: string; workspaceId: string; commentaire: string | null }) =>
       provider.contracts.update({ id, workspaceId, commentaire }),
-    onSuccess: (_data, variables) => {
-      // Optimistic-style: only invalidate the specific contract
+    onMutate: async (newComment) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ["contracts"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData<ContractListResult>(["contracts"]);
+
+      // Optimistically update to the new value
+      if (previousData) {
+        queryClient.setQueryData<ContractListResult>(["contracts"], {
+          ...previousData,
+          items: previousData.items.map(c => 
+            c.id === newComment.id ? { ...c, commentaire: newComment.commentaire } : c
+          )
+        });
+      }
+
+      return { previousData };
+    },
+    onError: (err, newComment, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousData) {
+        queryClient.setQueryData(["contracts"], context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success to keep server and client in sync
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
-      queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
     }
   });
 }
