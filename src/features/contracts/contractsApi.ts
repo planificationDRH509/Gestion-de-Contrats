@@ -64,6 +64,19 @@ export function useUpdateContract() {
   });
 }
 
+export function useUpdateContractComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, workspaceId, commentaire }: { id: string; workspaceId: string; commentaire: string | null }) =>
+      provider.contracts.update({ id, workspaceId, commentaire }),
+    onSuccess: (_data, variables) => {
+      // Optimistic-style: only invalidate the specific contract
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
+    }
+  });
+}
+
 export function useAssignContractsToDossier() {
   const queryClient = useQueryClient();
   return useMutation({

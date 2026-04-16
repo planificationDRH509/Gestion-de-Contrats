@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import {
@@ -7,7 +7,8 @@ import {
   useDeleteContract,
   usePrintJob,
   useChangeContractsStatus,
-  useChangeContractsDuration
+  useChangeContractsDuration,
+  useUpdateContractComment
 } from "./contractsApi";
 import { useAppUsers } from "../auth/usersApi";
 import { Contract, ContractDateFilterMode, ContractStatus } from "../../data/types";
@@ -102,6 +103,11 @@ export function ContractsListPage() {
   const [menuView, setMenuView] = useState<"main" | "dossiers" | "status">("main");
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const [commentOpen, setCommentOpen] = useState<string | null>(null);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [tagQuery, setTagQuery] = useState<string | null>(null);
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -155,6 +161,7 @@ export function ContractsListPage() {
   const changeContractsStatus = useChangeContractsStatus();
   const changeContractsDuration = useChangeContractsDuration();
   const deleteContract = useDeleteContract();
+  const updateContractComment = useUpdateContractComment();
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
   const { data: appUsers = [] } = useAppUsers();
@@ -168,6 +175,80 @@ export function ContractsListPage() {
   }, [appUsers]);
 
   const items = data?.items ?? [];
+
+  // Collect all existing tags from all contracts for autocomplete
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    items.forEach(c => {
+      if (c.commentaire) {
+        const matches = c.commentaire.match(/#[\w\u00C0-\u017E]+/g);
+        if (matches) matches.forEach(t => tagSet.add(t));
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [items]);
+
+  const openComment = useCallback((contractId: string, currentComment: string | null) => {
+    setCommentOpen(contractId);
+    setCommentDraft(prev => ({ ...prev, [contractId]: currentComment ?? "" }));
+    setTagQuery(null);
+    setTagSuggestions([]);
+    setTimeout(() => commentInputRef.current?.focus(), 50);
+  }, []);
+
+  const saveComment = useCallback((contractId: string) => {
+    const value = (commentDraft[contractId] ?? "").trim() || null;
+    updateContractComment.mutate({ id: contractId, workspaceId, commentaire: value });
+    setCommentOpen(null);
+    setTagQuery(null);
+    setTagSuggestions([]);
+  }, [commentDraft, workspaceId, updateContractComment]);
+
+  const handleCommentInput = useCallback((contractId: string, value: string) => {
+    setCommentDraft(prev => ({ ...prev, [contractId]: value }));
+    // Detect if user just typed a # or is inside a #word
+    const lastHash = value.lastIndexOf("#");
+    if (lastHash !== -1) {
+      const afterHash = value.slice(lastHash + 1);
+      // Only suggest if no space after the last #
+      if (!afterHash.includes(" ")) {
+        const q = afterHash.toLowerCase();
+        setTagQuery(q);
+        setTagSuggestions(allTags.filter(t => t.toLowerCase().startsWith("#" + q) && t !== "#" + q));
+        return;
+      }
+    }
+    setTagQuery(null);
+    setTagSuggestions([]);
+  }, [allTags]);
+
+  const applyTag = useCallback((contractId: string, tag: string) => {
+    const current = commentDraft[contractId] ?? "";
+    const lastHash = current.lastIndexOf("#");
+    const before = lastHash !== -1 ? current.slice(0, lastHash) : current;
+    const newValue = before + tag + " ";
+    setCommentDraft(prev => ({ ...prev, [contractId]: newValue }));
+    setTagQuery(null);
+    setTagSuggestions([]);
+    setTimeout(() => {
+      if (commentInputRef.current) {
+        commentInputRef.current.focus();
+        commentInputRef.current.setSelectionRange(newValue.length, newValue.length);
+      }
+    }, 10);
+  }, [commentDraft]);
+
+  // Parse comment: render tags as highlighted pills inline
+  function renderCommentWithTags(text: string) {
+    const parts = text.split(/(#[\w\u00C0-\u017E]+)/g);
+    return parts.map((part, i) =>
+      part.startsWith("#") ? (
+        <span key={i} className="comment-tag">{part}</span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  }
   const contextContract = contextMenu
     ? items.find((contract) => contract.id === contextMenu.id) ?? null
     : null;
@@ -1157,7 +1238,79 @@ export function ContractsListPage() {
                             <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>monitoring</span>
                             {getContractStatusLabel(contract.status)}
                           </button>
+
+                          {/* Comment button / inline editor */}
+                          {commentOpen === contract.id ? (
+                            <div className="contract-comment-editor" style={{ position: "relative" }}>
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px", color: "var(--accent)", flexShrink: 0 }}>edit</span>
+                              <input
+                                ref={commentInputRef}
+                                type="text"
+                                className="contract-comment-input"
+                                value={commentDraft[contract.id] ?? ""}
+                                placeholder="Ajouter un commentaire… (# pour tag)"
+                                onChange={e => handleCommentInput(contract.id, e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") { e.preventDefault(); saveComment(contract.id); }
+                                  if (e.key === "Escape") { setCommentOpen(null); setTagSuggestions([]); }
+                                }}
+                                onBlur={() => setTimeout(() => {
+                                  if (!document.activeElement?.closest(".tag-suggestion-list")) {
+                                    saveComment(contract.id);
+                                  }
+                                }, 150)}
+                              />
+                              {tagSuggestions.length > 0 && (
+                                <ul className="tag-suggestion-list">
+                                  {tagSuggestions.map(tag => (
+                                    <li key={tag}>
+                                      <button
+                                        type="button"
+                                        onMouseDown={e => { e.preventDefault(); applyTag(contract.id, tag); }}
+                                      >
+                                        {tag}
+                                      </button>
+                                    </li>
+                                  ))}
+                                  {tagQuery !== null && !allTags.includes("#" + tagQuery) && tagQuery.length > 0 && (
+                                    <li className="tag-suggestion-new">
+                                      <button
+                                        type="button"
+                                        onMouseDown={e => { e.preventDefault(); applyTag(contract.id, "#" + tagQuery); }}
+                                      >
+                                        <span className="material-symbols-rounded" style={{ fontSize: "13px" }}>add</span>
+                                        Créer #{tagQuery}
+                                      </button>
+                                    </li>
+                                  )}
+                                </ul>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="badge comment-badge"
+                              style={{ fontSize: "11px", padding: "2px 8px" }}
+                              onClick={() => openComment(contract.id, contract.commentaire ?? null)}
+                              title={contract.commentaire ? "Modifier le commentaire" : "Ajouter un commentaire"}
+                            >
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>chat_bubble</span>
+                              {!contract.commentaire && <span style={{ opacity: 0.7 }}>Commentaire</span>}
+                            </button>
+                          )}
                         </div>
+
+                        {/* Inline comment display when comment exists and not editing */}
+                        {contract.commentaire && commentOpen !== contract.id && (
+                          <div
+                            className="contract-comment-display"
+                            onClick={() => openComment(contract.id, contract.commentaire ?? null)}
+                            title="Cliquer pour modifier"
+                          >
+                            <span className="material-symbols-rounded" style={{ fontSize: "14px", opacity: 0.6 }}>chat_bubble</span>
+                            <span className="contract-comment-text">{renderCommentWithTags(contract.commentaire)}</span>
+                          </div>
+                        )}
 
                         <div className="contracts-meta">
                           <div>

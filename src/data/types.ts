@@ -73,6 +73,7 @@ export type Contract = {
   updatedAt: string;
   deletedAt?: string | null;
   createdBy?: string | null;
+  commentaire?: string | null;
 };
 
 export type ContractPrintJob = {

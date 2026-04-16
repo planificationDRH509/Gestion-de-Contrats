@@ -71,7 +71,8 @@ function mapContract(row: any): Contract {
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
     deletedAt: row.deleted_at || null,
-    createdBy: row.created_by
+    createdBy: row.created_by,
+    commentaire: row.commentaire || null
   };
 }
 
@@ -487,7 +488,8 @@ class SupabaseContractRepository implements ContractRepository {
       salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
       dossier_id: input.dossierId,
-      nif: input.applicantId || input.nif || ""
+      nif: input.applicantId || input.nif || "",
+      commentaire: input.commentaire !== undefined ? input.commentaire : undefined
     };
 
     const { data, error } = await (client
