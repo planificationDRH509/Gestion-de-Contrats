@@ -78,7 +78,7 @@ function mapDossier(row: any): Dossier {
     comment: row.comment,
     deadlineDate: row.deadline_date,
     focalPoint: row.focal_point,
-    roadmap_sheet_number: row.roadmap_sheet_number,
+    roadmapSheetNumber: row.roadmap_sheet_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at
