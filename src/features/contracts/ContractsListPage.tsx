@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
 import {
   useAssignContractsToDossier,
@@ -161,7 +162,7 @@ export function ContractsListPage() {
   // Prefetch next page for a smoother offline experience
   const queryClient = useQueryClient();
   useEffect(() => {
-    if (data?.hasMore) {
+    if (data && data.page * data.pageSize < data.total) {
       const nextPageParams = { ...queryParams, page: page + 1 };
       queryClient.prefetchQuery({
         queryKey: ["contracts", nextPageParams],

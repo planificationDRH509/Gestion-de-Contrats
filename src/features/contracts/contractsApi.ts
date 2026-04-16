@@ -90,7 +90,7 @@ export function useUpdateContractComment() {
 
       return { previousData };
     },
-    onError: (err, newComment, context) => {
+    onError: (_err, _newComment, context) => {
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousData) {
         queryClient.setQueryData(["contracts"], context.previousData);
