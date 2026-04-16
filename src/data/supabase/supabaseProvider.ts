@@ -25,7 +25,6 @@ import {
   normalizeOptionalText
 } from "../../lib/dossier";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
-import { randomUUID } from "node:crypto";
 
 function mapApplicant(row: any): Applicant {
   return {
