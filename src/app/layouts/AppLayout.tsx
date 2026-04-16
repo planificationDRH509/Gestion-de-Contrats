@@ -27,6 +27,20 @@ export function AppLayout() {
   });
 
   const [isResizing, setIsResizing] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -87,6 +101,7 @@ export function AppLayout() {
         onToggle={toggle} 
         onResizeStart={startResizing}
         isResizing={isResizing}
+        isOnline={isOnline}
       />
       <div className="main">
         <main className="content">

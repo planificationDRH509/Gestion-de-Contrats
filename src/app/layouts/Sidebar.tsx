@@ -9,9 +9,10 @@ interface SidebarProps {
   onToggle: () => void;
   onResizeStart?: () => void;
   isResizing?: boolean;
+  isOnline?: boolean;
 }
 
-export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true }: SidebarProps) {
   const { user, logout, switchWorkspace } = useAuth();
   const workspaces = listLocalWorkspaces();
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
@@ -91,6 +92,7 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing }: Side
         user={user} 
         collapsed={collapsed} 
         mode={mode} 
+        isOnline={isOnline}
         onLogout={logout} 
       />
 
@@ -153,9 +155,15 @@ function WorkspaceSwitcher({ user, workspaces, onSwitch }: { user: AuthUser, wor
   );
 }
 
-function SidebarFooter({ user, collapsed, mode, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, onLogout: () => void }) {
+function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, onLogout: () => void }) {
   return (
     <div className="sidebar-footer">
+      {!isOnline && !collapsed && (
+        <div className="offline-notice">
+          <span className="material-symbols-rounded">cloud_off</span>
+          Hors ligne (Cache actif)
+        </div>
+      )}
       {!collapsed && (
         <>
           <div className="user-card">

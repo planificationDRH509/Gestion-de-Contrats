@@ -645,6 +645,32 @@ img {
   color: var(--ink-muted);
 }
 
+/* Offline & Cache Status */
+.offline-notice {
+  background: var(--warning-soft);
+  color: var(--warning);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  margin-bottom: 8px;
+  animation: pulse-border 3s infinite;
+}
+
+.offline-notice .material-symbols-rounded {
+  font-size: 16px;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2); }
+  70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
 .main {
   display: flex;
   flex-direction: column;
