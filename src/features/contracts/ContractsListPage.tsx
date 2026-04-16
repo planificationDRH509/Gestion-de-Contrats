@@ -9,6 +9,7 @@ import {
   useChangeContractsStatus,
   useChangeContractsDuration
 } from "./contractsApi";
+import { useAppUsers } from "../auth/usersApi";
 import { Contract, ContractDateFilterMode, ContractStatus } from "../../data/types";
 import { Pagination } from "../../app/components/Pagination";
 import { formatCurrency } from "../../lib/format";
@@ -156,6 +157,15 @@ export function ContractsListPage() {
   const deleteContract = useDeleteContract();
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
+  const { data: appUsers = [] } = useAppUsers();
+
+  const userMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    appUsers.forEach(u => {
+      map[u.id] = u.fullName;
+    });
+    return map;
+  }, [appUsers]);
 
   const items = data?.items ?? [];
   const contextContract = contextMenu
@@ -1162,6 +1172,12 @@ export function ContractsListPage() {
                             <span className="meta-label">Saisie</span>
                             <span>{new Date(contract.createdAt).toLocaleDateString("fr-FR")}</span>
                           </div>
+                          {contract.createdBy && (
+                            <div>
+                              <span className="meta-label">Saisi par</span>
+                              <span>{userMap[contract.createdBy] || "Utilisateur inconnu"}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="contracts-actions" onClick={(e) => e.stopPropagation()}>
