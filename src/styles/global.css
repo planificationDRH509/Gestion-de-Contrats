@@ -858,11 +858,10 @@ img {
   gap: 12px;
 }
 
-.contracts-inline {
+.contracts-inline, .contracts-badges {
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-content: flex-end;
   flex-wrap: wrap;
 }
 

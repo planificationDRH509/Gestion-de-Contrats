@@ -1082,51 +1082,6 @@ export function ContractsListPage() {
                           >
                             {contract.lastName} {contract.firstName}
                           </div>
-                          <div className="contracts-inline">
-                            {contract.dossierId ? (
-                              <button
-                                type="button"
-                                className={`badge dossier-badge has-tooltip ${dossierFilterId === contract.dossierId ? "active" : ""}`}
-                                style={{ ...getDossierBadgeStyle(contract.dossierId), fontSize: "11px", padding: "2px 8px" }}
-                                aria-label="Filtrer par dossier"
-                                data-tooltip={getDossierTooltip(contract.dossierId)}
-                                tabIndex={0}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setDossierFilterId((prev) =>
-                                    prev === contract.dossierId ? null : contract.dossierId ?? null
-                                  );
-                                  setPage(1);
-                                }}
-                              >
-                                <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>folder</span>
-                                {getDossierLabel(contract.dossierId)}
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="badge dossier-badge"
-                                style={{ fontSize: "11px", padding: "2px 8px" }}
-                                aria-label="Ajouter au dossier"
-                                onClick={(event) => openDossierMenu(event, contract.id)}
-                              >
-                                <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>folder</span>
-                                <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>add</span>
-                                {getDossierLabel(contract.dossierId)}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className={`badge has-tooltip ${getContractStatusBadgeClass(contract.status)}`}
-                              style={{ fontSize: "11px", padding: "2px 8px" }}
-                              onClick={(e) => handleContextFromButton(e, contract.id, "status")}
-                              data-tooltip={getStatusTooltip(contract)}
-                              tabIndex={0}
-                            >
-                              <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>monitoring</span>
-                              {getContractStatusLabel(contract.status)}
-                            </button>
-                          </div>
                         </div>
 
                         {(contract.nif || contract.ninu || contract.salaryNumber) ? (
@@ -1146,6 +1101,52 @@ export function ContractsListPage() {
                             </span>
                           </div>
                         ) : null}
+
+                        <div className="contracts-badges" style={{ marginTop: "6px" }}>
+                          {contract.dossierId ? (
+                            <button
+                              type="button"
+                              className={`badge dossier-badge has-tooltip ${dossierFilterId === contract.dossierId ? "active" : ""}`}
+                              style={{ ...getDossierBadgeStyle(contract.dossierId), fontSize: "11px", padding: "2px 8px" }}
+                              aria-label="Filtrer par dossier"
+                              data-tooltip={getDossierTooltip(contract.dossierId)}
+                              tabIndex={0}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDossierFilterId((prev) =>
+                                  prev === contract.dossierId ? null : contract.dossierId ?? null
+                                );
+                                setPage(1);
+                              }}
+                            >
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>folder</span>
+                              {getDossierLabel(contract.dossierId)}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="badge dossier-badge"
+                              style={{ fontSize: "11px", padding: "2px 8px" }}
+                              aria-label="Ajouter au dossier"
+                              onClick={(event) => openDossierMenu(event, contract.id)}
+                            >
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>folder</span>
+                              <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>add</span>
+                              {getDossierLabel(contract.dossierId)}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className={`badge has-tooltip ${getContractStatusBadgeClass(contract.status)}`}
+                            style={{ fontSize: "11px", padding: "2px 8px" }}
+                            onClick={(e) => handleContextFromButton(e, contract.id, "status")}
+                            data-tooltip={getStatusTooltip(contract)}
+                            tabIndex={0}
+                          >
+                            <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>monitoring</span>
+                            {getContractStatusLabel(contract.status)}
+                          </button>
+                        </div>
 
                         <div className="contracts-meta">
                           <div>
