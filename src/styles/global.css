@@ -2539,3 +2539,17 @@ img {
     display: none !important;
   }
 }
+
+/* User Menu Dropdown */
+.user-card-btn:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.user-dropdown-menu .dropdown-item:hover {
+  background-color: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+.user-dropdown-menu .dropdown-item:active {
+  transform: scale(0.98);
+}

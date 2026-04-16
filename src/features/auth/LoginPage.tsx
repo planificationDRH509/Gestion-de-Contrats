@@ -4,8 +4,8 @@ import { useAuth } from "./auth";
 
 export function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export function LoginPage() {
     const ok = await login(username.trim(), password);
     setLoading(false);
     if (!ok) {
-      setError("Identifiants invalides. Utilisez admin / admin.");
+      setError("Identifiants invalides. Veuillez vérifier votre nom d'utilisateur et mot de passe.");
       return;
     }
     navigate(from, { replace: true });
@@ -34,7 +34,7 @@ export function LoginPage() {
         </div>
         <h1>Connexion</h1>
         <p className="auth-subtitle">
-          Accès local (mode hors ligne). Utilisez admin / admin.
+          Veuillez vous connecter pour accéder à la plateforme.
         </p>
         <form onSubmit={handleSubmit} className="auth-form">
           <label className="field">

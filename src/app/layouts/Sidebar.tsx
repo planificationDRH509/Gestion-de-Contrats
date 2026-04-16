@@ -156,6 +156,8 @@ function WorkspaceSwitcher({ user, workspaces, onSwitch }: { user: AuthUser, wor
 }
 
 function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, onLogout: () => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <div className="sidebar-footer">
       {!isOnline && !collapsed && (
@@ -164,27 +166,125 @@ function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: Au
           Hors ligne (Cache actif)
         </div>
       )}
-      {!collapsed && (
-        <>
-          <div className="user-card">
-            <div className="user-name">{user.name}</div>
-            <div className="user-meta">{user.username}</div>
-          </div>
-          <div className="status-pill" style={{ marginBottom: '8px', fontSize: '11px', padding: '4px 10px' }}>
+      
+      {!collapsed ? (
+        <div style={{ position: 'relative', width: '100%' }}>
+          <button 
+            className="user-card-btn"
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              background: 'none', 
+              border: 'none', 
+              padding: '0', 
+              cursor: 'pointer',
+              borderRadius: '12px',
+              transition: 'background 0.2s'
+            }}
+          >
+            <div className="user-card" style={{ 
+              margin: '0', 
+              padding: '12px',
+              backgroundColor: menuOpen ? 'var(--accent-soft)' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div className="user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+                <div className="user-meta" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.username}</div>
+              </div>
+              <span className="material-symbols-rounded" style={{ fontSize: '18px', color: 'var(--ink-muted)' }}>
+                {menuOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </div>
+          </button>
+
+          {menuOpen && (
+            <div className="user-dropdown-menu" style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: '0',
+              width: '100%',
+              backgroundColor: 'var(--surface)',
+              borderRadius: '12px',
+              boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
+              border: '1px solid var(--border)',
+              padding: '8px',
+              marginBottom: '8px',
+              zIndex: 100,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }}>
+              <button className="dropdown-item" onClick={() => { setMenuOpen(false); onLogout(); }} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                width: '100%',
+                fontSize: '14px',
+                color: 'var(--ink)'
+              }}>
+                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>sync_alt</span>
+                Changer d'utilisateur
+              </button>
+              <button className="dropdown-item" onClick={() => { setMenuOpen(false); onLogout(); }} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                width: '100%',
+                fontSize: '14px',
+                color: 'var(--ink)'
+              }}>
+                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>lock</span>
+                Verrouiller la session
+              </button>
+              <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '4px 0' }} />
+              <button className="dropdown-item" onClick={onLogout} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                width: '100%',
+                fontSize: '14px',
+                color: '#d93025'
+              }}>
+                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>logout</span>
+                Se déconnecter
+              </button>
+            </div>
+          )}
+          
+          <div className="status-pill" style={{ marginTop: '8px', marginBottom: '8px', fontSize: '11px', padding: '4px 10px' }}>
             Mode: {mode === "supabase" ? "Supabase" : "Local"}
           </div>
-        </>
+        </div>
+      ) : (
+        <button
+          className="icon-btn"
+          onClick={onLogout}
+          type="button"
+          title="Se déconnecter"
+          style={{ width: '100%' }}
+        >
+          <span className="material-symbols-rounded icon">logout</span>
+        </button>
       )}
-      <button
-        className={collapsed ? "icon-btn" : "btn btn-ghost"}
-        onClick={onLogout}
-        type="button"
-        title={collapsed ? "Se déconnecter" : undefined}
-        style={collapsed ? { width: '100%' } : undefined}
-      >
-        <span className="material-symbols-rounded icon">logout</span>
-        {!collapsed && "Se déconnecter"}
-      </button>
     </div>
   );
 }
