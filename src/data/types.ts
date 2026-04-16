@@ -10,14 +10,14 @@ export type Workspace = {
 export type Applicant = {
   id: string;
   workspaceId: string;
-  gender?: Gender | null;
+  gender: Gender;
   firstName: string;
   lastName: string;
   nif?: string | null;
   ninu?: string | null;
   address: string;
   createdAt: string;
-  updatedAt?: string | null;
+  updatedAt: string;
   deletedAt?: string | null;
 };
 
@@ -56,7 +56,7 @@ export type Contract = {
   dossierId?: string | null;
   applicantId: string | null;
   status: ContractStatus;
-  gender?: Gender | null;
+  gender: Gender;
   firstName: string;
   lastName: string;
   nif?: string | null;
@@ -68,7 +68,7 @@ export type Contract = {
   salaryText: string;
   durationMonths: number;
   createdAt: string;
-  updatedAt?: string | null;
+  updatedAt: string;
   deletedAt?: string | null;
 };
 

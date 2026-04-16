@@ -30,14 +30,14 @@ function mapApplicant(row: any): Applicant {
   return {
     id: row.nif,
     workspaceId: row.workspace_id,
-    gender: row.sexe as Applicant["gender"] || null,
+    gender: (row.sexe as Applicant["gender"]) ?? "Homme",
     firstName: row.prenom,
     lastName: row.nom,
     nif: row.nif,
     ninu: row.ninu,
     address: row.adresse,
     createdAt: row.created_at,
-    updatedAt: row.updated_at || null,
+    updatedAt: row.updated_at ?? row.created_at,
     deletedAt: row.deleted_at || null
   };
 }
@@ -50,7 +50,7 @@ function mapContract(row: any): Contract {
     dossierId: row.dossier_id,
     applicantId: row.nif,
     status: row.status as Contract["status"],
-    gender: ident.sexe as Contract["gender"] || null,
+    gender: (ident.sexe as Contract["gender"]) ?? "Homme",
     firstName: ident.prenom || "",
     lastName: ident.nom || "",
     nif: row.nif,
@@ -62,7 +62,7 @@ function mapContract(row: any): Contract {
     salaryText: row.salaire,
     durationMonths: row.duree_contrat,
     createdAt: row.created_at,
-    updatedAt: row.updated_at || null,
+    updatedAt: row.updated_at ?? row.created_at,
     deletedAt: row.deleted_at || null
   };
 }
@@ -437,19 +437,18 @@ class SupabaseContractRepository implements ContractRepository {
 
   async create(input: CreateContractInput): Promise<Contract> {
     const client = getSupabaseClient();
-    const idContrat = input.id || crypto.randomUUID(); // Simplified, normally there receives one
     const payload = {
-      id_contrat: crypto.randomUUID(), // we should provide an ID if none provided since primary key
+      id_contrat: crypto.randomUUID(),
       workspace_id: input.workspaceId,
       dossier_id: input.dossierId ?? null,
-      nif: input.applicantId || input.nif, // Maps to NIF
+      nif: input.applicantId || input.nif,
       status: input.status,
       titre: input.position,
       lieu_affectation: input.assignment,
       salaire_en_chiffre: input.salaryNumber,
       salaire: input.salaryText,
       duree_contrat: input.durationMonths ?? 12,
-      annee_fiscale: "2023-2024", // Fallback, could be calculated
+      annee_fiscale: "2023-2024",
       historique_saisie: "[]"
     };
 
