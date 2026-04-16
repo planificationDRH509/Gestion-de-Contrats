@@ -80,7 +80,8 @@ export function StatisticsPage() {
   // 3. STATS DATA
   const genderData = useMemo(() => {
     const counts = contracts.reduce((acc: any, curr) => {
-      acc[curr.gender] = (acc[curr.gender] || 0) + 1;
+      const g = curr.gender || "Inconnu";
+      acc[g] = (acc[g] || 0) + 1;
       return acc;
     }, {});
 
@@ -89,7 +90,8 @@ export function StatisticsPage() {
 
   const statusData = useMemo(() => {
     const counts = contracts.reduce((acc: any, curr) => {
-      acc[curr.status] = (acc[curr.status] || 0) + 1;
+      const s = curr.status || "draft";
+      acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
 
@@ -113,7 +115,8 @@ export function StatisticsPage() {
 
   const assignmentData = useMemo(() => {
     const counts = contracts.reduce((acc: any, curr) => {
-      acc[curr.assignment] = (acc[curr.assignment] || 0) + 1;
+      const a = curr.assignment || "Inconnue";
+      acc[a] = (acc[a] || 0) + 1;
       return acc;
     }, {});
 

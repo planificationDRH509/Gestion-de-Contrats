@@ -140,16 +140,16 @@ export function ContractEditPage() {
   useEffect(() => {
     if (!data) return;
     reset({
-      gender: data.gender,
-      firstName: data.firstName,
-      lastName: data.lastName,
+      gender: data.gender ?? "",
+      firstName: data.firstName ?? "",
+      lastName: data.lastName ?? "",
       nif: data.nif ?? "",
       ninu: data.ninu ?? "",
-      salaryNumber: data.salaryNumber.toString(),
-      salaryText: data.salaryText,
-      position: data.position,
-      assignment: data.assignment,
-      address: data.address,
+      salaryNumber: data.salaryNumber?.toString() ?? "",
+      salaryText: data.salaryText ?? "",
+      position: data.position ?? "",
+      assignment: data.assignment ?? "",
+      address: data.address ?? "",
       dossierId: data.dossierId ?? "",
       durationMonths: data.durationMonths ?? 12
     });

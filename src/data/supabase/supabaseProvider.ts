@@ -139,9 +139,9 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       adresse: input.address
     };
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("identification")
-      .upsert(payload, { onConflict: "nif" })
+      .upsert(payload as any, { onConflict: "nif" }) as any)
       .select("*")
       .single();
 
@@ -215,9 +215,9 @@ class SupabaseDossierRepository implements DossierRepository {
       roadmap_sheet_number: roadmapSheetNumber
     };
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("dossiers")
-      .insert(payload)
+      .insert(payload as any) as any)
       .select("*")
       .single();
 
@@ -452,9 +452,9 @@ class SupabaseContractRepository implements ContractRepository {
       historique_saisie: "[]"
     };
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("contrat")
-      .insert(payload)
+      .insert(payload as any) as any)
       .select("*, identification(*)")
       .single();
 
@@ -477,9 +477,9 @@ class SupabaseContractRepository implements ContractRepository {
       nif: input.applicantId || input.nif
     };
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("contrat")
-      .update(payload)
+      .update(payload as any) as any)
       .eq("id_contrat", input.id)
       .select("*, identification(*)")
       .single();
@@ -582,9 +582,13 @@ class SupabasePrintJobRepository implements PrintJobRepository {
   async create(workspaceId: string, contractIds: string[]): Promise<ContractPrintJob> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
-    const { data, error } = await client
+    const { data, error } = await (client
       .from("contract_print_jobs")
-      .insert({ id, workspace_id: workspaceId, contract_ids_json: JSON.stringify(contractIds) })
+      .insert({ 
+        id, 
+        workspace_id: workspaceId, 
+        contract_ids_json: JSON.stringify(contractIds) 
+      } as any) as any)
       .select("*")
       .single();
     if (error || !data) {
