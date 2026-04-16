@@ -67,8 +67,8 @@ export function useAddInstitution() {
 export function useUpdateAddress() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, label }: { id: string; label: string }) =>
-      repo().updateAddress(id, label),
+    mutationFn: ({ id, label, prefix, labelFeminine }: { id: string; label: string; prefix?: string | null; labelFeminine?: string | null }) =>
+      repo().updateAddress(id, label, prefix, labelFeminine),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "addresses"] });
     }
@@ -78,8 +78,8 @@ export function useUpdateAddress() {
 export function useUpdatePosition() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, label, defaultSalary }: { id: string; label: string; defaultSalary: number }) =>
-      repo().updatePosition(id, label, defaultSalary),
+    mutationFn: ({ id, label, defaultSalary, prefix, labelFeminine }: { id: string; label: string; defaultSalary: number; prefix?: string | null; labelFeminine?: string | null }) =>
+      repo().updatePosition(id, label, defaultSalary, prefix, labelFeminine),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "positions"] });
     }
@@ -89,8 +89,8 @@ export function useUpdatePosition() {
 export function useUpdateInstitution() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, label, addressKeywords }: { id: string; label: string; addressKeywords: string[] }) =>
-      repo().updateInstitution(id, label, addressKeywords),
+    mutationFn: ({ id, label, addressKeywords, prefix, labelFeminine }: { id: string; label: string; addressKeywords: string[]; prefix?: string | null; labelFeminine?: string | null }) =>
+      repo().updateInstitution(id, label, addressKeywords, prefix, labelFeminine),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "institutions"] });
     }

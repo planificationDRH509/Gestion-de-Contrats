@@ -635,12 +635,25 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
 
   async getAddresses(workspaceId: string): Promise<AddressSuggestion[]> {
     const data = await this.getByType(workspaceId, "address");
-    return data.map(r => ({ id: r.id, label: r.label, order: r.order_index }));
+    return data.map(r => ({ 
+      id: r.id, 
+      label: r.label, 
+      prefix: r.prefix,
+      labelFeminine: r.label_feminine,
+      order: r.order_index 
+    }));
   }
 
   async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
     const data = await this.getByType(workspaceId, "position");
-    return data.map(r => ({ id: r.id, label: r.label, defaultSalary: r.default_salary || 0, order: r.order_index }));
+    return data.map(r => ({ 
+      id: r.id, 
+      label: r.label, 
+      prefix: r.prefix,
+      labelFeminine: r.label_feminine,
+      defaultSalary: r.default_salary || 0, 
+      order: r.order_index 
+    }));
   }
 
   async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
@@ -648,6 +661,8 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     return data.map(r => ({ 
       id: r.id, 
       label: r.label, 
+      prefix: r.prefix,
+      labelFeminine: r.label_feminine,
       addressKeywords: typeof r.address_keywords === 'string' ? JSON.parse(r.address_keywords) : (r.address_keywords || []), 
       order: r.order_index 
     }));
@@ -661,9 +676,9 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     return { id, label, order: 0 };
   }
 
-  async updateAddress(id: string, label: string): Promise<void> {
+  async updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ label } as any).eq("id", id) as any);
+    await (client.from("autocompletion").update({ label, prefix, label_feminine: labelFeminine } as any).eq("id", id) as any);
   }
 
   async deleteAddress(id: string): Promise<void> {
@@ -679,9 +694,14 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     return { id, label, defaultSalary, order: 0 };
   }
 
-  async updatePosition(id: string, label: string, defaultSalary: number): Promise<void> {
+  async updatePosition(id: string, label: string, defaultSalary: number, prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ label, default_salary: defaultSalary } as any).eq("id", id) as any);
+    await (client.from("autocompletion").update({ 
+      label, 
+      default_salary: defaultSalary,
+      prefix,
+      label_feminine: labelFeminine
+    } as any).eq("id", id) as any);
   }
 
   async deletePosition(id: string): Promise<void> {
@@ -705,9 +725,14 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     return { id, label, addressKeywords, order: 0 };
   }
 
-  async updateInstitution(id: string, label: string, addressKeywords: string[]): Promise<void> {
+  async updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ label, address_keywords: JSON.stringify(addressKeywords) } as any).eq("id", id) as any);
+    await (client.from("autocompletion").update({ 
+      label, 
+      address_keywords: JSON.stringify(addressKeywords),
+      prefix,
+      label_feminine: labelFeminine
+    } as any).eq("id", id) as any);
   }
 
   async deleteInstitution(id: string): Promise<void> {

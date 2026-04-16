@@ -6,14 +6,14 @@ export interface AutocompleteRepository {
   getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]>;
   
   addAddress(workspaceId: string, label: string, createdBy?: string): Promise<AddressSuggestion>;
-  updateAddress(id: string, label: string): Promise<void>;
+  updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deleteAddress(id: string): Promise<void>;
   
   addPosition(workspaceId: string, label: string, defaultSalary: number, createdBy?: string): Promise<PositionSuggestion>;
-  updatePosition(id: string, label: string, defaultSalary: number): Promise<void>;
+  updatePosition(id: string, label: string, defaultSalary: number, prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deletePosition(id: string): Promise<void>;
   
   addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion>;
-  updateInstitution(id: string, label: string, addressKeywords: string[]): Promise<void>;
+  updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deleteInstitution(id: string): Promise<void>;
 }

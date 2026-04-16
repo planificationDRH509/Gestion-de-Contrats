@@ -10,12 +10,16 @@ const SUGGESTIONS_KEY = "contribution_suggestions_db";
 export type AddressSuggestion = {
   id: string;
   label: string;
+  prefix?: string | null;
+  labelFeminine?: string | null;
   order: number;
 };
 
 export type PositionSuggestion = {
   id: string;
   label: string;
+  prefix?: string | null;
+  labelFeminine?: string | null;
   defaultSalary: number;
   order: number;
 };
@@ -23,6 +27,8 @@ export type PositionSuggestion = {
 export type InstitutionSuggestion = {
   id: string;
   label: string;
+  prefix?: string | null;
+  labelFeminine?: string | null;
   addressKeywords: string[]; // which address areas this institution is linked to
   order: number;
 };
