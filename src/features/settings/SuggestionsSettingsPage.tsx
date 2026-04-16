@@ -6,7 +6,6 @@ import {
   useUpdateAddress, useUpdatePosition, useUpdateInstitution
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
-import { loadSuggestions } from "../../data/local/suggestionsDb";
 
 type Tab = "addresses" | "positions" | "institutions";
 
@@ -15,14 +14,13 @@ export function SuggestionsSettingsPage() {
 
   return (
     <div>
-      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="section-header">
         <div>
           <div className="section-title">Suggestions & Auto-complétion</div>
           <p className="helper-text" style={{ marginTop: 4 }}>
             Gérez les listes de suggestions partagées via Supabase.
           </p>
         </div>
-        <MigrateButton />
       </div>
 
       <div className="suggestions-tabs">
@@ -46,45 +44,7 @@ export function SuggestionsSettingsPage() {
   );
 }
 
-function MigrateButton() {
-  const { user } = useAuth();
-  const workspaceId = user?.workspaceId || "";
-  const addAddress = useAddAddress();
-  const addPosition = useAddPosition();
-  const addInstitution = useAddInstitution();
-  const [isMigrating, setIsMigrating] = useState(false);
 
-  async function handleMigrate() {
-    if (!confirm("Voulez-vous importer vos suggestions locales vers Supabase ? Cela peut créer des doublons.")) return;
-    setIsMigrating(true);
-    try {
-      const localDb = loadSuggestions();
-      for (const a of localDb.addresses) {
-        await addAddress.mutateAsync({ workspaceId, label: a.label });
-      }
-      for (const p of localDb.positions) {
-        await addPosition.mutateAsync({ workspaceId, label: p.label, defaultSalary: p.defaultSalary });
-      }
-      for (const i of localDb.institutions) {
-        await addInstitution.mutateAsync({ workspaceId, label: i.label, addressKeywords: i.addressKeywords });
-      }
-      alert("Migration terminée avec succès !");
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      alert("Une erreur est survenue pendant la migration.");
-    } finally {
-      setIsMigrating(false);
-    }
-  }
-
-  return (
-    <button className="btn btn-secondary" onClick={handleMigrate} disabled={isMigrating} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span className="material-symbols-rounded">{isMigrating ? "sync" : "cloud_upload"}</span>
-      {isMigrating ? "Importation..." : "Importer les suggestions locales"}
-    </button>
-  );
-}
 
 function AddressesPanel() {
   const { user } = useAuth();
@@ -214,6 +174,7 @@ function InstitutionsPanel() {
   const addMutation = useAddInstitution();
   const updateMutation = useUpdateInstitution();
   const [newLabel, setNewLabel] = useState("");
+  const [newKeywords, setNewKeywords] = useState("");
   
   const [editId, setEditId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -222,8 +183,13 @@ function InstitutionsPanel() {
 
   async function handleAdd() {
     if (!newLabel.trim()) return;
-    await addMutation.mutateAsync({ workspaceId, label: newLabel.trim(), addressKeywords: [] });
+    await addMutation.mutateAsync({ 
+      workspaceId, 
+      label: newLabel.trim(), 
+      addressKeywords: newKeywords.split(",").map(k => k.trim()).filter(Boolean) 
+    });
     setNewLabel("");
+    setNewKeywords("");
   }
 
   return (
@@ -232,8 +198,9 @@ function InstitutionsPanel() {
         <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>account_balance</span>
         <strong>Institutions</strong>
       </div>
-      <div className="sug-add-row">
-        <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom..." />
+      <div className="sug-add-row sug-add-row-multi">
+        <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom de l'institution..." style={{ flex: 2 }} />
+        <input className="input" value={newKeywords} onChange={(e) => setNewKeywords(e.target.value)} placeholder="villes (ex: delmas, tabarre)" style={{ flex: 1.5 }} />
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
       </div>
       <div className="sug-list">
