@@ -166,6 +166,6 @@ export type AppUser = {
   password?: string;
   fullName: string;
   workspaces: string[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
