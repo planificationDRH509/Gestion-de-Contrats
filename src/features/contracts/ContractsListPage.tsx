@@ -140,6 +140,7 @@ export function ContractsListPage() {
     page,
     pageSize,
     onlyMine: !showAll,
+    userId,
     status: statusFilter !== "all" ? statusFilter : undefined,
     dossierId: dossierFilterId ?? undefined,
     dateFilterMode: dateFilterMode !== "all" ? dateFilterMode : undefined,

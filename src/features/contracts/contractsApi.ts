@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
   ContractListParams,
@@ -35,9 +36,11 @@ export function useContractsByIds(ids: string[], workspaceId: string) {
 }
 
 export function useCreateContract() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateContractInput) => provider.contracts.create(input),
+    mutationFn: (input: CreateContractInput) => 
+      provider.contracts.create({ ...input, createdBy: user?.id }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({
@@ -160,8 +163,10 @@ export function usePrintJob() {
 }
 
 export function useApplicantUpsert() {
+  const { user } = useAuth();
   return useMutation({
-    mutationFn: (input: UpsertApplicantInput) => provider.applicants.upsert(input)
+    mutationFn: (input: UpsertApplicantInput) => 
+      provider.applicants.upsert({ ...input, createdBy: user?.id })
   });
 }
 

@@ -19,6 +19,7 @@ export type Applicant = {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  createdBy?: string | null;
 };
 
 export type Dossier = {
@@ -35,6 +36,7 @@ export type Dossier = {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  createdBy?: string | null;
 };
 
 export type DossierPriority = "normal" | "urgence";
@@ -70,6 +72,7 @@ export type Contract = {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  createdBy?: string | null;
 };
 
 export type ContractPrintJob = {
@@ -100,6 +103,7 @@ export type ContractListParams = {
   page?: number;
   pageSize?: number;
   onlyMine?: boolean;
+  userId?: string;
   status?: ContractStatus;
   dossierId?: string | null;
   dateFilterMode?: ContractDateFilterMode;
@@ -145,6 +149,7 @@ export type CreateDossierInput = {
   deadlineDate?: string | null;
   focalPoint?: string | null;
   roadmapSheetNumber?: string | null;
+  createdBy?: string;
 };
 
 export type UpdateDossierInput = {

@@ -44,7 +44,8 @@ function mapApplicant(row: any): Applicant {
     address: row.adresse,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    deletedAt: row.deleted_at || null
+    deletedAt: row.deleted_at || null,
+    createdBy: row.created_by
   };
 }
 
@@ -69,7 +70,8 @@ function mapContract(row: any): Contract {
     durationMonths: row.duree_contrat,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    deletedAt: row.deleted_at || null
+    deletedAt: row.deleted_at || null,
+    createdBy: row.created_by
   };
 }
 
@@ -87,7 +89,8 @@ function mapDossier(row: any): Dossier {
     roadmapSheetNumber: row.roadmap_sheet_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
+    deletedAt: row.deleted_at,
+    createdBy: row.created_by
   };
 }
 
@@ -142,7 +145,8 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       prenom: input.firstName,
       nom: input.lastName,
       ninu: input.ninu || null,
-      adresse: input.address
+      adresse: input.address,
+      created_by: input.createdBy
     };
 
     const { data, error } = await (client
@@ -218,7 +222,8 @@ class SupabaseDossierRepository implements DossierRepository {
       comment,
       deadline_date: deadlineDate,
       focal_point: focalPoint,
-      roadmap_sheet_number: roadmapSheetNumber
+      roadmap_sheet_number: roadmapSheetNumber,
+      created_by: (input as any).createdBy
     };
 
     const { data, error } = await (client
@@ -329,6 +334,10 @@ class SupabaseContractRepository implements ContractRepository {
       .select("*, identification!inner(*)", { count: "exact" })
       .eq("workspace_id", params.workspaceId)
       .is("deleted_at", null);
+
+    if (params.onlyMine && params.userId) {
+      query = query.eq("created_by", params.userId);
+    }
 
     if (params.query) {
       const escaped = params.query.replace(/,/g, " ");
@@ -452,7 +461,8 @@ class SupabaseContractRepository implements ContractRepository {
       salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
       annee_fiscale: "2023-2024",
-      historique_saisie: "[]"
+      historique_saisie: "[]",
+      created_by: input.createdBy
     };
 
     const { data, error } = await (client
@@ -641,10 +651,10 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     }));
   }
 
-  async addAddress(workspaceId: string, label: string): Promise<AddressSuggestion> {
+  async addAddress(workspaceId: string, label: string, createdBy?: string): Promise<AddressSuggestion> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
-    const payload = { id, workspace_id: workspaceId, type: "address", label, order_index: 0 };
+    const payload = { id, workspace_id: workspaceId, type: "address", label, order_index: 0, created_by: createdBy };
     await (client.from("autocompletion").insert(payload as any) as any);
     return { id, label, order: 0 };
   }
@@ -659,10 +669,10 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     await (client.from("autocompletion").delete().eq("id", id) as any);
   }
 
-  async addPosition(workspaceId: string, label: string, defaultSalary: number): Promise<PositionSuggestion> {
+  async addPosition(workspaceId: string, label: string, defaultSalary: number, createdBy?: string): Promise<PositionSuggestion> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
-    const payload = { id, workspace_id: workspaceId, type: "position", label, default_salary: defaultSalary, order_index: 0 };
+    const payload = { id, workspace_id: workspaceId, type: "position", label, default_salary: defaultSalary, order_index: 0, created_by: createdBy };
     await (client.from("autocompletion").insert(payload as any) as any);
     return { id, label, defaultSalary, order: 0 };
   }
@@ -677,7 +687,7 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     await (client.from("autocompletion").delete().eq("id", id) as any);
   }
 
-  async addInstitution(workspaceId: string, label: string, addressKeywords: string[]): Promise<InstitutionSuggestion> {
+  async addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
     const payload = { 
@@ -686,7 +696,8 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       type: "institution", 
       label, 
       address_keywords: JSON.stringify(addressKeywords),
-      order_index: 0 
+      order_index: 0,
+      created_by: createdBy
     };
     await (client.from("autocompletion").insert(payload as any) as any);
     return { id, label, addressKeywords, order: 0 };

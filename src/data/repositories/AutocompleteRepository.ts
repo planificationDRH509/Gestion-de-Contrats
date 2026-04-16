@@ -5,15 +5,15 @@ export interface AutocompleteRepository {
   getPositions(workspaceId: string): Promise<PositionSuggestion[]>;
   getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]>;
   
-  addAddress(workspaceId: string, label: string): Promise<AddressSuggestion>;
+  addAddress(workspaceId: string, label: string, createdBy?: string): Promise<AddressSuggestion>;
   updateAddress(id: string, label: string): Promise<void>;
   deleteAddress(id: string): Promise<void>;
   
-  addPosition(workspaceId: string, label: string, defaultSalary: number): Promise<PositionSuggestion>;
+  addPosition(workspaceId: string, label: string, defaultSalary: number, createdBy?: string): Promise<PositionSuggestion>;
   updatePosition(id: string, label: string, defaultSalary: number): Promise<void>;
   deletePosition(id: string): Promise<void>;
   
-  addInstitution(workspaceId: string, label: string, addressKeywords: string[]): Promise<InstitutionSuggestion>;
+  addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion>;
   updateInstitution(id: string, label: string, addressKeywords: string[]): Promise<void>;
   deleteInstitution(id: string): Promise<void>;
 }

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import { CreateDossierInput, UpdateDossierInput } from "../../data/types";
 import { isContractDone } from "../../lib/dossier";
@@ -67,9 +68,11 @@ export function useDossierContractMetrics(workspaceId: string) {
 }
 
 export function useCreateDossier() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateDossierInput) => provider.dossiers.create(input),
+    mutationFn: (input: CreateDossierInput) => 
+      provider.dossiers.create({ ...input, createdBy: user?.id } as any),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["dossiers", variables.workspaceId] });
       queryClient.invalidateQueries({
