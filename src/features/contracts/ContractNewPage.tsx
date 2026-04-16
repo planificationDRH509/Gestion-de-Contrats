@@ -12,13 +12,14 @@ import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { MsppVerificationModal } from "./MsppVerificationModal";
 import {
-  filterAddresses,
-  filterPositions,
-  filterInstitutions,
+  useAddresses,
+  usePositions,
+  useInstitutions
+} from "../settings/suggestionsApi";
+import {
   getLastChoice,
   saveLastChoice,
   learnSuggestions,
-  type PositionSuggestion,
 } from "../../data/local/suggestionsDb";
 
 export function ContractNewPage() {
@@ -41,6 +42,9 @@ export function ContractNewPage() {
   const { data: dossiers = [] } = useDossiersList(workspaceId);
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
+  const { data: allAddresses = [] } = useAddresses(workspaceId);
+  const { data: allPositions = [] } = usePositions(workspaceId);
+  const { data: allInstitutions = [] } = useInstitutions(workspaceId);
 
   const defaultDuration = useMemo(() => {
     const stored = localStorage.getItem("last_contract_duration");
@@ -100,29 +104,36 @@ export function ContractNewPage() {
   }
 
   // ── Autocomplete items ──────────────────────────────
-  const addressItems: AutocompleteItem[] = useMemo(
-    () => filterAddresses(addressValue).map((a) => ({ id: a.id, label: a.label })),
-    [addressValue]
-  );
+  const addressItems: AutocompleteItem[] = useMemo(() => {
+    const q = (addressValue || "").toLowerCase();
+    return allAddresses
+      .filter(a => a.label.toLowerCase().includes(q))
+      .map((a) => ({ id: a.id, label: a.label }));
+  }, [allAddresses, addressValue]);
 
-  const positionItems: AutocompleteItem[] = useMemo(
-    () =>
-      filterPositions(positionValue).map((p) => ({
+  const positionItems: AutocompleteItem[] = useMemo(() => {
+    const q = (positionValue || "").toLowerCase();
+    return allPositions
+      .filter(p => p.label.toLowerCase().includes(q))
+      .map((p) => ({
         id: p.id,
         label: p.label,
         sublabel: p.defaultSalary > 0 ? `${p.defaultSalary.toLocaleString("fr-HT")} HTG` : undefined,
-      })),
-    [positionValue]
-  );
+      }));
+  }, [allPositions, positionValue]);
 
-  const assignmentItems: AutocompleteItem[] = useMemo(
-    () =>
-      filterInstitutions(addressValue, assignmentValue).map((i) => ({
+  const assignmentItems: AutocompleteItem[] = useMemo(() => {
+    const q = (assignmentValue || "").toLowerCase();
+    return allInstitutions
+      .filter(i => {
+        const matchesQ = i.label.toLowerCase().includes(q);
+        return matchesQ;
+      })
+      .map((i) => ({
         id: i.id,
         label: i.label,
-      })),
-    [addressValue, assignmentValue]
-  );
+      }));
+  }, [allInstitutions, assignmentValue, addressValue]);
 
   const featuredAddress = useMemo(() => {
     const last = getLastChoice("address");
@@ -131,14 +142,13 @@ export function ContractNewPage() {
 
   const featuredPosition = useMemo(() => {
     const last = getLastChoice("position");
-    // Find matching suggestion to get its default salary if possible
-    const match = filterPositions(last || "").find(p => p.label === last);
+    const match = allPositions.find(p => p.label === last);
     return last ? { 
       id: `last_${last}`, 
       label: last,
       sublabel: match && match.defaultSalary > 0 ? `${match.defaultSalary.toLocaleString("fr-HT")} HTG` : undefined
     } : undefined;
-  }, []);
+  }, [allPositions]);
 
   const featuredAssignment = useMemo(() => {
     const last = getLastChoice("assignment");
@@ -163,9 +173,7 @@ export function ContractNewPage() {
 
   // ── Position selection: auto-fill salary ──────────────────────────────
   function handlePositionSelect(item: AutocompleteItem) {
-    // Find the position suggestion to get its default salary
-    const allPositions = filterPositions("");
-    const match = allPositions.find((p: PositionSuggestion) => p.id === item.id);
+    const match = allPositions.find((p) => p.id === item.id);
     if (match && match.defaultSalary > 0) {
       setValue("salaryNumber", match.defaultSalary.toString(), {
         shouldValidate: true,

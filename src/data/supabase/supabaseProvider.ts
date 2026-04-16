@@ -2,6 +2,12 @@ import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { ContractRepository } from "../repositories/ContractRepository";
 import { DossierRepository } from "../repositories/DossierRepository";
 import { PrintJobRepository } from "../repositories/PrintJobRepository";
+import { AutocompleteRepository } from "../repositories/AutocompleteRepository";
+import {
+  AddressSuggestion,
+  PositionSuggestion,
+  InstitutionSuggestion
+} from "../local/suggestionsDb";
 import {
   Applicant,
   Contract,
@@ -222,7 +228,8 @@ class SupabaseDossierRepository implements DossierRepository {
       .single();
 
     if (error || !data) {
-      throw new Error("Impossible de créer le dossier.");
+      console.error("Dossier create error:", error);
+      throw new Error(`Impossible de créer le dossier: ${error?.message || "Erreur Supabase"}`);
     }
 
     return mapDossier(data);
@@ -601,11 +608,107 @@ class SupabasePrintJobRepository implements PrintJobRepository {
   }
 }
 
+class SupabaseAutocompleteRepository implements AutocompleteRepository {
+  private async getByType(workspaceId: string, type: string): Promise<any[]> {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("autocompletion")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("type", type)
+      .order("order_index", { ascending: true });
+    if (error) return [];
+    return data || [];
+  }
+
+  async getAddresses(workspaceId: string): Promise<AddressSuggestion[]> {
+    const data = await this.getByType(workspaceId, "address");
+    return data.map(r => ({ id: r.id, label: r.label, order: r.order_index }));
+  }
+
+  async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
+    const data = await this.getByType(workspaceId, "position");
+    return data.map(r => ({ id: r.id, label: r.label, defaultSalary: r.default_salary || 0, order: r.order_index }));
+  }
+
+  async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
+    const data = await this.getByType(workspaceId, "institution");
+    return data.map(r => ({ 
+      id: r.id, 
+      label: r.label, 
+      addressKeywords: typeof r.address_keywords === 'string' ? JSON.parse(r.address_keywords) : (r.address_keywords || []), 
+      order: r.order_index 
+    }));
+  }
+
+  async addAddress(workspaceId: string, label: string): Promise<AddressSuggestion> {
+    const client = getSupabaseClient();
+    const id = crypto.randomUUID();
+    const payload = { id, workspace_id: workspaceId, type: "address", label, order_index: 0 };
+    await (client.from("autocompletion").insert(payload as any) as any);
+    return { id, label, order: 0 };
+  }
+
+  async updateAddress(id: string, label: string): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").update({ label } as any).eq("id", id) as any);
+  }
+
+  async deleteAddress(id: string): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").delete().eq("id", id) as any);
+  }
+
+  async addPosition(workspaceId: string, label: string, defaultSalary: number): Promise<PositionSuggestion> {
+    const client = getSupabaseClient();
+    const id = crypto.randomUUID();
+    const payload = { id, workspace_id: workspaceId, type: "position", label, default_salary: defaultSalary, order_index: 0 };
+    await (client.from("autocompletion").insert(payload as any) as any);
+    return { id, label, defaultSalary, order: 0 };
+  }
+
+  async updatePosition(id: string, label: string, defaultSalary: number): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").update({ label, default_salary: defaultSalary } as any).eq("id", id) as any);
+  }
+
+  async deletePosition(id: string): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").delete().eq("id", id) as any);
+  }
+
+  async addInstitution(workspaceId: string, label: string, addressKeywords: string[]): Promise<InstitutionSuggestion> {
+    const client = getSupabaseClient();
+    const id = crypto.randomUUID();
+    const payload = { 
+      id, 
+      workspace_id: workspaceId, 
+      type: "institution", 
+      label, 
+      address_keywords: JSON.stringify(addressKeywords),
+      order_index: 0 
+    };
+    await (client.from("autocompletion").insert(payload as any) as any);
+    return { id, label, addressKeywords, order: 0 };
+  }
+
+  async updateInstitution(id: string, label: string, addressKeywords: string[]): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").update({ label, address_keywords: JSON.stringify(addressKeywords) } as any).eq("id", id) as any);
+  }
+
+  async deleteInstitution(id: string): Promise<void> {
+    const client = getSupabaseClient();
+    await (client.from("autocompletion").delete().eq("id", id) as any);
+  }
+}
+
 export function createSupabaseProvider(): DataProvider {
   return {
     applicants: new SupabaseApplicantRepository(),
     dossiers: new SupabaseDossierRepository(),
     contracts: new SupabaseContractRepository(),
-    printJobs: new SupabasePrintJobRepository()
+    printJobs: new SupabasePrintJobRepository(),
+    suggestions: new SupabaseAutocompleteRepository()
   };
 }

@@ -3,6 +3,7 @@
  * Stores addresses, positions (with default salaries), and institutions (per address area).
  */
 import { sqliteApiRequest } from "./sqliteApiClient";
+import { getDataProvider } from "../dataProvider";
 
 const SUGGESTIONS_KEY = "contribution_suggestions_db";
 
@@ -327,7 +328,41 @@ export function filterInstitutions(addressValue: string, query: string): Institu
 }
 
 /** Automagically insert un-recognized inputs into the suggestions to learn from the user's input  */
-export function learnSuggestions(address?: string, position?: string, assignment?: string, salaryNumber: number = 0) {
+export async function learnSuggestions(address?: string, position?: string, assignment?: string, salaryNumber: number = 0) {
+  const provider = import.meta.env.VITE_DATA_PROVIDER ?? "local";
+  
+  try {
+    const raw = localStorage.getItem("contribution_auth");
+    const parsed = raw ? JSON.parse(raw) : null;
+    const workspaceId = parsed?.workspaceId || "workspace_default";
+
+    if (provider === "supabase") {
+      const repo = getDataProvider().suggestions;
+      if (address) {
+        const items = await repo.getAddresses(workspaceId);
+        if (!items.some(i => i.label.toLowerCase() === address.trim().toLowerCase())) {
+          await repo.addAddress(workspaceId, address.trim());
+        }
+      }
+      if (position) {
+        const items = await repo.getPositions(workspaceId);
+        if (!items.some(i => i.label.toLowerCase() === position.trim().toLowerCase())) {
+          await repo.addPosition(workspaceId, position.trim(), salaryNumber);
+        }
+      }
+      if (assignment) {
+        const items = await repo.getInstitutions(workspaceId);
+        if (!items.some(i => i.label.toLowerCase() === assignment.trim().toLowerCase())) {
+          await repo.addInstitution(workspaceId, assignment.trim(), address ? [address] : []);
+        }
+      }
+      return;
+    }
+  } catch (e) {
+    console.error("Failed to learn suggestions in Supabase mode", e);
+  }
+
+  // Fallback to local logic
   let db = loadSuggestions();
   let changed = false;
 
@@ -339,7 +374,7 @@ export function learnSuggestions(address?: string, position?: string, assignment
       changed = true;
     }
   }
-
+  // ... (rest is same)
   if (position) {
     const nPos = normalize(position);
     if (!db.positions.some((p) => normalize(p.label) === nPos)) {

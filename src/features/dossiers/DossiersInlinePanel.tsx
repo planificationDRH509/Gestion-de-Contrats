@@ -150,7 +150,7 @@ export function DossiersInlinePanel({
       setErrorMessage(null);
     } catch (error) {
       console.error(error);
-      setErrorMessage("Impossible de créer le dossier.");
+      setErrorMessage(error instanceof Error ? error.message : "Impossible de créer le dossier.");
       setSuccessMessage(null);
     }
   }
