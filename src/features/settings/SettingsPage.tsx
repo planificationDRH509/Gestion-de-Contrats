@@ -9,6 +9,12 @@ export function SettingsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px', marginTop: '20px' }}>
         <SettingsCard 
+          to="/app/parametres/affichage" 
+          icon="palette" 
+          title="Affichage" 
+          description="Personnalisez l'apparence de l'application (mode sombre, thèmes, etc.)."
+        />
+        <SettingsCard 
           to="/app/parametres/draft-html" 
           icon="data_object" 
           title="Modèle HTML" 

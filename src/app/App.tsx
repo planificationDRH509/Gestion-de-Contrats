@@ -5,6 +5,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { registerSW } from "virtual:pwa-register";
 import { AppRoutes } from "./router";
 import { AuthProvider } from "../features/auth/auth";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import { cachePersister } from "./persistence";
 import type { ReactNode } from "react";
 
@@ -40,8 +41,8 @@ class AppErrorBoundary extends React.Component<
           padding: "24px",
           textAlign: "center",
           fontFamily: "Inter, sans-serif",
-          background: "#f7f5f2",
-          color: "#1f2937"
+          background: "var(--bg)",
+          color: "var(--ink)"
         }}
       >
         <section>
@@ -96,11 +97,13 @@ export function App() {
           queryClient.resumePausedMutations();
         }}
       >
-        <AuthProvider>
-          <BrowserRouter basename={basename}>
-            <AppRoutes />
-          </BrowserRouter>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <BrowserRouter basename={basename}>
+              <AppRoutes />
+            </BrowserRouter>
+          </AuthProvider>
+        </ThemeProvider>
       </PersistQueryClientProvider>
     </AppErrorBoundary>
   );

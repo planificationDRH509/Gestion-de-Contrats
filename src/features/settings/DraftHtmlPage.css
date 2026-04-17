@@ -103,15 +103,15 @@
 }
 
 .tab-btn.active {
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px var(--glass-border);
 }
 
 .draft-status-badge {
   color: var(--accent);
   border: 1px solid var(--accent);
-  background: #fff;
+  background: var(--panel);
 }
 
 .code-field {
@@ -129,19 +129,19 @@
   tab-size: 2;
   white-space: pre;
   overflow: auto;
-  background: #fafafa;
+  background: var(--panel-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 16px;
-  color: #1a1a1b;
+  color: var(--ink);
   resize: none;
 }
 
 .code-textarea:focus {
-  background: #fff;
+  background: var(--panel);
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .sidebar-container {
@@ -192,7 +192,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px;
-  background: #fff;
+  background: var(--panel);
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -250,14 +250,15 @@
 }
 
 .letter-paper {
-  background: #fff;
+  background: white; /* Letters usually stay white even in dark mode for contrast, but we can make it a bit off-white if needed. Let's stick to white for now as it's a 'paper' preview. */
   width: 100%;
   max-width: 8.5in;
   min-height: 11in;
   padding: 1in;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 0 30px var(--glass-border);
   transform-origin: top center;
   border-radius: 2px;
+  color: #1a1a1b; /* Keep text dark on paper */
 }
 
 @media (max-width: 1200px) {
