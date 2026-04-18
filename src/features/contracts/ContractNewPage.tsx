@@ -63,6 +63,10 @@ export function ContractNewPage() {
     [workspaceId, userId]
   );
   const { data: spreadsheetData, isLoading: spreadsheetLoading } = useContractsList(spreadsheetQueryParams);
+  const [entryMode, setEntryMode] = useState<"form" | "sheet">(
+    () => (localStorage.getItem("new_contract_entry_mode") === "sheet" ? "sheet" : "form")
+  );
+  const isSheetMode = entryMode === "sheet";
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
@@ -193,6 +197,10 @@ export function ContractNewPage() {
   useEffect(() => {
     setValue("dossierId", preselectedDossierId, { shouldDirty: false });
   }, [preselectedDossierId, setValue]);
+
+  useEffect(() => {
+    localStorage.setItem("new_contract_entry_mode", entryMode);
+  }, [entryMode]);
 
   // ── Position selection: auto-fill salary ──────────────────────────────
   function handlePositionSelect(item: AutocompleteItem) {
@@ -342,8 +350,20 @@ export function ContractNewPage() {
         <div>
           <div className="section-title">Nouveau contrat</div>
         </div>
+        <button
+          type="button"
+          className={`icon-btn ${isSheetMode ? "primary" : ""}`}
+          title={isSheetMode ? "Basculer vers le formulaire" : "Basculer vers la vue tableur"}
+          onClick={() => setEntryMode((prev) => (prev === "form" ? "sheet" : "form"))}
+          aria-label={isSheetMode ? "Afficher le formulaire" : "Afficher la vue tableur"}
+        >
+          <span className="material-symbols-rounded">
+            {isSheetMode ? "description" : "table_view"}
+          </span>
+        </button>
       </div>
 
+      {!isSheetMode ? (
       <form className="card form-compact" onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
         <div className="form-grid compact">
           <label className="field">
@@ -612,6 +632,16 @@ export function ContractNewPage() {
           </button>
         </div>
       </form>
+      ) : (
+        <div className="card">
+          <ContractsSpreadsheetView
+            workspaceId={workspaceId}
+            userId={userId}
+            contracts={spreadsheetData?.items ?? []}
+            isLoading={spreadsheetLoading}
+          />
+        </div>
+      )}
 
       {/* ── Modal MSPP ──────────────────────────────────── */}
       {msppModalOpen && (
@@ -621,21 +651,6 @@ export function ContractNewPage() {
         />
       )}
 
-      <div className="card" style={{ marginTop: "16px" }}>
-        <div className="section-header compact" style={{ marginBottom: "8px" }}>
-          <div>
-            <div className="section-title" style={{ fontSize: "16px" }}>
-              Saisie rapide (tableur)
-            </div>
-          </div>
-        </div>
-        <ContractsSpreadsheetView
-          workspaceId={workspaceId}
-          userId={userId}
-          contracts={spreadsheetData?.items ?? []}
-          isLoading={spreadsheetLoading}
-        />
-      </div>
     </div>
   );
 }

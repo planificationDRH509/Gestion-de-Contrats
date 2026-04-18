@@ -44,6 +44,11 @@ type SpreadsheetDraft = {
   salaryText: string;
 };
 
+type SpreadsheetNewRow = {
+  id: string;
+  draft: SpreadsheetDraft;
+};
+
 type SpreadsheetColumn = {
   key: SpreadsheetFieldKey;
   label: string;
@@ -76,6 +81,19 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
   salaryNumber: "",
   salaryText: ""
 };
+
+const EMPTY_NEW_ROWS_COUNT = 3;
+
+function createEmptyDraft(): SpreadsheetDraft {
+  return { ...EMPTY_DRAFT };
+}
+
+function createNewRow(): SpreadsheetNewRow {
+  return {
+    id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    draft: createEmptyDraft()
+  };
+}
 
 type ContractsSpreadsheetViewProps = {
   workspaceId: string;
@@ -206,11 +224,13 @@ export function ContractsSpreadsheetView({
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
 
   const [draftById, setDraftById] = useState<Record<string, SpreadsheetDraft>>({});
-  const [newDraft, setNewDraft] = useState<SpreadsheetDraft>(EMPTY_DRAFT);
+  const [newRows, setNewRows] = useState<SpreadsheetNewRow[]>(() =>
+    Array.from({ length: EMPTY_NEW_ROWS_COUNT }, () => createNewRow())
+  );
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
-  const [creatingRow, setCreatingRow] = useState(false);
+  const [creatingRows, setCreatingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
-  const [newRowError, setNewRowError] = useState<string | null>(null);
+  const [newRowErrors, setNewRowErrors] = useState<Record<string, string>>({});
   const [sheetNotice, setSheetNotice] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
     () =>
@@ -225,10 +245,9 @@ export function ContractsSpreadsheetView({
     startWidth: number;
   } | null>(null);
 
-  const newNifRef = useRef<HTMLInputElement | null>(null);
+  const newRowsRef = useRef(newRows);
   const saveQueueRef = useRef<Record<string, Promise<void>>>({});
   const draftByIdRef = useRef(draftById);
-  const newDraftRef = useRef(newDraft);
   const contractsMapRef = useRef<Map<string, Contract>>(new Map());
 
   useEffect(() => {
@@ -236,8 +255,8 @@ export function ContractsSpreadsheetView({
   }, [draftById]);
 
   useEffect(() => {
-    newDraftRef.current = newDraft;
-  }, [newDraft]);
+    newRowsRef.current = newRows;
+  }, [newRows]);
 
   const contractsMap = useMemo(
     () => new Map(contracts.map((contract) => [contract.id, contract])),
@@ -362,21 +381,32 @@ export function ContractsSpreadsheetView({
     });
   }
 
-  function setNewField(key: SpreadsheetFieldKey, value: string) {
-    setNewDraft((prev) => {
-      const next: SpreadsheetDraft = { ...prev };
-      if (key === "nif") next.nif = formatNifInput(value);
-      else if (key === "ninu") next.ninu = formatNinuInput(value);
-      else if (key === "gender") next.gender = value === "Femme" ? "Femme" : "Homme";
-      else if (key === "salaryNumber") {
-        next.salaryNumber = value;
-        next.salaryText = computeSalaryText(value);
-      } else if (key !== "salaryText") {
-        (next[key] as string) = value;
-      }
+  function setNewField(rowId: string, key: SpreadsheetFieldKey, value: string) {
+    setNewRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+        const next: SpreadsheetDraft = { ...row.draft };
+        if (key === "nif") next.nif = formatNifInput(value);
+        else if (key === "ninu") next.ninu = formatNinuInput(value);
+        else if (key === "gender") next.gender = value === "Femme" ? "Femme" : "Homme";
+        else if (key === "salaryNumber") {
+          next.salaryNumber = value;
+          next.salaryText = computeSalaryText(value);
+        } else if (key !== "salaryText") {
+          (next[key] as string) = value;
+        }
+        return {
+          ...row,
+          draft: next
+        };
+      })
+    );
+    setNewRowErrors((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
       return next;
     });
-    setNewRowError(null);
   }
 
   function applyPositionSelection(contractId: string, item: AutocompleteItem) {
@@ -387,11 +417,11 @@ export function ContractsSpreadsheetView({
     }
   }
 
-  function applyNewPositionSelection(item: AutocompleteItem) {
+  function applyNewPositionSelection(rowId: string, item: AutocompleteItem) {
     const match = allPositions.find((position) => position.id === item.id);
-    setNewField("position", item.label);
+    setNewField(rowId, "position", item.label);
     if (match && match.defaultSalary > 0) {
-      setNewField("salaryNumber", String(match.defaultSalary));
+      setNewField(rowId, "salaryNumber", String(match.defaultSalary));
     }
   }
 
@@ -516,24 +546,37 @@ export function ContractsSpreadsheetView({
     }
   }
 
-  async function maybeCreateFromNewRow() {
-    if (!workspaceId || !userId || creatingRow) return;
-    const candidate = normalizeDraft(newDraftRef.current);
+  async function maybeCreateFromNewRow(rowId: string) {
+    if (!workspaceId || !userId || creatingRows[rowId]) return;
+
+    const row = newRowsRef.current.find((item) => item.id === rowId);
+    if (!row) return;
+    const candidate = normalizeDraft(row.draft);
 
     if (isDraftEmpty(candidate)) {
-      setNewRowError(null);
+      setNewRowErrors((prev) => {
+        if (!prev[rowId]) return prev;
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
       return;
     }
 
     const validationError = validateDraft(candidate);
     if (validationError) {
-      setNewRowError(validationError);
+      setNewRowErrors((prev) => ({ ...prev, [rowId]: validationError }));
       return;
     }
 
-    setCreatingRow(true);
+    setCreatingRows((prev) => ({ ...prev, [rowId]: true }));
     setSheetNotice(null);
-    setNewRowError(null);
+    setNewRowErrors((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
 
     try {
       const salaryNumberValue = parseMoney(candidate.salaryNumber);
@@ -578,20 +621,33 @@ export function ContractsSpreadsheetView({
         durationMonths: 12
       });
 
-      setNewDraft(EMPTY_DRAFT);
-      setSheetNotice("Nouveau contrat enregistré automatiquement.");
-      window.requestAnimationFrame(() => {
-        newNifRef.current?.focus();
+      setNewRows((prev) => {
+        const next = prev.map((item) =>
+          item.id === rowId ? createNewRow() : item
+        );
+        const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
+        if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
+          const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
+          return [...next, ...Array.from({ length: toAdd }, () => createNewRow())];
+        }
+        return next;
       });
+      setSheetNotice("Nouveau contrat enregistré automatiquement.");
     } catch (error) {
       console.error(error);
-      setNewRowError(
-        error instanceof Error
-          ? error.message
-          : "Impossible de créer le contrat."
-      );
+      setNewRowErrors((prev) => ({
+        ...prev,
+        [rowId]:
+          error instanceof Error
+            ? error.message
+            : "Impossible de créer le contrat."
+      }));
     } finally {
-      setCreatingRow(false);
+      setCreatingRows((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
     }
   }
 
@@ -622,7 +678,7 @@ export function ContractsSpreadsheetView({
     <div className="contracts-sheet-wrapper">
       <div className="contracts-sheet-toolbar">
         <div className="helper-text">
-          Vue tableur active · autosave à la sortie de cellule · contrats saisis par vous uniquement
+          Vue tableur active · autosave à la sortie de cellule · nouvelles lignes vierges en bas
         </div>
         {sheetNotice ? <div className="contracts-sheet-notice">{sheetNotice}</div> : null}
       </div>
@@ -649,117 +705,6 @@ export function ContractsSpreadsheetView({
               </div>
             ))}
           </div>
-
-          <div
-            className={`contracts-sheet-row contracts-sheet-row-new ${creatingRow ? "is-saving" : ""}`}
-            style={{ gridTemplateColumns }}
-          >
-            {renderNifInput(
-              newDraft.nif,
-              (value) => setNewField("nif", value),
-              () => {
-                void maybeCreateFromNewRow();
-              },
-              "input contracts-sheet-input",
-              newNifRef
-            )}
-            <input
-              className="input contracts-sheet-input"
-              value={newDraft.firstName}
-              placeholder="Prénom"
-              onChange={(event) => setNewField("firstName", event.target.value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-            />
-            <input
-              className="input contracts-sheet-input"
-              value={newDraft.lastName}
-              placeholder="Nom"
-              onChange={(event) => setNewField("lastName", event.target.value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-            />
-            <select
-              className="select contracts-sheet-input"
-              value={newDraft.gender}
-              onChange={(event) => setNewField("gender", event.target.value)}
-              onKeyDown={(event) =>
-                handleGenderShortcut(event, (value) => setNewField("gender", value))
-              }
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-            >
-              <option value="Homme">Homme</option>
-              <option value="Femme">Femme</option>
-            </select>
-            <input
-              className="input contracts-sheet-input"
-              value={newDraft.ninu}
-              placeholder="0000000000"
-              onChange={(event) => setNewField("ninu", event.target.value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-            />
-            <AutocompleteField
-              className="input contracts-sheet-input"
-              value={newDraft.address}
-              onChange={(value) => setNewField("address", value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-              items={addressItems}
-              placeholder="Adresse"
-              featuredItem={featuredAddress}
-              pinCategory="address"
-            />
-            <AutocompleteField
-              className="input contracts-sheet-input"
-              value={newDraft.position}
-              onChange={(value) => setNewField("position", value)}
-              onSelect={applyNewPositionSelection}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-              items={positionItems}
-              placeholder="Poste"
-              featuredItem={featuredPosition}
-              pinCategory="position"
-            />
-            <AutocompleteField
-              className="input contracts-sheet-input"
-              value={newDraft.assignment}
-              onChange={(value) => setNewField("assignment", value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-              items={assignmentItems}
-              placeholder="Affectation"
-              featuredItem={featuredAssignment}
-              pinCategory="assignment"
-            />
-            <input
-              className="input contracts-sheet-input"
-              value={newDraft.salaryNumber}
-              placeholder="Ex: 45000"
-              inputMode="decimal"
-              onChange={(event) => setNewField("salaryNumber", event.target.value)}
-              onBlur={() => {
-                void maybeCreateFromNewRow();
-              }}
-            />
-            <input
-              className="input contracts-sheet-input contracts-sheet-input-readonly"
-              value={newDraft.salaryText}
-              readOnly
-              tabIndex={-1}
-            />
-          </div>
-
-          {newRowError ? <div className="contracts-sheet-inline-error">{newRowError}</div> : null}
 
           {contracts.map((contract) => {
             const draft = getRowDraft(contract);
@@ -867,8 +812,128 @@ export function ContractsSpreadsheetView({
             );
           })}
 
+          {newRows.map((row) => {
+            const rowError = newRowErrors[row.id];
+            const creating = Boolean(creatingRows[row.id]);
+
+            return (
+              <div key={row.id} className="contracts-sheet-row-wrap">
+                <div
+                  className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
+                  style={{ gridTemplateColumns }}
+                >
+                  {renderNifInput(
+                    row.draft.nif,
+                    (value) => setNewField(row.id, "nif", value),
+                    () => {
+                      void maybeCreateFromNewRow(row.id);
+                    },
+                    "input contracts-sheet-input"
+                  )}
+                  <input
+                    className="input contracts-sheet-input"
+                    value={row.draft.firstName}
+                    placeholder="Prénom"
+                    onChange={(event) => setNewField(row.id, "firstName", event.target.value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                  />
+                  <input
+                    className="input contracts-sheet-input"
+                    value={row.draft.lastName}
+                    placeholder="Nom"
+                    onChange={(event) => setNewField(row.id, "lastName", event.target.value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                  />
+                  <select
+                    className="select contracts-sheet-input"
+                    value={row.draft.gender}
+                    onChange={(event) => setNewField(row.id, "gender", event.target.value)}
+                    onKeyDown={(event) =>
+                      handleGenderShortcut(event, (value) => setNewField(row.id, "gender", value))
+                    }
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                  >
+                    <option value="Homme">Homme</option>
+                    <option value="Femme">Femme</option>
+                  </select>
+                  <input
+                    className="input contracts-sheet-input"
+                    value={row.draft.ninu}
+                    placeholder="0000000000"
+                    onChange={(event) => setNewField(row.id, "ninu", event.target.value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                  />
+                  <AutocompleteField
+                    className="input contracts-sheet-input"
+                    value={row.draft.address}
+                    onChange={(value) => setNewField(row.id, "address", value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                    items={addressItems}
+                    placeholder="Adresse"
+                    featuredItem={featuredAddress}
+                    pinCategory="address"
+                  />
+                  <AutocompleteField
+                    className="input contracts-sheet-input"
+                    value={row.draft.position}
+                    onChange={(value) => setNewField(row.id, "position", value)}
+                    onSelect={(item) => applyNewPositionSelection(row.id, item)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                    items={positionItems}
+                    placeholder="Poste"
+                    featuredItem={featuredPosition}
+                    pinCategory="position"
+                  />
+                  <AutocompleteField
+                    className="input contracts-sheet-input"
+                    value={row.draft.assignment}
+                    onChange={(value) => setNewField(row.id, "assignment", value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                    items={assignmentItems}
+                    placeholder="Affectation"
+                    featuredItem={featuredAssignment}
+                    pinCategory="assignment"
+                  />
+                  <input
+                    className="input contracts-sheet-input"
+                    value={row.draft.salaryNumber}
+                    placeholder="Ex: 45000"
+                    inputMode="decimal"
+                    onChange={(event) => setNewField(row.id, "salaryNumber", event.target.value)}
+                    onBlur={() => {
+                      void maybeCreateFromNewRow(row.id);
+                    }}
+                  />
+                  <input
+                    className="input contracts-sheet-input contracts-sheet-input-readonly"
+                    value={row.draft.salaryText}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+              </div>
+            );
+          })}
+
           {!isLoading && contracts.length === 0 ? (
-            <div className="empty-state">Aucun contrat à afficher dans la vue tableur.</div>
+            <div className="empty-state">
+              Aucun contrat existant. Utilisez les lignes vierges ci-dessus pour en créer.
+            </div>
           ) : null}
         </div>
       </div>
