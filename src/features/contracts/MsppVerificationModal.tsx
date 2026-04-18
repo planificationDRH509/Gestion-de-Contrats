@@ -132,7 +132,7 @@ export const MsppVerificationModal: React.FC<MsppVerificationModalProps> = ({ ni
         </div>
 
         {/* Content/Iframe Container */}
-        <div style={{ flex: 1, position: "relative", backgroundColor: "#f8fafc" }}>
+        <div style={{ flex: 1, position: "relative", backgroundColor: "var(--panel-muted)" }}>
           <iframe
             src={`/api/local/mspp/verify?nif=${rawNif}`}
             title="MSPP Verification Site"

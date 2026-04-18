@@ -35,14 +35,14 @@ export function ContractDetailPage() {
                 style={
                   dossier.priority === "urgence"
                     ? {
-                        borderColor: "#f59e0b",
-                        color: "#b45309",
-                        backgroundColor: "#fff7ed"
+                        borderColor: "var(--warning)",
+                        color: "var(--warning)",
+                        backgroundColor: "var(--warning-soft)"
                       }
                     : {
-                        borderColor: "#86efac",
-                        color: "#166534",
-                        backgroundColor: "#f0fdf4"
+                        borderColor: "var(--success)",
+                        color: "var(--success)",
+                        backgroundColor: "var(--success-soft)"
                       }
                 }
               >

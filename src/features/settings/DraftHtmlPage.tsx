@@ -217,7 +217,7 @@ export function DraftHtmlPage() {
               </div>
 
               <div className="preview-container">
-                <div className="letter-preview-scroll">
+                <div className="letter-preview-scroll" data-theme="light">
                   <style>{template.css}</style>
                   <div className="letter-paper" dangerouslySetInnerHTML={{ __html: previewHtml }} />
                 </div>

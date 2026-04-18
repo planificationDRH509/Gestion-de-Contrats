@@ -28,13 +28,13 @@ export function ContractDocument({ contract }: { contract: Contract }) {
   }, [html]);
 
   return (
-    <>
+    <div data-theme="light">
       <style>{template.css}</style>
       {pages.map((pageHtml, index) => (
         <section className="contract-page" key={`${contract.id}-${index}`}>
           <div dangerouslySetInnerHTML={{ __html: pageHtml }} />
         </section>
       ))}
-    </>
+    </div>
   );
 }
