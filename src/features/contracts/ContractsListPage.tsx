@@ -29,10 +29,8 @@ import {
   savePrintHistory
 } from "../../lib/printHistory";
 import { createId } from "../../lib/uuid";
-import { ContractsSpreadsheetView } from "./ContractsSpreadsheetView";
 
 type ContractsView = "contracts" | "dossiers";
-type ContractsLayoutMode = "cards" | "sheet";
 
 const STATUS_FILTER_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "saisie", label: "Saisie" },
@@ -78,9 +76,6 @@ export function ContractsListPage() {
   const [manualError, setManualError] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<ContractsView>("contracts");
-  const [contractsLayoutMode, setContractsLayoutMode] = useState<ContractsLayoutMode>(
-    () => (localStorage.getItem("contracts_layout_mode") === "sheet" ? "sheet" : "cards")
-  );
   const [showAll, setShowAll] = useState(() => localStorage.getItem("contracts_view_all") === "true");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | "all">("all");
   const [dossierFilterId, setDossierFilterId] = useState<string | null>(null);
@@ -93,8 +88,7 @@ export function ContractsListPage() {
     "createdAt_desc"
   );
   const [page, setPage] = useState(1);
-  const isSpreadsheetMode = activeView === "contracts" && contractsLayoutMode === "sheet";
-  const pageSize = isSpreadsheetMode ? 30 : 8;
+  const [pageSize] = useState(8);
   const [selected, setSelected] = useState<string[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     id: string;
@@ -140,18 +134,6 @@ export function ContractsListPage() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [userId, workspaceId]);
 
-  useEffect(() => {
-    localStorage.setItem("contracts_layout_mode", contractsLayoutMode);
-  }, [contractsLayoutMode]);
-
-  useEffect(() => {
-    setPage(1);
-    if (isSpreadsheetMode) {
-      setSelected([]);
-      setContextMenu(null);
-    }
-  }, [isSpreadsheetMode]);
-
   const toggleShowAll = () => {
     const newValue = !showAll;
     setShowAll(newValue);
@@ -165,7 +147,7 @@ export function ContractsListPage() {
     sort,
     page,
     pageSize,
-    onlyMine: isSpreadsheetMode ? true : !showAll,
+    onlyMine: !showAll,
     userId,
     status: statusFilter !== "all" ? statusFilter : undefined,
     dossierId: dossierFilterId ?? undefined,
@@ -1069,24 +1051,6 @@ export function ContractsListPage() {
                 />
               </div>
 
-              <button
-                className={`icon-btn ${isSpreadsheetMode ? "primary" : ""}`}
-                title={
-                  isSpreadsheetMode
-                    ? "Basculer vers la vue cartes"
-                    : "Basculer vers la vue tableur"
-                }
-                onClick={() =>
-                  setContractsLayoutMode((prev) =>
-                    prev === "sheet" ? "cards" : "sheet"
-                  )
-                }
-              >
-                <span className="material-symbols-rounded">
-                  {isSpreadsheetMode ? "view_agenda" : "table_view"}
-                </span>
-              </button>
-
               {dossierFilterId ? (
                 <button
                   type="button"
@@ -1135,29 +1099,13 @@ export function ContractsListPage() {
 
               <div className="toolbar-divider" />
 
-              {isSpreadsheetMode ? (
-                <div
-                  className="badge"
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    padding: "6px 10px",
-                    color: "var(--accent)",
-                    borderColor: "var(--accent)",
-                    backgroundColor: "var(--accent-soft)"
-                  }}
-                >
-                  Mes contrats uniquement
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "4px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-muted)" }}>Global</span>
-                  <label className="switch" style={{ transform: "scale(0.7)" }}>
-                    <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                    <span className="switch-slider" />
-                  </label>
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "4px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-muted)" }}>Global</span>
+                <label className="switch" style={{ transform: "scale(0.7)" }}>
+                  <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
+                  <span className="switch-slider" />
+                </label>
+              </div>
             </>
           )}
         </div>
@@ -1176,14 +1124,7 @@ export function ContractsListPage() {
 
           {/* Bulk actions bar removed from here and moved to bottom as floating overlay */}
 
-          {isSpreadsheetMode ? (
-            <ContractsSpreadsheetView
-              workspaceId={workspaceId}
-              userId={userId}
-              contracts={items}
-              isLoading={isLoading}
-            />
-          ) : isLoading ? (
+          {isLoading ? (
             <div className="empty-state">Chargement en cours…</div>
           ) : (
             <div className="contracts-list">
@@ -1930,10 +1871,8 @@ export function ContractsListPage() {
           ) : null}
         </div>
       )}
-      {!isSpreadsheetMode ? (
-        <>
-          {/* Floating Selection Actions Bar */}
-          <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
+      {/* Floating Selection Actions Bar */}
+      <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
             <div className="selection-actions-head">
               <div className="helper-text">
                 {selected.length} sélectionné(s)
@@ -2056,8 +1995,6 @@ export function ContractsListPage() {
               </div>
             </div>
           </div>
-        </>
-      ) : null}
 
       {printHistoryOpen ? (
         <div className={`print-history-panel ${hasSelection ? "shifted" : ""}`}>

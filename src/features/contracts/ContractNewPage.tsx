@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { contractFormSchema, ContractFormSchema } from "./contractSchema";
-import { useApplicantUpsert, useCreateContract } from "./contractsApi";
+import { useApplicantUpsert, useContractsList, useCreateContract } from "./contractsApi";
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney } from "../../lib/format";
@@ -21,6 +21,7 @@ import {
   saveLastChoice,
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
+import { ContractsSpreadsheetView } from "./ContractsSpreadsheetView";
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -48,7 +49,20 @@ export function ContractNewPage() {
   const salaryInputRef = useRef<HTMLInputElement | null>(null);
   const preselectedDossierId = searchParams.get("dossierId") ?? "";
   const workspaceId = user?.workspaceId ?? "";
+  const userId = user?.id ?? "";
   const { data: dossiers = [] } = useDossiersList(workspaceId);
+  const spreadsheetQueryParams = useMemo(
+    () => ({
+      workspaceId,
+      sort: "createdAt_desc" as const,
+      page: 1,
+      pageSize: 30,
+      onlyMine: true,
+      userId
+    }),
+    [workspaceId, userId]
+  );
+  const { data: spreadsheetData, isLoading: spreadsheetLoading } = useContractsList(spreadsheetQueryParams);
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
@@ -606,6 +620,22 @@ export function ContractNewPage() {
           onClose={() => setMsppModalOpen(false)} 
         />
       )}
+
+      <div className="card" style={{ marginTop: "16px" }}>
+        <div className="section-header compact" style={{ marginBottom: "8px" }}>
+          <div>
+            <div className="section-title" style={{ fontSize: "16px" }}>
+              Saisie rapide (tableur)
+            </div>
+          </div>
+        </div>
+        <ContractsSpreadsheetView
+          workspaceId={workspaceId}
+          userId={userId}
+          contracts={spreadsheetData?.items ?? []}
+          isLoading={spreadsheetLoading}
+        />
+      </div>
     </div>
   );
 }
