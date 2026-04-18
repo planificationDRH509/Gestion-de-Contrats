@@ -58,6 +58,10 @@ export class LocalContractRepository implements ContractRepository {
         contract.workspaceId === params.workspaceId && !contract.deletedAt
     );
 
+    if (params.onlyMine && params.userId) {
+      items = items.filter((contract) => contract.createdBy === params.userId);
+    }
+
     if (params.query) {
       items = items.filter((contract) => matchesQuery(contract, params.query ?? ""));
     }

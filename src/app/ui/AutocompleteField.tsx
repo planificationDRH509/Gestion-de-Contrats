@@ -28,6 +28,10 @@ interface AutocompleteFieldProps {
   featuredItem?: AutocompleteItem;
   /** Category for pinning, e.g. "address". If provided, shows pin icons. */
   pinCategory?: string;
+  /** Optional blur handler for parent autosave workflows. */
+  onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
+  /** Optional keydown handler from parent. */
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 function normalize(str: string): string {
@@ -54,6 +58,8 @@ export function AutocompleteField({
   maxShortcuts = 9,
   featuredItem,
   pinCategory,
+  onBlur,
+  onKeyDown,
 }: AutocompleteFieldProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -228,7 +234,11 @@ export function AutocompleteField({
           setOpen(true);
           setActiveIndex(-1);
         }}
-        onKeyDown={handleKeyDown}
+        onKeyDown={(event) => {
+          handleKeyDown(event);
+          onKeyDown?.(event);
+        }}
+        onBlur={onBlur}
         autoComplete="off"
       />
       {open && visibleItems.length > 0 && (

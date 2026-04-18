@@ -29,8 +29,10 @@ import {
   savePrintHistory
 } from "../../lib/printHistory";
 import { createId } from "../../lib/uuid";
+import { ContractsSpreadsheetView } from "./ContractsSpreadsheetView";
 
 type ContractsView = "contracts" | "dossiers";
+type ContractsLayoutMode = "cards" | "sheet";
 
 const STATUS_FILTER_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "saisie", label: "Saisie" },
@@ -76,6 +78,9 @@ export function ContractsListPage() {
   const [manualError, setManualError] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<ContractsView>("contracts");
+  const [contractsLayoutMode, setContractsLayoutMode] = useState<ContractsLayoutMode>(
+    () => (localStorage.getItem("contracts_layout_mode") === "sheet" ? "sheet" : "cards")
+  );
   const [showAll, setShowAll] = useState(() => localStorage.getItem("contracts_view_all") === "true");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | "all">("all");
   const [dossierFilterId, setDossierFilterId] = useState<string | null>(null);
@@ -88,7 +93,8 @@ export function ContractsListPage() {
     "createdAt_desc"
   );
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(8);
+  const isSpreadsheetMode = activeView === "contracts" && contractsLayoutMode === "sheet";
+  const pageSize = isSpreadsheetMode ? 30 : 8;
   const [selected, setSelected] = useState<string[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     id: string;
@@ -134,6 +140,18 @@ export function ContractsListPage() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [userId, workspaceId]);
 
+  useEffect(() => {
+    localStorage.setItem("contracts_layout_mode", contractsLayoutMode);
+  }, [contractsLayoutMode]);
+
+  useEffect(() => {
+    setPage(1);
+    if (isSpreadsheetMode) {
+      setSelected([]);
+      setContextMenu(null);
+    }
+  }, [isSpreadsheetMode]);
+
   const toggleShowAll = () => {
     const newValue = !showAll;
     setShowAll(newValue);
@@ -147,7 +165,7 @@ export function ContractsListPage() {
     sort,
     page,
     pageSize,
-    onlyMine: !showAll,
+    onlyMine: isSpreadsheetMode ? true : !showAll,
     userId,
     status: statusFilter !== "all" ? statusFilter : undefined,
     dossierId: dossierFilterId ?? undefined,
@@ -1051,6 +1069,24 @@ export function ContractsListPage() {
                 />
               </div>
 
+              <button
+                className={`icon-btn ${isSpreadsheetMode ? "primary" : ""}`}
+                title={
+                  isSpreadsheetMode
+                    ? "Basculer vers la vue cartes"
+                    : "Basculer vers la vue tableur"
+                }
+                onClick={() =>
+                  setContractsLayoutMode((prev) =>
+                    prev === "sheet" ? "cards" : "sheet"
+                  )
+                }
+              >
+                <span className="material-symbols-rounded">
+                  {isSpreadsheetMode ? "view_agenda" : "table_view"}
+                </span>
+              </button>
+
               {dossierFilterId ? (
                 <button
                   type="button"
@@ -1099,13 +1135,29 @@ export function ContractsListPage() {
 
               <div className="toolbar-divider" />
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "4px" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-muted)" }}>Global</span>
-                <label className="switch" style={{ transform: "scale(0.7)" }}>
-                  <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                  <span className="switch-slider" />
-                </label>
-              </div>
+              {isSpreadsheetMode ? (
+                <div
+                  className="badge"
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    padding: "6px 10px",
+                    color: "var(--accent)",
+                    borderColor: "var(--accent)",
+                    backgroundColor: "var(--accent-soft)"
+                  }}
+                >
+                  Mes contrats uniquement
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "4px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-muted)" }}>Global</span>
+                  <label className="switch" style={{ transform: "scale(0.7)" }}>
+                    <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
+                    <span className="switch-slider" />
+                  </label>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1124,7 +1176,14 @@ export function ContractsListPage() {
 
           {/* Bulk actions bar removed from here and moved to bottom as floating overlay */}
 
-          {isLoading ? (
+          {isSpreadsheetMode ? (
+            <ContractsSpreadsheetView
+              workspaceId={workspaceId}
+              userId={userId}
+              contracts={items}
+              isLoading={isLoading}
+            />
+          ) : isLoading ? (
             <div className="empty-state">Chargement en cours…</div>
           ) : (
             <div className="contracts-list">
@@ -1871,130 +1930,134 @@ export function ContractsListPage() {
           ) : null}
         </div>
       )}
-      {/* Floating Selection Actions Bar */}
-      <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
-        <div className="selection-actions-head">
-          <div className="helper-text">
-            {selected.length} sélectionné(s)
-          </div>
-          <button
-            className="icon-btn"
-            style={{ border: "none", background: "transparent", width: "24px", height: "24px" }}
-            type="button"
-            onClick={() => setSelected([])}
-            title="Tout désélectionner"
-          >
-            <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>close</span>
-          </button>
-        </div>
-        <div className="selection-actions-row" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
-            <button
-               className="icon-btn"
-               type="button"
-               onClick={(e) => handleContextFromButton(e, "bulk-dossier-trigger")}
-               title="Attribuer un dossier"
-               style={{ background: "#fff", border: "1px solid var(--border)" }}
-            >
-               <span className="material-symbols-rounded">folder_managed</span>
-            </button>
-            <div style={{ fontSize: "12px", fontWeight: 600, maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-               {bulkDossierId ? dossiersById.get(bulkDossierId)?.name : "Choisir dossier"}
+      {!isSpreadsheetMode ? (
+        <>
+          {/* Floating Selection Actions Bar */}
+          <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
+            <div className="selection-actions-head">
+              <div className="helper-text">
+                {selected.length} sélectionné(s)
+              </div>
+              <button
+                className="icon-btn"
+                style={{ border: "none", background: "transparent", width: "24px", height: "24px" }}
+                type="button"
+                onClick={() => setSelected([])}
+                title="Tout désélectionner"
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>close</span>
+              </button>
+            </div>
+            <div className="selection-actions-row" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
+                <button
+                   className="icon-btn"
+                   type="button"
+                   onClick={(e) => handleContextFromButton(e, "bulk-dossier-trigger")}
+                   title="Attribuer un dossier"
+                   style={{ background: "#fff", border: "1px solid var(--border)" }}
+                >
+                   <span className="material-symbols-rounded">folder_managed</span>
+                </button>
+                <div style={{ fontSize: "12px", fontWeight: 600, maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                   {bulkDossierId ? dossiersById.get(bulkDossierId)?.name : "Choisir dossier"}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "4px" }}>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  onClick={handleAssignSelectedToDossier}
+                  disabled={!bulkDossierId}
+                  title="Valider l'affectation"
+                >
+                  <span className="material-symbols-rounded">check</span>
+                </button>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  onClick={() => void assignContracts(selected, null)}
+                  title="Retirer du dossier"
+                >
+                  <span className="material-symbols-rounded">folder_off</span>
+                </button>
+              </div>
+
+              <div className="toolbar-divider" />
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
+                <button
+                   className="icon-btn"
+                   type="button"
+                   onClick={(e) => handleContextFromButton(e, "bulk-status-trigger")}
+                   title="Modifier l'état"
+                   style={{ background: "#fff", border: "1px solid var(--border)" }}
+                >
+                   <span className="material-symbols-rounded">rule</span>
+                </button>
+                <div style={{ fontSize: "12px", fontWeight: 600 }}>
+                   {bulkStatus ? getContractStatusLabel(bulkStatus as ContractStatus) : "Modifier l'état"}
+                </div>
+              </div>
+
+              <button
+                className="icon-btn"
+                type="button"
+                onClick={handleApplyBulkStatus}
+                disabled={!bulkStatus}
+                title="Appliquer l'état"
+              >
+                <span className="material-symbols-rounded">done_all</span>
+              </button>
+
+              <div className="toolbar-divider" />
+
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                   className="input"
+                   type="number"
+                   min="1"
+                   style={{ width: "60px", height: "30px", fontSize: "12px" }}
+                   placeholder="Mois"
+                   value={bulkDuration}
+                   onChange={(e) => setBulkDuration(e.target.value ? Number(e.target.value) : "")}
+                />
+                <button
+                  className="icon-btn"
+                  type="button"
+                  onClick={() => void handleApplyBulkDuration()}
+                  disabled={!bulkDuration}
+                  title="Appliquer durée"
+                >
+                  <span className="material-symbols-rounded">timer</span>
+                </button>
+              </div>
+
+              <div className="toolbar-divider" />
+
+              <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
+                <button
+                  className="icon-btn primary"
+                  type="button"
+                  onClick={() => handlePrint(selected)}
+                  title="Imprimer tout"
+                >
+                  <span className="material-symbols-rounded">print</span>
+                </button>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  onClick={handleExportCsv}
+                  title="Exporter CSV"
+                >
+                  <span className="material-symbols-rounded">download_for_offline</span>
+                </button>
+              </div>
             </div>
           </div>
-
-          <div style={{ display: "flex", gap: "4px" }}>
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={handleAssignSelectedToDossier}
-              disabled={!bulkDossierId}
-              title="Valider l'affectation"
-            >
-              <span className="material-symbols-rounded">check</span>
-            </button>
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={() => void assignContracts(selected, null)}
-              title="Retirer du dossier"
-            >
-              <span className="material-symbols-rounded">folder_off</span>
-            </button>
-          </div>
-
-          <div className="toolbar-divider" />
-
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
-            <button
-               className="icon-btn"
-               type="button"
-               onClick={(e) => handleContextFromButton(e, "bulk-status-trigger")}
-               title="Modifier l'état"
-               style={{ background: "#fff", border: "1px solid var(--border)" }}
-            >
-               <span className="material-symbols-rounded">rule</span>
-            </button>
-            <div style={{ fontSize: "12px", fontWeight: 600 }}>
-               {bulkStatus ? getContractStatusLabel(bulkStatus as ContractStatus) : "Modifier l'état"}
-            </div>
-          </div>
-
-          <button
-            className="icon-btn"
-            type="button"
-            onClick={handleApplyBulkStatus}
-            disabled={!bulkStatus}
-            title="Appliquer l'état"
-          >
-            <span className="material-symbols-rounded">done_all</span>
-          </button>
-
-          <div className="toolbar-divider" />
-
-          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            <input
-               className="input"
-               type="number"
-               min="1"
-               style={{ width: "60px", height: "30px", fontSize: "12px" }}
-               placeholder="Mois"
-               value={bulkDuration}
-               onChange={(e) => setBulkDuration(e.target.value ? Number(e.target.value) : "")}
-            />
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={() => void handleApplyBulkDuration()}
-              disabled={!bulkDuration}
-              title="Appliquer durée"
-            >
-              <span className="material-symbols-rounded">timer</span>
-            </button>
-          </div>
-
-          <div className="toolbar-divider" />
-
-          <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
-            <button
-              className="icon-btn primary"
-              type="button"
-              onClick={() => handlePrint(selected)}
-              title="Imprimer tout"
-            >
-              <span className="material-symbols-rounded">print</span>
-            </button>
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={handleExportCsv}
-              title="Exporter CSV"
-            >
-              <span className="material-symbols-rounded">download_for_offline</span>
-            </button>
-          </div>
-        </div>
-      </div>
+        </>
+      ) : null}
 
       {printHistoryOpen ? (
         <div className={`print-history-panel ${hasSelection ? "shifted" : ""}`}>
