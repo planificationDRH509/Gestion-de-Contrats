@@ -67,6 +67,7 @@ export function ContractNewPage() {
     () => (localStorage.getItem("new_contract_entry_mode") === "sheet" ? "sheet" : "form")
   );
   const isSheetMode = entryMode === "sheet";
+  const [isSheetFullscreen, setIsSheetFullscreen] = useState(false);
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
@@ -201,6 +202,27 @@ export function ContractNewPage() {
   useEffect(() => {
     localStorage.setItem("new_contract_entry_mode", entryMode);
   }, [entryMode]);
+
+  useEffect(() => {
+    if (!isSheetMode) {
+      setIsSheetFullscreen(false);
+    }
+  }, [isSheetMode]);
+
+  useEffect(() => {
+    if (!(isSheetMode && isSheetFullscreen)) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSheetFullscreen(false);
+      }
+    };
+    document.body.classList.add("contracts-sheet-fullscreen-active");
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.classList.remove("contracts-sheet-fullscreen-active");
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isSheetMode, isSheetFullscreen]);
 
   // ── Position selection: auto-fill salary ──────────────────────────────
   function handlePositionSelect(item: AutocompleteItem) {
@@ -350,17 +372,32 @@ export function ContractNewPage() {
         <div>
           <div className="section-title">Nouveau contrat</div>
         </div>
-        <button
-          type="button"
-          className={`icon-btn ${isSheetMode ? "primary" : ""}`}
-          title={isSheetMode ? "Basculer vers le formulaire" : "Basculer vers la vue tableur"}
-          onClick={() => setEntryMode((prev) => (prev === "form" ? "sheet" : "form"))}
-          aria-label={isSheetMode ? "Afficher le formulaire" : "Afficher la vue tableur"}
-        >
-          <span className="material-symbols-rounded">
-            {isSheetMode ? "description" : "table_view"}
-          </span>
-        </button>
+        <div className="new-contract-header-actions">
+          {isSheetMode ? (
+            <button
+              type="button"
+              className={`icon-btn ${isSheetFullscreen ? "primary" : ""}`}
+              title={isSheetFullscreen ? "Réduire le tableur" : "Afficher le tableur en plein écran"}
+              onClick={() => setIsSheetFullscreen((prev) => !prev)}
+              aria-label={isSheetFullscreen ? "Réduire le tableur" : "Agrandir le tableur"}
+            >
+              <span className="material-symbols-rounded">
+                {isSheetFullscreen ? "fullscreen_exit" : "fullscreen"}
+              </span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`icon-btn ${isSheetMode ? "primary" : ""}`}
+            title={isSheetMode ? "Basculer vers le formulaire" : "Basculer vers la vue tableur"}
+            onClick={() => setEntryMode((prev) => (prev === "form" ? "sheet" : "form"))}
+            aria-label={isSheetMode ? "Afficher le formulaire" : "Afficher la vue tableur"}
+          >
+            <span className="material-symbols-rounded">
+              {isSheetMode ? "description" : "table_view"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {!isSheetMode ? (
@@ -633,14 +670,39 @@ export function ContractNewPage() {
         </div>
       </form>
       ) : (
-        <div className="card">
-          <ContractsSpreadsheetView
-            workspaceId={workspaceId}
-            userId={userId}
-            contracts={spreadsheetData?.items ?? []}
-            isLoading={spreadsheetLoading}
-          />
-        </div>
+        isSheetFullscreen ? (
+          <div className="contracts-sheet-fullscreen">
+            <div className="contracts-sheet-fullscreen-topbar">
+              <button
+                type="button"
+                className="icon-btn primary"
+                title="Réduire le tableur"
+                onClick={() => setIsSheetFullscreen(false)}
+                aria-label="Réduire le tableur"
+              >
+                <span className="material-symbols-rounded">fullscreen_exit</span>
+              </button>
+            </div>
+            <div className="contracts-sheet-fullscreen-body">
+              <ContractsSpreadsheetView
+                workspaceId={workspaceId}
+                userId={userId}
+                contracts={spreadsheetData?.items ?? []}
+                isLoading={spreadsheetLoading}
+                showToolbar={false}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="card">
+            <ContractsSpreadsheetView
+              workspaceId={workspaceId}
+              userId={userId}
+              contracts={spreadsheetData?.items ?? []}
+              isLoading={spreadsheetLoading}
+            />
+          </div>
+        )
       )}
 
       {/* ── Modal MSPP ──────────────────────────────────── */}

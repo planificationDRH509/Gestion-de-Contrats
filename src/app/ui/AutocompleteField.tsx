@@ -32,6 +32,12 @@ interface AutocompleteFieldProps {
   onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
   /** Optional keydown handler from parent. */
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** Disable internal ArrowUp/ArrowDown handling (useful for spreadsheet navigation). */
+  enableArrowNavigationInMenu?: boolean;
+  /** Optional row key used by spreadsheet keyboard navigation. */
+  dataSheetRow?: string;
+  /** Optional column index used by spreadsheet keyboard navigation. */
+  dataSheetCol?: number;
 }
 
 function normalize(str: string): string {
@@ -60,6 +66,9 @@ export function AutocompleteField({
   pinCategory,
   onBlur,
   onKeyDown,
+  enableArrowNavigationInMenu = true,
+  dataSheetRow,
+  dataSheetCol,
 }: AutocompleteFieldProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -173,7 +182,7 @@ export function AutocompleteField({
       }
 
       if (!open) {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (enableArrowNavigationInMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
           e.preventDefault();
           setOpen(true);
           setActiveIndex(0);
@@ -184,12 +193,18 @@ export function AutocompleteField({
 
       switch (e.key) {
         case "ArrowDown":
+          if (!enableArrowNavigationInMenu) {
+            break;
+          }
           e.preventDefault();
           setActiveIndex((prev) =>
             prev < visibleItems.length - 1 ? prev + 1 : 0
           );
           break;
         case "ArrowUp":
+          if (!enableArrowNavigationInMenu) {
+            break;
+          }
           e.preventDefault();
           setActiveIndex((prev) =>
             prev > 0 ? prev - 1 : visibleItems.length - 1
@@ -209,7 +224,7 @@ export function AutocompleteField({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, activeIndex, visibleItems, maxShortcuts, featuredItem]
+    [open, activeIndex, visibleItems, maxShortcuts, featuredItem, enableArrowNavigationInMenu]
   );
 
   return (
@@ -217,6 +232,8 @@ export function AutocompleteField({
       <input
         ref={inputRef}
         type="text"
+        data-sheet-row={dataSheetRow}
+        data-sheet-col={dataSheetCol}
         className={className}
         value={value}
         name={name}

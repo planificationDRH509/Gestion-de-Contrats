@@ -870,17 +870,66 @@ img {
   gap: 0;
 }
 
+.contracts-sheet-header-shell,
+.contracts-sheet-row-shell {
+  display: grid;
+  grid-template-columns: 58px auto;
+  align-items: stretch;
+}
+
 .contracts-sheet-header,
 .contracts-sheet-row {
   display: grid;
 }
 
-.contracts-sheet-header {
+.contracts-sheet-header-shell {
   position: sticky;
   top: 0;
   z-index: 10;
   background: var(--panel-muted);
   border-bottom: 1px solid var(--border);
+}
+
+.contracts-sheet-state-head {
+  border-right: 1px solid var(--border);
+}
+
+.contracts-sheet-state-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.contracts-sheet-state-cell .material-symbols-rounded {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.contracts-sheet-state-status-icon {
+  flex-shrink: 0;
+}
+
+.contracts-sheet-comment-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+.contracts-sheet-comment-btn span {
+  font-size: 12px;
+}
+
+.contracts-sheet-state-cell.saved {
+  color: #059669;
+}
+
+.contracts-sheet-state-cell.pending {
+  color: #b45309;
 }
 
 .contracts-sheet-head-cell {
@@ -924,11 +973,13 @@ img {
   background: var(--panel);
 }
 
-.contracts-sheet-row:hover {
+.contracts-sheet-row-shell:hover .contracts-sheet-row,
+.contracts-sheet-row-shell:hover .contracts-sheet-state-cell {
   background: var(--panel-muted);
 }
 
-.contracts-sheet-row.is-saving {
+.contracts-sheet-row.is-saving,
+.contracts-sheet-row-shell.is-saving .contracts-sheet-state-cell {
   box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.35);
   background: rgba(16, 185, 129, 0.05);
 }
@@ -941,7 +992,8 @@ img {
   background: rgba(16, 185, 129, 0.08);
 }
 
-.contracts-sheet-row-wrap:last-child .contracts-sheet-row {
+.contracts-sheet-row-wrap:last-child .contracts-sheet-row,
+.contracts-sheet-row-wrap:last-child .contracts-sheet-state-cell {
   border-bottom: none;
 }
 
@@ -977,6 +1029,51 @@ img {
   color: #b91c1c;
   background: #fef2f2;
   border-bottom: 1px solid #fecaca;
+}
+
+.new-contract-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contracts-sheet-fullscreen-active {
+  overflow: hidden;
+}
+
+.contracts-sheet-fullscreen {
+  position: fixed;
+  inset: 12px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover);
+  padding: 10px;
+}
+
+.contracts-sheet-fullscreen-topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.contracts-sheet-fullscreen-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.contracts-sheet-fullscreen-body .contracts-sheet-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.contracts-sheet-fullscreen-body .contracts-sheet-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .contracts-header {
@@ -1132,94 +1229,58 @@ img {
 }
 
 /* ── Comment widget ──────────────────────────────────── */
-.comment-badge {
-  opacity: 0.65;
-  transition: opacity 0.15s ease;
-}
-.comment-badge:hover {
-  opacity: 1;
+.comment-trigger {
+  position: relative;
 }
 
-.contract-comment-display {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--ink-muted);
-  padding: 3px 8px;
-  border-radius: 8px;
-  border: 1px dashed var(--border);
-  cursor: pointer;
-  margin-top: 4px;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  max-width: 100%;
-  overflow: hidden;
-}
-.contract-comment-display:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.contract-comment-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.contract-comment-editor {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 200px;
-  max-width: 400px;
-  background: #fff;
-  border: 1px solid var(--accent);
+.comment-trigger.has-comment::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  padding: 2px 10px;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: #dc2626;
 }
 
-.contract-comment-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 11px;
-  color: var(--ink);
-  flex: 1;
-  min-width: 0;
-  padding: 2px 0;
-}
-
-.comment-action-btn {
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
+.contract-comment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  background: rgba(15, 23, 42, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--ink-muted);
+  padding: 16px;
 }
 
-.comment-action-btn span {
-  font-size: 16px;
+.contract-comment-modal-card {
+  width: min(560px, 96vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  padding: 14px;
 }
 
-.comment-action-btn:hover {
-  background: var(--panel-muted);
+.contract-comment-modal-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
 }
 
-.comment-action-btn.save:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
+.contract-comment-modal-textarea {
+  min-height: 132px;
+  resize: vertical;
 }
 
-.comment-action-btn.cancel:hover {
-  background: #fee2e2;
-  color: #ef4444;
+.contract-comment-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .tag-suggestion-list {
@@ -2536,7 +2597,9 @@ img {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
+  right: auto;
+  min-width: max(100%, 340px);
+  max-width: min(760px, calc(100vw - 32px));
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -2609,9 +2672,10 @@ img {
 
 .autocomplete-item-label {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.25;
 }
 
 .autocomplete-item.featured {
