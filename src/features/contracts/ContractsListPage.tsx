@@ -1094,12 +1094,14 @@ export function ContractsListPage() {
                       <span>Collaboration</span>
                     </button>
                   </div>
-                  {items.map((contract) => (
-                    <div
-                      className={`contracts-row ${isExpanded(contract.id) ? "expanded" : ""}`}
-                      key={contract.id}
-                      onContextMenu={(event) => handleContextMenu(event, contract.id)}
-                    >
+                  {items.map((contract) => {
+                    const hasComment = Boolean(contract.commentaire?.trim());
+                    return (
+                      <div
+                        className={`contracts-row ${isExpanded(contract.id) ? "expanded" : ""}`}
+                        key={contract.id}
+                        onContextMenu={(event) => handleContextMenu(event, contract.id)}
+                      >
                       <div className="contracts-cell" onClick={(e) => e.stopPropagation()}>
                         <label className="check-hit">
                           <input
@@ -1258,10 +1260,10 @@ export function ContractsListPage() {
                             <span className="material-symbols-rounded">print</span>
                           </button>
                           <button
-                            className={`icon-btn comment-trigger ${contract.commentaire ? "has-comment" : ""}`}
+                            className={`icon-btn comment-trigger ${hasComment ? "has-comment" : ""}`}
                             onClick={() => openComment(contract.id, contract.commentaire ?? null)}
-                            aria-label={contract.commentaire ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
-                            title={contract.commentaire ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                            aria-label={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                            title={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
                           >
                             <span className="material-symbols-rounded">chat_bubble</span>
                           </button>
@@ -1275,8 +1277,9 @@ export function ContractsListPage() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </>
               )}
               {contextMenu && (
