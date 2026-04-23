@@ -18,8 +18,10 @@ import {
   useCreateContract,
   useUpdateContractComment,
   useUpdateContract,
-  useDeleteContract
+  useDeleteContract,
+  lookupNif
 } from "./contractsApi";
+import { getStoredFiscalYear } from "../settings/settingsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { useDossiersList } from "../dossiers/dossiersApi";
 
@@ -267,6 +269,14 @@ export function ContractsSpreadsheetView({
   const [creatingRows, setCreatingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [newRowErrors, setNewRowErrors] = useState<Record<string, string>>({});
+
+  // ── Per-row NIF status for new rows ────────────────────────────────────────
+  type NifRowStatus = {
+    type: "blocked" | "renewal" | "ok";
+    message: string;
+  };
+  const [nifCheckingRows, setNifCheckingRows] = useState<Record<string, boolean>>({});
+  const [nifStatusByRow, setNifStatusByRow] = useState<Record<string, NifRowStatus>>({}); 
 
   const { data: dossiers = [] } = useDossiersList(workspaceId);
 
@@ -589,6 +599,15 @@ export function ContractsSpreadsheetView({
         };
       })
     );
+    // Reset NIF status when NIF field is modified
+    if (key === "nif") {
+      setNifStatusByRow((prev) => {
+        if (!prev[rowId]) return prev;
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+    }
     setNewRowErrors((prev) => {
       if (!prev[rowId]) return prev;
       const next = { ...prev };
@@ -627,6 +646,101 @@ export function ContractsSpreadsheetView({
     if (key === "h" || key === "m") {
       event.preventDefault();
       setGender("Homme");
+    }
+  }
+
+  // ── NIF lookup for new rows ───────────────────────────────────────────
+  async function handleNewRowNifComplete(rowId: string, nifFormatted: string) {
+    if (!workspaceId) return;
+    setNifCheckingRows((prev) => ({ ...prev, [rowId]: true }));
+    try {
+      const result = await lookupNif(nifFormatted, workspaceId);
+      const { identification, contracts } = result;
+
+      if (!identification) {
+        // NIF not found – silent, allow manual entry
+        setNifStatusByRow((prev) => {
+          const next = { ...prev };
+          delete next[rowId];
+          return next;
+        });
+        return;
+      }
+
+      // Auto-fill personal info
+      setNewRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== rowId) return row;
+          const next: SpreadsheetDraft = { ...row.draft };
+          next.firstName = identification.prenom;
+          next.lastName = identification.nom;
+          next.address = identification.adresse;
+          if (identification.ninu) next.ninu = identification.ninu;
+          if (identification.sexe === "Homme" || identification.sexe === "Femme") {
+            next.gender = identification.sexe;
+          }
+          return { ...row, draft: next };
+        })
+      );
+
+      const currentFiscalYear = getStoredFiscalYear();
+
+      if (contracts.length === 0) {
+        // No existing contract – normal creation
+        setNifStatusByRow((prev) => {
+          const next = { ...prev };
+          delete next[rowId];
+          return next;
+        });
+        return;
+      }
+
+      const currentYearContract = contracts.find((c) => c.annee_fiscale === currentFiscalYear);
+      if (currentYearContract) {
+        setNifStatusByRow((prev) => ({
+          ...prev,
+          [rowId]: {
+            type: "blocked",
+            message: `Contrat déjà existant pour l'année fiscale ${currentFiscalYear}.`
+          }
+        }));
+        return;
+      }
+
+      // Renewal: auto-fill from latest contract
+      const latest = contracts[0];
+      setNewRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== rowId) return row;
+          const next: SpreadsheetDraft = { ...row.draft };
+          next.position = latest.titre;
+          next.assignment = latest.lieu_affectation;
+          next.salaryNumber = latest.salaire_en_chiffre?.toString() ?? latest.salaire;
+          next.salaryText = computeSalaryText(next.salaryNumber);
+          // Do NOT overwrite durationMonths
+          return { ...row, draft: next };
+        })
+      );
+      setNifStatusByRow((prev) => ({
+        ...prev,
+        [rowId]: {
+          type: "renewal",
+          message: `Renouvellement — données du contrat ${latest.annee_fiscale} pré-remplies.`
+        }
+      }));
+    } catch {
+      // Network error – silent, allow manual entry
+      setNifStatusByRow((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+    } finally {
+      setNifCheckingRows((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
     }
   }
 
@@ -1176,6 +1290,9 @@ export function ContractsSpreadsheetView({
             const rowError = newRowErrors[row.id];
             const creating = Boolean(creatingRows[row.id]);
             const hasValues = !isDraftEmpty(normalizeDraft(row.draft));
+            const nifChecking = Boolean(nifCheckingRows[row.id]);
+            const nifStatus = nifStatusByRow[row.id] ?? null;
+            const isBlocked = nifStatus?.type === "blocked";
             
             let syncState: SyncState = "empty";
             let label = "Vide";
@@ -1197,19 +1314,52 @@ export function ContractsSpreadsheetView({
                   {renderRowStatusIcon(syncState, label)}
                   <div
                     className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
-                    style={{ gridTemplateColumns }}
+                    style={{ gridTemplateColumns, opacity: isBlocked ? 0.5 : 1, pointerEvents: isBlocked ? "none" : undefined }}
                   >
-                    {renderNifInput(
-                      rowKey,
-                      0,
-                      row.draft.nif,
-                      (value) => setNewField(row.id, "nif", value),
-                      () => {
-                        void maybeCreateFromNewRow(row.id);
-                      },
-                      "input contracts-sheet-input",
-                      row.draft.position
-                    )}
+                    {/* NIF cell with inline status indicator */}
+                    <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+                      <input
+                        data-sheet-row={rowKey}
+                        data-sheet-col={0}
+                        className="input contracts-sheet-input"
+                        style={{ paddingRight: (nifChecking || nifStatus) ? "52px" : "8px" }}
+                        value={row.draft.nif}
+                        placeholder="000-000-000-0"
+                        onChange={(event) => {
+                          const formatted = formatNifInput(event.target.value);
+                          setNewField(row.id, "nif", formatted);
+                          const digits = formatted.replace(/\D/g, "");
+                          if (digits.length === 10) {
+                            void handleNewRowNifComplete(row.id, formatted);
+                          }
+                        }}
+                        onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 0)}
+                        onBlur={() => { void maybeCreateFromNewRow(row.id); }}
+                      />
+                      {/* Loading spinner */}
+                      {nifChecking && (
+                        <span
+                          className="material-symbols-rounded is-spinning"
+                          style={{ position: "absolute", right: "8px", fontSize: "15px", color: "var(--ink-muted)", pointerEvents: "none" }}
+                        >sync</span>
+                      )}
+                      {/* Renewal badge */}
+                      {!nifChecking && nifStatus?.type === "renewal" && (
+                        <span
+                          className="material-symbols-rounded"
+                          title={nifStatus.message}
+                          style={{ position: "absolute", right: "8px", fontSize: "16px", color: "#ca8a04", cursor: "default", pointerEvents: "none" }}
+                        >autorenew</span>
+                      )}
+                      {/* Blocked badge */}
+                      {!nifChecking && nifStatus?.type === "blocked" && (
+                        <span
+                          className="material-symbols-rounded"
+                          title={nifStatus.message}
+                          style={{ position: "absolute", right: "8px", fontSize: "16px", color: "#dc2626", cursor: "default", pointerEvents: "none" }}
+                        >block</span>
+                      )}
+                    </div>
                     <input
                       data-sheet-row={rowKey}
                       data-sheet-col={1}
@@ -1345,6 +1495,28 @@ export function ContractsSpreadsheetView({
                   </div>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+                {nifStatus?.type === "renewal" && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "3px 8px", fontSize: "11px",
+                    color: "#92400e", background: "rgba(234,179,8,0.08)",
+                    borderLeft: "2px solid #ca8a04"
+                  }}>
+                    <span className="material-symbols-rounded" style={{ fontSize: "13px" }}>autorenew</span>
+                    {nifStatus.message}
+                  </div>
+                )}
+                {nifStatus?.type === "blocked" && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "3px 8px", fontSize: "11px",
+                    color: "#991b1b", background: "rgba(239,68,68,0.08)",
+                    borderLeft: "2px solid #dc2626"
+                  }}>
+                    <span className="material-symbols-rounded" style={{ fontSize: "13px" }}>block</span>
+                    {nifStatus.message}
+                  </div>
+                )}
               </div>
             );
           })}

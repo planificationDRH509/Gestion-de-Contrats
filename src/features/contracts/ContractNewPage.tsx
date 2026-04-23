@@ -556,28 +556,8 @@ export function ContractNewPage() {
             <span style={{ fontSize: "13px", lineHeight: 1.45 }}>{nifAlert.message}</span>
           </div>
         )}
-        {nifAlert.type === "not_found" && (
-          <div style={{
-            display: "flex", alignItems: "flex-start", gap: "10px",
-            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
-            background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.30)",
-            color: "var(--info, #2563eb)"
-          }}>
-            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>person_search</span>
-            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>{nifAlert.message}</span>
-          </div>
-        )}
-        {nifError && (
-          <div style={{
-            display: "flex", alignItems: "flex-start", gap: "10px",
-            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
-            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
-            color: "var(--error, #dc2626)"
-          }}>
-            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>wifi_off</span>
-            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>Erreur lors de la vérification du NIF. Vérifiez votre connexion.</span>
-          </div>
-        )}
+        {nifAlert.type === "not_found" && null}
+        {nifError && null}
 
         <div className="form-grid compact">
           <label className="field">
