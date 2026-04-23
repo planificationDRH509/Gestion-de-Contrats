@@ -244,12 +244,12 @@ export function deleteInstitution(id: string) {
 
 // ─── Last Choice Persistence ───────────────────────────────────
 
-export function saveLastChoice(category: "address" | "position" | "assignment", value: string) {
+export function saveLastChoice(category: "address" | "position" | "assignment" | "durationMonths", value: string) {
   if (!value) return;
   localStorage.setItem(`contribution_last_${category}`, value);
 }
 
-export function getLastChoice(category: "address" | "position" | "assignment"): string | null {
+export function getLastChoice(category: "address" | "position" | "assignment" | "durationMonths"): string | null {
   return localStorage.getItem(`contribution_last_${category}`);
 }
 

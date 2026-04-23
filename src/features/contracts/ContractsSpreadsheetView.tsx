@@ -33,7 +33,9 @@ type SpreadsheetFieldKey =
   | "position"
   | "assignment"
   | "salaryNumber"
-  | "salaryText";
+  | "salaryText"
+  | "comment"
+  | "durationMonths";
 
 type SpreadsheetDraft = {
   nif: string;
