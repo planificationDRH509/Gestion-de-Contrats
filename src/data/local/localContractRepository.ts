@@ -11,6 +11,7 @@ import { createId } from "../../lib/uuid";
 import { loadDb, saveDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
+import { formatFirstName, formatLastName } from "../../lib/format";
 
 function now() {
   return new Date().toISOString();
@@ -113,6 +114,8 @@ export class LocalContractRepository implements ContractRepository {
     const timestamp = now();
     const contract: Contract = {
       ...input,
+      firstName: formatFirstName(input.firstName),
+      lastName: formatLastName(input.lastName),
       dossierId: input.dossierId ?? null,
       id: createId(),
       createdAt: timestamp,
@@ -133,6 +136,8 @@ export class LocalContractRepository implements ContractRepository {
     const updated: Contract = {
       ...db.contracts[contractIndex],
       ...input,
+      firstName: input.firstName ? formatFirstName(input.firstName) : db.contracts[contractIndex].firstName,
+      lastName: input.lastName ? formatLastName(input.lastName) : db.contracts[contractIndex].lastName,
       dossierId: input.dossierId ?? db.contracts[contractIndex].dossierId ?? null,
       updatedAt: now()
     };

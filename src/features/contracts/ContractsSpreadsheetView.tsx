@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Contract, Gender } from "../../data/types";
-import { parseMoney } from "../../lib/format";
+import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
   getLastChoice,
@@ -168,8 +168,8 @@ function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
   const salaryText = draft.salaryText.trim() || computeSalaryText(draft.salaryNumber);
   return {
     nif: formatNifInput(draft.nif),
-    firstName: draft.firstName.trim(),
-    lastName: draft.lastName.trim(),
+    firstName: formatFirstName(draft.firstName),
+    lastName: formatLastName(draft.lastName),
     gender: draft.gender === "Femme" ? "Femme" : draft.gender === "Homme" ? "Homme" : "",
     ninu: formatNinuInput(draft.ninu),
     address: draft.address.trim(),
@@ -629,12 +629,15 @@ export function ContractsSpreadsheetView({
         salaryNumberValue
       );
 
+      const formattedFirstName = formatFirstName(editedDraft.firstName);
+      const formattedLastName = formatLastName(editedDraft.lastName);
+
       const applicant = await upsertApplicant.mutateAsync({
         id: contract.applicantId ?? undefined,
         workspaceId,
         gender: editedDraft.gender as Gender,
-        firstName: editedDraft.firstName,
-        lastName: editedDraft.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: editedDraft.nif || null,
         ninu: editedDraft.ninu || null,
         address: editedDraft.address
@@ -647,8 +650,8 @@ export function ContractsSpreadsheetView({
         dossierId: contract.dossierId ?? null,
         status: contract.status,
         gender: editedDraft.gender as Gender,
-        firstName: editedDraft.firstName,
-        lastName: editedDraft.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: editedDraft.nif || null,
         ninu: editedDraft.ninu || null,
         address: editedDraft.address,
@@ -728,12 +731,15 @@ export function ContractsSpreadsheetView({
         salaryNumberValue
       );
 
+      const formattedFirstName = formatFirstName(candidate.firstName);
+      const formattedLastName = formatLastName(candidate.lastName);
+
       const applicant = await upsertApplicant.mutateAsync({
         workspaceId,
         createdBy: userId,
         gender: candidate.gender as Gender,
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: candidate.nif || null,
         ninu: candidate.ninu || null,
         address: candidate.address
@@ -746,8 +752,8 @@ export function ContractsSpreadsheetView({
         dossierId: useDefaultDossier ? (defaultDossierId || null) : null,
         status: "saisie",
         gender: candidate.gender as Gender,
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: candidate.nif || null,
         ninu: candidate.ninu || null,
         address: candidate.address,

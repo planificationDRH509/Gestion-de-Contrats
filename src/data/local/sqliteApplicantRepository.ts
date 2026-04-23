@@ -1,6 +1,7 @@
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
 import { sqliteApiRequest } from "./sqliteApiClient";
+import { formatFirstName, formatLastName } from "../../lib/format";
 
 export class SqliteApplicantRepository implements ApplicantRepository {
   async getById(id: string): Promise<Applicant | null> {
@@ -26,7 +27,11 @@ export class SqliteApplicantRepository implements ApplicantRepository {
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     return sqliteApiRequest<Applicant>("/applicants/upsert", {
       method: "POST",
-      body: input
+      body: {
+        ...input,
+        firstName: formatFirstName(input.firstName),
+        lastName: formatLastName(input.lastName)
+      }
     });
   }
 }

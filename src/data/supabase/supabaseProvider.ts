@@ -23,6 +23,7 @@ import {
   UpsertApplicantInput
 } from "../types";
 import { DataProvider } from "../dataProvider";
+import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import { getSupabaseClient } from "./supabaseClient";
 import {
   normalizeDossierName,
@@ -144,8 +145,8 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       nif: input.nif || input.id || "",
       workspace_id: input.workspaceId,
       sexe: input.gender,
-      prenom: input.firstName,
-      nom: input.lastName,
+      prenom: formatFirstName(input.firstName),
+      nom: formatLastName(input.lastName),
       ninu: input.ninu || null,
       adresse: input.address,
       created_by: input.createdBy

@@ -2,6 +2,7 @@ import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
 import { createId } from "../../lib/uuid";
 import { loadDb, saveDb } from "./localDb";
+import { formatFirstName, formatLastName } from "../../lib/format";
 
 function now() {
   return new Date().toISOString();
@@ -47,8 +48,8 @@ export class LocalApplicantRepository implements ApplicantRepository {
       const updated: Applicant = {
         ...existing,
         gender: input.gender,
-        firstName: input.firstName,
-        lastName: input.lastName,
+        firstName: formatFirstName(input.firstName),
+        lastName: formatLastName(input.lastName),
         nif: input.nif ?? null,
         ninu: input.ninu ?? null,
         address: input.address,
@@ -65,8 +66,8 @@ export class LocalApplicantRepository implements ApplicantRepository {
       id: createId(),
       workspaceId: input.workspaceId,
       gender: input.gender,
-      firstName: input.firstName,
-      lastName: input.lastName,
+      firstName: formatFirstName(input.firstName),
+      lastName: formatLastName(input.lastName),
       nif: input.nif ?? null,
       ninu: input.ninu ?? null,
       address: input.address,

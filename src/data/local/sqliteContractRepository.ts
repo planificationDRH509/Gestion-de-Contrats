@@ -8,6 +8,7 @@ import {
   UpdateContractInput
 } from "../types";
 import { sqliteApiRequest } from "./sqliteApiClient";
+import { formatFirstName, formatLastName } from "../../lib/format";
 
 export class SqliteContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
@@ -34,14 +35,22 @@ export class SqliteContractRepository implements ContractRepository {
   async create(input: CreateContractInput): Promise<Contract> {
     return sqliteApiRequest<Contract>("/contracts", {
       method: "POST",
-      body: input
+      body: {
+        ...input,
+        firstName: formatFirstName(input.firstName),
+        lastName: formatLastName(input.lastName)
+      }
     });
   }
 
   async update(input: UpdateContractInput): Promise<Contract> {
     return sqliteApiRequest<Contract>(`/contracts/${encodeURIComponent(input.id)}`, {
       method: "PATCH",
-      body: input
+      body: {
+        ...input,
+        firstName: input.firstName ? formatFirstName(input.firstName) : undefined,
+        lastName: input.lastName ? formatLastName(input.lastName) : undefined
+      }
     });
   }
 
