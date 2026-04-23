@@ -20,6 +20,7 @@ import {
   useUpdateContract
 } from "./contractsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
+import { useDossiers } from "../dossiers/dossiersApi";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -37,7 +38,7 @@ type SpreadsheetDraft = {
   nif: string;
   firstName: string;
   lastName: string;
-  gender: Gender;
+  gender: Gender | "";
   ninu: string;
   address: string;
   position: string;
@@ -75,7 +76,7 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
   nif: "",
   firstName: "",
   lastName: "",
-  gender: "Homme",
+  gender: "",
   ninu: "",
   address: "",
   position: "",
@@ -169,7 +170,7 @@ function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
     nif: formatNifInput(draft.nif),
     firstName: draft.firstName.trim(),
     lastName: draft.lastName.trim(),
-    gender: draft.gender === "Femme" ? "Femme" : "Homme",
+    gender: draft.gender === "Femme" ? "Femme" : draft.gender === "Homme" ? "Homme" : "",
     ninu: formatNinuInput(draft.ninu),
     address: draft.address.trim(),
     position: draft.position.trim(),
@@ -188,6 +189,9 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
   }
   if (!draft.lastName) {
     return "Le nom est obligatoire.";
+  }
+  if (draft.gender !== "Homme" && draft.gender !== "Femme") {
+    return "Le sexe est obligatoire (Homme ou Femme).";
   }
   if (draft.ninu && !/^\d{10}$/.test(draft.ninu)) {
     return "NINU invalide (10 chiffres).";
@@ -246,6 +250,21 @@ export function ContractsSpreadsheetView({
   const [creatingRows, setCreatingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [newRowErrors, setNewRowErrors] = useState<Record<string, string>>({});
+
+  const { data: dossiers = [] } = useDossiers(workspaceId);
+
+  // Default values state
+  const [useDefaultDossier, setUseDefaultDossier] = useState(false);
+  const [defaultDossierId, setDefaultDossierId] = useState<string>("");
+  
+  const [useDefaultDuration, setUseDefaultDuration] = useState(false);
+  const [defaultDuration, setDefaultDuration] = useState<number>(12);
+
+  const [useDefaultAddress, setUseDefaultAddress] = useState(false);
+  const [defaultAddress, setDefaultAddress] = useState<string>("");
+
+  const [useDefaultAssignment, setUseDefaultAssignment] = useState(false);
+  const [defaultAssignment, setDefaultAssignment] = useState<string>("");
   const [commentOpenContractId, setCommentOpenContractId] = useState<string | null>(null);
   const [commentDraftById, setCommentDraftById] = useState<Record<string, string>>({});
   const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
@@ -320,6 +339,30 @@ export function ContractsSpreadsheetView({
       window.removeEventListener("mouseup", onMouseUp);
     };
   }, [resizing]);
+
+  // Effect to apply address/assignment defaults to empty new rows
+  useEffect(() => {
+    setNewRows((prev) =>
+      prev.map((row) => {
+        const isCurrentlyEmpty = isDraftEmpty(normalizeDraft(row.draft));
+        if (!isCurrentlyEmpty) return row;
+
+        const nextDraft = { ...row.draft };
+        let modified = false;
+
+        if (useDefaultAddress && !row.draft.address) {
+          nextDraft.address = defaultAddress;
+          modified = true;
+        }
+        if (useDefaultAssignment && !row.draft.assignment) {
+          nextDraft.assignment = defaultAssignment;
+          modified = true;
+        }
+
+        return modified ? { ...row, draft: nextDraft } : row;
+      })
+    );
+  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment]);
 
   const featuredAddress = useMemo(() => {
     const last = getLastChoice("address");
@@ -459,7 +502,7 @@ export function ContractsSpreadsheetView({
 
       if (key === "nif") next.nif = formatNifInput(value);
       else if (key === "ninu") next.ninu = formatNinuInput(value);
-      else if (key === "gender") next.gender = value === "Femme" ? "Femme" : "Homme";
+      else if (key === "gender") next.gender = value as Gender | "";
       else if (key === "salaryNumber") {
         next.salaryNumber = value;
         next.salaryText = computeSalaryText(value);
@@ -485,7 +528,7 @@ export function ContractsSpreadsheetView({
         const next: SpreadsheetDraft = { ...row.draft };
         if (key === "nif") next.nif = formatNifInput(value);
         else if (key === "ninu") next.ninu = formatNinuInput(value);
-        else if (key === "gender") next.gender = value === "Femme" ? "Femme" : "Homme";
+        else if (key === "gender") next.gender = value as Gender | "";
         else if (key === "salaryNumber") {
           next.salaryNumber = value;
           next.salaryText = computeSalaryText(value);
@@ -524,14 +567,14 @@ export function ContractsSpreadsheetView({
 
   function handleGenderShortcut(
     event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
-    setGender: (value: Gender) => void
+    setGender: (value: Gender | "") => void
   ) {
     const key = event.key.toLowerCase();
     if (key === "f") {
       event.preventDefault();
       setGender("Femme");
     }
-    if (key === "m") {
+    if (key === "h" || key === "m") {
       event.preventDefault();
       setGender("Homme");
     }
@@ -700,7 +743,7 @@ export function ContractsSpreadsheetView({
         workspaceId,
         createdBy: userId,
         applicantId: applicant.id,
-        dossierId: null,
+        dossierId: useDefaultDossier ? (defaultDossierId || null) : null,
         status: "saisie",
         gender: candidate.gender,
         firstName: candidate.firstName,
@@ -712,17 +755,27 @@ export function ContractsSpreadsheetView({
         assignment: candidate.assignment,
         salaryNumber: salaryNumberValue,
         salaryText: candidate.salaryText,
-        durationMonths: 12
+        durationMonths: useDefaultDuration ? defaultDuration : 12
       });
 
       setNewRows((prev) => {
-        const next = prev.map((item) =>
-          item.id === rowId ? createNewRow() : item
-        );
+        const next = prev.map((item) => {
+          if (item.id !== rowId) return item;
+          const empty = createNewRow();
+          if (useDefaultAddress) empty.draft.address = defaultAddress;
+          if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
+          return empty;
+        });
         const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
         if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
           const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
-          return [...next, ...Array.from({ length: toAdd }, () => createNewRow())];
+          const extra = Array.from({ length: toAdd }, () => {
+            const row = createNewRow();
+            if (useDefaultAddress) row.draft.address = defaultAddress;
+            if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
+            return row;
+          });
+          return [...next, ...extra];
         }
         return next;
       });
@@ -791,8 +844,10 @@ export function ContractsSpreadsheetView({
     );
   }
 
+  type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty";
+
   function renderRowStatusIcon(
-    isPending: boolean,
+    syncState: SyncState,
     label: string,
     options?: {
       showCommentButton?: boolean;
@@ -802,14 +857,32 @@ export function ContractsSpreadsheetView({
   ) {
     const showCommentButton = Boolean(options?.showCommentButton);
     const hasComment = Boolean(options?.hasComment);
+
+    let icon = "radio_button_unchecked";
+    let colorClass = "empty";
+
+    if (syncState === "saved") {
+      icon = "check_circle";
+      colorClass = "saved";
+    } else if (syncState === "saving") {
+      icon = "sync";
+      colorClass = "pending";
+    } else if (syncState === "unsaved") {
+      icon = "edit";
+      colorClass = "unsaved";
+    } else if (syncState === "error") {
+      icon = "error";
+      colorClass = "error";
+    }
+
     return (
       <div
-        className={`contracts-sheet-state-cell ${isPending ? "pending" : "saved"}`}
+        className={`contracts-sheet-state-cell ${colorClass}`}
         title={label}
         aria-label={label}
       >
-        <span className="material-symbols-rounded contracts-sheet-state-status-icon">
-          {isPending ? "schedule" : "check_circle"}
+        <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
+          {icon}
         </span>
         {showCommentButton ? (
           <button
@@ -841,8 +914,98 @@ export function ContractsSpreadsheetView({
     <div className="contracts-sheet-wrapper" ref={sheetRootRef}>
       {showToolbar ? (
         <div className="contracts-sheet-toolbar">
-          <div className="helper-text">
-            Vue tableur active · flèches pour naviguer · lignes vierges en haut
+          <div className="contracts-sheet-defaults-bar">
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultDossier ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultDossier}
+                  onChange={(e) => setUseDefaultDossier(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">folder</span>
+                Dossier
+              </label>
+              {useDefaultDossier && (
+                <select
+                  className="select defaults-select"
+                  value={defaultDossierId}
+                  onChange={(e) => setDefaultDossierId(e.target.value)}
+                >
+                  <option value="">Aucun dossier</option>
+                  {dossiers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultDuration ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultDuration}
+                  onChange={(e) => setUseDefaultDuration(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">calendar_month</span>
+                Durée
+              </label>
+              {useDefaultDuration && (
+                <input
+                  type="number"
+                  className="input defaults-input-mini"
+                  value={defaultDuration}
+                  min={1}
+                  max={60}
+                  onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 12)}
+                />
+              )}
+            </div>
+
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultAddress ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultAddress}
+                  onChange={(e) => setUseDefaultAddress(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">location_on</span>
+                Adresse
+              </label>
+              {useDefaultAddress && (
+                <AutocompleteField
+                  className="defaults-autocomplete"
+                  value={defaultAddress}
+                  onChange={setDefaultAddress}
+                  items={addressItems}
+                  placeholder="Adresse par défaut"
+                  pinCategory="address"
+                />
+              )}
+            </div>
+
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultAssignment ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultAssignment}
+                  onChange={(e) => setUseDefaultAssignment(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">business</span>
+                Affectation
+              </label>
+              {useDefaultAssignment && (
+                <AutocompleteField
+                  className="defaults-autocomplete"
+                  value={defaultAssignment}
+                  onChange={setDefaultAssignment}
+                  items={assignmentItems}
+                  placeholder="Affectation par défaut"
+                  pinCategory="assignment"
+                />
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -877,15 +1040,25 @@ export function ContractsSpreadsheetView({
             const rowError = newRowErrors[row.id];
             const creating = Boolean(creatingRows[row.id]);
             const hasValues = !isDraftEmpty(normalizeDraft(row.draft));
-            const isPending = creating || Boolean(rowError) || hasValues;
+            
+            let syncState: SyncState = "empty";
+            let label = "Vide";
+            
+            if (creating) {
+               syncState = "saving";
+               label = "Enregistrement en cours...";
+            } else if (rowError) {
+               syncState = "error";
+               label = `Erreur: ${rowError}`;
+            } else if (hasValues) {
+               syncState = "unsaved";
+               label = "Non synchronisé";
+            }
 
             return (
               <div key={row.id} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${creating ? "is-saving" : ""}`}>
-                  {renderRowStatusIcon(
-                    isPending,
-                    isPending ? "En attente d'enregistrement" : "Enregistré"
-                  )}
+                  {renderRowStatusIcon(syncState, label)}
                   <div
                     className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
                     style={{ gridTemplateColumns }}
@@ -924,12 +1097,18 @@ export function ContractsSpreadsheetView({
                         void maybeCreateFromNewRow(row.id);
                       }}
                     />
-                    <select
+                    <input
                       data-sheet-row={rowKey}
                       data-sheet-col={3}
-                      className="select contracts-sheet-input"
+                      className="input contracts-sheet-input"
                       value={row.draft.gender}
-                      onChange={(event) => setNewField(row.id, "gender", event.target.value)}
+                      placeholder="H / F"
+                      onChange={(event) => {
+                        const val = event.target.value.toUpperCase();
+                        if (val === "H" || val === "HOMME") setNewField(row.id, "gender", "Homme");
+                        else if (val === "F" || val === "FEMME") setNewField(row.id, "gender", "Femme");
+                        else setNewField(row.id, "gender", val);
+                      }}
                       onKeyDown={(event) => {
                         handleGenderShortcut(event, (value) => setNewField(row.id, "gender", value));
                         handleGridArrowNavigation(event, rowKey, 3);
@@ -937,10 +1116,7 @@ export function ContractsSpreadsheetView({
                       onBlur={() => {
                         void maybeCreateFromNewRow(row.id);
                       }}
-                    >
-                      <option value="Homme">Homme</option>
-                      <option value="Femme">Femme</option>
-                    </select>
+                    />
                     <input
                       data-sheet-row={rowKey}
                       data-sheet-col={4}
@@ -1033,17 +1209,28 @@ export function ContractsSpreadsheetView({
             const draft = getRowDraft(contract);
             const rowError = rowErrors[contract.id];
             const saving = Boolean(savingRows[contract.id]);
-            const isPending =
-              saving ||
-              Boolean(rowError) ||
-              !areDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+            const hasChanges = !areDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+            
+            let syncState: SyncState = "saved";
+            let label = "Enregistré";
+            
+            if (saving) {
+              syncState = "saving";
+              label = "Enregistrement en cours...";
+            } else if (rowError) {
+              syncState = "error";
+              label = `Erreur: ${rowError}`;
+            } else if (hasChanges) {
+              syncState = "unsaved";
+              label = "Modifications non synchronisées";
+            }
 
             return (
               <div key={contract.id} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${saving ? "is-saving" : ""}`}>
                   {renderRowStatusIcon(
-                    isPending,
-                    isPending ? "En attente d'enregistrement" : "Enregistré",
+                    syncState,
+                    label,
                     {
                       showCommentButton: true,
                       hasComment: Boolean(contract.commentaire?.trim()),
@@ -1084,14 +1271,18 @@ export function ContractsSpreadsheetView({
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 2)}
                       onBlur={() => queueExistingSave(contract.id)}
                     />
-                    <select
+                    <input
                       data-sheet-row={rowKey}
                       data-sheet-col={3}
-                      className="select contracts-sheet-input"
+                      className="input contracts-sheet-input"
                       value={draft.gender}
-                      onChange={(event) =>
-                        setExistingField(contract.id, "gender", event.target.value)
-                      }
+                      placeholder="H / F"
+                      onChange={(event) => {
+                        const val = event.target.value.toUpperCase();
+                        if (val === "H" || val === "HOMME") setExistingField(contract.id, "gender", "Homme");
+                        else if (val === "F" || val === "FEMME") setExistingField(contract.id, "gender", "Femme");
+                        else setExistingField(contract.id, "gender", val);
+                      }}
                       onKeyDown={(event) => {
                         handleGenderShortcut(event, (value) =>
                           setExistingField(contract.id, "gender", value)
@@ -1099,10 +1290,7 @@ export function ContractsSpreadsheetView({
                         handleGridArrowNavigation(event, rowKey, 3);
                       }}
                       onBlur={() => queueExistingSave(contract.id)}
-                    >
-                      <option value="Homme">Homme</option>
-                      <option value="Femme">Femme</option>
-                    </select>
+                    />
                     <input
                       data-sheet-row={rowKey}
                       data-sheet-col={4}

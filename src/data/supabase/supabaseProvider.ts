@@ -480,17 +480,18 @@ class SupabaseContractRepository implements ContractRepository {
 
   async update(input: UpdateContractInput): Promise<Contract> {
     const client = getSupabaseClient();
-    const payload = {
-      status: input.status,
-      titre: input.position,
-      lieu_affectation: input.assignment,
-      salaire_en_chiffre: input.salaryNumber,
-      salaire: input.salaryText,
-      duree_contrat: input.durationMonths || 12,
-      dossier_id: input.dossierId,
-      nif: input.applicantId || input.nif || "",
-      commentaire: input.commentaire !== undefined ? input.commentaire : undefined
-    };
+    const payload: Record<string, any> = {};
+    if (input.status !== undefined) payload.status = input.status;
+    if (input.position !== undefined) payload.titre = input.position;
+    if (input.assignment !== undefined) payload.lieu_affectation = input.assignment;
+    if (input.salaryNumber !== undefined) payload.salaire_en_chiffre = input.salaryNumber;
+    if (input.salaryText !== undefined) payload.salaire = input.salaryText;
+    if (input.durationMonths !== undefined) payload.duree_contrat = input.durationMonths;
+    if (input.dossierId !== undefined) payload.dossier_id = input.dossierId;
+    if (input.applicantId !== undefined || input.nif !== undefined) {
+      payload.nif = input.applicantId || input.nif || "";
+    }
+    if (input.commentaire !== undefined) payload.commentaire = input.commentaire;
 
     const { data, error } = await (client
       .from("contrat")

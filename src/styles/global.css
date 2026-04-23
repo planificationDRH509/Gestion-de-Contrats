@@ -844,7 +844,98 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 4px 2px;
+  padding: 8px 12px;
+  background: var(--panel-muted);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+
+.contracts-sheet-defaults-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.defaults-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  transition: all 0.2s var(--premium-ease);
+  box-shadow: var(--shadow);
+}
+
+.defaults-bar-item:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-hover);
+}
+
+.defaults-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.defaults-checkbox input {
+  display: none;
+}
+
+.defaults-checkbox .material-symbols-rounded {
+  font-size: 20px;
+  color: var(--ink-muted);
+  transition: color 0.2s ease;
+}
+
+.defaults-checkbox.is-active {
+  color: var(--accent);
+}
+
+.defaults-checkbox.is-active .material-symbols-rounded {
+  color: var(--accent);
+}
+
+.defaults-select, 
+.defaults-input-mini {
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  height: 32px;
+  outline: none;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.defaults-select:focus,
+.defaults-input-mini:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.defaults-input-mini {
+  width: 60px;
+}
+
+.defaults-autocomplete {
+  width: 200px;
+}
+
+.defaults-autocomplete .input {
+  height: 32px !important;
+  font-size: 12px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
 }
 
 .contracts-sheet-notice {
@@ -930,6 +1021,26 @@ img {
 
 .contracts-sheet-state-cell.pending {
   color: #b45309;
+}
+
+.contracts-sheet-state-cell.unsaved {
+  color: #d97706;
+}
+
+.contracts-sheet-state-cell.error {
+  color: #dc2626;
+}
+
+.contracts-sheet-state-cell.empty {
+  color: #94a3b8;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.is-spinning {
+  animation: spin 1s linear infinite;
 }
 
 .contracts-sheet-head-cell {
