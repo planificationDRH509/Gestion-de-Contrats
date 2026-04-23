@@ -761,7 +761,7 @@ export function ContractNewPage() {
               </button>
             </div>
             <iframe
-              src={`/api/local/mspp/verify?nif=${(nifValue || "").replace(/\D/g, "")}`}
+              src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mspp-verify-proxy?nif=${(nifValue || "").replace(/\D/g, "")}`}
               title="Vérification du permis MSPP"
               style={{ flex: 1, border: "none", minHeight: "320px" }}
             />
