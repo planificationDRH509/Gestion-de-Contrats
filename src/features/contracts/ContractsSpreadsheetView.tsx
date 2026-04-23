@@ -20,7 +20,7 @@ import {
   useUpdateContract
 } from "./contractsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
-import { useDossiers } from "../dossiers/dossiersApi";
+import { useDossiersList } from "../dossiers/dossiersApi";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -251,7 +251,7 @@ export function ContractsSpreadsheetView({
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [newRowErrors, setNewRowErrors] = useState<Record<string, string>>({});
 
-  const { data: dossiers = [] } = useDossiers(workspaceId);
+  const { data: dossiers = [] } = useDossiersList(workspaceId);
 
   // Default values state
   const [useDefaultDossier, setUseDefaultDossier] = useState(false);
@@ -632,7 +632,7 @@ export function ContractsSpreadsheetView({
       const applicant = await upsertApplicant.mutateAsync({
         id: contract.applicantId ?? undefined,
         workspaceId,
-        gender: editedDraft.gender,
+        gender: editedDraft.gender as Gender,
         firstName: editedDraft.firstName,
         lastName: editedDraft.lastName,
         nif: editedDraft.nif || null,
@@ -646,7 +646,7 @@ export function ContractsSpreadsheetView({
         applicantId: applicant.id,
         dossierId: contract.dossierId ?? null,
         status: contract.status,
-        gender: editedDraft.gender,
+        gender: editedDraft.gender as Gender,
         firstName: editedDraft.firstName,
         lastName: editedDraft.lastName,
         nif: editedDraft.nif || null,
@@ -731,7 +731,7 @@ export function ContractsSpreadsheetView({
       const applicant = await upsertApplicant.mutateAsync({
         workspaceId,
         createdBy: userId,
-        gender: candidate.gender,
+        gender: candidate.gender as Gender,
         firstName: candidate.firstName,
         lastName: candidate.lastName,
         nif: candidate.nif || null,
@@ -745,7 +745,7 @@ export function ContractsSpreadsheetView({
         applicantId: applicant.id,
         dossierId: useDefaultDossier ? (defaultDossierId || null) : null,
         status: "saisie",
-        gender: candidate.gender,
+        gender: candidate.gender as Gender,
         firstName: candidate.firstName,
         lastName: candidate.lastName,
         nif: candidate.nif || null,

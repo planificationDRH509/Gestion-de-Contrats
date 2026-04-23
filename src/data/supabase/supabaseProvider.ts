@@ -31,6 +31,7 @@ import {
   normalizeOptionalText
 } from "../../lib/dossier";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
+import { getStoredFiscalYear } from "../../features/settings/settingsApi";
 
 function mapApplicant(row: any): Applicant {
   return {
