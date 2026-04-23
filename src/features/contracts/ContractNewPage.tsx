@@ -12,6 +12,7 @@ import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { filterAddresses, filterPositions, filterAssignments } from "../../data/local/suggestionsDb";
 import { registerContract, updateContract } from "../../data/local/contractsDb";
+import {
   useAddresses,
   usePositions,
   useInstitutions
