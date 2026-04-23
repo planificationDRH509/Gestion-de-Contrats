@@ -15,6 +15,7 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import { BackupSqlPage } from "../features/settings/BackupSqlPage";
 import { UserManagementPage } from "../features/settings/UserManagementPage";
 import { DisplaySettingsPage } from "../features/settings/DisplaySettingsPage";
+import { GeneralSettingsPage } from "../features/settings/GeneralSettingsPage";
 
 export function AppRoutes() {
   return (
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="parametres/backup-sql" element={<BackupSqlPage />} />
         <Route path="parametres/utilisateurs" element={<UserManagementPage />} />
         <Route path="parametres/affichage" element={<DisplaySettingsPage />} />
+        <Route path="parametres/general" element={<GeneralSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/app/contrats" replace />} />
     </Routes>

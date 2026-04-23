@@ -6,10 +6,9 @@ import { contractFormSchema, ContractFormSchema } from "./contractSchema";
 import { useApplicantUpsert, useContract, useUpdateContract } from "./contractsApi";
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
-import { parseMoney } from "../../lib/format";
+import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
-import { MsppVerificationModal } from "./MsppVerificationModal";
 import {
   useAddresses,
   usePositions,
@@ -256,12 +255,15 @@ export function ContractEditPage() {
       // Automatically learn new inputs for the suggestion lists
       learnSuggestions(values.address, values.position, values.assignment, salaryNumberValue);
 
+      const formattedFirstName = formatFirstName(values.firstName);
+      const formattedLastName = formatLastName(values.lastName);
+
       const applicant = await upsertApplicant.mutateAsync({
         id: data.applicantId ?? undefined,
         workspaceId: user.workspaceId,
         gender: values.gender as "Homme" | "Femme",
-        firstName: values.firstName,
-        lastName: values.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: values.nif?.trim() || null,
         ninu: values.ninu?.trim() || null,
         address: values.address
@@ -273,8 +275,8 @@ export function ContractEditPage() {
         dossierId: values.dossierId?.trim() ? values.dossierId : null,
         status: data.status,
         gender: values.gender as "Homme" | "Femme",
-        firstName: values.firstName,
-        lastName: values.lastName,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         nif: values.nif?.trim() || null,
         ninu: values.ninu?.trim() || null,
         address: values.address,
@@ -569,10 +571,50 @@ export function ContractEditPage() {
 
       {/* ── Modal MSPP ──────────────────────────────────── */}
       {msppModalOpen && (
-        <MsppVerificationModal 
-          nif={nifValue || ""} 
-          onClose={() => setMsppModalOpen(false)} 
-        />
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setMsppModalOpen(false); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px"
+          }}
+        >
+          <div style={{
+            background: "var(--panel, #fff)",
+            borderRadius: "12px",
+            width: "100%",
+            maxWidth: "520px",
+            maxHeight: "80vh",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--border, #eee)"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="material-symbols-rounded" style={{ fontSize: "20px", color: "var(--accent, #10b981)" }}>verified_user</span>
+                <span style={{ fontWeight: 600, fontSize: "14px" }}>Vérification MSPP</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMsppModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", lineHeight: 1 }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: "20px", color: "var(--ink-muted, #666)" }}>close</span>
+              </button>
+            </div>
+            <iframe
+              src={`/api/local/mspp/verify?nif=${(nifValue || "").replace(/\D/g, "")}`}
+              title="Vérification du permis MSPP"
+              style={{ flex: 1, border: "none", minHeight: "320px" }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

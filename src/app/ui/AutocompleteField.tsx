@@ -160,24 +160,17 @@ export function AutocompleteField({
         return;
       }
 
-      // Number shortcuts: 1-9 pick item (starting from the second one if we consider 1-9 indices)
-      // Actually, if featuredItem is at index 0, 1 picks index 1.
+      // Number shortcuts: 1-9 pick item
       if (open && visibleItems.length > 0) {
         const digit = parseInt(e.key, 10);
-        if (!isNaN(digit) && digit >= 1 && digit <= Math.min(maxShortcuts, visibleItems.length)) {
-          // If we have a featured item at idx 0, then 1 refers to idx 1?
-          // No, usually 1 refers to the first visible thing.
-          // Let's stick to: 1 picks index 0, 2 picks index 1...
-          e.preventDefault();
-          selectItem(visibleItems[digit - 1]);
-          return;
-        }
-
-        // TAB picks the first item (featured or not)
-        if (e.key === "Tab" && visibleItems.length > 0) {
-          e.preventDefault();
-          selectItem(visibleItems[0]);
-          return;
+        if (!isNaN(digit) && digit >= 1 && digit <= maxShortcuts) {
+          const offset = featuredItem ? 0 : -1;
+          const targetIndex = digit + offset;
+          if (targetIndex >= 0 && targetIndex < visibleItems.length) {
+            e.preventDefault();
+            selectItem(visibleItems[targetIndex]);
+            return;
+          }
         }
       }
 
@@ -262,8 +255,16 @@ export function AutocompleteField({
         <div className="autocomplete-dropdown" ref={listRef}>
           {visibleItems.map((item, idx) => {
             const isFeatured = featuredItem && item.id === featuredItem.id;
-            // Digital shortcuts for first few items
-            const shortcutKey = idx < maxShortcuts ? idx + 1 : null;
+            let shortcutKey = null;
+            if (isFeatured) {
+              shortcutKey = 0;
+            } else {
+              const offset = featuredItem ? 0 : 1;
+              const computedShortcut = idx + offset;
+              if (computedShortcut <= maxShortcuts) {
+                shortcutKey = computedShortcut;
+              }
+            }
             
             return (
               <button
@@ -276,11 +277,9 @@ export function AutocompleteField({
                   selectItem(item);
                 }}
               >
-                {isFeatured ? (
-                  <span className="autocomplete-shortcut featured">Tab</span>
-                ) : shortcutKey !== null ? (
-                  <span className="autocomplete-shortcut">{shortcutKey}</span>
-                ) : null}
+                {shortcutKey !== null && (
+                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>{shortcutKey}</span>
+                )}
 
                 <span className="autocomplete-item-label">
                   {isFeatured && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Dernier:</strong>}

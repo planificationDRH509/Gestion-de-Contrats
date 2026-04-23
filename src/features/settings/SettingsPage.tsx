@@ -9,6 +9,12 @@ export function SettingsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px', marginTop: '20px' }}>
         <SettingsCard 
+          to="/app/parametres/general" 
+          icon="settings" 
+          title="Général" 
+          description="Paramètres globaux tels que l'année fiscale courante."
+        />
+        <SettingsCard 
           to="/app/parametres/affichage" 
           icon="palette" 
           title="Affichage" 

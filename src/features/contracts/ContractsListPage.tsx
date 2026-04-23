@@ -89,7 +89,7 @@ export function ContractsListPage() {
     "createdAt_desc"
   );
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(8);
+  const [pageSize] = useState(25);
   const [selected, setSelected] = useState<string[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     id: string;

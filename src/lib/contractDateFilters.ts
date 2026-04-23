@@ -75,6 +75,11 @@ export function getCurrentFiscalYearStart(now = new Date()): Date {
   return new Date(fiscalStartYear, 9, 1);
 }
 
+export function getDefaultFiscalYearString(now = new Date()): string {
+  const startYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
 export function matchesContractDateFilter(
   contract: ContractDateShape,
   mode: ContractDateFilterMode | undefined,

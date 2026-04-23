@@ -23,7 +23,7 @@ export const contractFormSchema = z.object({
   salaryNumber: z
     .string()
     .min(1, "Le salaire est obligatoire.")
-    .refine((value) => !Number.isNaN(Number.parseFloat(value.replace(/\s/g, "").replace(",", "."))), {
+    .refine((value) => !Number.isNaN(Number.parseFloat(value.replace(/[\s,]/g, ""))), {
       message: "Le salaire doit être un nombre valide."
     }),
   salaryText: z.string().min(1, "Le salaire en lettre est obligatoire."),

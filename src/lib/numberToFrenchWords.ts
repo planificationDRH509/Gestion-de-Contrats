@@ -106,5 +106,5 @@ export function numberToFrenchWords(value: number): string {
     result = `${result} et ${centWords} centime${centPart > 1 ? "s" : ""}`;
   }
 
-  return result;
+  return result.toUpperCase().replace(/-/g, " ");
 }

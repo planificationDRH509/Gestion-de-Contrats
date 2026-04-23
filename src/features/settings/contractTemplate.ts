@@ -1,5 +1,5 @@
 import { Contract } from "../../data/types";
-import { formatCurrency } from "../../lib/format";
+import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import { loadSuggestions } from "../../data/local/suggestionsDb";
 
 export type ContractTemplate = {
@@ -609,11 +609,14 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     addressLabel = `${addressMatch.prefix}${addressLabel}`;
   }
 
+  const formattedFirstName = formatFirstName(contract.firstName);
+  const formattedLastName = formatLastName(contract.lastName);
+
   return {
     contract_id: contract.id,
-    first_name: contract.firstName,
-    last_name: contract.lastName,
-    full_name: `${contract.lastName} ${contract.firstName}`.trim(),
+    first_name: formattedFirstName,
+    last_name: formattedLastName,
+    full_name: `${formattedLastName} ${formattedFirstName}`.trim(),
     gender: contract.gender,
     honorific: isFeminine ? "Madame" : "Monsieur",
     identifiee_identifie: isFeminine ? "identifiée" : "identifié",

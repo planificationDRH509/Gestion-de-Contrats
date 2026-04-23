@@ -461,7 +461,7 @@ class SupabaseContractRepository implements ContractRepository {
       salaire_en_chiffre: input.salaryNumber,
       salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
-      annee_fiscale: "2023-2024",
+      annee_fiscale: getStoredFiscalYear(),
       historique_saisie: "[]",
       created_by: input.createdBy
     };
