@@ -1574,7 +1574,7 @@ export function ContractsSpreadsheetView({
               </button>
             </div>
             <iframe
-              src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mspp-verify-proxy?nif=${(msppNif || "").replace(/\D/g, "")}`}
+              src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mspp-verify-proxy-v2?nif=${(msppNif || "").replace(/\D/g, "")}`}
               title="Vérification du permis MSPP"
               style={{ flex: 1, border: "none", minHeight: "320px" }}
             />
