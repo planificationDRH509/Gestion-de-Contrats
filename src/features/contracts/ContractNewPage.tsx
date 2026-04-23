@@ -3,11 +3,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { contractFormSchema, ContractFormSchema } from "./contractSchema";
-import { useApplicantUpsert, useContractsList, useCreateContract } from "./contractsApi";
+import { useApplicantUpsert, useContractsList, useCreateContract, useNifLookupQuery } from "./contractsApi";
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { saveDraftContract } from "./contractDraft";
+import { getStoredFiscalYear } from "../settings/settingsApi";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 
@@ -121,6 +122,27 @@ export function ContractNewPage() {
   const assignmentValue = watch("assignment");
   const nifValue = watch("nif");
 
+  // ── NIF Lookup State ────────────────────────────────────────────────────────
+  const [nifAlert, setNifAlert] = useState<{
+    type: "renewal" | "blocked" | "not_found" | null;
+    message: string;
+    renewalContract?: { annee_fiscale: string };
+  }>({ type: null, message: "" });
+  const [fieldsLockedByNif, setFieldsLockedByNif] = useState(false);
+  const currentFiscalYear = getStoredFiscalYear();
+
+  // Track which NIF was last processed to avoid double-processing
+  const lastProcessedNif = useRef<string | null>(null);
+
+  const nifDigits = (nifValue ?? "").replace(/\D/g, "");
+  const nifIsComplete = nifDigits.length === 10;
+
+  const {
+    data: nifLookup,
+    isFetching: nifFetching,
+    error: nifError,
+  } = useNifLookupQuery(nifIsComplete ? nifValue : null, workspaceId);
+
   const isMedical = /infirmi|medecin|médecin|pharmacien|sage-femme|laboratoire/i.test(positionValue || "");
 
   function handleVerifyMspp() {
@@ -199,6 +221,81 @@ export function ContractNewPage() {
   useEffect(() => {
     setValue("dossierId", preselectedDossierId, { shouldDirty: false });
   }, [preselectedDossierId, setValue]);
+
+  // ── NIF Lookup Effect ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!nifIsComplete) {
+      // Reset NIF-related state when NIF is cleared/incomplete
+      if (nifAlert.type !== null) {
+        setNifAlert({ type: null, message: "" });
+        setFieldsLockedByNif(false);
+      }
+      return;
+    }
+    if (nifFetching) return;
+    if (!nifLookup) return;
+
+    // Avoid reprocessing the same NIF twice
+    const formattedNif = `${nifDigits.slice(0,3)}-${nifDigits.slice(3,6)}-${nifDigits.slice(6,9)}-${nifDigits.slice(9)}`;
+    if (lastProcessedNif.current === formattedNif) return;
+    lastProcessedNif.current = formattedNif;
+
+    const { identification, contracts } = nifLookup;
+
+    if (!identification) {
+      // NIF not found in identification table → manual entry
+      setNifAlert({
+        type: "not_found",
+        message: "NIF introuvable dans la base d'identification. Saisie manuelle requise."
+      });
+      setFieldsLockedByNif(false);
+      return;
+    }
+
+    // ── Auto-fill personal info ─────────────────────────────────────────────
+    setValue("firstName", identification.prenom, { shouldDirty: true });
+    setValue("lastName", identification.nom, { shouldDirty: true });
+    setValue("address", identification.adresse, { shouldDirty: true });
+    if (identification.ninu) {
+      setValue("ninu", identification.ninu, { shouldDirty: true });
+    }
+    if (identification.sexe === "Homme" || identification.sexe === "Femme") {
+      setValue("gender", identification.sexe, { shouldValidate: true, shouldDirty: true });
+    }
+
+    // ── Contract existence checks ───────────────────────────────────────────
+    if (contracts.length === 0) {
+      // No existing contract → normal creation
+      setNifAlert({ type: null, message: "" });
+      setFieldsLockedByNif(false);
+      return;
+    }
+
+    // Check if a contract exists for the CURRENT fiscal year
+    const currentYearContract = contracts.find(c => c.annee_fiscale === currentFiscalYear);
+    if (currentYearContract) {
+      setNifAlert({
+        type: "blocked",
+        message: `Un contrat existe déjà pour ce NIF dans l'année fiscale en cours (${currentFiscalYear}). La création est bloquée.`
+      });
+      setFieldsLockedByNif(true);
+      return;
+    }
+
+    // Contract exists for a previous fiscal year → Renewal
+    const latestContract = contracts[0]; // already ordered by created_at desc
+    setValue("position", latestContract.titre, { shouldDirty: true });
+    setValue("assignment", latestContract.lieu_affectation, { shouldDirty: true });
+    setValue("salaryNumber", latestContract.salaire_en_chiffre?.toString() ?? latestContract.salaire, { shouldDirty: true });
+    // Do NOT auto-fill durationMonths or annee_fiscale
+    setNifAlert({
+      type: "renewal",
+      message: `Renouvellement détecté — données du contrat ${latestContract.annee_fiscale} pré-remplies. Vérifiez et ajustez si nécessaire.`,
+      renewalContract: { annee_fiscale: latestContract.annee_fiscale }
+    });
+    setFieldsLockedByNif(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nifLookup, nifFetching, nifIsComplete]);
 
   useEffect(() => {
     localStorage.setItem("new_contract_entry_mode", entryMode);
@@ -436,15 +533,79 @@ export function ContractNewPage() {
 
       {!isSheetMode ? (
       <form className="card form-compact" onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
+        {/* ── NIF Alert Banner ──────────────────────────────────────────────── */}
+        {nifAlert.type === "blocked" && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
+            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)",
+            color: "var(--error, #dc2626)"
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>block</span>
+            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>{nifAlert.message}</span>
+          </div>
+        )}
+        {nifAlert.type === "renewal" && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
+            background: "rgba(234,179,8,0.10)", border: "1px solid rgba(234,179,8,0.40)",
+            color: "var(--warning, #ca8a04)"
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>autorenew</span>
+            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>{nifAlert.message}</span>
+          </div>
+        )}
+        {nifAlert.type === "not_found" && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
+            background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.30)",
+            color: "var(--info, #2563eb)"
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>person_search</span>
+            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>{nifAlert.message}</span>
+          </div>
+        )}
+        {nifError && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+            color: "var(--error, #dc2626)"
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>wifi_off</span>
+            <span style={{ fontSize: "13px", lineHeight: 1.45 }}>Erreur lors de la vérification du NIF. Vérifiez votre connexion.</span>
+          </div>
+        )}
+
         <div className="form-grid compact">
           <label className="field">
-            <span>NIF *</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+              <span>NIF *</span>
+              {nifFetching && (
+                <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--ink-muted)" }}>
+                  <span className="material-symbols-rounded is-spinning" style={{ fontSize: "14px" }}>sync</span>
+                  Vérification…
+                </span>
+              )}
+              {!nifFetching && nifLookup?.identification && nifAlert.type !== "blocked" && (
+                <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success, #16a34a)" }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>check_circle</span>
+                  Identifié
+                </span>
+              )}
+            </div>
             <input 
               className="input" 
               placeholder="000-000-000-0" 
               {...register("nif", {
                 onChange: (e) => {
                   setMsppModalOpen(false);
+                  // Reset NIF lookup state on change
+                  lastProcessedNif.current = null;
+                  setNifAlert({ type: null, message: "" });
+                  setFieldsLockedByNif(false);
                   let val = e.target.value.replace(/\D/g, "");
                   if (val.length > 10) val = val.slice(0, 10);
                   let formatted = "";
@@ -454,7 +615,7 @@ export function ContractNewPage() {
                   if (val.length > 9) formatted += "-" + val.substring(9, 10);
                   e.target.value = formatted;
                   if (val.length === 10) {
-                     setFocus("firstName");
+                     setTimeout(() => setFocus("firstName"), 50);
                   }
                 }
               })}
@@ -466,7 +627,12 @@ export function ContractNewPage() {
 
           <label className="field">
             <span>Prénom *</span>
-            <input className="input" {...register("firstName")} />
+            <input
+              className="input"
+              {...register("firstName")}
+              readOnly={fieldsLockedByNif}
+              style={fieldsLockedByNif ? { background: "var(--surface-muted, #f3f4f6)", cursor: "not-allowed" } : undefined}
+            />
             {errors.firstName ? (
               <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.firstName.message}</span>
             ) : null}
@@ -474,7 +640,12 @@ export function ContractNewPage() {
 
           <label className="field">
             <span>Nom *</span>
-            <input className="input" {...register("lastName")} />
+            <input
+              className="input"
+              {...register("lastName")}
+              readOnly={fieldsLockedByNif}
+              style={fieldsLockedByNif ? { background: "var(--surface-muted, #f3f4f6)", cursor: "not-allowed" } : undefined}
+            />
             {errors.lastName ? (
               <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.lastName.message}</span>
             ) : null}
@@ -679,7 +850,12 @@ export function ContractNewPage() {
         {successMessage ? <div className="form-success">{successMessage}</div> : null}
 
         <div className="form-actions">
-          <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+          <button
+            className="btn btn-primary"
+            type="submit"
+            disabled={isSubmitting || fieldsLockedByNif || nifFetching}
+            title={fieldsLockedByNif ? "Création bloquée : un contrat existe déjà pour cette année fiscale" : undefined}
+          >
             <span className="material-symbols-rounded icon">save</span>
             Enregistrer
           </button>
@@ -687,7 +863,7 @@ export function ContractNewPage() {
             className="btn btn-outline"
             type="button"
             onClick={onSubmit("preview")}
-            disabled={isSubmitting}
+            disabled={isSubmitting || fieldsLockedByNif || nifFetching}
           >
             <span className="material-symbols-rounded icon">visibility</span>
             Aperçu
@@ -696,7 +872,7 @@ export function ContractNewPage() {
             className="btn btn-outline"
             type="button"
             onClick={onSubmit("print")}
-            disabled={isSubmitting}
+            disabled={isSubmitting || fieldsLockedByNif || nifFetching}
           >
             <span className="material-symbols-rounded icon">print</span>
             Imprimer

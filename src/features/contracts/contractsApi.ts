@@ -10,6 +10,95 @@ import {
   UpsertApplicantInput
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
+import { getSupabaseClient } from "../../data/supabase/supabaseClient";
+
+// ── NIF Lookup ────────────────────────────────────────────────────────────────
+
+export interface NifIdentification {
+  nif: string;
+  nom: string;
+  prenom: string;
+  sexe: string | null;
+  ninu: string | null;
+  adresse: string;
+}
+
+export interface NifContractMatch {
+  id_contrat: string;
+  annee_fiscale: string;
+  titre: string;
+  lieu_affectation: string;
+  salaire: string;
+  salaire_en_chiffre: number;
+  duree_contrat: number;
+}
+
+export interface NifLookupResult {
+  identification: NifIdentification | null;
+  /** All existing contracts for this NIF (excluding deleted) */
+  contracts: NifContractMatch[];
+}
+
+export async function lookupNif(rawNif: string, workspaceId: string): Promise<NifLookupResult> {
+  const supabase = getSupabaseClient();
+  const nif = rawNif.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d)/, "$1-$2-$3-$4");
+
+  // Query identification table
+  const { data: idData, error: idError } = await supabase
+    .from("identification")
+    .select("nif, nom, prenom, sexe, ninu, adresse")
+    .eq("nif", nif)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  if (idError) throw new Error(idError.message);
+
+  // Query contrat table (only if identification exists)
+  let contracts: NifContractMatch[] = [];
+  if (idData) {
+    const { data: contractData, error: contractError } = await supabase
+      .from("contrat")
+      .select("id_contrat, annee_fiscale, titre, lieu_affectation, salaire, salaire_en_chiffre, duree_contrat")
+      .eq("nif", nif)
+      .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+
+    if (contractError) throw new Error(contractError.message);
+    contracts = (contractData ?? []) as unknown as NifContractMatch[];
+  }
+
+  return {
+    identification: idData
+      ? {
+          nif: idData.nif,
+          nom: idData.nom,
+          prenom: idData.prenom,
+          sexe: idData.sexe ?? null,
+          ninu: idData.ninu ?? null,
+          adresse: idData.adresse,
+        }
+      : null,
+    contracts,
+  };
+}
+
+export function useNifLookupQuery(rawNif: string | null, workspaceId: string) {
+  // Format NIF for lookup (needs 10 digits to be considered complete)
+  const digits = (rawNif ?? "").replace(/\D/g, "");
+  const isComplete = digits.length === 10;
+  const formattedNif = isComplete
+    ? `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9)}`
+    : null;
+
+  return useQuery({
+    queryKey: ["nif-lookup", formattedNif, workspaceId],
+    queryFn: () => lookupNif(formattedNif!, workspaceId),
+    enabled: isComplete && !!workspaceId,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
 
 const provider = getDataProvider();
 
