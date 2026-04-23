@@ -77,6 +77,12 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           label="Statistiques" 
           collapsed={collapsed} 
         />
+        <NavItem 
+          to="/app/identification" 
+          icon="badge" 
+          label="Identification" 
+          collapsed={collapsed} 
+        />
 
         <div className="nav-divider" />
         

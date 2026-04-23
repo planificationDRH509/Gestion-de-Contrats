@@ -16,6 +16,7 @@ import { BackupSqlPage } from "../features/settings/BackupSqlPage";
 import { UserManagementPage } from "../features/settings/UserManagementPage";
 import { DisplaySettingsPage } from "../features/settings/DisplaySettingsPage";
 import { GeneralSettingsPage } from "../features/settings/GeneralSettingsPage";
+import { IdentificationPage } from "../features/identification/IdentificationPage";
 
 export function AppRoutes() {
   return (
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="contrats/:contractId" element={<ContractDetailPage />} />
         <Route path="contrats/print" element={<ContractsPrintPage />} />
         <Route path="statistiques" element={<StatisticsPage />} />
+        <Route path="identification" element={<IdentificationPage />} />
         <Route path="parametres" element={<SettingsPage />} />
         <Route path="parametres/draft-html" element={<DraftHtmlPage />} />
         <Route path="parametres/suggestions" element={<SuggestionsSettingsPage />} />
