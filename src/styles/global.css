@@ -1141,11 +1141,16 @@ img {
   border-bottom: none;
 }
 
+.contracts-sheet-row > div,
+.contracts-sheet-row > input,
+.contracts-sheet-row > .autocomplete-container {
+  border-right: 1px solid var(--border);
+}
+
 .contracts-sheet-input {
   height: 100%;
   min-height: 44px;
   border: none !important;
-  border-right: 1px solid var(--border) !important;
   border-radius: 0 !important;
   background: transparent !important;
   font-size: 13px;

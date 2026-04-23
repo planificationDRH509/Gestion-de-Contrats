@@ -1013,7 +1013,7 @@ export function ContractsSpreadsheetView({
     const canVerify = isMedical && value.length >= 10;
 
     return (
-      <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "stretch", width: "100%" }}>
         <input
           ref={ref}
           data-sheet-row={rowKey}
@@ -1027,32 +1027,32 @@ export function ContractsSpreadsheetView({
           onBlur={onBlur}
         />
         {canVerify && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMsppNif(value);
-              setMsppModalOpen(true);
-            }}
-            style={{
-              position: "absolute",
-              right: "4px",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "4px",
-              color: "var(--accent, #10b981)",
-              transition: "transform 0.2s ease"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.2)"}
-            onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
-            title="Vérifier le permis MSPP"
-          >
-            <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>verified_user</span>
-          </button>
+          <div style={{ position: "absolute", right: "4px", top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMsppNif(value);
+                setMsppModalOpen(true);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "4px",
+                color: "var(--accent, #10b981)",
+                transition: "transform 0.2s ease"
+              }}
+              onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.2)"}
+              onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+              title="Vérifier le permis MSPP"
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>verified_user</span>
+            </button>
+          </div>
         )}
       </div>
     );
@@ -1317,7 +1317,7 @@ export function ContractsSpreadsheetView({
                     style={{ gridTemplateColumns, opacity: isBlocked ? 0.5 : 1, pointerEvents: isBlocked ? "none" : undefined }}
                   >
                     {/* NIF cell with inline status indicator */}
-                    <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+                    <div style={{ position: "relative", display: "flex", alignItems: "stretch", width: "100%" }}>
                       <input
                         data-sheet-row={rowKey}
                         data-sheet-col={0}
@@ -1336,29 +1336,31 @@ export function ContractsSpreadsheetView({
                         onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 0)}
                         onBlur={() => { void maybeCreateFromNewRow(row.id); }}
                       />
-                      {/* Loading spinner */}
-                      {nifChecking && (
-                        <span
-                          className="material-symbols-rounded is-spinning"
-                          style={{ position: "absolute", right: "8px", fontSize: "15px", color: "var(--ink-muted)", pointerEvents: "none" }}
-                        >sync</span>
-                      )}
-                      {/* Renewal badge */}
-                      {!nifChecking && nifStatus?.type === "renewal" && (
-                        <span
-                          className="material-symbols-rounded"
-                          title={nifStatus.message}
-                          style={{ position: "absolute", right: "8px", fontSize: "16px", color: "#ca8a04", cursor: "default", pointerEvents: "none" }}
-                        >autorenew</span>
-                      )}
-                      {/* Blocked badge */}
-                      {!nifChecking && nifStatus?.type === "blocked" && (
-                        <span
-                          className="material-symbols-rounded"
-                          title={nifStatus.message}
-                          style={{ position: "absolute", right: "8px", fontSize: "16px", color: "#dc2626", cursor: "default", pointerEvents: "none" }}
-                        >block</span>
-                      )}
+                      <div style={{ position: "absolute", right: "8px", top: 0, bottom: 0, display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        {/* Loading spinner */}
+                        {nifChecking && (
+                          <span
+                            className="material-symbols-rounded is-spinning"
+                            style={{ fontSize: "15px", color: "var(--ink-muted)" }}
+                          >sync</span>
+                        )}
+                        {/* Renewal badge */}
+                        {!nifChecking && nifStatus?.type === "renewal" && (
+                          <span
+                            className="material-symbols-rounded"
+                            title={nifStatus.message}
+                            style={{ fontSize: "16px", color: "#ca8a04", cursor: "default" }}
+                          >autorenew</span>
+                        )}
+                        {/* Blocked badge */}
+                        {!nifChecking && nifStatus?.type === "blocked" && (
+                          <span
+                            className="material-symbols-rounded"
+                            title={nifStatus.message}
+                            style={{ fontSize: "16px", color: "#dc2626", cursor: "default" }}
+                          >block</span>
+                        )}
+                      </div>
                     </div>
                     <input
                       data-sheet-row={rowKey}
@@ -1465,19 +1467,19 @@ export function ContractsSpreadsheetView({
                       featuredItem={featuredAssignment}
                       pinCategory="assignment"
                     />
-                    <input
-                      data-sheet-row={rowKey}
-                      data-sheet-col={8}
+                    <AutocompleteField
+                      dataSheetRow={rowKey}
+                      dataSheetCol={8}
                       className="input contracts-sheet-input"
                       value={row.draft.salaryNumber}
-                      title={row.draft.salaryText}
                       placeholder="Ex: 45000"
-                      inputMode="decimal"
-                      onChange={(event) => setNewField(row.id, "salaryNumber", event.target.value)}
+                      onChange={(value) => setNewField(row.id, "salaryNumber", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
                       onBlur={() => {
                         void maybeCreateFromNewRow(row.id);
                       }}
+                      items={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).map(s => ({ id: s.toString(), label: s.toString() }))}
+                      showAllOnFocus={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).length > 1}
                     />
                     <input
                       data-sheet-row={rowKey}
@@ -1665,18 +1667,19 @@ export function ContractsSpreadsheetView({
                       featuredItem={featuredAssignment}
                       pinCategory="assignment"
                     />
-                    <input
-                      data-sheet-row={rowKey}
-                      data-sheet-col={8}
+                    <AutocompleteField
+                      dataSheetRow={rowKey}
+                      dataSheetCol={8}
                       className="input contracts-sheet-input"
                       value={draft.salaryNumber}
-                      title={draft.salaryText}
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        setExistingField(contract.id, "salaryNumber", event.target.value)
+                      placeholder="Ex: 45000"
+                      onChange={(value) =>
+                        setExistingField(contract.id, "salaryNumber", value)
                       }
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
                       onBlur={() => queueExistingSave(contract.id)}
+                      items={(allPositions.find(p => p.label === draft.position)?.salaries || []).map(s => ({ id: s.toString(), label: s.toString() }))}
+                      showAllOnFocus={(allPositions.find(p => p.label === draft.position)?.salaries || []).length > 1}
                     />
                     <input
                       data-sheet-row={rowKey}
