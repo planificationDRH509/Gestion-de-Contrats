@@ -59,6 +59,7 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
       .from("contrat")
       .select("id_contrat, annee_fiscale, titre, lieu_affectation, salaire, salaire_en_chiffre, duree_contrat")
       .eq("nif", nif)
+      .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
 

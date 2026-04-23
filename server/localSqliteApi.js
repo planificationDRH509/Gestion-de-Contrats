@@ -429,7 +429,7 @@ function getDb() {
     var db = new DatabaseSync(filePath);
     db.exec("PRAGMA foreign_keys = ON;");
     db.exec("PRAGMA journal_mode = WAL;");
-    db.exec("\n    CREATE TABLE IF NOT EXISTS workspaces (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT\n    );\n\n    CREATE TABLE IF NOT EXISTS identification (\n      nif TEXT PRIMARY KEY,\n      nom TEXT NOT NULL,\n      prenom TEXT NOT NULL,\n      sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),\n      ninu TEXT UNIQUE,\n      adresse TEXT NOT NULL,\n      workspace_id TEXT NOT NULL DEFAULT 'workspace_default',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS identification_workspace_idx\n      ON identification (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS identification_name_idx\n      ON identification (workspace_id, nom, prenom);\n\n    CREATE INDEX IF NOT EXISTS identification_ninu_idx\n      ON identification (workspace_id, ninu);\n\n    CREATE TABLE IF NOT EXISTS dossiers (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      id_contrat TEXT,\n      name TEXT NOT NULL,\n      is_ephemeral INTEGER NOT NULL DEFAULT 0,\n      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),\n      contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),\n      comment TEXT,\n      deadline_date TEXT,\n      focal_point TEXT,\n      roadmap_sheet_number TEXT,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS dossiers_workspace_name_unique_idx\n      ON dossiers (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS dossiers_workspace_idx\n      ON dossiers (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contrat (\n      id_contrat TEXT PRIMARY KEY,\n      nif TEXT NOT NULL,\n      duree_contrat INTEGER NOT NULL DEFAULT 12,\n      salaire TEXT NOT NULL,\n      annee_fiscale TEXT NOT NULL,\n      salaire_en_chiffre REAL NOT NULL,\n      titre TEXT NOT NULL,\n      lieu_affectation TEXT NOT NULL,\n      historique_saisie TEXT NOT NULL,\n      workspace_id TEXT NOT NULL,\n      dossier_id TEXT,\n      status TEXT NOT NULL DEFAULT 'draft'\n        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (nif) REFERENCES identification(nif) ON DELETE RESTRICT ON UPDATE CASCADE,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,\n      FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL\n    );\n\n    CREATE INDEX IF NOT EXISTS contrat_workspace_idx\n      ON contrat (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS contrat_nif_idx\n      ON contrat (workspace_id, nif);\n\n    CREATE INDEX IF NOT EXISTS contrat_dossier_idx\n      ON contrat (workspace_id, dossier_id);\n\n    CREATE TABLE IF NOT EXISTS contract_print_jobs (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      contract_ids_json TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      printed_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE TABLE IF NOT EXISTS autocompletion (\n      id TEXT PRIMARY KEY,\n      type TEXT NOT NULL CHECK (type IN ('address','position','institution')),\n      label TEXT NOT NULL,\n      default_salary INTEGER,\n      address_keywords TEXT,\n      order_index INTEGER NOT NULL DEFAULT 0,\n      workspace_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx\n      ON autocompletion (workspace_id, type);\n  ");
+    db.exec("\n    CREATE TABLE IF NOT EXISTS workspaces (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT\n    );\n\n    CREATE TABLE IF NOT EXISTS identification (\n      nif TEXT PRIMARY KEY,\n      nom TEXT NOT NULL,\n      prenom TEXT NOT NULL,\n      sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),\n      ninu TEXT UNIQUE,\n      adresse TEXT NOT NULL,\n      workspace_id TEXT NOT NULL DEFAULT 'workspace_default',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS identification_workspace_idx\n      ON identification (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS identification_name_idx\n      ON identification (workspace_id, nom, prenom);\n\n    CREATE INDEX IF NOT EXISTS identification_ninu_idx\n      ON identification (workspace_id, ninu);\n\n    CREATE TABLE IF NOT EXISTS dossiers (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      id_contrat TEXT,\n      name TEXT NOT NULL,\n      is_ephemeral INTEGER NOT NULL DEFAULT 0,\n      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),\n      contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),\n      comment TEXT,\n      deadline_date TEXT,\n      focal_point TEXT,\n      roadmap_sheet_number TEXT,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS dossiers_workspace_name_unique_idx\n      ON dossiers (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS dossiers_workspace_idx\n      ON dossiers (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contrat (\n      id_contrat TEXT PRIMARY KEY,\n      nif TEXT NOT NULL,\n      duree_contrat INTEGER NOT NULL DEFAULT 12,\n      salaire TEXT NOT NULL,\n      annee_fiscale TEXT NOT NULL,\n      salaire_en_chiffre REAL NOT NULL,\n      titre TEXT NOT NULL,\n      lieu_affectation TEXT NOT NULL,\n      historique_saisie TEXT NOT NULL,\n      workspace_id TEXT NOT NULL,\n      dossier_id TEXT,\n      status TEXT NOT NULL DEFAULT 'draft'\n        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (nif) REFERENCES identification(nif) ON DELETE RESTRICT ON UPDATE CASCADE,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,\n      FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL\n    );\n\n    CREATE INDEX IF NOT EXISTS contrat_workspace_idx\n      ON contrat (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS contrat_nif_idx\n      ON contrat (workspace_id, nif);\n\n    CREATE INDEX IF NOT EXISTS contrat_dossier_idx\n      ON contrat (workspace_id, dossier_id);\n\n    CREATE TABLE IF NOT EXISTS contract_print_jobs (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      contract_ids_json TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      printed_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE TABLE IF NOT EXISTS autocompletion (\n      id TEXT PRIMARY KEY,\n      type TEXT NOT NULL CHECK (type IN ('address','position','institution')),\n      label TEXT NOT NULL,\n      salaries TEXT,\n      address_keywords TEXT,\n      order_index INTEGER NOT NULL DEFAULT 0,\n      workspace_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    -- Migration hack for consolidated salaries\n    try {\n      const info = db.pragma(\"table_info(autocompletion)\") as any[];\n      if (!info.some(c => c.name === 'salaries')) {\n        db.exec(\"ALTER TABLE autocompletion ADD COLUMN salaries TEXT;\");\n      }\n    } catch(e) {}\n\n    CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx\n      ON autocompletion (workspace_id, type);\n  ");
     var now = nowIso();
     var upsertWorkspace = db.prepare("\n    INSERT INTO workspaces (id, name, created_at, updated_at)\n    VALUES (:id, :name, :created_at, :updated_at)\n    ON CONFLICT(id) DO UPDATE SET\n      name = excluded.name,\n      updated_at = excluded.updated_at\n  ");
     for (var _i = 0, WORKSPACES_1 = WORKSPACES; _i < WORKSPACES_1.length; _i++) {
@@ -482,24 +482,24 @@ function getDb() {
             { l: "Direction Générale", k: [] },
             { l: "Direction Départementale", k: [] }
         ];
-        var insertAuto_1 = db.prepare("\n        INSERT INTO autocompletion (id, type, label, default_salary, address_keywords, order_index, workspace_id, created_at, updated_at)\n        VALUES (:id, :type, :label, :default_salary, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)\n    ");
+        var insertAuto_1 = db.prepare("\n        INSERT INTO autocompletion (id, type, label, salaries, address_keywords, order_index, workspace_id, created_at, updated_at)\n        VALUES (:id, :type, :label, :salaries, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)\n    ");
         addresses.forEach(function (label, idx) {
             insertAuto_1.run({
                 id: randomUUID(), type: "address",
                 label: label,
-                default_salary: null, address_keywords: null,
+                salaries: null, address_keywords: null,
                 order_index: idx, workspace_id: "workspace_default", created_at: now, updated_at: now
             });
         });
         positions.forEach(function (p, idx) {
             insertAuto_1.run({
-                id: randomUUID(), type: "position", label: p.l, default_salary: p.s, address_keywords: null,
+                id: randomUUID(), type: "position", label: p.l, salaries: JSON.stringify([p.s]), address_keywords: null,
                 order_index: idx, workspace_id: "workspace_default", created_at: now, updated_at: now
             });
         });
         institutions.forEach(function (i, idx) {
             insertAuto_1.run({
-                id: randomUUID(), type: "institution", label: i.l, default_salary: null, address_keywords: JSON.stringify(i.k),
+                id: randomUUID(), type: "institution", label: i.l, salaries: null, address_keywords: JSON.stringify(i.k),
                 order_index: idx, workspace_id: "workspace_default", created_at: now, updated_at: now
             });
         });
@@ -1279,14 +1279,33 @@ function handleApiRequest(req, res) {
                                 result_1.addresses.push({ id: row.id, label: row.label, order: row.order_index });
                             }
                             else if (row.type === "position") {
-                                result_1.positions.push({ id: row.id, label: row.label, defaultSalary: row.default_salary, order: row.order_index });
+                                var salaries = [];
+                                try {
+                                    if (row.salaries) {
+                                        salaries = JSON.parse(asString(row.salaries));
+                                    }
+                                    else if (row.salaries_json) {
+                                        // Backward compatibility during migration
+                                        salaries = JSON.parse(asString(row.salaries_json));
+                                    }
+                                    else if (row.default_salary) {
+                                        salaries = [asNumber(row.default_salary)];
+                                    }
+                                }
+                                catch (_a) { }
+                                result_1.positions.push({
+                                    id: row.id,
+                                    label: row.label,
+                                    salaries: salaries,
+                                    order: row.order_index
+                                });
                             }
                             else if (row.type === "institution") {
                                 var kw = [];
                                 try {
                                     kw = JSON.parse(asString(row.address_keywords) || "[]");
                                 }
-                                catch (_a) { }
+                                catch (_b) { }
                                 result_1.institutions.push({ id: row.id, label: row.label, addressKeywords: kw, order: row.order_index });
                             }
                         });
@@ -1305,20 +1324,31 @@ function handleApiRequest(req, res) {
                     db.exec("BEGIN TRANSACTION;");
                     try {
                         db.prepare("DELETE FROM autocompletion WHERE workspace_id = :workspaceId").run({ workspaceId: workspaceId_1 });
-                        insertAuto_2 = db.prepare("\n        INSERT INTO autocompletion (id, type, label, default_salary, address_keywords, order_index, workspace_id, created_at, updated_at)\n        VALUES (:id, :type, :label, :default_salary, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)\n      ");
+                        insertAuto_2 = db.prepare("\n        INSERT INTO autocompletion (id, type, label, salaries, address_keywords, order_index, workspace_id, created_at, updated_at)\n        VALUES (:id, :type, :label, :salaries, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)\n      ");
                         if (Array.isArray(data.addresses)) {
                             data.addresses.forEach(function (a, idx) {
-                                insertAuto_2.run({ id: a.id || randomUUID(), type: "address", label: a.label, default_salary: null, address_keywords: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId_1, created_at: now_1, updated_at: now_1 });
+                                insertAuto_2.run({ id: a.id || randomUUID(), type: "address", label: a.label, salaries: null, address_keywords: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId_1, created_at: now_1, updated_at: now_1 });
                             });
                         }
                         if (Array.isArray(data.positions)) {
                             data.positions.forEach(function (p, idx) {
-                                insertAuto_2.run({ id: p.id || randomUUID(), type: "position", label: p.label, default_salary: p.defaultSalary || 0, address_keywords: null, order_index: typeof p.order === 'number' ? p.order : idx, workspace_id: workspaceId_1, created_at: now_1, updated_at: now_1 });
+                                var salaries = Array.isArray(p.salaries) ? p.salaries : (p.defaultSalary ? [p.defaultSalary] : []);
+                                insertAuto_2.run({
+                                    id: p.id || randomUUID(),
+                                    type: "position",
+                                    label: p.label,
+                                    salaries: JSON.stringify(salaries),
+                                    address_keywords: null,
+                                    order_index: typeof p.order === 'number' ? p.order : idx,
+                                    workspace_id: workspaceId_1,
+                                    created_at: now_1,
+                                    updated_at: now_1
+                                });
                             });
                         }
                         if (Array.isArray(data.institutions)) {
                             data.institutions.forEach(function (i, idx) {
-                                insertAuto_2.run({ id: i.id || randomUUID(), type: "institution", label: i.label, default_salary: null, address_keywords: JSON.stringify(i.addressKeywords || []), order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId_1, created_at: now_1, updated_at: now_1 });
+                                insertAuto_2.run({ id: i.id || randomUUID(), type: "institution", label: i.label, salaries: null, address_keywords: JSON.stringify(i.addressKeywords || []), order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId_1, created_at: now_1, updated_at: now_1 });
                             });
                         }
                         db.exec("COMMIT;");

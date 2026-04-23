@@ -123,6 +123,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     let query = client
       .from("identification")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .is("deleted_at", null);
 
     if (normalizedNif && normalizedNinu) {
