@@ -1987,7 +1987,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           if (row.salaries_json) {
             salaries = JSON.parse(asString(row.salaries_json));
           } else if (row.default_salary) {
-            salaries = [row.default_salary];
+            salaries = [asNumber(row.default_salary)];
           }
         } catch {}
         result.positions.push({ 

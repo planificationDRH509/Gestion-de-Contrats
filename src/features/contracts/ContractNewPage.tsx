@@ -113,7 +113,6 @@ export function ContractNewPage() {
 
   const salaryNumber = watch("salaryNumber");
   const genderValue = watch("gender");
-  const salaryNumberRegister = register("salaryNumber");
   const durationValue = watch("durationMonths");
   const addressValue = watch("address");
   const positionValue = watch("position");
@@ -146,7 +145,7 @@ export function ContractNewPage() {
       .map((p) => ({
         id: p.id,
         label: p.label,
-        sublabel: p.defaultSalary > 0 ? `${p.defaultSalary.toLocaleString("fr-HT")} HTG` : undefined,
+        sublabel: p.salaries && p.salaries.length > 0 ? `${p.salaries[0].toLocaleString("fr-HT")} HTG` : undefined,
       }));
   }, [allPositions, positionValue]);
 
@@ -174,7 +173,7 @@ export function ContractNewPage() {
     return last ? { 
       id: `last_${last}`, 
       label: last,
-      sublabel: match && match.defaultSalary > 0 ? `${match.defaultSalary.toLocaleString("fr-HT")} HTG` : undefined
+      sublabel: match && match.salaries && match.salaries.length > 0 ? `${match.salaries[0].toLocaleString("fr-HT")} HTG` : undefined
     } : undefined;
   }, [allPositions]);
 

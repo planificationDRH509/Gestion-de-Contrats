@@ -405,8 +405,8 @@ export function ContractsSpreadsheetView({
           id: `last_position_${last}`,
           label: last,
           sublabel:
-            match && match.defaultSalary > 0
-              ? `${match.defaultSalary.toLocaleString("fr-HT")} HTG`
+            match && match.salaries && match.salaries.length > 0
+              ? `${match.salaries[0].toLocaleString("fr-HT")} HTG`
               : undefined
         }
       : undefined;
@@ -426,8 +426,8 @@ export function ContractsSpreadsheetView({
       id: position.id,
       label: position.label,
       sublabel:
-        position.defaultSalary > 0
-          ? `${position.defaultSalary.toLocaleString("fr-HT")} HTG`
+        position.salaries && position.salaries.length > 0
+          ? `${position.salaries[0].toLocaleString("fr-HT")} HTG`
           : undefined
     }));
   }, [allPositions]);
