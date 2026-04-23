@@ -964,7 +964,7 @@ img {
 .contracts-sheet-header-shell,
 .contracts-sheet-row-shell {
   display: grid;
-  grid-template-columns: 80px auto;
+  grid-template-columns: 64px auto;
   align-items: stretch;
 }
 
@@ -994,15 +994,21 @@ img {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  position: relative;
 }
 
 .contracts-sheet-state-cell .material-symbols-rounded {
   font-size: 14px;
   line-height: 1;
+  transition: opacity 0.2s ease;
 }
 
 .contracts-sheet-state-status-icon {
   flex-shrink: 0;
+}
+
+.contracts-sheet-row-shell:hover .contracts-sheet-state-status-icon {
+  opacity: 0;
 }
 
 .contracts-sheet-comment-btn {
@@ -1016,13 +1022,16 @@ img {
 }
 
 .contracts-sheet-delete-btn {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.8);
   width: 20px;
   height: 20px;
   border-radius: 5px;
   color: var(--danger);
   opacity: 0;
   transition: all 0.2s ease;
-  transform: scale(0.8);
 }
 
 .contracts-sheet-delete-btn span {
@@ -1030,8 +1039,8 @@ img {
 }
 
 .contracts-sheet-row-shell:hover .contracts-sheet-delete-btn {
-  opacity: 0.6;
-  transform: scale(1);
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
 }
 
 .contracts-sheet-delete-btn:hover {

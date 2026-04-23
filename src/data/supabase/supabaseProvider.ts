@@ -123,7 +123,6 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     let query = client
       .from("identification")
       .select("*")
-      .eq("workspace_id", workspaceId)
       .is("deleted_at", null);
 
     if (normalizedNif && normalizedNinu) {
@@ -141,27 +140,83 @@ class SupabaseApplicantRepository implements ApplicantRepository {
 
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     const client = getSupabaseClient();
-    const payload = {
-      nif: input.nif || input.id || "",
-      workspace_id: input.workspaceId,
-      sexe: input.gender,
-      prenom: formatFirstName(input.firstName),
-      nom: formatLastName(input.lastName),
-      ninu: input.ninu || null,
-      adresse: input.address,
-      created_by: input.createdBy
-    };
+    const nif = (input.nif || input.id || "").trim();
+    if (!nif) throw new Error("NIF obligatoire pour enregistrer un postulant.");
 
-    const { data, error } = await (client
+    const formattedFirstName = formatFirstName(input.firstName);
+    const formattedLastName  = formatLastName(input.lastName);
+
+    // ── 1. Check if the record already exists ─────────────────────────────
+    const { data: existing } = await client
       .from("identification")
-      .upsert(payload as any, { onConflict: "nif" }) as any)
+      .select("*")
+      .eq("nif", nif)
+      .maybeSingle();
+
+    if (!existing) {
+      // ── 2a. NIF not found → INSERT ────────────────────────────────────
+      const payload = {
+        nif,
+        workspace_id: input.workspaceId,
+        sexe: input.gender,
+        prenom: formattedFirstName,
+        nom: formattedLastName,
+        ninu: input.ninu || null,
+        adresse: input.address,
+        created_by: input.createdBy
+      };
+
+      const { data, error } = await (client
+        .from("identification")
+        .insert(payload as any) as any)
+        .select("*")
+        .single();
+
+      if (error || !data) {
+        throw new Error("Impossible d'enregistrer le postulant.");
+      }
+      return mapApplicant(data);
+    }
+
+    // ── 2b. NIF exists → selective UPDATE of changed fields only ─────────
+    const changes: Record<string, unknown> = {};
+
+    if (formattedFirstName && formattedFirstName !== existing.prenom) {
+      changes.prenom = formattedFirstName;
+    }
+    if (formattedLastName && formattedLastName !== existing.nom) {
+      changes.nom = formattedLastName;
+    }
+    if (input.gender && input.gender !== existing.sexe) {
+      changes.sexe = input.gender;
+    }
+    // For ninu: only update if a new value is provided AND it differs
+    if (input.ninu && input.ninu !== existing.ninu) {
+      changes.ninu = input.ninu;
+    }
+    if (input.address && input.address !== existing.adresse) {
+      changes.adresse = input.address;
+    }
+
+    if (Object.keys(changes).length === 0) {
+      // Nothing changed — return existing data as-is
+      return mapApplicant(existing);
+    }
+
+    changes.updated_at = new Date().toISOString();
+
+    const { data: updated, error: updateError } = await (client
+      .from("identification")
+      .update(changes as any) as any)
+      .eq("nif", nif)
+      .eq("workspace_id", input.workspaceId)
       .select("*")
       .single();
 
-    if (error || !data) {
-      throw new Error("Impossible d'enregistrer le postulant.");
+    if (updateError || !updated) {
+      throw new Error("Impossible de mettre à jour le postulant.");
     }
-    return mapApplicant(data);
+    return mapApplicant(updated);
   }
 }
 
@@ -650,21 +705,12 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
   async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
     const data = await this.getByType(workspaceId, "position");
     return data.map(r => {
-      let salaries: number[] = [];
-      try {
-        if (r.salaries_json) {
-          salaries = JSON.parse(r.salaries_json);
-        } else if (r.default_salary) {
-          salaries = [r.default_salary];
-        }
-      } catch {}
-      
       return { 
         id: r.id, 
         label: r.label, 
         prefix: r.prefix,
         labelFeminine: r.label_feminine,
-        salaries, 
+        salaries: r.salaries || [], 
         order: r.order_index 
       };
     });
@@ -708,8 +754,7 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       workspace_id: workspaceId, 
       type: "position", 
       label, 
-      salaries_json: JSON.stringify(salaries),
-      default_salary: salaries[0] || 0,
+      salaries,
       order_index: 0, 
       created_by: createdBy 
     };
@@ -721,8 +766,7 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     const client = getSupabaseClient();
     await (client.from("autocompletion").update({ 
       label, 
-      salaries_json: JSON.stringify(salaries),
-      default_salary: salaries[0] || 0,
+      salaries,
       prefix,
       label_feminine: labelFeminine
     } as any).eq("id", id) as any);

@@ -92,9 +92,10 @@ export function AutocompleteField({
     if (!open) return [];
     
     // Filter base items
-    let filtered = q
+    const isExactMatch = q && items.some(it => normalize(it.label) === q);
+    let filtered = (q && (!showAllOnFocus || !isExactMatch))
       ? items.filter((item) => normalize(item.label).includes(q))
-      : (showAllOnFocus ? items : []);
+      : (q || showAllOnFocus ? items : []);
       
     // Handle featured item
     if (featuredItem) {

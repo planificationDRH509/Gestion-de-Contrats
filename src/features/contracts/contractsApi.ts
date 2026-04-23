@@ -48,7 +48,6 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
     .from("identification")
     .select("nif, nom, prenom, sexe, ninu, adresse")
     .eq("nif", nif)
-    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   if (idError) throw new Error(idError.message);
@@ -60,7 +59,6 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
       .from("contrat")
       .select("id_contrat, annee_fiscale, titre, lieu_affectation, salaire, salaire_en_chiffre, duree_contrat")
       .eq("nif", nif)
-      .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
@@ -92,7 +90,7 @@ export function useNifLookupQuery(rawNif: string | null, workspaceId: string) {
     : null;
 
   return useQuery({
-    queryKey: ["nif-lookup", formattedNif, workspaceId],
+    queryKey: ["nif-lookup", formattedNif],
     queryFn: () => lookupNif(formattedNif!, workspaceId),
     enabled: isComplete && !!workspaceId,
     staleTime: 30_000,
