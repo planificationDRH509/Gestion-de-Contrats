@@ -44,8 +44,8 @@ export function useAddPosition() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ workspaceId, label, defaultSalary }: { workspaceId: string; label: string; defaultSalary: number }) =>
-      repo().addPosition(workspaceId, label, defaultSalary, user?.id),
+    mutationFn: ({ workspaceId, label, salaries }: { workspaceId: string; label: string; salaries: number[] }) =>
+      repo().addPosition(workspaceId, label, salaries, user?.id),
     onSuccess: (_, { workspaceId }) => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "positions", workspaceId] });
     }
@@ -78,8 +78,8 @@ export function useUpdateAddress() {
 export function useUpdatePosition() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, label, defaultSalary, prefix, labelFeminine }: { id: string; label: string; defaultSalary: number; prefix?: string | null; labelFeminine?: string | null }) =>
-      repo().updatePosition(id, label, defaultSalary, prefix, labelFeminine),
+    mutationFn: ({ id, label, salaries, prefix, labelFeminine }: { id: string; label: string; salaries: number[]; prefix?: string | null; labelFeminine?: string | null }) =>
+      repo().updatePosition(id, label, salaries, prefix, labelFeminine),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "positions"] });
     }

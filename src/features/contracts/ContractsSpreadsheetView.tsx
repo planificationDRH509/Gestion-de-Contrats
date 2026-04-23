@@ -94,7 +94,7 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 
 const EMPTY_NEW_ROWS_COUNT = 3;
 const NAVIGABLE_COLUMN_COUNT = 10;
-const STATUS_COLUMN_WIDTH = 64;
+const STATUS_COLUMN_WIDTH = 80;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT };
@@ -140,7 +140,7 @@ function formatNinuInput(value: string): string {
 
 function computeSalaryText(salaryNumber: string): string {
   const numeric = parseMoney(salaryNumber || "0");
-  return numeric ? numberToFrenchWords(numeric) : "";
+  return numeric ? numberToFrenchWords(numeric).toUpperCase() : "";
 }
 
 function toDraft(contract: Contract): SpreadsheetDraft {
@@ -252,6 +252,10 @@ export function ContractsSpreadsheetView({
   const { data: allAddresses = [] } = useAddresses(workspaceId);
   const { data: allPositions = [] } = usePositions(workspaceId);
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
+  const isMedicalPosition = (pos: string) => /infirmi|medecin|médecin|pharmacien|sage-femme|laboratoire/i.test(pos || "");
+
+  const [msppModalOpen, setMsppModalOpen] = useState(false);
+  const [msppNif, setMsppNif] = useState("");
 
   const [draftById, setDraftById] = useState<Record<string, SpreadsheetDraft>>({});
   const [newRows, setNewRows] = useState<SpreadsheetNewRow[]>(() =>
@@ -574,18 +578,20 @@ export function ContractsSpreadsheetView({
   }
 
   function applyPositionSelection(contractId: string, item: AutocompleteItem) {
-    const match = allPositions.find((position) => position.id === item.id);
+    const match = allPositions.find((position: any) => position.id === item.id);
     setExistingField(contractId, "position", item.label);
-    if (match && match.defaultSalary > 0) {
-      setExistingField(contractId, "salaryNumber", String(match.defaultSalary));
+    if (match && match.salaries && match.salaries.length > 0) {
+      const middleIndex = Math.floor(match.salaries.length / 2);
+      setExistingField(contractId, "salaryNumber", String(match.salaries[middleIndex]));
     }
   }
 
   function applyNewPositionSelection(rowId: string, item: AutocompleteItem) {
-    const match = allPositions.find((position) => position.id === item.id);
+    const match = allPositions.find((position: any) => position.id === item.id);
     setNewField(rowId, "position", item.label);
-    if (match && match.defaultSalary > 0) {
-      setNewField(rowId, "salaryNumber", String(match.defaultSalary));
+    if (match && match.salaries && match.salaries.length > 0) {
+      const middleIndex = Math.floor(match.salaries.length / 2);
+      setNewField(rowId, "salaryNumber", String(match.salaries[middleIndex]));
     }
   }
 
@@ -866,20 +872,55 @@ export function ContractsSpreadsheetView({
     onChange: (value: string) => void,
     onBlur: () => void,
     rowClassName: string,
+    position?: string,
     ref?: React.RefObject<HTMLInputElement>
   ) {
+    const isMedical = isMedicalPosition(position || "");
+    const canVerify = isMedical && value.length >= 10;
+
     return (
-      <input
-        ref={ref}
-        data-sheet-row={rowKey}
-        data-sheet-col={columnIndex}
-        className={rowClassName}
-        value={value}
-        placeholder="000-000-000-0"
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, columnIndex)}
-        onBlur={onBlur}
-      />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+        <input
+          ref={ref}
+          data-sheet-row={rowKey}
+          data-sheet-col={columnIndex}
+          className={rowClassName}
+          style={{ paddingRight: canVerify ? "32px" : "8px" }}
+          value={value}
+          placeholder="000-000-000-0"
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, columnIndex)}
+          onBlur={onBlur}
+        />
+        {canVerify && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMsppNif(value);
+              setMsppModalOpen(true);
+            }}
+            style={{
+              position: "absolute",
+              right: "4px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "4px",
+              color: "var(--accent, #10b981)",
+              transition: "transform 0.2s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.2)"}
+            onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+            title="Vérifier le permis MSPP"
+          >
+            <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>verified_user</span>
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -1146,7 +1187,8 @@ export function ContractsSpreadsheetView({
                       () => {
                         void maybeCreateFromNewRow(row.id);
                       },
-                      "input contracts-sheet-input"
+                      "input contracts-sheet-input",
+                      row.draft.position
                     )}
                     <input
                       data-sheet-row={rowKey}
@@ -1335,7 +1377,8 @@ export function ContractsSpreadsheetView({
                       draft.nif,
                       (value) => setExistingField(contract.id, "nif", value),
                       () => queueExistingSave(contract.id),
-                      "input contracts-sheet-input"
+                      "input contracts-sheet-input",
+                      draft.position
                     )}
                     <input
                       data-sheet-row={rowKey}
@@ -1491,6 +1534,53 @@ export function ContractsSpreadsheetView({
           void saveComment(activeCommentContract.id);
         }}
       />
+      {/* ── Modal MSPP ──────────────────────────────────── */}
+      {msppModalOpen && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setMsppModalOpen(false); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 3000,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px"
+          }}
+        >
+          <div style={{
+            background: "var(--panel, #fff)",
+            borderRadius: "12px",
+            width: "100%",
+            maxWidth: "520px",
+            maxHeight: "80vh",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--border, #eee)"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="material-symbols-rounded" style={{ fontSize: "20px", color: "var(--accent, #10b981)" }}>verified_user</span>
+                <span style={{ fontWeight: 600, fontSize: "14px" }}>Vérification MSPP</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMsppModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", lineHeight: 1 }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: "20px", color: "var(--ink-muted, #666)" }}>close</span>
+              </button>
+            </div>
+            <iframe
+              src={`/api/local/mspp/verify?nif=${(msppNif || "").replace(/\D/g, "")}`}
+              title="Vérification du permis MSPP"
+              style={{ flex: 1, border: "none", minHeight: "320px" }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

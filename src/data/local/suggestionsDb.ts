@@ -20,7 +20,7 @@ export type PositionSuggestion = {
   label: string;
   prefix?: string | null;
   labelFeminine?: string | null;
-  defaultSalary: number;
+  salaries: number[];
   order: number;
 };
 
@@ -66,20 +66,20 @@ function seedSuggestions(): SuggestionsDb {
       { id: sugId(), label: "Hinche", order: 15 },
     ],
     positions: [
-      { id: sugId(), label: "Agent de Liaison", defaultSalary: 25000, order: 0 },
-      { id: sugId(), label: "Intendant", defaultSalary: 35000, order: 1 },
-      { id: sugId(), label: "Auxiliaire-Infirmière", defaultSalary: 30000, order: 2 },
-      { id: sugId(), label: "Infirmière de Ligne", defaultSalary: 45000, order: 3 },
-      { id: sugId(), label: "Aide-Infirmière", defaultSalary: 25000, order: 4 },
-      { id: sugId(), label: "Médecin", defaultSalary: 75000, order: 5 },
-      { id: sugId(), label: "Technicien de Laboratoire", defaultSalary: 40000, order: 6 },
-      { id: sugId(), label: "Pharmacien", defaultSalary: 60000, order: 7 },
-      { id: sugId(), label: "Sage-Femme", defaultSalary: 45000, order: 8 },
-      { id: sugId(), label: "Assistante Administrative", defaultSalary: 30000, order: 9 },
-      { id: sugId(), label: "Agent de Sécurité", defaultSalary: 20000, order: 10 },
-      { id: sugId(), label: "Chauffeur", defaultSalary: 25000, order: 11 },
-      { id: sugId(), label: "Ménagère", defaultSalary: 18000, order: 12 },
-      { id: sugId(), label: "Cuisinier(ère)", defaultSalary: 20000, order: 13 },
+      { id: sugId(), label: "Agent de Liaison", salaries: [25000], order: 0 },
+      { id: sugId(), label: "Intendant", salaries: [35000], order: 1 },
+      { id: sugId(), label: "Auxiliaire-Infirmière", salaries: [30000], order: 2 },
+      { id: sugId(), label: "Infirmière de Ligne", salaries: [45000], order: 3 },
+      { id: sugId(), label: "Aide-Infirmière", salaries: [25000], order: 4 },
+      { id: sugId(), label: "Médecin", salaries: [75000], order: 5 },
+      { id: sugId(), label: "Technicien de Laboratoire", salaries: [40000], order: 6 },
+      { id: sugId(), label: "Pharmacien", salaries: [60000], order: 7 },
+      { id: sugId(), label: "Sage-Femme", salaries: [45000], order: 8 },
+      { id: sugId(), label: "Assistante Administrative", salaries: [30000], order: 9 },
+      { id: sugId(), label: "Agent de Sécurité", salaries: [20000], order: 10 },
+      { id: sugId(), label: "Chauffeur", salaries: [25000], order: 11 },
+      { id: sugId(), label: "Ménagère", salaries: [18000], order: 12 },
+      { id: sugId(), label: "Cuisinier(ère)", salaries: [20000], order: 13 },
     ],
     institutions: [
       { id: sugId(), label: "Hôpital de l'Université d'État d'Haïti (HUEH)", addressKeywords: ["port-au-prince"], order: 0 },
@@ -187,21 +187,21 @@ export function getPositions(): PositionSuggestion[] {
   return loadSuggestions().positions.slice().sort((a, b) => a.order - b.order);
 }
 
-export function addPosition(label: string, defaultSalary: number): PositionSuggestion {
+export function addPosition(label: string, salaries: number[]): PositionSuggestion {
   const db = loadSuggestions();
   const maxOrder = db.positions.reduce((m, p) => Math.max(m, p.order), -1);
-  const entry: PositionSuggestion = { id: sugId(), label, defaultSalary, order: maxOrder + 1 };
+  const entry: PositionSuggestion = { id: sugId(), label, salaries, order: maxOrder + 1 };
   db.positions.push(entry);
   saveSuggestions(db);
   return entry;
 }
 
-export function updatePosition(id: string, label: string, defaultSalary: number) {
+export function updatePosition(id: string, label: string, salaries: number[]) {
   const db = loadSuggestions();
   const idx = db.positions.findIndex((p) => p.id === id);
   if (idx >= 0) {
     db.positions[idx].label = label;
-    db.positions[idx].defaultSalary = defaultSalary;
+    db.positions[idx].salaries = salaries;
     saveSuggestions(db);
   }
 }
@@ -352,8 +352,13 @@ export async function learnSuggestions(address?: string, position?: string, assi
       }
       if (position) {
         const items = await repo.getPositions(workspaceId);
-        if (!items.some(i => i.label.toLowerCase() === position.trim().toLowerCase())) {
-          await repo.addPosition(workspaceId, position.trim(), salaryNumber);
+        const existing = items.find(i => i.label.toLowerCase() === position.trim().toLowerCase());
+        if (!existing) {
+          await repo.addPosition(workspaceId, position.trim(), salaryNumber > 0 ? [salaryNumber] : []);
+        } else if (salaryNumber > 0 && !existing.salaries.includes(salaryNumber)) {
+          // If we have a new salary for an existing position, learn it too (up to 3)
+          const newSalaries = [...existing.salaries, salaryNumber].slice(0, 3);
+          await repo.updatePosition(existing.id, existing.label, newSalaries);
         }
       }
       if (assignment) {
@@ -383,9 +388,13 @@ export async function learnSuggestions(address?: string, position?: string, assi
   // ... (rest is same)
   if (position) {
     const nPos = normalize(position);
-    if (!db.positions.some((p) => normalize(p.label) === nPos)) {
+    const existing = db.positions.find((p) => normalize(p.label) === nPos);
+    if (!existing) {
       const maxOrder = db.positions.reduce((m, p) => Math.max(m, p.order), -1);
-      db.positions.push({ id: sugId(), label: position.trim(), defaultSalary: salaryNumber, order: maxOrder + 1 });
+      db.positions.push({ id: sugId(), label: position.trim(), salaries: salaryNumber > 0 ? [salaryNumber] : [], order: maxOrder + 1 });
+      changed = true;
+    } else if (salaryNumber > 0 && !existing.salaries.includes(salaryNumber)) {
+      existing.salaries = [...existing.salaries, salaryNumber].slice(0, 3);
       changed = true;
     }
   }

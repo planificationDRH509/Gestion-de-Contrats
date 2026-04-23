@@ -151,12 +151,13 @@ function PositionsPanel() {
 
   async function handleAdd() {
     if (!newLabel.trim()) return;
-    const res = await addMutation.mutateAsync({ workspaceId, label: newLabel.trim(), defaultSalary: parseInt(newSalary) || 0 });
+    const salaries = newSalary.split(",").map(s => parseInt(s.trim())).filter(s => !isNaN(s));
+    const res = await addMutation.mutateAsync({ workspaceId, label: newLabel.trim(), salaries });
     if (newPrefix.trim()) {
        await updateMutation.mutateAsync({ 
          id: res.id, 
          label: res.label, 
-         defaultSalary: res.defaultSalary, 
+         salaries: res.salaries, 
          prefix: newPrefix.trim() 
        });
     }
@@ -174,7 +175,7 @@ function PositionsPanel() {
       <div className="sug-add-row sug-add-row-multi" style={{ gap: 4 }}>
         <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
         <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Poste..." style={{ flex: 2 }} />
-        <input className="input" value={newSalary} onChange={(e) => setNewSalary(e.target.value)} placeholder="Salaire" style={{ flex: 1 }} />
+        <input className="input" value={newSalary} onChange={(e) => setNewSalary(e.target.value)} placeholder="Salaires (ex: 25000, 30000)" style={{ flex: 1.5 }} />
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
       </div>
       <div className="sug-list">
@@ -185,16 +186,17 @@ function PositionsPanel() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
                   <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 2 }} placeholder="Poste" />
-                  <input className="input" value={editSalary} onChange={e => setEditSalary(e.target.value)} style={{ flex: 1 }} placeholder="Salaire" />
+                  <input className="input" value={editSalary} onChange={e => setEditSalary(e.target.value)} style={{ flex: 1.5 }} placeholder="Salaires (ex: 25000, 30000)" />
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input className="input" value={editLabelFeminine} onChange={e => setEditLabelFeminine(e.target.value)} placeholder="Équivalent féminin" style={{ flex: 1 }} />
                   <button className="icon-btn" onClick={async () => {
                      if(editLabel.trim()) {
+                       const salaries = editSalary.split(",").map(s => parseInt(s.trim())).filter(s => !isNaN(s));
                        await updateMutation.mutateAsync({ 
                          id: item.id, 
                          label: editLabel.trim(), 
-                         defaultSalary: parseInt(editSalary)||0,
+                         salaries,
                          prefix: editPrefix.trim() || null,
                          labelFeminine: editLabelFeminine.trim() || null
                        });
@@ -208,14 +210,14 @@ function PositionsPanel() {
               <>
                 <div style={{ flex: 1 }}>
                   {item.prefix && <span style={{ opacity: 0.5, marginRight: 4 }}>{item.prefix}</span>}
-                  <span className="sug-item-label">{item.label} ({item.defaultSalary} HTG)</span>
+                  <span className="sug-item-label">{item.label} ({item.salaries.join(", ")} HTG)</span>
                   {item.labelFeminine && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>(f: {item.labelFeminine})</span>}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
                   <button className="icon-btn" onClick={() => { 
                     setEditId(item.id); 
                     setEditLabel(item.label); 
-                    setEditSalary(item.defaultSalary.toString()); 
+                    setEditSalary(item.salaries.join(", ")); 
                     setEditPrefix(item.prefix || "");
                     setEditLabelFeminine(item.labelFeminine || "");
                   }}><span className="material-symbols-rounded">edit</span></button>

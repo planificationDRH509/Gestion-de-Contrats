@@ -964,7 +964,7 @@ img {
 .contracts-sheet-header-shell,
 .contracts-sheet-row-shell {
   display: grid;
-  grid-template-columns: 64px auto;
+  grid-template-columns: 80px auto;
   align-items: stretch;
 }
 

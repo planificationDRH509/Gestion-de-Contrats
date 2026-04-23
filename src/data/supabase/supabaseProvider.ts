@@ -649,14 +649,25 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
 
   async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
     const data = await this.getByType(workspaceId, "position");
-    return data.map(r => ({ 
-      id: r.id, 
-      label: r.label, 
-      prefix: r.prefix,
-      labelFeminine: r.label_feminine,
-      defaultSalary: r.default_salary || 0, 
-      order: r.order_index 
-    }));
+    return data.map(r => {
+      let salaries: number[] = [];
+      try {
+        if (r.salaries_json) {
+          salaries = JSON.parse(r.salaries_json);
+        } else if (r.default_salary) {
+          salaries = [r.default_salary];
+        }
+      } catch {}
+      
+      return { 
+        id: r.id, 
+        label: r.label, 
+        prefix: r.prefix,
+        labelFeminine: r.label_feminine,
+        salaries, 
+        order: r.order_index 
+      };
+    });
   }
 
   async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
@@ -689,19 +700,29 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     await (client.from("autocompletion").delete().eq("id", id) as any);
   }
 
-  async addPosition(workspaceId: string, label: string, defaultSalary: number, createdBy?: string): Promise<PositionSuggestion> {
+  async addPosition(workspaceId: string, label: string, salaries: number[], createdBy?: string): Promise<PositionSuggestion> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
-    const payload = { id, workspace_id: workspaceId, type: "position", label, default_salary: defaultSalary, order_index: 0, created_by: createdBy };
+    const payload = { 
+      id, 
+      workspace_id: workspaceId, 
+      type: "position", 
+      label, 
+      salaries_json: JSON.stringify(salaries),
+      default_salary: salaries[0] || 0,
+      order_index: 0, 
+      created_by: createdBy 
+    };
     await (client.from("autocompletion").insert(payload as any) as any);
-    return { id, label, defaultSalary, order: 0 };
+    return { id, label, salaries, order: 0 };
   }
 
-  async updatePosition(id: string, label: string, defaultSalary: number, prefix?: string | null, labelFeminine?: string | null): Promise<void> {
+  async updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
     await (client.from("autocompletion").update({ 
       label, 
-      default_salary: defaultSalary,
+      salaries_json: JSON.stringify(salaries),
+      default_salary: salaries[0] || 0,
       prefix,
       label_feminine: labelFeminine
     } as any).eq("id", id) as any);

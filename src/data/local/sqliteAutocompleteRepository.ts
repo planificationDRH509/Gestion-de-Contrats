@@ -26,11 +26,11 @@ export class SqliteAutocompleteRepository implements AutocompleteRepository {
   async deleteAddress(id: string): Promise<void> {
     deleteAddress(id);
   }
-  async addPosition(_workspaceId: string, label: string, defaultSalary: number): Promise<PositionSuggestion> {
-    return addPosition(label, defaultSalary);
+  async addPosition(_workspaceId: string, label: string, salaries: number[]): Promise<PositionSuggestion> {
+    return addPosition(label, salaries);
   }
-  async updatePosition(id: string, label: string, defaultSalary: number): Promise<void> {
-    updatePosition(id, label, defaultSalary);
+  async updatePosition(id: string, label: string, salaries: number[]): Promise<void> {
+    updatePosition(id, label, salaries);
   }
   async deletePosition(id: string): Promise<void> {
     deletePosition(id);

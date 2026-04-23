@@ -178,18 +178,31 @@ export function ContractEditPage() {
 
   useEffect(() => {
     const numeric = parseMoney(salaryNumber || "0");
-    const computed = numeric ? numberToFrenchWords(numeric) : "";
+    const computed = numeric ? numberToFrenchWords(numeric).toUpperCase() : "";
     setValue("salaryText", computed, { shouldValidate: true, shouldDirty: true });
   }, [salaryNumber, setValue]);
 
   // ── Position selection: auto-fill salary ──────────────────────────────
+  const [availableSalaries, setAvailableSalaries] = useState<number[]>([]);
+
   function handlePositionSelect(item: AutocompleteItem) {
     const match = allPositions.find((p: any) => p.id === item.id);
-    if (match && match.defaultSalary > 0) {
-      setValue("salaryNumber", match.defaultSalary.toString(), {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
+    if (match) {
+      const salaries = match.salaries || [];
+      setAvailableSalaries(salaries);
+      
+      if (salaries.length > 0) {
+        // Pick the middle salary by default
+        const middleIndex = Math.floor(salaries.length / 2);
+        const defaultSalary = salaries[middleIndex];
+        
+        setValue("salaryNumber", defaultSalary.toString(), {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+      }
+    } else {
+      setAvailableSalaries([]);
     }
   }
 
@@ -481,25 +494,25 @@ export function ContractEditPage() {
             ) : null}
           </div>
 
-          <label className="field">
+          <div className="field">
             <span>Salaire (HTG) *</span>
-            <input
-              className="input"
-              {...salaryNumberRegister}
-              placeholder="Ex: 45000"
-              inputMode="decimal"
-              ref={(element) => {
-                salaryNumberRegister.ref(element);
-                lastFieldRef.current = element;
-                salaryInputRef.current = element;
+            <AutocompleteField
+              value={watch("salaryNumber")}
+              onChange={(val) => {
+                setValue("salaryNumber", val, { shouldValidate: true, shouldDirty: true });
               }}
+              items={availableSalaries.map(s => ({ id: s.toString(), label: s.toString() }))}
+              placeholder="Ex: 45000"
+              hasError={!!errors.salaryNumber}
+              name="salaryNumber"
+              showAllOnFocus={availableSalaries.length > 1}
             />
             {errors.salaryNumber ? (
               <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.salaryNumber.message}</span>
             ) : null}
-          </label>
+          </div>
 
-          <div className="field span-2">
+          <div className="field">
             <label htmlFor="salaryText">
               <span>Salaire en lettre</span>
             </label>

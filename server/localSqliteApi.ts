@@ -589,6 +589,7 @@ function getDb(): DatabaseSync {
       type TEXT NOT NULL CHECK (type IN ('address','position','institution')),
       label TEXT NOT NULL,
       default_salary INTEGER,
+      salaries_json TEXT,
       address_keywords TEXT,
       order_index INTEGER NOT NULL DEFAULT 0,
       workspace_id TEXT NOT NULL,
@@ -1981,7 +1982,20 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       if (row.type === "address") {
         result.addresses.push({ id: row.id, label: row.label, order: row.order_index });
       } else if (row.type === "position") {
-        result.positions.push({ id: row.id, label: row.label, defaultSalary: row.default_salary, order: row.order_index });
+        let salaries: number[] = [];
+        try {
+          if (row.salaries_json) {
+            salaries = JSON.parse(asString(row.salaries_json));
+          } else if (row.default_salary) {
+            salaries = [row.default_salary];
+          }
+        } catch {}
+        result.positions.push({ 
+          id: row.id, 
+          label: row.label, 
+          salaries,
+          order: row.order_index 
+        });
       } else if (row.type === "institution") {
         let kw = [];
         try { kw = JSON.parse(asString(row.address_keywords) || "[]"); } catch {}
@@ -2005,23 +2019,35 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       db.prepare("DELETE FROM autocompletion WHERE workspace_id = :workspaceId").run({ workspaceId });
       const insertAuto = db.prepare(`
-        INSERT INTO autocompletion (id, type, label, default_salary, address_keywords, order_index, workspace_id, created_at, updated_at)
-        VALUES (:id, :type, :label, :default_salary, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)
+        INSERT INTO autocompletion (id, type, label, default_salary, salaries_json, address_keywords, order_index, workspace_id, created_at, updated_at)
+        VALUES (:id, :type, :label, :default_salary, :salaries_json, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)
       `);
       
       if (Array.isArray(data.addresses)) {
         data.addresses.forEach((a: any, idx: number) => {
-          insertAuto.run({ id: a.id || randomUUID(), type: "address", label: a.label, default_salary: null, address_keywords: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          insertAuto.run({ id: a.id || randomUUID(), type: "address", label: a.label, default_salary: null, salaries_json: null, address_keywords: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
         });
       }
       if (Array.isArray(data.positions)) {
         data.positions.forEach((p: any, idx: number) => {
-          insertAuto.run({ id: p.id || randomUUID(), type: "position", label: p.label, default_salary: p.defaultSalary || 0, address_keywords: null, order_index: typeof p.order === 'number' ? p.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          const salaries = Array.isArray(p.salaries) ? p.salaries : (p.defaultSalary ? [p.defaultSalary] : []);
+          insertAuto.run({ 
+            id: p.id || randomUUID(), 
+            type: "position", 
+            label: p.label, 
+            default_salary: salaries[0] || 0, 
+            salaries_json: JSON.stringify(salaries),
+            address_keywords: null, 
+            order_index: typeof p.order === 'number' ? p.order : idx, 
+            workspace_id: workspaceId, 
+            created_at: now, 
+            updated_at: now 
+          });
         });
       }
       if (Array.isArray(data.institutions)) {
         data.institutions.forEach((i: any, idx: number) => {
-          insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, default_salary: null, address_keywords: JSON.stringify(i.addressKeywords || []), order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, default_salary: null, salaries_json: null, address_keywords: JSON.stringify(i.addressKeywords || []), order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
         });
       }
       

@@ -9,8 +9,8 @@ export interface AutocompleteRepository {
   updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deleteAddress(id: string): Promise<void>;
   
-  addPosition(workspaceId: string, label: string, defaultSalary: number, createdBy?: string): Promise<PositionSuggestion>;
-  updatePosition(id: string, label: string, defaultSalary: number, prefix?: string | null, labelFeminine?: string | null): Promise<void>;
+  addPosition(workspaceId: string, label: string, salaries: number[], createdBy?: string): Promise<PositionSuggestion>;
+  updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deletePosition(id: string): Promise<void>;
   
   addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion>;
