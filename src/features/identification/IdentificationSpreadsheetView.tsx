@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Gender } from "../../data/types";
 import { formatFirstName, formatLastName } from "../../lib/format";
@@ -10,7 +10,6 @@ import {
   useCreateIdentification,
   useUpdateIdentification,
   useDeleteIdentification,
-  checkNifExists,
   IdentificationRow
 } from "./identificationApi";
 
@@ -57,7 +56,6 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 
 const EMPTY_NEW_ROWS_COUNT = 5;
 const NAVIGABLE_COLUMN_COUNT = 6;
-const STATUS_COLUMN_WIDTH = 64;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT };
@@ -141,8 +139,9 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
   );
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
-  const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(() =>
-    COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: col.width }), {} as any)
+  const columnWidths = useMemo<Record<SpreadsheetFieldKey, number>>(() =>
+    COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: col.width }), {} as any),
+    []
   );
 
   const sheetRootRef = useRef<HTMLDivElement>(null);
@@ -152,7 +151,6 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
     allAddresses.map(a => ({ id: a.id, label: a.label })), [allAddresses]
   );
 
-  function getRowKey(id: string) { return id; }
 
   function focusGridCell(rowKey: string, columnIndex: number) {
     const selector = `[data-sheet-row="${rowKey}"][data-sheet-col="${columnIndex}"]`;
@@ -196,8 +194,12 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
     try {
       // Check NIF uniqueness locally first if possible, but API handles it too
       await createIdentity.mutateAsync({
-        ...candidate,
+        nif: candidate.nif,
+        prenom: candidate.firstName,
+        nom: candidate.lastName,
         sexe: candidate.gender as Gender,
+        ninu: candidate.ninu || null,
+        adresse: candidate.address,
         workspace_id: workspaceId,
         created_by: userId
       });
@@ -229,8 +231,12 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
     setSavingRows(prev => ({ ...prev, [nif]: true }));
     try {
       await updateIdentity.mutateAsync({
-        ...candidate,
+        nif: candidate.nif,
+        prenom: candidate.firstName,
+        nom: candidate.lastName,
         sexe: candidate.gender as Gender,
+        ninu: candidate.ninu || null,
+        adresse: candidate.address,
       });
       setRowErrors(prev => { const n = { ...prev }; delete n[nif]; return n; });
     } catch (e: any) {
