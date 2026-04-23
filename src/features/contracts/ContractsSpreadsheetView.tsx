@@ -45,6 +45,8 @@ type SpreadsheetDraft = {
   assignment: string;
   salaryNumber: string;
   salaryText: string;
+  comment: string;
+  durationMonths: string;
 };
 
 type SpreadsheetNewRow = {
@@ -69,7 +71,8 @@ const COLUMNS: SpreadsheetColumn[] = [
   { key: "position", label: "Poste", width: 206, min: 156 },
   { key: "assignment", label: "Affectation", width: 214, min: 164 },
   { key: "salaryNumber", label: "Salaire (HTG)", width: 146, min: 132 },
-  { key: "salaryText", label: "Salaire en lettre", width: 250, min: 190 }
+  { key: "salaryText", label: "Salaire en lettre", width: 250, min: 190 },
+  { key: "durationMonths", label: "Mois", width: 80, min: 60 }
 ];
 
 const EMPTY_DRAFT: SpreadsheetDraft = {
@@ -82,7 +85,9 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
   position: "",
   assignment: "",
   salaryNumber: "",
-  salaryText: ""
+  salaryText: "",
+  comment: "",
+  durationMonths: "12"
 };
 
 const EMPTY_NEW_ROWS_COUNT = 3;
@@ -145,9 +150,11 @@ function toDraft(contract: Contract): SpreadsheetDraft {
     ninu: contract.ninu ?? "",
     address: contract.address ?? "",
     position: contract.position ?? "",
-    assignment: contract.assignment ?? "",
-    salaryNumber: contract.salaryNumber ? String(contract.salaryNumber) : "",
-    salaryText: contract.salaryText ?? ""
+    assignment: contract.assignment || "",
+    salaryNumber: contract.salaryNumber?.toString() || "",
+    salaryText: contract.salaryText || "",
+    comment: contract.commentaire || "",
+    durationMonths: contract.durationMonths?.toString() || "12"
   };
 }
 
@@ -157,9 +164,7 @@ function isDraftEmpty(draft: SpreadsheetDraft): boolean {
     !draft.firstName.trim() &&
     !draft.lastName.trim() &&
     !draft.ninu.trim() &&
-    !draft.address.trim() &&
     !draft.position.trim() &&
-    !draft.assignment.trim() &&
     !draft.salaryNumber.trim()
   );
 }
@@ -176,7 +181,9 @@ function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
     position: draft.position.trim(),
     assignment: draft.assignment.trim(),
     salaryNumber: draft.salaryNumber.trim(),
-    salaryText
+    salaryText,
+    comment: draft.comment.trim(),
+    durationMonths: draft.durationMonths.trim() || "12"
   };
 }
 
@@ -223,7 +230,8 @@ function areDraftsEqual(a: SpreadsheetDraft, b: SpreadsheetDraft): boolean {
     a.position === b.position &&
     a.assignment === b.assignment &&
     parseMoney(a.salaryNumber) === parseMoney(b.salaryNumber) &&
-    a.salaryText === b.salaryText
+    a.salaryText === b.salaryText &&
+    a.comment === b.comment
   );
 }
 
@@ -253,18 +261,24 @@ export function ContractsSpreadsheetView({
 
   const { data: dossiers = [] } = useDossiersList(workspaceId);
 
-  // Default values state
   const [useDefaultDossier, setUseDefaultDossier] = useState(false);
   const [defaultDossierId, setDefaultDossierId] = useState<string>("");
   
   const [useDefaultDuration, setUseDefaultDuration] = useState(false);
-  const [defaultDuration, setDefaultDuration] = useState<number>(12);
+  const [defaultDuration, setDefaultDuration] = useState<number>(() => {
+    const last = getLastChoice("durationMonths");
+    return last ? parseInt(last, 10) : 12;
+  });
 
   const [useDefaultAddress, setUseDefaultAddress] = useState(false);
-  const [defaultAddress, setDefaultAddress] = useState<string>("");
+  const [defaultAddress, setDefaultAddress] = useState<string>(() => getLastChoice("address") || "");
 
   const [useDefaultAssignment, setUseDefaultAssignment] = useState(false);
-  const [defaultAssignment, setDefaultAssignment] = useState<string>("");
+  const [defaultAssignment, setDefaultAssignment] = useState<string>(() => getLastChoice("assignment") || "");
+
+  const [useDefaultComment, setUseDefaultComment] = useState(false);
+  const [defaultComment, setDefaultComment] = useState<string>("");
+
   const [commentOpenContractId, setCommentOpenContractId] = useState<string | null>(null);
   const [commentDraftById, setCommentDraftById] = useState<Record<string, string>>({});
   const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
@@ -340,7 +354,6 @@ export function ContractsSpreadsheetView({
     };
   }, [resizing]);
 
-  // Effect to apply address/assignment defaults to empty new rows
   useEffect(() => {
     setNewRows((prev) =>
       prev.map((row) => {
@@ -358,11 +371,19 @@ export function ContractsSpreadsheetView({
           nextDraft.assignment = defaultAssignment;
           modified = true;
         }
+        if (useDefaultComment && !row.draft.comment) {
+          nextDraft.comment = defaultComment;
+          modified = true;
+        }
+        if (useDefaultDuration && row.draft.durationMonths === "12") {
+          nextDraft.durationMonths = String(defaultDuration);
+          modified = true;
+        }
 
         return modified ? { ...row, draft: nextDraft } : row;
       })
     );
-  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment]);
+  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment, useDefaultDuration, defaultDuration]);
 
   const featuredAddress = useMemo(() => {
     const last = getLastChoice("address");
@@ -587,7 +608,6 @@ export function ContractsSpreadsheetView({
         await saveExistingRow(contractId);
       })
       .catch(() => {
-        // No-op, next blur should retry.
       });
   }
 
@@ -659,8 +679,11 @@ export function ContractsSpreadsheetView({
         assignment: editedDraft.assignment,
         salaryNumber: salaryNumberValue,
         salaryText: editedDraft.salaryText,
-        durationMonths: contract.durationMonths || 12
+        durationMonths: parseInt(editedDraft.durationMonths) || 12,
+        commentaire: editedDraft.comment
       });
+
+      saveLastChoice("durationMonths", editedDraft.durationMonths);
 
       setDraftById((prev) => ({ ...prev, [contractId]: editedDraft }));
       setRowErrors((prev) => {
@@ -761,8 +784,11 @@ export function ContractsSpreadsheetView({
         assignment: candidate.assignment,
         salaryNumber: salaryNumberValue,
         salaryText: candidate.salaryText,
-        durationMonths: useDefaultDuration ? defaultDuration : 12
+        durationMonths: parseInt(candidate.durationMonths) || 12,
+        commentaire: candidate.comment
       });
+
+      saveLastChoice("durationMonths", candidate.durationMonths);
 
       setNewRows((prev) => {
         const next = prev.map((item) => {
@@ -770,6 +796,8 @@ export function ContractsSpreadsheetView({
           const empty = createNewRow();
           if (useDefaultAddress) empty.draft.address = defaultAddress;
           if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
+          if (useDefaultComment) empty.draft.comment = defaultComment;
+          if (useDefaultDuration) empty.draft.durationMonths = String(defaultDuration);
           return empty;
         });
         const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
@@ -779,6 +807,8 @@ export function ContractsSpreadsheetView({
             const row = createNewRow();
             if (useDefaultAddress) row.draft.address = defaultAddress;
             if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
+            if (useDefaultComment) row.draft.comment = defaultComment;
+            if (useDefaultDuration) row.draft.durationMonths = String(defaultDuration);
             return row;
           });
           return [...next, ...extra];
@@ -1012,6 +1042,27 @@ export function ContractsSpreadsheetView({
                 />
               )}
             </div>
+
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultComment ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultComment}
+                  onChange={(e) => setUseDefaultComment(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">chat_bubble</span>
+                Commentaire
+              </label>
+              {useDefaultComment && (
+                <input
+                  className="input defaults-input"
+                  style={{ width: '180px' }}
+                  value={defaultComment}
+                  onChange={(e) => setDefaultComment(e.target.value)}
+                  placeholder="Commentaire par défaut"
+                />
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -1203,6 +1254,19 @@ export function ContractsSpreadsheetView({
                       readOnly
                       tabIndex={-1}
                     />
+                    <input
+                      data-sheet-row={rowKey}
+                      data-sheet-col={10}
+                      className="input contracts-sheet-input"
+                      value={row.draft.durationMonths}
+                      placeholder="Mois"
+                      type="number"
+                      onChange={(event) => setNewField(row.id, "durationMonths", event.target.value)}
+                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 10)}
+                      onBlur={() => {
+                        void maybeCreateFromNewRow(row.id);
+                      }}
+                    />
                   </div>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
@@ -1365,6 +1429,17 @@ export function ContractsSpreadsheetView({
                       value={draft.salaryText}
                       readOnly
                       tabIndex={-1}
+                    />
+                    <input
+                      data-sheet-row={rowKey}
+                      data-sheet-col={10}
+                      className="input contracts-sheet-input"
+                      value={draft.durationMonths}
+                      placeholder="Mois"
+                      type="number"
+                      onChange={(event) => setExistingField(contract.id, "durationMonths", event.target.value)}
+                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 10)}
+                      onBlur={() => queueExistingSave(contract.id)}
                     />
                   </div>
                 </div>
