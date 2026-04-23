@@ -70,6 +70,8 @@ export function ContractNewPage() {
   const [isSheetFullscreen, setIsSheetFullscreen] = useState(false);
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
+  const [msppHtml, setMsppHtml] = useState("");
+  const [msppLoading, setMsppLoading] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
   const { data: allPositions = [] } = usePositions(workspaceId);
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
@@ -223,7 +225,23 @@ export function ContractNewPage() {
     };
   }, [isSheetMode, isSheetFullscreen]);
 
-  // ── Position selection: auto-fill salary ──────────────────────────────
+  // ── MSPP Verification Fetch ──────────────────────────────────────────
+  useEffect(() => {
+    if (msppModalOpen && nifValue) {
+      setMsppLoading(true);
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mspp-verify-proxy-v2?nif=${nifValue.replace(/\D/g, "")}`;
+      fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          setMsppHtml(html);
+          setMsppLoading(false);
+        })
+        .catch(err => {
+          setMsppHtml(`<p style="color:red;padding:20px">Erreur: ${err.message}</p>`);
+          setMsppLoading(false);
+        });
+    }
+  }, [msppModalOpen, nifValue]);
   const [availableSalaries, setAvailableSalaries] = useState<number[]>([]);
 
   function handlePositionSelect(item: AutocompleteItem) {
@@ -760,11 +778,23 @@ export function ContractNewPage() {
                 <span className="material-symbols-rounded" style={{ fontSize: "20px", color: "var(--ink-muted, #666)" }}>close</span>
               </button>
             </div>
-            <iframe
-              src={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mspp-verify-proxy-v2?nif=${(nifValue || "").replace(/\D/g, "")}`}
-              title="Vérification du permis MSPP"
-              style={{ flex: 1, border: "none", minHeight: "320px" }}
-            />
+            <div style={{ flex: 1, position: "relative", minHeight: "320px", display: "flex", flexDirection: "column" }}>
+              {msppLoading && (
+                <div style={{
+                  position: "absolute", inset: 0, zIndex: 10,
+                  background: "var(--panel, #fff)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "12px"
+                }}>
+                  <span className="material-symbols-rounded is-spinning" style={{ color: "var(--accent, #10b981)" }}>sync</span>
+                  <span style={{ fontSize: "13px", color: "var(--ink-muted, #666)" }}>Chargement du MSPP...</span>
+                </div>
+              )}
+              <iframe
+                srcDoc={msppHtml}
+                title="Vérification du permis MSPP"
+                style={{ flex: 1, border: "none" }}
+              />
+            </div>
           </div>
         </div>
       )}
