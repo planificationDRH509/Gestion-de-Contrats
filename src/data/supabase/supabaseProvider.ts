@@ -23,7 +23,7 @@ import {
   UpsertApplicantInput
 } from "../types";
 import { DataProvider } from "../dataProvider";
-import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
+import { formatFirstName, formatLastName } from "../../lib/format";
 import { getSupabaseClient } from "./supabaseClient";
 import {
   normalizeDossierName,
