@@ -1015,6 +1015,30 @@ img {
   font-size: 12px;
 }
 
+.contracts-sheet-delete-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--danger);
+  opacity: 0;
+  transition: all 0.2s ease;
+  transform: scale(0.8);
+}
+
+.contracts-sheet-delete-btn span {
+  font-size: 14px;
+}
+
+.contracts-sheet-row-shell:hover .contracts-sheet-delete-btn {
+  opacity: 0.6;
+  transform: scale(1);
+}
+
+.contracts-sheet-delete-btn:hover {
+  opacity: 1 !important;
+  background: var(--danger-soft);
+}
+
 .contracts-sheet-state-cell.saved {
   color: #059669;
 }

@@ -17,7 +17,8 @@ import {
   useApplicantUpsert,
   useCreateContract,
   useUpdateContractComment,
-  useUpdateContract
+  useUpdateContract,
+  useDeleteContract
 } from "./contractsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { useDossiersList } from "../dossiers/dossiersApi";
@@ -71,7 +72,6 @@ const COLUMNS: SpreadsheetColumn[] = [
   { key: "position", label: "Poste", width: 206, min: 156 },
   { key: "assignment", label: "Affectation", width: 214, min: 164 },
   { key: "salaryNumber", label: "Salaire (HTG)", width: 146, min: 132 },
-  { key: "salaryText", label: "Salaire en lettre", width: 250, min: 190 },
   { key: "durationMonths", label: "Mois", width: 80, min: 60 }
 ];
 
@@ -91,8 +91,8 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 };
 
 const EMPTY_NEW_ROWS_COUNT = 3;
-const NAVIGABLE_COLUMN_COUNT = 9;
-const STATUS_COLUMN_WIDTH = 58;
+const NAVIGABLE_COLUMN_COUNT = 10;
+const STATUS_COLUMN_WIDTH = 64;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT };
@@ -246,6 +246,7 @@ export function ContractsSpreadsheetView({
   const updateContract = useUpdateContract();
   const updateContractComment = useUpdateContractComment();
   const upsertApplicant = useApplicantUpsert();
+  const deleteContract = useDeleteContract();
   const { data: allAddresses = [] } = useAddresses(workspaceId);
   const { data: allPositions = [] } = usePositions(workspaceId);
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
@@ -889,6 +890,7 @@ export function ContractsSpreadsheetView({
       showCommentButton?: boolean;
       hasComment?: boolean;
       onCommentClick?: () => void;
+      onDeleteClick?: () => void;
     }
   ) {
     const showCommentButton = Boolean(options?.showCommentButton);
@@ -932,6 +934,20 @@ export function ContractsSpreadsheetView({
             }}
           >
             <span className="material-symbols-rounded">chat_bubble</span>
+          </button>
+        ) : null}
+        {options?.onDeleteClick ? (
+          <button
+            type="button"
+            className="icon-btn contracts-sheet-delete-btn"
+            title="Supprimer ce contrat"
+            aria-label="Supprimer ce contrat"
+            onClick={(event) => {
+              event.stopPropagation();
+              options.onDeleteClick?.();
+            }}
+          >
+            <span className="material-symbols-rounded">delete</span>
           </button>
         ) : null}
       </div>
@@ -1240,6 +1256,7 @@ export function ContractsSpreadsheetView({
                       data-sheet-col={8}
                       className="input contracts-sheet-input"
                       value={row.draft.salaryNumber}
+                      title={row.draft.salaryText}
                       placeholder="Ex: 45000"
                       inputMode="decimal"
                       onChange={(event) => setNewField(row.id, "salaryNumber", event.target.value)}
@@ -1249,20 +1266,14 @@ export function ContractsSpreadsheetView({
                       }}
                     />
                     <input
-                      className="input contracts-sheet-input contracts-sheet-input-readonly"
-                      value={row.draft.salaryText}
-                      readOnly
-                      tabIndex={-1}
-                    />
-                    <input
                       data-sheet-row={rowKey}
-                      data-sheet-col={10}
+                      data-sheet-col={9}
                       className="input contracts-sheet-input"
                       value={row.draft.durationMonths}
                       placeholder="Mois"
                       type="number"
                       onChange={(event) => setNewField(row.id, "durationMonths", event.target.value)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 10)}
+                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={() => {
                         void maybeCreateFromNewRow(row.id);
                       }}
@@ -1304,7 +1315,12 @@ export function ContractsSpreadsheetView({
                     {
                       showCommentButton: true,
                       hasComment: Boolean(contract.commentaire?.trim()),
-                      onCommentClick: () => openCommentDialog(contract)
+                      onCommentClick: () => openCommentDialog(contract),
+                      onDeleteClick: () => {
+                        if (window.confirm("Supprimer ce contrat ?")) {
+                          deleteContract.mutate({ id: contract.id, workspaceId });
+                        }
+                      }
                     }
                   )}
                   <div
@@ -1417,6 +1433,7 @@ export function ContractsSpreadsheetView({
                       data-sheet-col={8}
                       className="input contracts-sheet-input"
                       value={draft.salaryNumber}
+                      title={draft.salaryText}
                       inputMode="decimal"
                       onChange={(event) =>
                         setExistingField(contract.id, "salaryNumber", event.target.value)
@@ -1425,20 +1442,14 @@ export function ContractsSpreadsheetView({
                       onBlur={() => queueExistingSave(contract.id)}
                     />
                     <input
-                      className="input contracts-sheet-input contracts-sheet-input-readonly"
-                      value={draft.salaryText}
-                      readOnly
-                      tabIndex={-1}
-                    />
-                    <input
                       data-sheet-row={rowKey}
-                      data-sheet-col={10}
+                      data-sheet-col={9}
                       className="input contracts-sheet-input"
                       value={draft.durationMonths}
                       placeholder="Mois"
                       type="number"
                       onChange={(event) => setExistingField(contract.id, "durationMonths", event.target.value)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 10)}
+                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={() => queueExistingSave(contract.id)}
                     />
                   </div>
