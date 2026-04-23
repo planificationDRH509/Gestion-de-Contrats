@@ -56,7 +56,7 @@ export function ContractNewPage() {
       workspaceId,
       sort: "createdAt_desc" as const,
       page: 1,
-      pageSize: 30,
+      pageSize: 15,
       onlyMine: true,
       userId
     }),
