@@ -526,7 +526,7 @@ export function ContractsSpreadsheetView({
       if (isNewRow) {
         // For new rows, Enter usually means "I'm done with this row, go to the next NIF"
         // Try to find the next empty new row
-        const nextEmpty = newRows.find((r, idx) => {
+        const nextEmpty = newRows.find((r) => {
           const rIndex = rowOrder.indexOf(r.id);
           return rIndex > currentRowIndex && isDraftEmpty(r.draft);
         });

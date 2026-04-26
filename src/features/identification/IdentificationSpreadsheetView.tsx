@@ -168,7 +168,7 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
       const isNewRow = rowKey.startsWith("new_");
       if (isNewRow) {
         // Move to next empty row NIF
-        const nextEmpty = newRows.find((r, idx) => {
+        const nextEmpty = newRows.find((r) => {
           const rIdx = rows.indexOf(r.id);
           return rIdx > rowIndex && isDraftEmpty(r.draft);
         });
