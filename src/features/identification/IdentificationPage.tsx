@@ -37,7 +37,7 @@ export function IdentificationPage() {
         </div>
       </div>
       
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <IdentificationSpreadsheetView 
           workspaceId={workspaceId} 
           userId={userId} 

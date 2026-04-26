@@ -30,7 +30,8 @@ export interface CreateIdentificationInput {
 }
 
 export interface UpdateIdentificationInput {
-  nif: string; // PK – used to locate the row
+  oldNif: string; // Used to locate the row
+  nif?: string;   // New NIF value
   nom?: string;
   prenom?: string;
   sexe?: Gender;
@@ -109,6 +110,7 @@ export function useUpdateIdentification() {
       const updates: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
+      if (input.nif !== undefined) updates.nif = input.nif;
       if (input.nom !== undefined) updates.nom = input.nom;
       if (input.prenom !== undefined) updates.prenom = input.prenom;
       if (input.sexe !== undefined) updates.sexe = input.sexe;
@@ -118,7 +120,7 @@ export function useUpdateIdentification() {
       const { data, error } = await supabase
         .from("identification")
         .update(updates)
-        .eq("nif", input.nif)
+        .eq("nif", input.oldNif)
         .select()
         .single();
 

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Gender } from "../../data/types";
 import { formatFirstName, formatLastName } from "../../lib/format";
@@ -147,6 +147,8 @@ export function IdentificationSpreadsheetView({
   );
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   const filteredIdentities = useMemo(() => {
     if (!searchQuery.trim()) return identities;
@@ -157,6 +159,17 @@ export function IdentificationSpreadsheetView({
       return nifDigits.includes(q) || ninuDigits.includes(q);
     });
   }, [identities, searchQuery]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const totalPages = Math.ceil(filteredIdentities.length / pageSize) || 1;
+  const paginatedIdentities = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredIdentities.slice(start, start + pageSize);
+  }, [filteredIdentities, currentPage, pageSize]);
 
   const columnWidths = useMemo<Record<SpreadsheetFieldKey, number>>(() =>
     COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: col.width }), {} as any),
@@ -186,7 +199,7 @@ export function IdentificationSpreadsheetView({
         focusGridCell(firstEmpty.id, 0);
       } else {
         // Fallback: next row col 0 if no empty one found
-        const rows = [...newRows.map(r => r.id), ...filteredIdentities.map(i => i.nif)];
+        const rows = [...newRows.map(r => r.id), ...paginatedIdentities.map(i => i.nif)];
         const rowIndex = rows.indexOf(rowKey);
         const nextRowKey = rows[rowIndex + 1];
         if (nextRowKey) focusGridCell(nextRowKey, 0);
@@ -197,7 +210,7 @@ export function IdentificationSpreadsheetView({
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
     
     // Simple navigation logic
-    const rows = [...newRows.map(r => r.id), ...filteredIdentities.map(i => i.nif)];
+    const rows = [...newRows.map(r => r.id), ...paginatedIdentities.map(i => i.nif)];
     const rowIndex = rows.indexOf(rowKey);
     
     let nextRowIndex = rowIndex;
@@ -267,24 +280,51 @@ export function IdentificationSpreadsheetView({
     }
   }
 
-  async function handleSaveExisting(nif: string) {
-    const draft = draftById[nif];
-    if (!draft || savingRows[nif]) return;
+  function setExistingField(originalNif: string, key: SpreadsheetFieldKey, value: string) {
+    setDraftById((prev) => {
+      const identity = identitiesMap.get(originalNif);
+      const source = prev[originalNif] ?? (identity ? toDraft(identity) : EMPTY_DRAFT);
+      const next: SpreadsheetDraft = { ...source };
+
+      if (key === "nif") next.nif = formatNifInput(value);
+      else if (key === "ninu") next.ninu = formatNinuInput(value);
+      else if (key === "gender") {
+        const v = value.toUpperCase();
+        next.gender = v.startsWith("F") ? "Femme" : v.startsWith("H") || v.startsWith("M") ? "Homme" : v as any;
+      } else {
+        (next[key] as string) = value;
+      }
+
+      return { ...prev, [originalNif]: next };
+    });
+
+    setRowErrors((prev) => {
+      if (!prev[originalNif]) return prev;
+      const next = { ...prev };
+      delete next[originalNif];
+      return next;
+    });
+  }
+
+  async function handleSaveExisting(originalNif: string) {
+    const draft = draftById[originalNif];
+    if (!draft || savingRows[originalNif]) return;
 
     const candidate = normalizeDraft(draft);
-    const original = toDraft(identitiesMap.get(nif)!);
+    const original = toDraft(identitiesMap.get(originalNif)!);
     
     if (JSON.stringify(candidate) === JSON.stringify(original)) return;
 
     const error = validateDraft(candidate);
     if (error) {
-      setRowErrors(prev => ({ ...prev, [nif]: error }));
+      setRowErrors(prev => ({ ...prev, [originalNif]: error }));
       return;
     }
 
-    setSavingRows(prev => ({ ...prev, [nif]: true }));
+    setSavingRows(prev => ({ ...prev, [originalNif]: true }));
     try {
       await updateIdentity.mutateAsync({
+        oldNif: originalNif,
         nif: candidate.nif,
         prenom: candidate.firstName,
         nom: candidate.lastName,
@@ -292,11 +332,21 @@ export function IdentificationSpreadsheetView({
         ninu: candidate.ninu || null,
         adresse: candidate.address,
       });
-      setRowErrors(prev => { const n = { ...prev }; delete n[nif]; return n; });
+
+      // If NIF changed, we need to move the draft to the new NIF key or just clear it
+      if (candidate.nif !== originalNif) {
+        setDraftById(prev => {
+          const next = { ...prev };
+          delete next[originalNif];
+          return next;
+        });
+      }
+
+      setRowErrors(prev => { const n = { ...prev }; delete n[originalNif]; return n; });
     } catch (e: any) {
-      setRowErrors(prev => ({ ...prev, [nif]: e.message }));
+      setRowErrors(prev => ({ ...prev, [originalNif]: e.message }));
     } finally {
-      setSavingRows(prev => ({ ...prev, [nif]: false }));
+      setSavingRows(prev => ({ ...prev, [originalNif]: false }));
     }
   }
 
@@ -305,8 +355,8 @@ export function IdentificationSpreadsheetView({
   const gridTemplateColumns = COLUMNS.map(c => `${columnWidths[c.key]}px`).join(" ");
 
   return (
-    <div className="contracts-sheet-wrapper" ref={sheetRootRef}>
-      <div className="contracts-sheet-scroll">
+    <div className="contracts-sheet-wrapper" ref={sheetRootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="contracts-sheet-scroll" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="contracts-sheet-grid">
           <div className="contracts-sheet-header-shell">
             <div className="contracts-sheet-state-head" />
@@ -420,8 +470,8 @@ export function IdentificationSpreadsheetView({
             </div>
           ))}
 
-          {/* Existing Rows */}
-          {filteredIdentities.map(identity => {
+          {/* Existing Rows (Paginated) */}
+          {paginatedIdentities.map(identity => {
             const draft = draftById[identity.nif] || toDraft(identity);
             return (
               <div key={identity.nif} className="contracts-sheet-row-wrap">
@@ -443,8 +493,8 @@ export function IdentificationSpreadsheetView({
                       data-sheet-col={0}
                       className="input contracts-sheet-input"
                       value={draft.nif}
-                      readOnly
-                      style={{ opacity: 0.7 }}
+                      onChange={e => setExistingField(identity.nif, "nif", e.target.value)}
+                      onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 0)}
                     />
                     <input
@@ -452,7 +502,7 @@ export function IdentificationSpreadsheetView({
                       data-sheet-col={1}
                       className="input contracts-sheet-input"
                       value={draft.firstName}
-                      onChange={e => setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, firstName: e.target.value } }))}
+                      onChange={e => setExistingField(identity.nif, "firstName", e.target.value)}
                       onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 1)}
                     />
@@ -461,7 +511,7 @@ export function IdentificationSpreadsheetView({
                       data-sheet-col={2}
                       className="input contracts-sheet-input"
                       value={draft.lastName}
-                      onChange={e => setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, lastName: e.target.value } }))}
+                      onChange={e => setExistingField(identity.nif, "lastName", e.target.value)}
                       onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 2)}
                     />
@@ -470,15 +520,11 @@ export function IdentificationSpreadsheetView({
                       data-sheet-col={3}
                       className="input contracts-sheet-input"
                       value={draft.gender}
-                      onChange={e => {
-                        const v = e.target.value.toUpperCase();
-                        const gender = v.startsWith("F") ? "Femme" : v.startsWith("H") || v.startsWith("M") ? "Homme" : v;
-                        setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, gender: gender as any } }));
-                      }}
+                      onChange={e => setExistingField(identity.nif, "gender", e.target.value)}
                       onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => {
-                        if (e.key.toLowerCase() === "f") { e.preventDefault(); setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, gender: "Femme" } })); }
-                        if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, gender: "Homme" } })); }
+                        if (e.key.toLowerCase() === "f") { e.preventDefault(); setExistingField(identity.nif, "gender", "Femme"); }
+                        if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setExistingField(identity.nif, "gender", "Homme"); }
                         handleGridArrowNavigation(e, identity.nif, 3);
                       }}
                     />
@@ -487,7 +533,7 @@ export function IdentificationSpreadsheetView({
                       data-sheet-col={4}
                       className="input contracts-sheet-input"
                       value={draft.ninu}
-                      onChange={e => setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, ninu: formatNinuInput(e.target.value) } }))}
+                      onChange={e => setExistingField(identity.nif, "ninu", e.target.value)}
                       onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 4)}
                     />
@@ -496,7 +542,7 @@ export function IdentificationSpreadsheetView({
                       dataSheetCol={5}
                       className="input contracts-sheet-input"
                       value={draft.address}
-                      onChange={val => setDraftById(prev => ({ ...prev, [identity.nif]: { ...draft, address: val } }))}
+                      onChange={val => setExistingField(identity.nif, "address", val)}
                       onBlur={() => handleSaveExisting(identity.nif)}
                       onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 5)}
                       items={addressItems}
@@ -514,6 +560,45 @@ export function IdentificationSpreadsheetView({
               Aucun résultat pour "{searchQuery}"
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="contracts-sheet-footer" style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        padding: '8px 16px', 
+        borderTop: '1px solid var(--border-subtle)',
+        background: 'var(--surface-sunken)',
+        fontSize: '13px'
+      }}>
+        <div style={{ color: 'var(--ink-muted)' }}>
+          Total: <strong>{filteredIdentities.length}</strong> entrées 
+          {searchQuery && ` (filtrées)`}
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ color: 'var(--ink-muted)' }}>
+            Page <strong>{currentPage}</strong> sur {totalPages}
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button 
+              className="icon-btn" 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+              style={{ padding: '4px' }}
+            >
+              <span className="material-symbols-rounded">chevron_left</span>
+            </button>
+            <button 
+              className="icon-btn" 
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              style={{ padding: '4px' }}
+            >
+              <span className="material-symbols-rounded">chevron_right</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
