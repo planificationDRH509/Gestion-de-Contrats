@@ -148,6 +148,7 @@ export function IdentificationSpreadsheetView({
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const pageSize = 50;
 
   const filteredIdentities = useMemo(() => {
@@ -342,12 +343,31 @@ export function IdentificationSpreadsheetView({
         });
       }
 
+      setEditingRowId(null);
       setRowErrors(prev => { const n = { ...prev }; delete n[originalNif]; return n; });
     } catch (e: any) {
       setRowErrors(prev => ({ ...prev, [originalNif]: e.message }));
     } finally {
       setSavingRows(prev => ({ ...prev, [originalNif]: false }));
     }
+  }
+
+  function startEditing(nif: string) {
+    setEditingRowId(nif);
+  }
+
+  function cancelEditing(nif: string) {
+    setEditingRowId(null);
+    setDraftById(prev => {
+      const next = { ...prev };
+      delete next[nif];
+      return next;
+    });
+    setRowErrors(prev => {
+      const next = { ...prev };
+      delete next[nif];
+      return next;
+    });
   }
 
   if (isLoading) return <div className="empty-state">Chargement...</div>;
@@ -472,82 +492,127 @@ export function IdentificationSpreadsheetView({
 
           {/* Existing Rows (Paginated) */}
           {paginatedIdentities.map(identity => {
+            const isEditing = editingRowId === identity.nif;
             const draft = draftById[identity.nif] || toDraft(identity);
+            
             return (
-              <div key={identity.nif} className="contracts-sheet-row-wrap">
-                <div className="contracts-sheet-row-shell">
+               <div key={identity.nif} className="contracts-sheet-row-wrap">
+                <div className={`contracts-sheet-row-shell ${isEditing ? 'is-editing' : ''}`}>
                   <div className="contracts-sheet-state-cell">
                     {savingRows[identity.nif] ? (
                       <span className="material-symbols-rounded is-spinning">sync</span>
+                    ) : isEditing ? (
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="icon-btn success-btn" onClick={() => handleSaveExisting(identity.nif)} title="Enregistrer">
+                          <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '20px'}}>check_circle</span>
+                        </button>
+                        <button className="icon-btn" onClick={() => cancelEditing(identity.nif)} title="Annuler">
+                          <span className="material-symbols-rounded" style={{color: 'var(--error)', fontSize: '20px'}}>cancel</span>
+                        </button>
+                      </div>
                     ) : (
-                      <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '18px'}} title="Enregistré">check_circle</span>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '18px'}} title="Enregistré">check_circle</span>
+                        <button className="icon-btn edit-btn" onClick={() => startEditing(identity.nif)} title="Modifier">
+                          <span className="material-symbols-rounded" style={{fontSize: '18px'}}>edit</span>
+                        </button>
+                        <button className="icon-btn delete-btn" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} style={{marginLeft: '4px'}}>
+                          <span className="material-symbols-rounded" style={{fontSize: '18px'}}>delete</span>
+                        </button>
+                      </div>
                     )}
-                    <span className="material-symbols-rounded edit-hint" style={{ fontSize: '16px', color: 'var(--ink-muted)', marginLeft: '4px' }} title="Modifiable">edit</span>
-                    <button className="icon-btn delete-btn" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} style={{marginLeft: 'auto'}}>
-                      <span className="material-symbols-rounded" style={{fontSize: '18px'}}>delete</span>
-                    </button>
                   </div>
+
                   <div className="contracts-sheet-row" style={{ gridTemplateColumns }}>
-                    <input
-                      data-sheet-row={identity.nif}
-                      data-sheet-col={0}
-                      className="input contracts-sheet-input"
-                      value={draft.nif}
-                      onChange={e => setExistingField(identity.nif, "nif", e.target.value)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 0)}
-                    />
-                    <input
-                      data-sheet-row={identity.nif}
-                      data-sheet-col={1}
-                      className="input contracts-sheet-input"
-                      value={draft.firstName}
-                      onChange={e => setExistingField(identity.nif, "firstName", e.target.value)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 1)}
-                    />
-                    <input
-                      data-sheet-row={identity.nif}
-                      data-sheet-col={2}
-                      className="input contracts-sheet-input"
-                      value={draft.lastName}
-                      onChange={e => setExistingField(identity.nif, "lastName", e.target.value)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 2)}
-                    />
-                    <input
-                      data-sheet-row={identity.nif}
-                      data-sheet-col={3}
-                      className="input contracts-sheet-input"
-                      value={draft.gender}
-                      onChange={e => setExistingField(identity.nif, "gender", e.target.value)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => {
-                        if (e.key.toLowerCase() === "f") { e.preventDefault(); setExistingField(identity.nif, "gender", "Femme"); }
-                        if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setExistingField(identity.nif, "gender", "Homme"); }
-                        handleGridArrowNavigation(e, identity.nif, 3);
-                      }}
-                    />
-                    <input
-                      data-sheet-row={identity.nif}
-                      data-sheet-col={4}
-                      className="input contracts-sheet-input"
-                      value={draft.ninu}
-                      onChange={e => setExistingField(identity.nif, "ninu", e.target.value)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 4)}
-                    />
-                    <AutocompleteField
-                      dataSheetRow={identity.nif}
-                      dataSheetCol={5}
-                      className="input contracts-sheet-input"
-                      value={draft.address}
-                      onChange={val => setExistingField(identity.nif, "address", val)}
-                      onBlur={() => handleSaveExisting(identity.nif)}
-                      onKeyDown={e => handleGridArrowNavigation(e, identity.nif, 5)}
-                      items={addressItems}
-                      pinCategory="address"
-                    />
+                    {isEditing ? (
+                      <>
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={0}
+                          className="input contracts-sheet-input editing"
+                          value={draft.nif}
+                          onChange={e => setExistingField(identity.nif, "nif", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 0);
+                          }}
+                        />
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={1}
+                          className="input contracts-sheet-input editing"
+                          value={draft.firstName}
+                          onChange={e => setExistingField(identity.nif, "firstName", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 1);
+                          }}
+                        />
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={2}
+                          className="input contracts-sheet-input editing"
+                          value={draft.lastName}
+                          onChange={e => setExistingField(identity.nif, "lastName", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 2);
+                          }}
+                        />
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={3}
+                          className="input contracts-sheet-input editing"
+                          value={draft.gender}
+                          onChange={e => setExistingField(identity.nif, "gender", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            if (e.key.toLowerCase() === "f") { e.preventDefault(); setExistingField(identity.nif, "gender", "Femme"); }
+                            if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setExistingField(identity.nif, "gender", "Homme"); }
+                            handleGridArrowNavigation(e, identity.nif, 3);
+                          }}
+                        />
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={4}
+                          className="input contracts-sheet-input editing"
+                          value={draft.ninu}
+                          onChange={e => setExistingField(identity.nif, "ninu", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 4);
+                          }}
+                        />
+                        <AutocompleteField
+                          dataSheetRow={identity.nif}
+                          dataSheetCol={5}
+                          className="input contracts-sheet-input editing"
+                          value={draft.address}
+                          onChange={val => setExistingField(identity.nif, "address", val)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 5);
+                          }}
+                          items={addressItems}
+                          pinCategory="address"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div className="contracts-sheet-cell-text">{identity.nif}</div>
+                        <div className="contracts-sheet-cell-text">{identity.prenom}</div>
+                        <div className="contracts-sheet-cell-text">{identity.nom}</div>
+                        <div className="contracts-sheet-cell-text">{identity.sexe}</div>
+                        <div className="contracts-sheet-cell-text">{identity.ninu || "-"}</div>
+                        <div className="contracts-sheet-cell-text" style={{ fontSize: '12px' }}>{identity.adresse}</div>
+                      </>
+                    )}
                   </div>
                 </div>
                 {rowErrors[identity.nif] && <div className="contracts-sheet-inline-error">{rowErrors[identity.nif]}</div>}
