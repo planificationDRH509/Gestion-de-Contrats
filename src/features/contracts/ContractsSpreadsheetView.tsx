@@ -516,7 +516,42 @@ export function ContractsSpreadsheetView({
     columnIndex: number
   ) {
     if (event.defaultPrevented) return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const currentRowIndex = rowOrder.indexOf(rowKey);
+      if (currentRowIndex < 0) return;
+
+      const isNewRow = rowKey.startsWith("new_");
+      if (isNewRow) {
+        // For new rows, Enter usually means "I'm done with this row, go to the next NIF"
+        // Try to find the next empty new row
+        const nextEmpty = newRows.find((r, idx) => {
+          const rIndex = rowOrder.indexOf(r.id);
+          return rIndex > currentRowIndex && isDraftEmpty(r.draft);
+        });
+
+        if (nextEmpty) {
+          focusGridCell(nextEmpty.id, 0);
+        } else {
+          // Just go to the row immediately below at col 0
+          const nextRowKey = rowOrder[currentRowIndex + 1];
+          if (nextRowKey) focusGridCell(nextRowKey, 0);
+        }
+      } else {
+        // For existing rows, Enter moves to the same column in the next row
+        const nextRowIndex = Math.min(rowOrder.length - 1, currentRowIndex + 1);
+        focusGridCell(rowOrder[nextRowIndex], columnIndex);
+      }
+      return;
+    }
+
+    if (
+      event.key !== "ArrowUp" &&
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight"
+    ) {
       return;
     }
 
@@ -546,6 +581,25 @@ export function ContractsSpreadsheetView({
     window.requestAnimationFrame(() => {
       focusGridCell(rowOrder[nextRowIndex], nextColumnIndex);
     });
+  }
+
+  function checkAutoNext(rowId: string, colIndex: number, key: SpreadsheetFieldKey, value: string) {
+    let complete = false;
+    if (key === "nif") {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length === 10) complete = true;
+    } else if (key === "ninu") {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length === 10) complete = true;
+    } else if (key === "gender") {
+      if (value === "Homme" || value === "Femme") complete = true;
+    }
+
+    if (complete) {
+      window.requestAnimationFrame(() => {
+        focusGridCell(rowId, colIndex + 1);
+      });
+    }
   }
 
   function getRowDraft(contract: Contract): SpreadsheetDraft {
@@ -1328,6 +1382,7 @@ export function ContractsSpreadsheetView({
                         onChange={(event) => {
                           const formatted = formatNifInput(event.target.value);
                           setNewField(row.id, "nif", formatted);
+                          checkAutoNext(row.id, 0, "nif", formatted);
                           const digits = formatted.replace(/\D/g, "");
                           if (digits.length === 10) {
                             void handleNewRowNifComplete(row.id, formatted);
@@ -1394,12 +1449,18 @@ export function ContractsSpreadsheetView({
                       placeholder="H / F"
                       onChange={(event) => {
                         const val = event.target.value.toUpperCase();
-                        if (val === "H" || val === "HOMME") setNewField(row.id, "gender", "Homme");
-                        else if (val === "F" || val === "FEMME") setNewField(row.id, "gender", "Femme");
-                        else setNewField(row.id, "gender", val);
+                        let nextGender = val;
+                        if (val === "H" || val === "HOMME") nextGender = "Homme";
+                        else if (val === "F" || val === "FEMME") nextGender = "Femme";
+                        
+                        setNewField(row.id, "gender", nextGender as any);
+                        checkAutoNext(row.id, 3, "gender", nextGender);
                       }}
                       onKeyDown={(event) => {
-                        handleGenderShortcut(event, (value) => setNewField(row.id, "gender", value));
+                        handleGenderShortcut(event, (value) => {
+                          setNewField(row.id, "gender", value);
+                          checkAutoNext(row.id, 3, "gender", value);
+                        });
                         handleGridArrowNavigation(event, rowKey, 3);
                       }}
                       onBlur={() => {
@@ -1412,7 +1473,10 @@ export function ContractsSpreadsheetView({
                       className="input contracts-sheet-input"
                       value={row.draft.ninu}
                       placeholder="0000000000"
-                      onChange={(event) => setNewField(row.id, "ninu", event.target.value)}
+                      onChange={(event) => {
+                        setNewField(row.id, "ninu", event.target.value);
+                        checkAutoNext(row.id, 4, "ninu", event.target.value);
+                      }}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 4)}
                       onBlur={() => {
                         void maybeCreateFromNewRow(row.id);

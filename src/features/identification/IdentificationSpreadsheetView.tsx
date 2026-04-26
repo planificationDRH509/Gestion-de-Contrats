@@ -159,6 +159,33 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
   }
 
   function handleGridArrowNavigation(event: React.KeyboardEvent, rowKey: string, columnIndex: number) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const rows = [...newRows.map(r => r.id), ...identities.map(i => i.nif)];
+      const rowIndex = rows.indexOf(rowKey);
+      if (rowIndex < 0) return;
+
+      const isNewRow = rowKey.startsWith("new_");
+      if (isNewRow) {
+        // Move to next empty row NIF
+        const nextEmpty = newRows.find((r, idx) => {
+          const rIdx = rows.indexOf(r.id);
+          return rIdx > rowIndex && isDraftEmpty(r.draft);
+        });
+        if (nextEmpty) {
+          focusGridCell(nextEmpty.id, 0);
+        } else {
+          const nextRowKey = rows[rowIndex + 1];
+          if (nextRowKey) focusGridCell(nextRowKey, 0);
+        }
+      } else {
+        // Same column next row
+        const nextRowIndex = Math.min(rows.length - 1, rowIndex + 1);
+        focusGridCell(rows[nextRowIndex], columnIndex);
+      }
+      return;
+    }
+
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
     
     // Simple navigation logic
@@ -176,6 +203,25 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
     if (nextRowIndex !== rowIndex || nextColIndex !== columnIndex) {
       event.preventDefault();
       focusGridCell(rows[nextRowIndex], nextColIndex);
+    }
+  }
+
+  function checkAutoNext(rowId: string, colIndex: number, key: SpreadsheetFieldKey, value: string) {
+    let complete = false;
+    if (key === "nif") {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length === 10) complete = true;
+    } else if (key === "ninu") {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length === 10) complete = true;
+    } else if (key === "gender") {
+      if (value === "Homme" || value === "Femme") complete = true;
+    }
+
+    if (complete) {
+      window.requestAnimationFrame(() => {
+        focusGridCell(rowId, colIndex + 1);
+      });
     }
   }
 
@@ -282,6 +328,7 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
                     onChange={e => {
                       const val = formatNifInput(e.target.value);
                       setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, nif: val } } : r));
+                      checkAutoNext(row.id, 0, "nif", val);
                     }}
                     onBlur={() => handleSaveNew(row.id)}
                     onKeyDown={e => handleGridArrowNavigation(e, row.id, 0)}
@@ -316,21 +363,34 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
                       const v = e.target.value.toUpperCase();
                       const gender = v.startsWith("F") ? "Femme" : v.startsWith("H") || v.startsWith("M") ? "Homme" : v;
                       setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, gender: gender as any } } : r));
+                      checkAutoNext(row.id, 3, "gender", gender);
                     }}
                     onBlur={() => handleSaveNew(row.id)}
                     onKeyDown={e => {
-                      if (e.key.toLowerCase() === "f") { e.preventDefault(); setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, gender: "Femme" } } : r)); }
-                      if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, gender: "Homme" } } : r)); }
+                      if (e.key.toLowerCase() === "f") { 
+                        e.preventDefault(); 
+                        setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, gender: "Femme" } } : r)); 
+                        checkAutoNext(row.id, 3, "gender", "Femme");
+                      }
+                      if (["h", "m"].includes(e.key.toLowerCase())) { 
+                        e.preventDefault(); 
+                        setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, gender: "Homme" } } : r)); 
+                        checkAutoNext(row.id, 3, "gender", "Homme");
+                      }
                       handleGridArrowNavigation(e, row.id, 3);
                     }}
                   />
-                  <input
+                   <input
                     data-sheet-row={row.id}
                     data-sheet-col={4}
                     className="input contracts-sheet-input"
                     value={row.draft.ninu}
                     placeholder="NINU"
-                    onChange={e => setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, ninu: formatNinuInput(e.target.value) } } : r))}
+                    onChange={e => {
+                      const val = formatNinuInput(e.target.value);
+                      setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, ninu: val } } : r));
+                      checkAutoNext(row.id, 4, "ninu", val);
+                    }}
                     onBlur={() => handleSaveNew(row.id)}
                     onKeyDown={e => handleGridArrowNavigation(e, row.id, 4)}
                   />
