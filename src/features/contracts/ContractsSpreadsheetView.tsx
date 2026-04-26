@@ -519,29 +519,15 @@ export function ContractsSpreadsheetView({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const currentRowIndex = rowOrder.indexOf(rowKey);
-      if (currentRowIndex < 0) return;
-
-      const isNewRow = rowKey.startsWith("new_");
-      if (isNewRow) {
-        // For new rows, Enter usually means "I'm done with this row, go to the next NIF"
-        // Try to find the next empty new row
-        const nextEmpty = newRows.find((r) => {
-          const rIndex = rowOrder.indexOf(r.id);
-          return rIndex > currentRowIndex && isDraftEmpty(r.draft);
-        });
-
-        if (nextEmpty) {
-          focusGridCell(nextEmpty.id, 0);
-        } else {
-          // Just go to the row immediately below at col 0
-          const nextRowKey = rowOrder[currentRowIndex + 1];
-          if (nextRowKey) focusGridCell(nextRowKey, 0);
-        }
+      // Jump directly to the first available empty row's NIF column
+      const firstEmpty = newRows.find(r => isDraftEmpty(r.draft));
+      if (firstEmpty) {
+        focusGridCell(firstEmpty.id, 0);
       } else {
-        // For existing rows, Enter moves to the same column in the next row
-        const nextRowIndex = Math.min(rowOrder.length - 1, currentRowIndex + 1);
-        focusGridCell(rowOrder[nextRowIndex], columnIndex);
+        // Fallback: next row col 0 if no empty one found
+        const currentRowIndex = rowOrder.indexOf(rowKey);
+        const nextRowKey = rowOrder[currentRowIndex + 1];
+        if (nextRowKey) focusGridCell(nextRowKey, 0);
       }
       return;
     }
@@ -1550,8 +1536,8 @@ export function ContractsSpreadsheetView({
                       data-sheet-col={9}
                       className="input contracts-sheet-input"
                       value={row.draft.durationMonths}
-                      placeholder="Mois"
-                      type="number"
+                      placeholder="12"
+                      inputMode="numeric"
                       onChange={(event) => setNewField(row.id, "durationMonths", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={() => {
@@ -1750,8 +1736,8 @@ export function ContractsSpreadsheetView({
                       data-sheet-col={9}
                       className="input contracts-sheet-input"
                       value={draft.durationMonths}
-                      placeholder="Mois"
-                      type="number"
+                      placeholder="12"
+                      inputMode="numeric"
                       onChange={(event) => setExistingField(contract.id, "durationMonths", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={() => queueExistingSave(contract.id)}

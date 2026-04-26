@@ -126,7 +126,15 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
   return null;
 }
 
-export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspaceId: string, userId: string }) {
+export function IdentificationSpreadsheetView({ 
+  workspaceId, 
+  userId, 
+  searchQuery = "" 
+}: { 
+  workspaceId: string, 
+  userId: string, 
+  searchQuery?: string 
+}) {
   const { data: identities = [], isLoading } = useIdentificationList(workspaceId);
   const createIdentity = useCreateIdentification();
   const updateIdentity = useUpdateIdentification();
@@ -139,6 +147,17 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
   );
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+
+  const filteredIdentities = useMemo(() => {
+    if (!searchQuery.trim()) return identities;
+    const q = searchQuery.toLowerCase().replace(/\D/g, "");
+    return identities.filter(i => {
+      const nifDigits = i.nif.replace(/\D/g, "");
+      const ninuDigits = (i.ninu || "").replace(/\D/g, "");
+      return nifDigits.includes(q) || ninuDigits.includes(q);
+    });
+  }, [identities, searchQuery]);
+
   const columnWidths = useMemo<Record<SpreadsheetFieldKey, number>>(() =>
     COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: col.width }), {} as any),
     []
@@ -161,27 +180,16 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
   function handleGridArrowNavigation(event: React.KeyboardEvent, rowKey: string, columnIndex: number) {
     if (event.key === "Enter") {
       event.preventDefault();
-      const rows = [...newRows.map(r => r.id), ...identities.map(i => i.nif)];
-      const rowIndex = rows.indexOf(rowKey);
-      if (rowIndex < 0) return;
-
-      const isNewRow = rowKey.startsWith("new_");
-      if (isNewRow) {
-        // Move to next empty row NIF
-        const nextEmpty = newRows.find((r) => {
-          const rIdx = rows.indexOf(r.id);
-          return rIdx > rowIndex && isDraftEmpty(r.draft);
-        });
-        if (nextEmpty) {
-          focusGridCell(nextEmpty.id, 0);
-        } else {
-          const nextRowKey = rows[rowIndex + 1];
-          if (nextRowKey) focusGridCell(nextRowKey, 0);
-        }
+      // Jump directly to the first available empty row's NIF column
+      const firstEmpty = newRows.find(r => isDraftEmpty(r.draft));
+      if (firstEmpty) {
+        focusGridCell(firstEmpty.id, 0);
       } else {
-        // Same column next row
-        const nextRowIndex = Math.min(rows.length - 1, rowIndex + 1);
-        focusGridCell(rows[nextRowIndex], columnIndex);
+        // Fallback: next row col 0 if no empty one found
+        const rows = [...newRows.map(r => r.id), ...filteredIdentities.map(i => i.nif)];
+        const rowIndex = rows.indexOf(rowKey);
+        const nextRowKey = rows[rowIndex + 1];
+        if (nextRowKey) focusGridCell(nextRowKey, 0);
       }
       return;
     }
@@ -189,7 +197,7 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
     
     // Simple navigation logic
-    const rows = [...newRows.map(r => r.id), ...identities.map(i => i.nif)];
+    const rows = [...newRows.map(r => r.id), ...filteredIdentities.map(i => i.nif)];
     const rowIndex = rows.indexOf(rowKey);
     
     let nextRowIndex = rowIndex;
@@ -413,15 +421,20 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
           ))}
 
           {/* Existing Rows */}
-          {identities.map(identity => {
+          {filteredIdentities.map(identity => {
             const draft = draftById[identity.nif] || toDraft(identity);
             return (
               <div key={identity.nif} className="contracts-sheet-row-wrap">
                 <div className="contracts-sheet-row-shell">
                   <div className="contracts-sheet-state-cell">
-                    {savingRows[identity.nif] ? <span className="material-symbols-rounded is-spinning">sync</span> : <span className="material-symbols-rounded" style={{color: 'var(--success)'}}>check_circle</span>}
-                    <button className="icon-btn" onClick={() => { if(confirm("Supprimer?")) deleteIdentity.mutate(identity.nif); }} style={{marginLeft: '4px'}}>
-                      <span className="material-symbols-rounded" style={{fontSize: '16px'}}>delete</span>
+                    {savingRows[identity.nif] ? (
+                      <span className="material-symbols-rounded is-spinning">sync</span>
+                    ) : (
+                      <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '18px'}} title="Enregistré">check_circle</span>
+                    )}
+                    <span className="material-symbols-rounded edit-hint" style={{ fontSize: '16px', color: 'var(--ink-muted)', marginLeft: '4px' }} title="Modifiable">edit</span>
+                    <button className="icon-btn delete-btn" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} style={{marginLeft: 'auto'}}>
+                      <span className="material-symbols-rounded" style={{fontSize: '18px'}}>delete</span>
                     </button>
                   </div>
                   <div className="contracts-sheet-row" style={{ gridTemplateColumns }}>
@@ -495,6 +508,12 @@ export function IdentificationSpreadsheetView({ workspaceId, userId }: { workspa
               </div>
             );
           })}
+
+          {filteredIdentities.length === 0 && searchQuery.trim() !== "" && (
+            <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+              Aucun résultat pour "{searchQuery}"
+            </div>
+          )}
         </div>
       </div>
     </div>
