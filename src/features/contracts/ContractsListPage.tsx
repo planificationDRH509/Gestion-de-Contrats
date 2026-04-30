@@ -175,7 +175,7 @@ export function ContractsListPage() {
   const [pendingAssignIds, setPendingAssignIds] = useState<string[] | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status">("main");
+  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export">("main");
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
@@ -515,7 +515,7 @@ export function ContractsListPage() {
                 "assignment"
               )
             : contract.assignment,
-          contract.salaryNumber.toString().replace(".", ","),
+          contract.salaryNumber.toLocaleString("en-US"),
           contract.salaryText,
           exportWithPrepositions
             ? addCsvLocationPrefix(
@@ -678,6 +678,8 @@ export function ContractsListPage() {
           ? 320
           : contractId === "sort-trigger"
             ? 240
+            : contractId === "export-trigger"
+              ? 170
             : contractId === "bulk-dossier-trigger"
               ? 260
             : mode === "status"
@@ -696,7 +698,13 @@ export function ContractsListPage() {
       x: Math.min(window.innerWidth - 260, Math.max(padding, rect.left - 160)),
       y: Math.max(padding, y)
     });
-    setMenuView(contractId === "bulk-dossier-trigger" ? "dossiers" : "main");
+    setMenuView(
+      contractId === "bulk-dossier-trigger"
+        ? "dossiers"
+        : contractId === "export-trigger"
+          ? "export"
+          : "main"
+    );
     setMenuMode(mode);
   }
 
@@ -1763,6 +1771,44 @@ export function ContractsListPage() {
                         ))}
                       </div>
                     </>
+                  ) : menuView === "export" ? (
+                    <>
+                      <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
+                        <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700 }}>Export CSV</div>
+                      </div>
+
+                      <div style={{ padding: "12px", display: "grid", gap: "12px" }}>
+                        <label
+                          className="switch"
+                          title="Ajouter les articles et prépositions dans le CSV selon les règles configurées"
+                          style={{ justifyContent: "space-between", gap: "10px" }}
+                        >
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
+                            Prépositions
+                          </span>
+                          <div style={{ display: "inline-flex", alignItems: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={exportWithPrepositions}
+                              onChange={(event) => setExportWithPrepositions(event.target.checked)}
+                            />
+                            <span className="switch-slider" />
+                          </div>
+                        </label>
+
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          style={{ width: "100%", justifyContent: "center" }}
+                          onClick={() => {
+                            setContextMenu(null);
+                            void handleExportCsv();
+                          }}
+                        >
+                          Exporter
+                        </button>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
@@ -1943,21 +1989,6 @@ export function ContractsListPage() {
               <div className="toolbar-divider" />
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
-                <label
-                  className="switch"
-                  title="Ajouter les articles et prépositions dans le CSV selon les règles configurées"
-                  style={{ gap: "6px" }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={exportWithPrepositions}
-                    onChange={(event) => setExportWithPrepositions(event.target.checked)}
-                  />
-                  <span className="switch-slider" />
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
-                    Prépositions
-                  </span>
-                </label>
                 <button
                   className="icon-btn primary"
                   type="button"
@@ -1969,7 +2000,7 @@ export function ContractsListPage() {
                 <button
                   className="icon-btn"
                   type="button"
-                  onClick={handleExportCsv}
+                  onClick={(event) => handleContextFromButton(event, "export-trigger")}
                   title="Exporter CSV"
                 >
                   <span className="material-symbols-rounded">download_for_offline</span>
