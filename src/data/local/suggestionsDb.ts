@@ -167,11 +167,13 @@ export function addAddress(label: string): AddressSuggestion {
   return entry;
 }
 
-export function updateAddress(id: string, label: string) {
+export function updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null) {
   const db = loadSuggestions();
   const idx = db.addresses.findIndex((a) => a.id === id);
   if (idx >= 0) {
     db.addresses[idx].label = label;
+    db.addresses[idx].prefix = prefix ?? null;
+    db.addresses[idx].labelFeminine = labelFeminine ?? null;
     saveSuggestions(db);
   }
 }
@@ -196,12 +198,20 @@ export function addPosition(label: string, salaries: number[]): PositionSuggesti
   return entry;
 }
 
-export function updatePosition(id: string, label: string, salaries: number[]) {
+export function updatePosition(
+  id: string,
+  label: string,
+  salaries: number[],
+  prefix?: string | null,
+  labelFeminine?: string | null
+) {
   const db = loadSuggestions();
   const idx = db.positions.findIndex((p) => p.id === id);
   if (idx >= 0) {
     db.positions[idx].label = label;
     db.positions[idx].salaries = salaries;
+    db.positions[idx].prefix = prefix ?? null;
+    db.positions[idx].labelFeminine = labelFeminine ?? null;
     saveSuggestions(db);
   }
 }
@@ -226,12 +236,20 @@ export function addInstitution(label: string, addressKeywords: string[]): Instit
   return entry;
 }
 
-export function updateInstitution(id: string, label: string, addressKeywords: string[]) {
+export function updateInstitution(
+  id: string,
+  label: string,
+  addressKeywords: string[],
+  prefix?: string | null,
+  labelFeminine?: string | null
+) {
   const db = loadSuggestions();
   const idx = db.institutions.findIndex((i) => i.id === id);
   if (idx >= 0) {
     db.institutions[idx].label = label;
     db.institutions[idx].addressKeywords = addressKeywords;
+    db.institutions[idx].prefix = prefix ?? null;
+    db.institutions[idx].labelFeminine = labelFeminine ?? null;
     saveSuggestions(db);
   }
 }

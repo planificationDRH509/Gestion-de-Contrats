@@ -53,21 +53,73 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 ];
 
 const FRENCH_ELISION_START = /^[aeiouyàâäéèêëîïôöùûüœh]/i;
+const CSV_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
+const CSV_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
+const ASSIGNMENT_FEMININE_PREFIX_WORDS = [
+  "direction",
+  "maternite",
+  "maternité",
+  "clinique",
+  "faculte",
+  "faculté",
+  "mairie",
+  "section"
+];
+const ASSIGNMENT_MASCULINE_PREFIX_WORDS = [
+  "centre",
+  "sanatorium",
+  "bureau",
+  "service",
+  "departement",
+  "département",
+  "ministere",
+  "ministère",
+  "programme",
+  "lycee",
+  "lycée",
+  "college",
+  "collège",
+  "dispensaire",
+  "palais",
+  "tribunal"
+];
 
 function startsWithFrenchElision(value: string) {
   return FRENCH_ELISION_START.test(value.trim());
 }
 
-function addCsvPositionPrefix(value: string) {
+function normalizeCsvGrammarValue(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function joinCsvPrefix(prefix: string, value: string) {
+  const trimmedPrefix = prefix.trim();
+  const trimmedValue = value.trim();
+  if (!trimmedPrefix) return trimmedValue;
+  if (/[\'’]$/.test(trimmedPrefix)) return `${trimmedPrefix}${trimmedValue}`;
+  return `${trimmedPrefix} ${trimmedValue}`;
+}
+
+function addCsvPositionPrefix(value: string, explicitPrefix?: string | null) {
   const trimmed = value.trim();
-  if (!trimmed || /^(d['’]|de\s|du\s|des\s)/i.test(trimmed)) return trimmed;
+  if (!trimmed || CSV_PREFIXED_POSITION.test(trimmed)) return trimmed;
+  if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
   return startsWithFrenchElision(trimmed) ? `d'${trimmed}` : `de ${trimmed}`;
 }
 
-function addCsvLocationPrefix(value: string) {
+function addCsvLocationPrefix(value: string, explicitPrefix?: string | null, kind: "assignment" | "address" = "address") {
   const trimmed = value.trim();
-  if (!trimmed || /^(à\s|a\s|à\s*l['’]|a\s*l['’]|au\s|aux\s|en\s|chez\s)/i.test(trimmed)) {
-    return trimmed;
+  if (!trimmed || CSV_PREFIXED_LOCATION.test(trimmed)) return trimmed;
+  if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
+  if (kind === "assignment") {
+    const normalized = normalizeCsvGrammarValue(trimmed);
+    const firstWord = normalized.split(/[\s(-]+/)[0] ?? normalized;
+    if (ASSIGNMENT_FEMININE_PREFIX_WORDS.includes(firstWord)) return `à la ${trimmed}`;
+    if (ASSIGNMENT_MASCULINE_PREFIX_WORDS.includes(firstWord)) return `au ${trimmed}`;
   }
   return startsWithFrenchElision(trimmed) ? `à l'${trimmed}` : `à ${trimmed}`;
 }
@@ -426,7 +478,21 @@ export function ContractsListPage() {
     if (selected.length === 0) return;
     try {
       const provider = getDataProvider();
-      const contracts = await provider.contracts.getByIds(selected, workspaceId);
+      const [contracts, positions, institutions, addresses] = await Promise.all([
+        provider.contracts.getByIds(selected, workspaceId),
+        provider.suggestions.getPositions(workspaceId),
+        provider.suggestions.getInstitutions(workspaceId),
+        provider.suggestions.getAddresses(workspaceId)
+      ]);
+      const positionPrefixes = new Map(
+        positions.map((position) => [normalizeCsvGrammarValue(position.label), position.prefix ?? null])
+      );
+      const institutionPrefixes = new Map(
+        institutions.map((institution) => [normalizeCsvGrammarValue(institution.label), institution.prefix ?? null])
+      );
+      const addressPrefixes = new Map(
+        addresses.map((address) => [normalizeCsvGrammarValue(address.label), address.prefix ?? null])
+      );
       const header =
         "sexe; Nom; Prenom; Nif; Ninu; Poste; Affectation; Salaire en chiffre; Salaire en Lettre; Adresse";
       const rows = contracts.map((contract) =>
@@ -436,11 +502,28 @@ export function ContractsListPage() {
           contract.firstName,
           contract.nif ?? "",
           contract.ninu ?? "",
-          exportWithPrepositions ? addCsvPositionPrefix(contract.position) : contract.position,
-          exportWithPrepositions ? addCsvLocationPrefix(contract.assignment) : contract.assignment,
+          exportWithPrepositions
+            ? addCsvPositionPrefix(
+                contract.position,
+                positionPrefixes.get(normalizeCsvGrammarValue(contract.position))
+              )
+            : contract.position,
+          exportWithPrepositions
+            ? addCsvLocationPrefix(
+                contract.assignment,
+                institutionPrefixes.get(normalizeCsvGrammarValue(contract.assignment)),
+                "assignment"
+              )
+            : contract.assignment,
           contract.salaryNumber.toString().replace(".", ","),
           contract.salaryText,
-          exportWithPrepositions ? addCsvLocationPrefix(contract.address) : contract.address
+          exportWithPrepositions
+            ? addCsvLocationPrefix(
+                contract.address,
+                addressPrefixes.get(normalizeCsvGrammarValue(contract.address)),
+                "address"
+              )
+            : contract.address
         ]
           .map((value) => escapeCsv(String(value)))
           .join("; ")
@@ -1862,7 +1945,7 @@ export function ContractsListPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
                 <label
                   className="switch"
-                  title="Ajouter de/d' devant le poste et à/à l' devant l'affectation et l'adresse dans le CSV"
+                  title="Ajouter les articles et prépositions dans le CSV selon les règles configurées"
                   style={{ gap: "6px" }}
                 >
                   <input
