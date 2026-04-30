@@ -52,6 +52,26 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "classe", label: "Classé" }
 ];
 
+const FRENCH_ELISION_START = /^[aeiouyàâäéèêëîïôöùûüœh]/i;
+
+function startsWithFrenchElision(value: string) {
+  return FRENCH_ELISION_START.test(value.trim());
+}
+
+function addCsvPositionPrefix(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^(d['’]|de\s|du\s|des\s)/i.test(trimmed)) return trimmed;
+  return startsWithFrenchElision(trimmed) ? `d'${trimmed}` : `de ${trimmed}`;
+}
+
+function addCsvLocationPrefix(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^(à\s|a\s|à\s*l['’]|a\s*l['’]|au\s|aux\s|en\s|chez\s)/i.test(trimmed)) {
+    return trimmed;
+  }
+  return startsWithFrenchElision(trimmed) ? `à l'${trimmed}` : `à ${trimmed}`;
+}
+
 export function ContractsListPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -91,6 +111,7 @@ export function ContractsListPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [selected, setSelected] = useState<string[]>([]);
+  const [exportWithPrepositions, setExportWithPrepositions] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     id: string;
     x: number;
@@ -415,11 +436,11 @@ export function ContractsListPage() {
           contract.firstName,
           contract.nif ?? "",
           contract.ninu ?? "",
-          contract.position,
-          contract.assignment,
+          exportWithPrepositions ? addCsvPositionPrefix(contract.position) : contract.position,
+          exportWithPrepositions ? addCsvLocationPrefix(contract.assignment) : contract.assignment,
           contract.salaryNumber.toString().replace(".", ","),
           contract.salaryText,
-          contract.address
+          exportWithPrepositions ? addCsvLocationPrefix(contract.address) : contract.address
         ]
           .map((value) => escapeCsv(String(value)))
           .join("; ")
@@ -1838,7 +1859,22 @@ export function ContractsListPage() {
 
               <div className="toolbar-divider" />
 
-              <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
+                <label
+                  className="switch"
+                  title="Ajouter de/d' devant le poste et à/à l' devant l'affectation et l'adresse dans le CSV"
+                  style={{ gap: "6px" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={exportWithPrepositions}
+                    onChange={(event) => setExportWithPrepositions(event.target.checked)}
+                  />
+                  <span className="switch-slider" />
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
+                    Prépositions
+                  </span>
+                </label>
                 <button
                   className="icon-btn primary"
                   type="button"
