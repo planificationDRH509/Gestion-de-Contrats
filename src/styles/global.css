@@ -769,6 +769,11 @@ img {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: var(--spacing-2) 0;
 }
 
 .section-header.compact {
@@ -777,7 +782,25 @@ img {
 
 .section-title {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  color: var(--ink);
+}
+
+.section-subtitle {
+  font-size: 14px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.page-container {
+  padding: var(--spacing-5);
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  height: 100%;
 }
 
 .card {
@@ -2333,7 +2356,7 @@ img {
   display: flex;
   gap: var(--spacing-2);
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin-top: var(--spacing-3);
 }
 

@@ -81,17 +81,25 @@ export function UserManagementPage() {
   };
 
   return (
-    <div className="content">
-      <div className="section-header">
-        <h1 className="section-title">Gestion des Utilisateurs</h1>
-      </div>
+    <div className="page-container" style={{ animation: 'fade-in 0.4s var(--premium-ease)' }}>
+      <header className="section-header" style={{ background: 'transparent' }}>
+        <div>
+          <h1 className="section-title" style={{ fontSize: '28px' }}>Gestion des Utilisateurs</h1>
+          <p className="section-subtitle">Créez et gérez les comptes des collaborateurs.</p>
+        </div>
+      </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '32px', marginTop: '12px' }}>
         {/* Form Section */}
         <div className="card" style={{ padding: '24px' }}>
-          <h2 style={{ fontSize: '20px', marginBottom: '20px', color: 'var(--ink)' }}>Créer un Nouvel Utilisateur</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+               <span className="material-symbols-rounded">person_add</span>
+             </div>
+             <h2 style={{ fontSize: '18px', margin: 0, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>Nouveau Collaborateur</h2>
+          </div>
           
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div className="form-group">
               <label className="label">Nom complet</label>
               <input 
@@ -126,12 +134,13 @@ export function UserManagementPage() {
             </div>
 
             <div className="form-group">
-              <label className="label">Espaces de travail autorisés</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+              <label className="label" style={{ marginBottom: '12px' }}>Espaces de travail autorisés</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: 'var(--surface-sunken)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                 {workspaces.map(wp => (
-                  <label key={wp.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '14px' }}>
+                  <label key={wp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: 'var(--ink)' }}>
                     <input 
                       type="checkbox" 
+                      className="checkbox"
                       checked={selectedWorkspaces.includes(wp.id)} 
                       onChange={() => toggleWorkspace(wp.id)}
                     />
@@ -144,10 +153,12 @@ export function UserManagementPage() {
             {message && (
               <div style={{ 
                 padding: '12px', 
-                borderRadius: '8px', 
-                backgroundColor: message.type === 'success' ? '#e6f4ea' : '#fce8e6',
-                color: message.type === 'success' ? '#1e8e3e' : '#d93025',
-                fontSize: '14px'
+                borderRadius: '10px', 
+                backgroundColor: message.type === 'success' ? 'var(--success-soft)' : 'var(--danger-soft)',
+                color: message.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                fontSize: '13.5px',
+                fontWeight: '500',
+                border: `1px solid ${message.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
               }}>
                 {message.text}
               </div>
@@ -157,7 +168,7 @@ export function UserManagementPage() {
               type="submit" 
               className="button button-primary" 
               disabled={isSubmitting}
-              style={{ marginTop: '12px' }}
+              style={{ height: '44px', fontWeight: '600' }}
             >
               {isSubmitting ? "Création..." : "Ajouter l'utilisateur"}
             </button>
@@ -166,34 +177,47 @@ export function UserManagementPage() {
 
         {/* List Section */}
         <div className="card" style={{ padding: '24px' }}>
-          <h2 style={{ fontSize: '20px', marginBottom: '20px', color: 'var(--ink)' }}>Utilisateurs Existants</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--info-soft)', color: 'var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+               <span className="material-symbols-rounded">group</span>
+             </div>
+             <h2 style={{ fontSize: '18px', margin: 0, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>Utilisateurs Existants</h2>
+          </div>
+
           {loading ? (
-            <p style={{ color: 'var(--ink-muted)' }}>Chargement...</p>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+              <span className="material-symbols-rounded is-spinning" style={{ color: 'var(--primary)' }}>sync</span>
+            </div>
           ) : users.length === 0 ? (
-            <p style={{ color: 'var(--ink-muted)' }}>Aucun utilisateur trouvé.</p>
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--ink-muted)' }}>
+              <span className="material-symbols-rounded" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>person_off</span>
+              <p>Aucun utilisateur trouvé.</p>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {users.map(u => (
                 <div key={u.id} style={{ 
                   padding: '16px', 
-                  borderRadius: '12px', 
+                  borderRadius: '16px', 
                   border: '1px solid var(--border)',
-                  backgroundColor: 'var(--surface)'
+                  backgroundColor: 'var(--surface-sunken)',
+                  transition: 'all 0.2s ease'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: '600', color: 'var(--ink)' }}>{u.fullName}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>@{u.username}</div>
+                    <div style={{ fontWeight: '700', color: 'var(--ink)', fontSize: '15px' }}>{u.fullName}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-muted)', background: 'var(--panel)', padding: '2px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}>@{u.username}</div>
                   </div>
-                  <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {u.workspaces.map(wpId => {
                       const wp = workspaces.find(w => w.id === wpId);
                       return (
                         <span key={wpId} style={{ 
                           fontSize: '11px', 
                           padding: '2px 8px', 
-                          borderRadius: '10px', 
+                          borderRadius: '8px', 
                           backgroundColor: 'var(--accent-soft)', 
-                          color: 'var(--accent)' 
+                          color: 'var(--accent)',
+                          fontWeight: '600'
                         }}>
                           {wp?.name || wpId}
                         </span>

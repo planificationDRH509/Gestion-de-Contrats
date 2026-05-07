@@ -214,23 +214,22 @@ export function StatisticsPage() {
   const totalContracts = contracts.length;
 
   return (
-    <div className="stats-page" style={{ padding: "32px", maxWidth: "1600px", margin: "0 auto", animation: "fade-in 0.4s ease-out" }}>
-      <header className="stats-header" style={{ marginBottom: "32px", display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+    <div className="page-container" style={{ animation: "fade-in 0.4s ease-out" }}>
+      <header className="section-header" style={{ marginBottom: "32px", display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '20px', position: 'relative', background: 'transparent' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '20px' }}>
           <div>
-            <h1 style={{ fontSize: "32px", fontWeight: "800", color: "var(--ink)", marginBottom: "8px", letterSpacing: "-0.02em" }}>Tableau de Bord & Statistiques</h1>
-            <p style={{ color: "var(--ink-muted)", fontSize: "16px" }}>Analysez les données de vos effectifs et la masse salariale.</p>
+            <h1 className="section-title" style={{ fontSize: "28px", fontFamily: "var(--font-heading)" }}>Tableau de Bord & Statistiques</h1>
+            <p style={{ color: "var(--ink-muted)", fontSize: "15px", marginTop: "4px" }}>Visualisation analytique des effectifs et de la masse salariale.</p>
           </div>
 
           {/* Time Filter Bar */}
           <div className="stats-filters" style={{ 
             display: 'flex', 
             background: 'var(--surface-sunken)', 
-            padding: '6px', 
-            borderRadius: '12px', 
-            gap: '4px',
+            padding: '4px', 
+            borderRadius: '14px', 
+            gap: '2px',
             alignItems: 'center',
-            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
             border: '1px solid var(--border)'
           }}>
             {['all', 'today', 'week', 'month', 'quarter', 'custom'].map((f) => (
@@ -238,17 +237,17 @@ export function StatisticsPage() {
                 key={f}
                 onClick={() => setFilterType(f as FilterType)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
                   border: 'none',
                   background: filterType === f ? 'var(--primary)' : 'transparent',
                   color: filterType === f ? 'white' : 'var(--ink-muted)',
                   fontWeight: filterType === f ? '600' : '500',
                   cursor: 'pointer',
                   fontSize: '13px',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'all 0.2s var(--premium-ease)',
                   textTransform: 'capitalize',
-                  boxShadow: filterType === f ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none'
+                  boxShadow: filterType === f ? '0 4px 12px rgba(99, 102, 241, 0.2)' : 'none'
                 }}
               >
                 {f === 'all' ? 'Tous' : 
@@ -268,14 +267,15 @@ export function StatisticsPage() {
           alignItems: 'center', 
           flexWrap: 'wrap',
           background: 'var(--surface-card)',
-          padding: '16px 20px',
+          padding: '12px 16px',
           borderRadius: '16px',
           border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-sm)'
+          width: '100%',
+          boxShadow: 'var(--shadow)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="material-symbols-rounded" style={{ color: 'var(--ink-muted)', fontSize: '20px' }}>filter_list</span>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)' }}>Filtres avancés :</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="material-symbols-rounded" style={{ color: 'var(--primary)', fontSize: '20px' }}>filter_alt</span>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)' }}>Filtres :</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -283,15 +283,8 @@ export function StatisticsPage() {
             <select 
               value={statusFilter} 
               onChange={e => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--ink)',
-                fontSize: '14px',
-                minWidth: '150px'
-              }}
+              className="input"
+              style={{ padding: '6px 10px', fontSize: '13.5px', minWidth: '140px', height: '36px' }}
             >
               <option value="all">Tous les statuts</option>
               {Object.entries(statusLabels).map(([val, label]) => (
@@ -305,15 +298,8 @@ export function StatisticsPage() {
             <select 
               value={assignmentFilter} 
               onChange={e => setAssignmentFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--ink)',
-                fontSize: '14px',
-                minWidth: '200px'
-              }}
+              className="input"
+              style={{ padding: '6px 10px', fontSize: '13.5px', minWidth: '180px', height: '36px' }}
             >
               <option value="all">Toutes les affectations</option>
               {uniqueAssignments.map(a => (
@@ -323,25 +309,22 @@ export function StatisticsPage() {
           </div>
 
           {filterType === 'custom' && (
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginLeft: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Du</label>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={e => setStartDate(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Au</label>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={e => setEndDate(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
-                />
-              </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto' }}>
+              <input 
+                type="date" 
+                className="input"
+                value={startDate} 
+                onChange={e => setStartDate(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: '13px', height: '36px' }}
+              />
+              <span style={{ color: 'var(--ink-muted)' }}>→</span>
+              <input 
+                type="date" 
+                className="input"
+                value={endDate} 
+                onChange={e => setEndDate(e.target.value)}
+                style={{ padding: '6px 10px', fontSize: '13px', height: '36px' }}
+              />
             </div>
           )}
         </div>
@@ -349,72 +332,61 @@ export function StatisticsPage() {
 
       {isLoading ? (
         <div className="empty-state" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="material-symbols-rounded" style={{ fontSize: '48px', marginBottom: '16px', animation: 'spin 1.5s linear infinite', color: 'var(--primary)' }}>sync</div>
-          <div className="text-xl" style={{ color: 'var(--ink-muted)' }}>Analyse des données en cours...</div>
+          <div className="material-symbols-rounded is-spinning" style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--primary)' }}>sync</div>
+          <div style={{ color: 'var(--ink-muted)', fontSize: '16px', fontWeight: '500' }}>Analyse des données en cours...</div>
         </div>
       ) : contracts.length === 0 ? (
-        <div className="empty-state" style={{ padding: "80px 20px", textAlign: 'center', background: 'var(--surface-card)', borderRadius: '24px', border: '1px dashed var(--border)' }}>
+        <div className="card" style={{ padding: "80px 20px", textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <span className="material-symbols-rounded" style={{ fontSize: "64px", color: "var(--border)", marginBottom: "20px" }}>analytics</span>
-          <h2 style={{ color: "var(--ink)", marginBottom: "8px", fontSize: '24px' }}>Aucune donnée pour cette sélection</h2>
-          <p style={{ color: 'var(--ink-muted)' }}>Ajustez vos filtres ou sélectionnez une autre période.</p>
+          <h2 style={{ color: "var(--ink)", marginBottom: "8px", fontSize: '20px', fontFamily: "var(--font-heading)" }}>Aucune donnée pour cette sélection</h2>
+          <p style={{ color: 'var(--ink-muted)', fontSize: '14px' }}>Ajustez vos filtres ou sélectionnez une autre période.</p>
         </div>
       ) : (
-        <div style={{ animation: "slide-up 0.5s ease-out" }}>
+        <div style={{ animation: "slide-up 0.5s var(--premium-ease)" }}>
           {/* Hero Stats */}
           <div className="stats-grid" style={{ 
             display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", 
             gap: "24px", 
             marginBottom: "32px" 
           }}>
             
-            {/* Stat Card 1 */}
-            <div style={{ background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px', transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={e => e.currentTarget.style.transform = 'none'}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'var(--info-soft)', color: 'var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '28px' }}>description</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: '500', marginBottom: '4px' }}>Total Contrats</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: 'var(--ink)' }}>{totalContracts}</div>
-              </div>
-            </div>
-
-            {/* Stat Card 2 */}
-            <div style={{ background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px', transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={e => e.currentTarget.style.transform = 'none'}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '28px' }}>payments</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: '500', marginBottom: '4px' }}>Masse Salariale Engagée</div>
-                <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--ink)' }}>{formatCurrency(financialStats.totalMass)}</div>
-              </div>
-            </div>
-
-            {/* Stat Card 3 */}
-            <div style={{ background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px', transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={e => e.currentTarget.style.transform = 'none'}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '28px' }}>account_balance_wallet</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: '500', marginBottom: '4px' }}>Salaire Moyen</div>
-                <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--ink)' }}>{formatCurrency(financialStats.avgSalary)}</div>
-              </div>
-            </div>
-
-            {/* Stat Card 4 */}
-            <div style={{ background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px', transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={e => e.currentTarget.style.transform = 'none'}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '28px' }}>wc</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: '500', marginBottom: '4px' }}>Ratio Homme/Femme</div>
-                <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <HeroStatCard 
+              label="Total Contrats" 
+              value={totalContracts} 
+              icon="description" 
+              color="var(--info)" 
+              bg="var(--info-soft)" 
+            />
+            <HeroStatCard 
+              label="Masse Salariale Engagée" 
+              value={formatCurrency(financialStats.totalMass)} 
+              icon="payments" 
+              color="var(--success)" 
+              bg="var(--success-soft)" 
+              fontSize="22px"
+            />
+            <HeroStatCard 
+              label="Salaire Moyen" 
+              value={formatCurrency(financialStats.avgSalary)} 
+              icon="account_balance_wallet" 
+              color="var(--warning)" 
+              bg="var(--warning-soft)" 
+              fontSize="22px"
+            />
+            <HeroStatCard 
+              label="Ratio Homme/Femme" 
+              value={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ color: '#3b82f6' }}>{contracts.filter(c => c.gender === 'Homme').length}</span>
                   <span style={{ fontSize: '18px', color: 'var(--border)' }}>/</span>
                   <span style={{ color: '#ec4899' }}>{contracts.filter(c => c.gender === 'Femme').length}</span>
                 </div>
-              </div>
-            </div>
+              } 
+              icon="wc" 
+              color="#8b5cf6" 
+              bg="rgba(139, 92, 246, 0.1)" 
+            />
 
           </div>
 
@@ -422,10 +394,10 @@ export function StatisticsPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "24px" }}>
             
             {/* Evolution Chart (Wide) */}
-            <div style={{ gridColumn: "span 8", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)' }}>
+            <div className="card" style={{ gridColumn: "span 8" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0 }}>Dynamique des Saisies</h3>
-                <span style={{ fontSize: '13px', background: 'var(--surface-sunken)', padding: '4px 12px', borderRadius: '12px', color: 'var(--ink-muted)' }}>Volume & Coûts</span>
+                <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Dynamique des Saisies</h3>
+                <span style={{ fontSize: '12px', background: 'var(--surface-sunken)', padding: '4px 10px', borderRadius: '10px', color: 'var(--ink-muted)', fontWeight: '600' }}>Volume & Coûts</span>
               </div>
               <div style={{ height: "320px" }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -444,7 +416,7 @@ export function StatisticsPage() {
                     <XAxis 
                       dataKey="date" 
                       stroke="var(--ink-muted)" 
-                      fontSize={12} 
+                      fontSize={11} 
                       tickLine={false} 
                       axisLine={false} 
                       tickFormatter={(val) => {
@@ -456,19 +428,18 @@ export function StatisticsPage() {
                       }}
                       dy={10}
                     />
-                    <YAxis yAxisId="left" stroke="var(--ink-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
-                    {/* Hide the right Y axis to keep it clean, but use it for scaling cost */}
+                    <YAxis yAxisId="left" stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-10} />
                     <YAxis yAxisId="right" orientation="right" hide />
                     
                     <Tooltip 
-                      contentStyle={{ borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', background: 'var(--surface-card)', color: 'var(--ink)', padding: '16px' }}
+                      contentStyle={{ borderRadius: '14px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-premium)', background: 'var(--surface-card)', padding: '12px' }}
                       formatter={(value: any, name: any) => {
                         if (name === 'cost') return [formatCurrency(value as number), 'Coût Engagé'];
                         return [value, 'Contrats'];
                       }}
-                      labelStyle={{ color: 'var(--ink-muted)', marginBottom: '8px', fontWeight: '600' }}
+                      labelStyle={{ color: 'var(--ink-muted)', marginBottom: '4px', fontWeight: '700', fontSize: '13px' }}
                     />
-                    <Area yAxisId="left" type="monotone" dataKey="count" name="count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} />
+                    <Area yAxisId="left" type="monotone" dataKey="count" name="count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2.5} activeDot={{ r: 5, strokeWidth: 0, fill: '#6366f1' }} />
                     <Area yAxisId="right" type="monotone" dataKey="cost" name="cost" stroke="#10b981" fillOpacity={1} fill="url(#colorCost)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -476,18 +447,18 @@ export function StatisticsPage() {
             </div>
 
             {/* Gender Distribution */}
-            <div style={{ gridColumn: "span 4", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px' }}>Répartition par Genre</h3>
-              <div style={{ flex: 1, minHeight: '320px' }}>
+            <div className="card" style={{ gridColumn: "span 4", display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Répartition par Genre</h3>
+              <div style={{ flex: 1, minHeight: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={genderData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={80}
-                      outerRadius={120}
-                      paddingAngle={8}
+                      innerRadius={70}
+                      outerRadius={100}
+                      paddingAngle={6}
                       dataKey="value"
                       stroke="none"
                     >
@@ -496,8 +467,8 @@ export function StatisticsPage() {
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', background: 'var(--surface-card)' }} 
-                      itemStyle={{ color: 'var(--ink)', fontWeight: '600' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
+                      itemStyle={{ color: 'var(--ink)', fontWeight: '600', fontSize: '13px' }}
                     />
                     <Legend verticalAlign="bottom" height={36} iconType="circle" />
                   </PieChart>
@@ -506,19 +477,19 @@ export function StatisticsPage() {
             </div>
 
             {/* Top Positions */}
-            <div style={{ gridColumn: "span 4", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px' }}>Top 8 Postes</h3>
+            <div className="card" style={{ gridColumn: "span 4" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Top 8 Postes</h3>
               <div style={{ height: "300px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={positionData} layout="vertical" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={positionData} layout="vertical" margin={{ top: 0, right: 20, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={12} width={120} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontSize: 11 }} />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={110} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontSize: 11 }} />
                     <Tooltip 
                       cursor={{ fill: 'var(--surface-sunken)' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', background: 'var(--surface-card)' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
                     />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} barSize={16}>
+                    <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={14}>
                       {positionData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
@@ -529,57 +500,57 @@ export function StatisticsPage() {
             </div>
 
             {/* Status Distribution */}
-            <div style={{ gridColumn: "span 4", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px' }}>État d'avancement</h3>
+            <div className="card" style={{ gridColumn: "span 4" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>État d'avancement</h3>
               <div style={{ height: "300px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={statusData} layout="vertical" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={statusData} layout="vertical" margin={{ top: 0, right: 20, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={12} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)' }} />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)' }} />
                     <Tooltip 
                       cursor={{ fill: 'var(--surface-sunken)' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', background: 'var(--surface-card)' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
                     />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Durations Distribution */}
-            <div style={{ gridColumn: "span 4", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px' }}>Répartition des Durées</h3>
+            <div className="card" style={{ gridColumn: "span 4" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Répartition des Durées</h3>
               <div style={{ height: "300px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={durationData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={durationData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
-                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis stroke="var(--ink-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
+                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-10} />
                     <Tooltip 
                       cursor={{ fill: 'var(--surface-sunken)' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', background: 'var(--surface-card)' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
                     />
-                    <Bar dataKey="count" fill="#14b8a6" radius={[6, 6, 0, 0]} barSize={32} />
+                    <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} barSize={28} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Top Assignments */}
-            <div style={{ gridColumn: "span 12", background: 'var(--surface-card)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px' }}>Top 10 Affectations</h3>
+            <div className="card" style={{ gridColumn: "span 12" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Top 10 Affectations</h3>
               <div style={{ height: "340px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={assignmentData} margin={{ top: 20, right: 0, left: -20, bottom: 40 }}>
+                  <BarChart data={assignmentData} margin={{ top: 10, right: 10, left: -15, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
-                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} tick={{angle: -35, textAnchor: 'end', fill: 'var(--ink)' }} height={80} tickLine={false} axisLine={false} interval={0} />
-                    <YAxis stroke="var(--ink-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
+                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} tick={{angle: -30, textAnchor: 'end', fill: 'var(--ink)' }} height={70} tickLine={false} axisLine={false} interval={0} />
+                    <YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-10} />
                     <Tooltip 
                       cursor={{ fill: 'var(--surface-sunken)' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', background: 'var(--surface-card)' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
                     />
-                    <Bar dataKey="count" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={40}>
+                    <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={36}>
                       {assignmentData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
                       ))}
@@ -592,6 +563,36 @@ export function StatisticsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function HeroStatCard({ label, value, icon, color, bg, fontSize = "26px" }: { label: string, value: any, icon: string, color: string, bg: string, fontSize?: string }) {
+  return (
+    <div className="card" style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '20px', 
+      padding: '24px',
+      transition: 'all 0.3s var(--premium-ease)',
+      cursor: 'default'
+    }}>
+      <div style={{ 
+        width: '52px', 
+        height: '52px', 
+        borderRadius: '14px', 
+        background: bg, 
+        color: color, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center' 
+      }}>
+        <span className="material-symbols-rounded" style={{ fontSize: '26px' }}>{icon}</span>
+      </div>
+      <div>
+        <div style={{ fontSize: '13px', color: 'var(--ink-muted)', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</div>
+        <div style={{ fontSize, fontWeight: '800', color: 'var(--ink)', fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}>{value}</div>
+      </div>
     </div>
   );
 }

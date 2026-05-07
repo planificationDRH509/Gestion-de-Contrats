@@ -9,33 +9,25 @@ export function IdentificationPage() {
   const userId = user?.id ?? "";
 
   return (
-    <div className="page-container">
-      <div className="section-header">
+  return (
+    <div className="page-container" style={{ animation: "fade-in 0.4s ease-out" }}>
+      <header className="section-header" style={{ background: 'transparent' }}>
         <div>
-          <div className="section-title">Base d'identification</div>
-          <div className="section-subtitle">Gérez les informations personnelles (NIF, Prénom, Nom, NINU, Adresse, Sexe)</div>
+          <h1 className="section-title">Base d'identification</h1>
+          <p className="section-subtitle">Gérez les informations personnelles (NIF, Prénom, Nom, NINU, Adresse, Sexe)</p>
         </div>
-        <div className="header-actions" style={{ display: 'flex', gap: '12px' }}>
-          <div className="search-field-container" style={{ position: 'relative' }}>
-             <span className="material-symbols-rounded" style={{ 
-               position: 'absolute', 
-               left: '10px', 
-               top: '50%', 
-               transform: 'translateY(-50%)', 
-               fontSize: '18px', 
-               color: 'var(--ink-muted)' 
-             }}>search</span>
-             <input 
-               type="text" 
-               className="input" 
-               placeholder="Chercher NIF ou NINU..." 
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               style={{ paddingLeft: '36px', width: '240px' }}
-             />
-          </div>
+        
+        <div className="search-field-unified" style={{ maxWidth: '300px' }}>
+          <span className="material-symbols-rounded icon">search</span>
+          <input 
+            type="text" 
+            className="input" 
+            placeholder="Chercher NIF ou NINU..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-      </div>
+      </header>
       
       <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <IdentificationSpreadsheetView 

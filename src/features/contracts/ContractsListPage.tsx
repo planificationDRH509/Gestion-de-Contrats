@@ -1244,6 +1244,10 @@ export function ContractsListPage() {
                               <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>location_on</span>
                               <span>{contract.assignment || "—"}</span>
                             </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Durée du contrat">
+                              <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>schedule</span>
+                              <span>{contract.durationMonths} mois</span>
+                            </div>
                           </div>
                         </div>
 
