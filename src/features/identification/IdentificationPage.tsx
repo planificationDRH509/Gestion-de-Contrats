@@ -9,7 +9,6 @@ export function IdentificationPage() {
   const userId = user?.id ?? "";
 
   return (
-  return (
     <div className="page-container" style={{ animation: "fade-in 0.4s ease-out" }}>
       <header className="section-header" style={{ background: 'transparent' }}>
         <div>
