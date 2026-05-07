@@ -1226,7 +1226,7 @@ export function ContractsListPage() {
                         </label>
                       </div>
                       <div className="contracts-main">
-                        <div className="contracts-top" style={{ alignItems: "center", justifyContent: "flex-start", gap: "8px" }}>
+                        <div className="contracts-top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                           <div
                             className="contracts-name has-tooltip"
                             data-tooltip={`Sexe: ${contract.gender} · Durée: ${contract.durationMonths} mois`}
@@ -1235,7 +1235,7 @@ export function ContractsListPage() {
                             {contract.firstName} {contract.lastName}
                           </div>
 
-                          <div className="contracts-top-meta" style={{ display: "flex", gap: "12px", marginLeft: "4px", paddingLeft: "8px", borderLeft: "1px solid var(--border)", color: "var(--ink-muted)", fontSize: "11px" }}>
+                          <div className="contracts-top-meta" style={{ display: "flex", gap: "12px", color: "var(--ink-muted)", fontSize: "11px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Poste">
                               <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>badge</span>
                               <span>{contract.position || "—"}</span>
