@@ -186,6 +186,19 @@ export function StatisticsPage() {
       .sort((a, b) => b.count - a.count);
   }, [contracts]);
 
+  const createdByData = useMemo(() => {
+    const counts = contracts.reduce((acc: any, curr) => {
+      const creator = curr.createdBy || "Inconnu";
+      acc[creator] = (acc[creator] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count: count as number }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8); // Top 8 employees
+  }, [contracts]);
+
   const evolutionData = useMemo(() => {
     const counts: Record<string, number> = {};
     const costAcc: Record<string, number> = {};
@@ -538,7 +551,7 @@ export function StatisticsPage() {
             </div>
 
             {/* Top Assignments */}
-            <div className="card" style={{ gridColumn: "span 12" }}>
+            <div className="card" style={{ gridColumn: "span 8" }}>
               <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Top 10 Affectations</h3>
               <div style={{ height: "340px" }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -553,6 +566,29 @@ export function StatisticsPage() {
                     <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={36}>
                       {assignmentData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Contracts by Employee */}
+            <div className="card" style={{ gridColumn: "span 4" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Contrats par Employé</h3>
+              <div style={{ height: "340px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={createdByData} layout="vertical" margin={{ top: 0, right: 20, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={90} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)' }} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--surface-sunken)' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
+                    />
+                    <Bar dataKey="count" fill="#ec4899" radius={[0, 4, 4, 0]} barSize={18}>
+                      {createdByData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 1) % COLORS.length]} />
                       ))}
                     </Bar>
                   </BarChart>

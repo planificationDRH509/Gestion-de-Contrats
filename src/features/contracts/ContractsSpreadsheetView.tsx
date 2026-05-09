@@ -979,40 +979,41 @@ export function ContractsSpreadsheetView({
 
       setNewRows((prev) => {
         const next = prev.map((item) => {
-          if (item.id !== rowId) return item;
-          const empty = createNewRow();
-          if (useDefaultAddress) empty.draft.address = defaultAddress;
-          if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
-          if (useDefaultComment) empty.draft.comment = defaultComment;
-          empty.draft.durationMonths = candidate.durationMonths;
-          return empty;
-        }
-        if (isDraftEmpty(normalizeDraft(item.draft))) {
-           return {
-             ...item,
-             draft: {
-               ...item.draft,
-               durationMonths: candidate.durationMonths
-             }
-           };
-        }
-        return item;
-      });
-      const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
-      if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
-        const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
-        const extra = Array.from({ length: toAdd }, () => {
-          const row = createNewRow();
-          if (useDefaultAddress) row.draft.address = defaultAddress;
-          if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
-          if (useDefaultComment) row.draft.comment = defaultComment;
-          row.draft.durationMonths = candidate.durationMonths;
-          return row;
+          if (item.id === rowId) {
+            const empty = createNewRow();
+            if (useDefaultAddress) empty.draft.address = defaultAddress;
+            if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
+            if (useDefaultComment) empty.draft.comment = defaultComment;
+            empty.draft.durationMonths = candidate.durationMonths;
+            return empty;
+          }
+          if (isDraftEmpty(normalizeDraft(item.draft))) {
+            return {
+              ...item,
+              draft: {
+                ...item.draft,
+                durationMonths: candidate.durationMonths
+              }
+            };
+          }
+          return item;
         });
-        return [...next, ...extra];
-      }
-      return next;
-    });
+
+        const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
+        if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
+          const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
+          const extra = Array.from({ length: toAdd }, () => {
+            const row = createNewRow();
+            if (useDefaultAddress) row.draft.address = defaultAddress;
+            if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
+            if (useDefaultComment) row.draft.comment = defaultComment;
+            row.draft.durationMonths = candidate.durationMonths;
+            return row;
+          });
+          return [...next, ...extra];
+        }
+        return next;
+      });
     } catch (error) {
       console.error(error);
       setNewRowErrors((prev) => ({
