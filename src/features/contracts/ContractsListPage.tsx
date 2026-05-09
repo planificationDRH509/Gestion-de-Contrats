@@ -1236,7 +1236,20 @@ export function ContractsListPage() {
                             {contract.firstName} {contract.lastName}
                           </div>
 
-
+                          <div className="contracts-top-meta" style={{ display: "flex", gap: "12px", color: "var(--ink-muted)", fontSize: "11px", marginLeft: "auto" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Poste">
+                              <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>badge</span>
+                              <span>{contract.position || "—"}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Lieu d'affectation">
+                              <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>location_on</span>
+                              <span>{contract.assignment || "—"}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Durée du contrat">
+                              <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>schedule</span>
+                              <span>{contract.durationMonths} mois</span>
+                            </div>
+                          </div>
                         </div>
 
                         {(contract.nif || contract.ninu || contract.salaryNumber) ? (
@@ -1337,21 +1350,7 @@ export function ContractsListPage() {
                           )}
                         </div>
                       </div>
-                      <div className="contracts-actions" onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-                        <div className="contracts-top-meta" style={{ display: "flex", gap: "12px", color: "var(--ink-muted)", fontSize: "11px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Poste">
-                            <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>badge</span>
-                            <span>{contract.position || "—"}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Lieu d'affectation">
-                            <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>location_on</span>
-                            <span>{contract.assignment || "—"}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }} title="Durée du contrat">
-                            <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>schedule</span>
-                            <span>{contract.durationMonths} mois</span>
-                          </div>
-                        </div>
+                      <div className="contracts-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="icon-actions">
                           <button
                             className="icon-btn"
