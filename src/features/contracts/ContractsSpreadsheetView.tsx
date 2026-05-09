@@ -99,7 +99,7 @@ const NAVIGABLE_COLUMN_COUNT = 10;
 const STATUS_COLUMN_WIDTH = 64;
 
 function createEmptyDraft(): SpreadsheetDraft {
-  return { ...EMPTY_DRAFT };
+  return { ...EMPTY_DRAFT, durationMonths: getLastChoice("durationMonths") || "12" };
 }
 
 function createNewRow(): SpreadsheetNewRow {
@@ -283,11 +283,7 @@ export function ContractsSpreadsheetView({
   const [useDefaultDossier, setUseDefaultDossier] = useState(false);
   const [defaultDossierId, setDefaultDossierId] = useState<string>("");
   
-  const [useDefaultDuration, setUseDefaultDuration] = useState(false);
-  const [defaultDuration, setDefaultDuration] = useState<number>(() => {
-    const last = getLastChoice("durationMonths");
-    return last ? parseInt(last, 10) : 12;
-  });
+
 
   const [useDefaultAddress, setUseDefaultAddress] = useState(false);
   const [defaultAddress, setDefaultAddress] = useState<string>(() => getLastChoice("address") || "");
@@ -412,15 +408,10 @@ export function ContractsSpreadsheetView({
           nextDraft.comment = defaultComment;
           modified = true;
         }
-        if (useDefaultDuration && row.draft.durationMonths === "12") {
-          nextDraft.durationMonths = String(defaultDuration);
-          modified = true;
-        }
-
         return modified ? { ...row, draft: nextDraft } : row;
       })
     );
-  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment, useDefaultDuration, defaultDuration]);
+  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment]);
 
   const featuredAddress = useMemo(() => {
     const last = getLastChoice("address");
@@ -868,6 +859,19 @@ export function ContractsSpreadsheetView({
 
       saveLastChoice("durationMonths", editedDraft.durationMonths);
 
+      setNewRows((prev) => prev.map((item) => {
+        if (isDraftEmpty(normalizeDraft(item.draft))) {
+           return {
+             ...item,
+             draft: {
+               ...item.draft,
+               durationMonths: editedDraft.durationMonths
+             }
+           };
+        }
+        return item;
+      }));
+
       setDraftById((prev) => ({ ...prev, [contractId]: editedDraft }));
       setRowErrors((prev) => {
         if (!prev[contractId]) return prev;
@@ -980,24 +984,35 @@ export function ContractsSpreadsheetView({
           if (useDefaultAddress) empty.draft.address = defaultAddress;
           if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
           if (useDefaultComment) empty.draft.comment = defaultComment;
-          if (useDefaultDuration) empty.draft.durationMonths = String(defaultDuration);
+          empty.draft.durationMonths = candidate.durationMonths;
           return empty;
-        });
-        const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
-        if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
-          const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
-          const extra = Array.from({ length: toAdd }, () => {
-            const row = createNewRow();
-            if (useDefaultAddress) row.draft.address = defaultAddress;
-            if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
-            if (useDefaultComment) row.draft.comment = defaultComment;
-            if (useDefaultDuration) row.draft.durationMonths = String(defaultDuration);
-            return row;
-          });
-          return [...next, ...extra];
         }
-        return next;
+        if (isDraftEmpty(normalizeDraft(item.draft))) {
+           return {
+             ...item,
+             draft: {
+               ...item.draft,
+               durationMonths: candidate.durationMonths
+             }
+           };
+        }
+        return item;
       });
+      const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
+      if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
+        const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
+        const extra = Array.from({ length: toAdd }, () => {
+          const row = createNewRow();
+          if (useDefaultAddress) row.draft.address = defaultAddress;
+          if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
+          if (useDefaultComment) row.draft.comment = defaultComment;
+          row.draft.durationMonths = candidate.durationMonths;
+          return row;
+        });
+        return [...next, ...extra];
+      }
+      return next;
+    });
     } catch (error) {
       console.error(error);
       setNewRowErrors((prev) => ({
@@ -1210,27 +1225,6 @@ export function ContractsSpreadsheetView({
               )}
             </div>
 
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultDuration ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultDuration}
-                  onChange={(e) => setUseDefaultDuration(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">calendar_month</span>
-                Durée
-              </label>
-              {useDefaultDuration && (
-                <input
-                  type="number"
-                  className="input defaults-input-mini"
-                  value={defaultDuration}
-                  min={1}
-                  max={60}
-                  onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 12)}
-                />
-              )}
-            </div>
 
             <div className="defaults-bar-item">
               <label className={`defaults-checkbox ${useDefaultAddress ? "is-active" : ""}`}>

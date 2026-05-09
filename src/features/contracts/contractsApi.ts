@@ -131,7 +131,34 @@ export function useCreateContract() {
   return useMutation({
     mutationFn: (input: CreateContractInput) => 
       provider.contracts.create({ ...input, createdBy: user?.id }),
-    onSuccess: (_data, variables) => {
+    onMutate: async (newContract) => {
+      await queryClient.cancelQueries({ queryKey: ["contracts"] });
+      const previousData = queryClient.getQueryData<ContractListResult>(["contracts"]);
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticContract = {
+        ...newContract,
+        id: tempId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as any;
+
+      if (previousData) {
+        queryClient.setQueryData<ContractListResult>(["contracts"], {
+          ...previousData,
+          items: [optimisticContract, ...previousData.items],
+          total: previousData.total + 1
+        });
+      }
+
+      return { previousData };
+    },
+    onError: (_err, _newContract, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["contracts"], context.previousData);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -144,7 +171,40 @@ export function useUpdateContract() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateContractInput) => provider.contracts.update(input),
-    onSuccess: (_data, variables) => {
+    onMutate: async (updatedContract) => {
+      await queryClient.cancelQueries({ queryKey: ["contracts"] });
+      await queryClient.cancelQueries({ queryKey: ["contract", updatedContract.id] });
+
+      const previousList = queryClient.getQueryData<ContractListResult>(["contracts"]);
+      const previousDetail = queryClient.getQueryData(["contract", updatedContract.id]);
+
+      if (previousList) {
+        queryClient.setQueryData<ContractListResult>(["contracts"], {
+          ...previousList,
+          items: previousList.items.map(c => 
+            c.id === updatedContract.id ? { ...c, ...updatedContract } : c
+          )
+        });
+      }
+
+      if (previousDetail) {
+        queryClient.setQueryData(["contract", updatedContract.id], {
+          ...(previousDetail as any),
+          ...updatedContract
+        });
+      }
+
+      return { previousList, previousDetail };
+    },
+    onError: (_err, updatedContract, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(["contracts"], context.previousList);
+      }
+      if (context?.previousDetail) {
+        queryClient.setQueryData(["contract", updatedContract.id], context.previousDetail);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({
@@ -268,7 +328,27 @@ export function useDeleteContract() {
   return useMutation({
     mutationFn: ({ id, workspaceId }: { id: string; workspaceId: string }) =>
       provider.contracts.softDelete(id, workspaceId),
-    onSuccess: (_data, variables) => {
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: ["contracts"] });
+      
+      const previousData = queryClient.getQueryData<ContractListResult>(["contracts"]);
+
+      if (previousData) {
+        queryClient.setQueryData<ContractListResult>(["contracts"], {
+          ...previousData,
+          items: previousData.items.filter(c => c.id !== id),
+          total: previousData.total - 1
+        });
+      }
+
+      return { previousData };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["contracts"], context.previousData);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({

@@ -67,11 +67,11 @@ export function App() {
             staleTime: 1000 * 60 * 60, // Data is fresh for 1 hour (less noise)
             retry: 1,
             refetchOnWindowFocus: false,
-            // Re-fetch even if we think we are offline (will fail but show cache)
-            networkMode: 'always', 
+            // Try to fetch/mutate even if offline, pause and queue if it fails due to network
+            networkMode: 'offlineFirst', 
           },
           mutations: {
-            networkMode: 'always',
+            networkMode: 'offlineFirst',
           }
         },
       }),
