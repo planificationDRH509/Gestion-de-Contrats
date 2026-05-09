@@ -222,6 +222,17 @@ export function ContractNewPage() {
     setValue("dossierId", preselectedDossierId, { shouldDirty: false });
   }, [preselectedDossierId, setValue]);
 
+  const dossierIdValue = watch("dossierId");
+
+  useEffect(() => {
+    if (dossierIdValue) {
+      const selectedDossier = dossiers.find(d => d.id === dossierIdValue);
+      if (selectedDossier?.defaultDurationMonths) {
+        setValue("durationMonths", selectedDossier.defaultDurationMonths, { shouldDirty: true, shouldValidate: true });
+      }
+    }
+  }, [dossierIdValue, dossiers, setValue]);
+
   // ── NIF Lookup Effect ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!nifIsComplete) {

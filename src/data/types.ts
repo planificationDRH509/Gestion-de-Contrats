@@ -33,6 +33,7 @@ export type Dossier = {
   deadlineDate?: string | null;
   focalPoint?: string | null;
   roadmapSheetNumber?: string | null;
+  defaultDurationMonths?: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -150,6 +151,7 @@ export type CreateDossierInput = {
   deadlineDate?: string | null;
   focalPoint?: string | null;
   roadmapSheetNumber?: string | null;
+  defaultDurationMonths?: number | null;
   createdBy?: string;
 };
 
@@ -164,6 +166,7 @@ export type UpdateDossierInput = {
   deadlineDate?: string | null;
   focalPoint?: string | null;
   roadmapSheetNumber?: string | null;
+  defaultDurationMonths?: number | null;
 };
 
 export type AppUser = {

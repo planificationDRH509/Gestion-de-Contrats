@@ -282,10 +282,22 @@ export function ContractsSpreadsheetView({
 
   const [useDefaultDossier, setUseDefaultDossier] = useState(false);
   const [defaultDossierId, setDefaultDossierId] = useState<string>("");
-  
 
+  const [useDefaultDuration, setUseDefaultDuration] = useState(false);
+  const [defaultDuration, setDefaultDuration] = useState<number>(() => {
+    const last = getLastChoice("durationMonths");
+    return last ? parseInt(last, 10) : 12;
+  });
 
-  const [useDefaultAddress, setUseDefaultAddress] = useState(false);
+  useEffect(() => {
+    if (useDefaultDossier && defaultDossierId) {
+      const selectedDossier = dossiers.find(d => d.id === defaultDossierId);
+      if (selectedDossier?.defaultDurationMonths) {
+        setUseDefaultDuration(true);
+        setDefaultDuration(selectedDossier.defaultDurationMonths);
+      }
+    }
+  }, [useDefaultDossier, defaultDossierId, dossiers]);  const [useDefaultAddress, setUseDefaultAddress] = useState(false);
   const [defaultAddress, setDefaultAddress] = useState<string>(() => getLastChoice("address") || "");
 
   const [useDefaultAssignment, setUseDefaultAssignment] = useState(false);
@@ -408,10 +420,15 @@ export function ContractsSpreadsheetView({
           nextDraft.comment = defaultComment;
           modified = true;
         }
+        if (useDefaultDuration && row.draft.durationMonths !== String(defaultDuration)) {
+          nextDraft.durationMonths = String(defaultDuration);
+          modified = true;
+        }
+
         return modified ? { ...row, draft: nextDraft } : row;
       })
     );
-  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment]);
+  }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment, useDefaultDuration, defaultDuration]);
 
   const featuredAddress = useMemo(() => {
     const last = getLastChoice("address");
@@ -984,7 +1001,8 @@ export function ContractsSpreadsheetView({
             if (useDefaultAddress) empty.draft.address = defaultAddress;
             if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
             if (useDefaultComment) empty.draft.comment = defaultComment;
-            empty.draft.durationMonths = candidate.durationMonths;
+            if (useDefaultDuration) empty.draft.durationMonths = String(defaultDuration);
+            else empty.draft.durationMonths = candidate.durationMonths;
             return empty;
           }
           if (isDraftEmpty(normalizeDraft(item.draft))) {
@@ -1007,7 +1025,8 @@ export function ContractsSpreadsheetView({
             if (useDefaultAddress) row.draft.address = defaultAddress;
             if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
             if (useDefaultComment) row.draft.comment = defaultComment;
-            row.draft.durationMonths = candidate.durationMonths;
+            if (useDefaultDuration) row.draft.durationMonths = String(defaultDuration);
+            else row.draft.durationMonths = candidate.durationMonths;
             return row;
           });
           return [...next, ...extra];
@@ -1226,6 +1245,27 @@ export function ContractsSpreadsheetView({
               )}
             </div>
 
+            <div className="defaults-bar-item">
+              <label className={`defaults-checkbox ${useDefaultDuration ? "is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={useDefaultDuration}
+                  onChange={(e) => setUseDefaultDuration(e.target.checked)}
+                />
+                <span className="material-symbols-rounded">calendar_month</span>
+                Durée
+              </label>
+              {useDefaultDuration && (
+                <input
+                  type="number"
+                  className="input defaults-input-mini"
+                  value={defaultDuration}
+                  min={1}
+                  max={60}
+                  onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 12)}
+                />
+              )}
+            </div>
 
             <div className="defaults-bar-item">
               <label className={`defaults-checkbox ${useDefaultAddress ? "is-active" : ""}`}>

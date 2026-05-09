@@ -38,6 +38,7 @@ export function DossiersInlinePanel({
   const [comment, setComment] = useState("");
   const [focalPoint, setFocalPoint] = useState("");
   const [roadmapSheetNumber, setRoadmapSheetNumber] = useState("");
+  const [defaultDurationMonths, setDefaultDurationMonths] = useState("");
 
   const [editingDossierId, setEditingDossierId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -48,6 +49,7 @@ export function DossiersInlinePanel({
   const [editComment, setEditComment] = useState("");
   const [editFocalPoint, setEditFocalPoint] = useState("");
   const [editRoadmapSheetNumber, setEditRoadmapSheetNumber] = useState("");
+  const [editDefaultDurationMonths, setEditDefaultDurationMonths] = useState("");
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function DossiersInlinePanel({
     setComment("");
     setFocalPoint("");
     setRoadmapSheetNumber("");
+    setDefaultDurationMonths("");
   }
 
   function startEditing(dossier: Dossier) {
@@ -73,6 +76,7 @@ export function DossiersInlinePanel({
     setEditComment(dossier.comment ?? "");
     setEditFocalPoint(dossier.focalPoint ?? "");
     setEditRoadmapSheetNumber(dossier.roadmapSheetNumber ?? "");
+    setEditDefaultDurationMonths(dossier.defaultDurationMonths ? String(dossier.defaultDurationMonths) : "");
     setErrorMessage(null);
     setSuccessMessage(null);
   }
@@ -87,6 +91,7 @@ export function DossiersInlinePanel({
     setEditComment("");
     setEditFocalPoint("");
     setEditRoadmapSheetNumber("");
+    setEditDefaultDurationMonths("");
   }
 
   function parseTargetCount(raw: string) {
@@ -142,7 +147,8 @@ export function DossiersInlinePanel({
         deadlineDate: normalizeOptionalDate(deadlineDate),
         comment,
         focalPoint,
-        roadmapSheetNumber
+        roadmapSheetNumber,
+        defaultDurationMonths: defaultDurationMonths ? Number(defaultDurationMonths) : null
       });
       resetCreateForm();
       onDossierCreated?.(dossier.id);
@@ -177,7 +183,8 @@ export function DossiersInlinePanel({
         deadlineDate: normalizeOptionalDate(editDeadlineDate),
         comment: editComment,
         focalPoint: editFocalPoint,
-        roadmapSheetNumber: editRoadmapSheetNumber
+        roadmapSheetNumber: editRoadmapSheetNumber,
+        defaultDurationMonths: editDefaultDurationMonths ? Number(editDefaultDurationMonths) : null
       });
       setSuccessMessage(`Dossier "${dossier.name}" mis à jour.`);
       setErrorMessage(null);
@@ -246,6 +253,18 @@ export function DossiersInlinePanel({
               value={contractTargetCount}
               onChange={(event) => setContractTargetCount(event.target.value)}
               placeholder="0"
+            />
+          </label>
+
+          <label className="field">
+            <span>Durée par défaut (mois)</span>
+            <input
+              type="number"
+              min={1}
+              className="input"
+              value={defaultDurationMonths}
+              onChange={(event) => setDefaultDurationMonths(event.target.value)}
+              placeholder="Ex: 12"
             />
           </label>
 
@@ -352,6 +371,18 @@ export function DossiersInlinePanel({
                 className="input"
                 value={editContractTargetCount}
                 onChange={(event) => setEditContractTargetCount(event.target.value)}
+              />
+            </label>
+
+            <label className="field">
+              <span>Durée par défaut (mois)</span>
+              <input
+                type="number"
+                min={1}
+                className="input"
+                value={editDefaultDurationMonths}
+                onChange={(event) => setEditDefaultDurationMonths(event.target.value)}
+                placeholder="Ex: 12"
               />
             </label>
 
@@ -516,6 +547,10 @@ export function DossiersInlinePanel({
                   <div>
                     <span className="meta-label">Feuille de route</span>
                     <span>{dossier.roadmapSheetNumber || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="meta-label">Durée par défaut</span>
+                    <span>{dossier.defaultDurationMonths ? `${dossier.defaultDurationMonths} mois` : "—"}</span>
                   </div>
                 </div>
 

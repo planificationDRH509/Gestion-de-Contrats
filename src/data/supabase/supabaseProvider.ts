@@ -90,6 +90,7 @@ function mapDossier(row: any): Dossier {
     deadlineDate: row.deadline_date,
     focalPoint: row.focal_point,
     roadmapSheetNumber: row.roadmap_sheet_number,
+    defaultDurationMonths: row.default_duration_months,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -282,6 +283,7 @@ class SupabaseDossierRepository implements DossierRepository {
       deadline_date: deadlineDate,
       focal_point: focalPoint,
       roadmap_sheet_number: roadmapSheetNumber,
+      default_duration_months: input.defaultDurationMonths || null,
       created_by: (input as any).createdBy
     };
 
@@ -332,7 +334,11 @@ class SupabaseDossierRepository implements DossierRepository {
       roadmap_sheet_number:
         input.roadmapSheetNumber !== undefined
           ? normalizeOptionalText(input.roadmapSheetNumber)
-          : (existing as any).roadmapSheetNumber ?? null
+          : (existing as any).roadmapSheetNumber ?? null,
+      default_duration_months:
+        input.defaultDurationMonths !== undefined
+          ? input.defaultDurationMonths
+          : existing.defaultDurationMonths ?? null
     };
 
     const { data, error } = await (client
