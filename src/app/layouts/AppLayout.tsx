@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
+import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -30,7 +31,12 @@ export function AppLayout() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      if ((import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase") {
+        syncSupabaseOutbox();
+      }
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);

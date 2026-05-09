@@ -4,6 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { contractFormSchema, ContractFormSchema } from "./contractSchema";
 import { useApplicantUpsert, useContractsList, useCreateContract, useNifLookupQuery } from "./contractsApi";
+import {
+  clearUnsavedDraft,
+  contractFormDraftKey,
+  isContractFormDraftEmpty,
+  loadDraftValue,
+  saveUnsavedDraft
+} from "./contractUnsavedDrafts";
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
@@ -43,11 +50,14 @@ export function ContractNewPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const genderFocusRef = useRef<HTMLButtonElement | null>(null);
-  const lastFieldRef = useRef<HTMLInputElement | null>(null);
   const addressContainerRef = useRef<HTMLDivElement | null>(null);
   const positionContainerRef = useRef<HTMLDivElement | null>(null);
   const assignmentContainerRef = useRef<HTMLDivElement | null>(null);
-  const salaryInputRef = useRef<HTMLInputElement | null>(null);
+  const salaryContainerRef = useRef<HTMLDivElement | null>(null);
+  const dossierSelectRef = useRef<HTMLSelectElement | null>(null);
+  const durationInputRef = useRef<HTMLInputElement | null>(null);
+  const saveButtonRef = useRef<HTMLButtonElement | null>(null);
+  const draftHydratedRef = useRef(false);
   const preselectedDossierId = searchParams.get("dossierId") ?? "";
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
@@ -113,7 +123,14 @@ export function ContractNewPage() {
     resolver: zodResolver(contractFormSchema),
     defaultValues
   });
+  const dossierField = register("dossierId");
+  const durationField = register("durationMonths", { valueAsNumber: true });
+  const unsavedDraftKey = useMemo(
+    () => contractFormDraftKey("new", workspaceId, userId),
+    [workspaceId, userId]
+  );
 
+  const formValues = watch();
   const salaryNumber = watch("salaryNumber");
   const genderValue = watch("gender");
   const durationValue = watch("durationMonths");
@@ -144,6 +161,24 @@ export function ContractNewPage() {
   } = useNifLookupQuery(nifIsComplete ? nifValue : null, workspaceId);
 
   const isMedical = /infirmi|medecin|médecin|pharmacien|sage-femme|laboratoire/i.test(positionValue || "");
+
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    if (!workspaceId || !userId) return;
+
+    const savedDraft = loadDraftValue<ContractFormSchema>(unsavedDraftKey);
+    reset(savedDraft ? { ...defaultValues, ...savedDraft } : defaultValues);
+    draftHydratedRef.current = true;
+  }, [defaultValues, reset, unsavedDraftKey, userId, workspaceId]);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current || !workspaceId || !userId) return;
+    if (isContractFormDraftEmpty(formValues)) {
+      clearUnsavedDraft(unsavedDraftKey);
+      return;
+    }
+    saveUnsavedDraft(unsavedDraftKey, formValues);
+  }, [formValues, unsavedDraftKey, userId, workspaceId]);
 
   function handleVerifyMspp() {
     const rawNif = (nifValue || "").replace(/\D/g, "");
@@ -219,6 +254,7 @@ export function ContractNewPage() {
   }, [salaryNumber, setValue]);
 
   useEffect(() => {
+    if (!preselectedDossierId) return;
     setValue("dossierId", preselectedDossierId, { shouldDirty: false });
   }, [preselectedDossierId, setValue]);
 
@@ -430,6 +466,7 @@ export function ContractNewPage() {
     }
 
     const contract = await createContract.mutateAsync(contractPayload);
+    clearUnsavedDraft(unsavedDraftKey);
 
     if (mode === "print") {
       navigate(`/app/contrats/print?ids=${contract.id}`);
@@ -462,7 +499,7 @@ export function ContractNewPage() {
 
   function handleGenderSelect(value: "Homme" | "Femme") {
     setValue("gender", value, { shouldValidate: true, shouldDirty: true });
-    setTimeout(() => setFocus("ninu"), 0);
+    focusFormField("ninu");
   }
 
   function handleGenderKey(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -477,13 +514,67 @@ export function ContractNewPage() {
     }
   }
 
+  function focusFormField(target: "firstName" | "lastName" | "gender" | "ninu" | "address" | "position" | "assignment" | "salaryNumber" | "dossierId" | "durationMonths" | "submit") {
+    window.requestAnimationFrame(() => {
+      if (target === "firstName" || target === "lastName" || target === "ninu") {
+        setFocus(target);
+        return;
+      }
+      if (target === "gender") {
+        genderFocusRef.current?.focus();
+        return;
+      }
+      if (target === "address") {
+        addressContainerRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        return;
+      }
+      if (target === "position") {
+        positionContainerRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        return;
+      }
+      if (target === "assignment") {
+        assignmentContainerRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        return;
+      }
+      if (target === "salaryNumber") {
+        salaryContainerRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        return;
+      }
+      if (target === "dossierId") {
+        dossierSelectRef.current?.focus();
+        return;
+      }
+      if (target === "durationMonths") {
+        durationInputRef.current?.focus();
+        return;
+      }
+      saveButtonRef.current?.focus();
+    });
+  }
+
   function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
     if (event.key !== "Enter") return;
-    if (!(event.target instanceof HTMLInputElement)) return;
-    if (event.target === lastFieldRef.current) {
-      return;
-    }
+    if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) return;
+
+    const targetName = event.target.name;
+    const nextFieldMap: Partial<Record<string, Parameters<typeof focusFormField>[0]>> = {
+      nif: "firstName",
+      firstName: "lastName",
+      lastName: "gender",
+      ninu: "address",
+      address: "position",
+      position: "assignment",
+      assignment: "salaryNumber",
+      salaryNumber: "dossierId",
+      dossierId: "durationMonths",
+      durationMonths: "submit"
+    };
+
+    const nextField = nextFieldMap[targetName];
+    if (!nextField) return;
+
     event.preventDefault();
+    focusFormField(nextField);
   }
 
   async function handleCreateDossier() {
@@ -687,7 +778,7 @@ export function ContractNewPage() {
                   if (val.length > 10) val = val.slice(0, 10);
                   e.target.value = val;
                   if (val.length === 10) {
-                     setFocus("address");
+                     focusFormField("address");
                   }
                 }
               })}
@@ -751,7 +842,7 @@ export function ContractNewPage() {
             <AutocompleteField
               value={assignmentValue}
               onChange={(val) => setValue("assignment", val, { shouldValidate: true, shouldDirty: true })}
-              onAfterSelect={() => salaryInputRef.current?.focus()}
+              onAfterSelect={() => focusFormField("salaryNumber")}
               featuredItem={featuredAssignment}
               items={assignmentItems}
               placeholder="Institution d'affectation…"
@@ -764,7 +855,7 @@ export function ContractNewPage() {
             ) : null}
           </div>
 
-          <div className="field">
+          <div className="field" ref={salaryContainerRef}>
             <span>Salaire (HTG) *</span>
             <AutocompleteField
               value={watch("salaryNumber")}
@@ -798,7 +889,14 @@ export function ContractNewPage() {
           <div className="field span-2">
             <span>Dossier</span>
             <div className="field-inline-actions">
-              <select className="select" {...register("dossierId")}>
+              <select
+                className="select"
+                {...dossierField}
+                ref={(element) => {
+                  dossierField.ref(element);
+                  dossierSelectRef.current = element;
+                }}
+              >
                 <option value="">Aucun dossier</option>
                 {dossiers.map((dossier) => (
                   <option key={dossier.id} value={dossier.id}>
@@ -827,7 +925,11 @@ export function ContractNewPage() {
                  min="1"
                  max="12"
                  style={{ paddingRight: "42px" }}
-                 {...register("durationMonths", { valueAsNumber: true })}
+                 {...durationField}
+                 ref={(element) => {
+                   durationField.ref(element);
+                   durationInputRef.current = element;
+                 }}
                />
                <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--ink-muted)", pointerEvents: "none" }}>mois</span>
             </div>
@@ -842,6 +944,7 @@ export function ContractNewPage() {
 
         <div className="form-actions">
           <button
+            ref={saveButtonRef}
             className="btn btn-primary"
             type="submit"
             disabled={isSubmitting || fieldsLockedByNif || nifFetching}

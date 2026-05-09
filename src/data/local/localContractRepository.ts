@@ -138,7 +138,10 @@ export class LocalContractRepository implements ContractRepository {
       ...input,
       firstName: input.firstName ? formatFirstName(input.firstName) : db.contracts[contractIndex].firstName,
       lastName: input.lastName ? formatLastName(input.lastName) : db.contracts[contractIndex].lastName,
-      dossierId: input.dossierId ?? db.contracts[contractIndex].dossierId ?? null,
+      dossierId:
+        input.dossierId !== undefined
+          ? input.dossierId
+          : db.contracts[contractIndex].dossierId ?? null,
       updatedAt: now()
     };
     db.contracts[contractIndex] = updated;

@@ -21,6 +21,12 @@ import {
   useDeleteContract,
   lookupNif
 } from "./contractsApi";
+import {
+  clearUnsavedDraft,
+  loadDraftValue,
+  saveUnsavedDraft,
+  spreadsheetDraftKey
+} from "./contractUnsavedDrafts";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { useDossiersList } from "../dossiers/dossiersApi";
@@ -57,6 +63,11 @@ type SpreadsheetDraft = {
 type SpreadsheetNewRow = {
   id: string;
   draft: SpreadsheetDraft;
+};
+
+type SpreadsheetPersistedDraft = {
+  newRows: SpreadsheetNewRow[];
+  draftById: Record<string, SpreadsheetDraft>;
 };
 
 type SpreadsheetColumn = {
@@ -107,6 +118,10 @@ function createNewRow(): SpreadsheetNewRow {
     id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     draft: createEmptyDraft()
   };
+}
+
+function createDefaultNewRows(): SpreadsheetNewRow[] {
+  return Array.from({ length: EMPTY_NEW_ROWS_COUNT }, () => createNewRow());
 }
 
 function getNewRowKey(rowId: string): string {
@@ -255,16 +270,25 @@ export function ContractsSpreadsheetView({
   const { data: allPositions = [] } = usePositions(workspaceId);
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
   const isMedicalPosition = (pos: string) => /infirmi|medecin|médecin|pharmacien|sage-femme|laboratoire/i.test(pos || "");
+  const unsavedDraftKey = useMemo(
+    () => spreadsheetDraftKey(workspaceId, userId),
+    [workspaceId, userId]
+  );
+  const draftHydratedRef = useRef(false);
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const [msppHtml, setMsppHtml] = useState("");
   const [msppLoading, setMsppLoading] = useState(false);
   const [msppNif, setMsppNif] = useState("");
 
-  const [draftById, setDraftById] = useState<Record<string, SpreadsheetDraft>>({});
-  const [newRows, setNewRows] = useState<SpreadsheetNewRow[]>(() =>
-    Array.from({ length: EMPTY_NEW_ROWS_COUNT }, () => createNewRow())
-  );
+  const [draftById, setDraftById] = useState<Record<string, SpreadsheetDraft>>(() => {
+    const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
+    return saved?.draftById ?? {};
+  });
+  const [newRows, setNewRows] = useState<SpreadsheetNewRow[]>(() => {
+    const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
+    return saved?.newRows?.length ? saved.newRows : createDefaultNewRows();
+  });
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [creatingRows, setCreatingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -369,6 +393,39 @@ export function ContractsSpreadsheetView({
   useEffect(() => {
     contractsMapRef.current = contractsMap;
   }, [contractsMap]);
+
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
+    setDraftById(saved?.draftById ?? {});
+    setNewRows(saved?.newRows?.length ? saved.newRows : createDefaultNewRows());
+    const timeoutId = window.setTimeout(() => {
+      draftHydratedRef.current = true;
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [unsavedDraftKey]);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current || !workspaceId || !userId) return;
+
+    const nonEmptyRows = newRows.filter((row) => !isDraftEmpty(normalizeDraft(row.draft)));
+    const changedDraftById = Object.fromEntries(
+      Object.entries(draftById).filter(([contractId, draft]) => {
+        const contract = contractsMap.get(contractId);
+        return !contract || !areDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+      })
+    ) as Record<string, SpreadsheetDraft>;
+
+    if (nonEmptyRows.length === 0 && Object.keys(changedDraftById).length === 0) {
+      clearUnsavedDraft(unsavedDraftKey);
+      return;
+    }
+
+    saveUnsavedDraft<SpreadsheetPersistedDraft>(unsavedDraftKey, {
+      newRows,
+      draftById: changedDraftById
+    });
+  }, [contractsMap, draftById, newRows, unsavedDraftKey, userId, workspaceId]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -518,6 +575,10 @@ export function ContractsSpreadsheetView({
     target.focus();
   }
 
+  function focusNewRowCell(rowId: string, columnIndex: number) {
+    focusGridCell(getNewRowKey(rowId), columnIndex);
+  }
+
   function handleGridArrowNavigation(
     event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     rowKey: string,
@@ -530,7 +591,7 @@ export function ContractsSpreadsheetView({
       // Jump directly to the first available empty row's NIF column
       const firstEmpty = newRows.find(r => isDraftEmpty(r.draft));
       if (firstEmpty) {
-        focusGridCell(firstEmpty.id, 0);
+        focusNewRowCell(firstEmpty.id, 0);
       } else {
         // Fallback: next row col 0 if no empty one found
         const currentRowIndex = rowOrder.indexOf(rowKey);
@@ -591,7 +652,7 @@ export function ContractsSpreadsheetView({
 
     if (complete) {
       window.requestAnimationFrame(() => {
-        focusGridCell(rowId, colIndex + 1);
+        focusNewRowCell(rowId, colIndex + 1);
       });
     }
   }

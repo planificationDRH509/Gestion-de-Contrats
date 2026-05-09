@@ -4,6 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractFormSchema, ContractFormSchema } from "./contractSchema";
 import { useApplicantUpsert, useContract, useUpdateContract } from "./contractsApi";
+import {
+  clearUnsavedDraft,
+  contractFormDraftKey,
+  isContractFormDraftEmpty,
+  loadDraftValue,
+  saveUnsavedDraft
+} from "./contractUnsavedDrafts";
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
@@ -39,6 +46,7 @@ export function ContractEditPage() {
   const createDossier = useCreateDossier();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const draftHydratedRef = useRef(false);
 
   const genderFocusRef = useRef<HTMLButtonElement | null>(null);
   const lastFieldRef = useRef<HTMLInputElement | null>(null);
@@ -87,6 +95,12 @@ export function ContractEditPage() {
     defaultValues
   });
 
+  const userId = user?.id ?? "";
+  const unsavedDraftKey = useMemo(
+    () => contractFormDraftKey("edit", workspaceId, userId, contractId ?? ""),
+    [contractId, userId, workspaceId]
+  );
+  const formValues = watch();
   const salaryNumber = watch("salaryNumber");
   const genderValue = watch("gender");
   const addressValue = watch("address");
@@ -161,6 +175,8 @@ export function ContractEditPage() {
 
   useEffect(() => {
     if (!data) return;
+    draftHydratedRef.current = false;
+    const savedDraft = loadDraftValue<ContractFormSchema>(unsavedDraftKey);
     reset({
       gender: (data.gender as string) || "Homme",
       firstName: data.firstName || "",
@@ -173,9 +189,20 @@ export function ContractEditPage() {
       assignment: data.assignment || "",
       address: data.address || "",
       dossierId: data.dossierId || "",
-      durationMonths: data.durationMonths || 12
+      durationMonths: data.durationMonths || 12,
+      ...savedDraft
     });
-  }, [data, reset]);
+    draftHydratedRef.current = true;
+  }, [data, reset, unsavedDraftKey]);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current || !workspaceId || !userId) return;
+    if (isContractFormDraftEmpty(formValues)) {
+      clearUnsavedDraft(unsavedDraftKey);
+      return;
+    }
+    saveUnsavedDraft(unsavedDraftKey, formValues);
+  }, [formValues, unsavedDraftKey, userId, workspaceId]);
 
   useEffect(() => {
     const numeric = parseMoney(salaryNumber || "0");
@@ -330,6 +357,7 @@ export function ContractEditPage() {
         durationMonths: values.durationMonths
       });
 
+      clearUnsavedDraft(unsavedDraftKey);
       navigate(`/app/contrats/${data.id}`);
     } catch (error) {
       console.error(error);

@@ -25,6 +25,18 @@ import {
 import { DataProvider } from "../dataProvider";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { getSupabaseClient } from "./supabaseClient";
+import { LocalApplicantRepository } from "../local/localApplicantRepository";
+import { LocalContractRepository } from "../local/localContractRepository";
+import {
+  cacheApplicant,
+  cacheContract,
+  cacheContracts,
+  getPendingContractIds,
+  getPendingOutbox,
+  isOfflineFailure,
+  removeOutboxItem,
+  upsertApplicantOffline
+} from "../local/offlineStore";
 import {
   normalizeDossierName,
   normalizeNonNegativeInteger,
@@ -515,7 +527,7 @@ class SupabaseContractRepository implements ContractRepository {
   async create(input: CreateContractInput): Promise<Contract> {
     const client = getSupabaseClient();
     const payload = {
-      id_contrat: crypto.randomUUID(),
+      id_contrat: (input as CreateContractInput & { id?: string }).id || crypto.randomUUID(),
       workspace_id: input.workspaceId,
       dossier_id: input.dossierId || null,
       nif: input.applicantId || input.nif || "",
@@ -816,11 +828,250 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
   }
 }
 
+let outboxSyncPromise: Promise<void> | null = null;
+
+function syncPendingOutbox() {
+  if (outboxSyncPromise) return outboxSyncPromise;
+
+  outboxSyncPromise = (async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    const applicants = new SupabaseApplicantRepository();
+    const contracts = new SupabaseContractRepository();
+
+    for (const item of getPendingOutbox()) {
+      try {
+        if (item.type === "applicant.upsert") {
+          const applicant = await applicants.upsert(item.payload as unknown as UpsertApplicantInput);
+          cacheApplicant(applicant);
+        } else if (item.type === "contract.create") {
+          const contract = await contracts.create(item.payload as unknown as CreateContractInput);
+          cacheContract(contract);
+        } else if (item.type === "contract.update") {
+          const payload = item.payload as Partial<UpdateContractInput> & {
+            id?: string;
+            contractIds?: string[];
+            status?: ContractStatus;
+            durationMonths?: number;
+            dossierId?: string | null;
+          };
+          if (payload.id) {
+            const contract = await contracts.update(payload as UpdateContractInput);
+            cacheContract(contract);
+          } else if (Array.isArray(payload.contractIds) && payload.status) {
+            await contracts.updateStatus(item.workspaceId, payload.contractIds, payload.status);
+          } else if (Array.isArray(payload.contractIds) && typeof payload.durationMonths === "number") {
+            await contracts.updateDuration(item.workspaceId, payload.contractIds, payload.durationMonths);
+          } else if (Array.isArray(payload.contractIds) && "dossierId" in payload) {
+            await contracts.assignToDossier(item.workspaceId, payload.contractIds, payload.dossierId ?? null);
+          }
+        } else if (item.type === "contract.delete") {
+          const payload = item.payload as { id?: string };
+          if (payload.id) {
+            await contracts.softDelete(payload.id, item.workspaceId);
+          }
+        }
+        removeOutboxItem(item.id);
+      } catch (error) {
+        if (isOfflineFailure(error)) return;
+        console.error("Impossible de synchroniser une action locale.", error);
+      }
+    }
+  })().finally(() => {
+    outboxSyncPromise = null;
+  });
+
+  return outboxSyncPromise;
+}
+
+export function syncSupabaseOutbox() {
+  return syncPendingOutbox();
+}
+
+class OfflineFirstApplicantRepository implements ApplicantRepository {
+  private readonly local = new LocalApplicantRepository();
+  private readonly remote = new SupabaseApplicantRepository();
+
+  async getById(id: string): Promise<Applicant | null> {
+    try {
+      const applicant = await this.remote.getById(id);
+      if (applicant) cacheApplicant(applicant);
+      return applicant;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getById(id);
+    }
+  }
+
+  async findByNifOrNinu(
+    workspaceId: string,
+    nif?: string | null,
+    ninu?: string | null
+  ): Promise<Applicant | null> {
+    try {
+      const applicant = await this.remote.findByNifOrNinu(workspaceId, nif, ninu);
+      if (applicant) cacheApplicant(applicant);
+      return applicant;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.findByNifOrNinu(workspaceId, nif, ninu);
+    }
+  }
+
+  async upsert(input: UpsertApplicantInput): Promise<Applicant> {
+    try {
+      await syncPendingOutbox();
+      const applicant = await this.remote.upsert(input);
+      cacheApplicant(applicant);
+      return applicant;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return upsertApplicantOffline(input);
+    }
+  }
+}
+
+class OfflineFirstContractRepository implements ContractRepository {
+  private readonly local = new LocalContractRepository();
+  private readonly remote = new SupabaseContractRepository();
+
+  async list(params: ContractListParams): Promise<ContractListResult> {
+    try {
+      await syncPendingOutbox();
+      const remoteResult = await this.remote.list(params);
+      cacheContracts(remoteResult.items);
+
+      const pendingIds = getPendingContractIds();
+      if (pendingIds.size === 0) return remoteResult;
+
+      const localResult = await this.local.list({
+        ...params,
+        page: 1,
+        pageSize: Math.max(params.pageSize ?? 10, remoteResult.pageSize + pendingIds.size)
+      });
+      const localPendingItems = localResult.items.filter((item) => pendingIds.has(item.id));
+      if (localPendingItems.length === 0) return remoteResult;
+
+      const byId = new Map(remoteResult.items.map((item) => [item.id, item]));
+      localPendingItems.forEach((item) => byId.set(item.id, item));
+      const items = Array.from(byId.values());
+      return {
+        ...remoteResult,
+        items,
+        total: Math.max(remoteResult.total, items.length)
+      };
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.list(params);
+    }
+  }
+
+  async getById(id: string): Promise<Contract | null> {
+    try {
+      await syncPendingOutbox();
+      const contract = await this.remote.getById(id);
+      if (contract) cacheContract(contract);
+      return contract;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getById(id);
+    }
+  }
+
+  async getByIds(ids: string[], workspaceId: string): Promise<Contract[]> {
+    try {
+      await syncPendingOutbox();
+      const contracts = await this.remote.getByIds(ids, workspaceId);
+      cacheContracts(contracts);
+      return contracts;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getByIds(ids, workspaceId);
+    }
+  }
+
+  async create(input: CreateContractInput): Promise<Contract> {
+    try {
+      await syncPendingOutbox();
+      const contract = await this.remote.create(input);
+      cacheContract(contract);
+      return contract;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.create(input);
+    }
+  }
+
+  async update(input: UpdateContractInput): Promise<Contract> {
+    try {
+      await syncPendingOutbox();
+      const contract = await this.remote.update(input);
+      cacheContract(contract);
+      return contract;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.update(input);
+    }
+  }
+
+  async assignToDossier(
+    workspaceId: string,
+    contractIds: string[],
+    dossierId: string | null
+  ): Promise<number> {
+    try {
+      await syncPendingOutbox();
+      return await this.remote.assignToDossier(workspaceId, contractIds, dossierId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.assignToDossier(workspaceId, contractIds, dossierId);
+    }
+  }
+
+  async updateStatus(
+    workspaceId: string,
+    contractIds: string[],
+    status: ContractStatus
+  ): Promise<number> {
+    try {
+      await syncPendingOutbox();
+      return await this.remote.updateStatus(workspaceId, contractIds, status);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.updateStatus(workspaceId, contractIds, status);
+    }
+  }
+
+  async updateDuration(
+    workspaceId: string,
+    contractIds: string[],
+    durationMonths: number
+  ): Promise<number> {
+    try {
+      await syncPendingOutbox();
+      return await this.remote.updateDuration(workspaceId, contractIds, durationMonths);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.updateDuration(workspaceId, contractIds, durationMonths);
+    }
+  }
+
+  async softDelete(id: string, workspaceId: string): Promise<void> {
+    try {
+      await syncPendingOutbox();
+      await this.remote.softDelete(id, workspaceId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      await this.local.softDelete(id, workspaceId);
+    }
+  }
+}
+
 export function createSupabaseProvider(): DataProvider {
   return {
-    applicants: new SupabaseApplicantRepository(),
+    applicants: new OfflineFirstApplicantRepository(),
     dossiers: new SupabaseDossierRepository(),
-    contracts: new SupabaseContractRepository(),
+    contracts: new OfflineFirstContractRepository(),
     printJobs: new SupabasePrintJobRepository(),
     suggestions: new SupabaseAutocompleteRepository()
   };
