@@ -6,19 +6,10 @@ export function parseMoney(input: string): number {
 }
 
 export function formatCurrency(value: number) {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "HTG",
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2
-    }).format(value);
-  } catch {
-    return new Intl.NumberFormat("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  }
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
 }
 
 export function formatLastName(name: string): string {

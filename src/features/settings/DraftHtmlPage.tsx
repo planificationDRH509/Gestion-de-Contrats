@@ -105,8 +105,8 @@ export function DraftHtmlPage() {
     <div className="draft-container">
       <div className="section-header">
         <div>
-          <div className="section-title">Modèles HTML</div>
-          <div className="helper-text">Gérez plusieurs drafts depuis un seul espace.</div>
+          <h1 className="section-title">Modèles HTML</h1>
+          <div className="section-subtitle">Gérez et personnalisez les modèles de vos contrats.</div>
         </div>
         <div className="form-actions" style={{ marginTop: 0 }}>
           <button className="btn btn-outline" type="button" onClick={handleReset}>
