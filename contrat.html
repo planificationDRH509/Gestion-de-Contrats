@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Contrat de Service</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  /* Zéro marge navigateur — le div fait exactement une page */
+  @page { size: letter portrait; margin: 0; }
+
+  body { background: #888; font-family: "Times New Roman", Times, serif; margin: 0; padding: 0; }
+
+  /* Chaque div = exactement une feuille lettre */
+  .page {
+    width: 8.5in;
+    height: 11in;
+    padding: 1in 1.15in 0.9in 1.15in;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+    /* écran : espacement visuel entre pages */
+    margin: 0.3in auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4);
+    display: block;
+  }
+
+  @media print {
+    body, html { background: #fff; margin: 0; padding: 0; }
+    .page {
+      margin: 0;
+      box-shadow: none;
+      page-break-after: always;
+      break-after: page;
+      /* On utilise une hauteur légèrement réduite pour éviter les arrondis qui créent des pages blanches */
+      height: 10.99in;
+    }
+    .page:last-child { 
+      page-break-after: avoid; 
+      break-after: avoid;
+    }
+  }
+
+  /* Typographie */
+  p, .art {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 12pt;
+    line-height: 1.25;
+    color: #000;
+  }
+
+  p { text-align: justify; margin-bottom: 4pt; }
+
+  .center { text-align: center; }
+  .indent { margin-left: 18pt; }
+
+  /* En-tête */
+  .hdr {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10pt;
+    font-size: 12pt;
+  }
+
+  /* Titre */
+  .titre {
+    font-size: 14pt;
+    font-weight: bold;
+    text-decoration: underline;
+    text-align: center;
+    margin-bottom: 10pt;
+  }
+
+  /* Titre d'article */
+  .art {
+    font-weight: bold;
+    text-decoration: underline;
+    text-align: justify;
+    margin-top: 6pt;
+    margin-bottom: 2pt;
+    display: block;
+  }
+
+  /* Numéro de page */
+  .pgn {
+    position: absolute;
+    bottom: 0.45in;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 12pt;
+  }
+
+  /* Signatures */
+  .sigs {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 28pt;
+  }
+  .sig { width: 42%; text-align: center; }
+  .sig-line { border-top: 1px solid #000; margin-bottom: 3pt; }
+
+  /* petits espaceurs */
+  .s2 { display:block; height:2pt; }
+  .s5 { display:block; height:5pt; }
+  .s8 { display:block; height:8pt; }
+  .s16{ display:block; height:16pt; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ PAGE 1 ══════════════════════════ -->
+<div class="page">
+
+  <div class="hdr">
+    <span>No……………………………</span>
+    <span>Port-au-Prince, le………………………</span>
+  </div>
+
+  <div class="titre">CONTRAT DE SERVICE</div>
+
+  <p class="center">Entre</p>
+  <span class="s2"></span>
+
+  <p>L'Etat Haïtien, représenté par Docteur Bertrand SINAL, identifié par son NINU : 1009241060 et son NIF : 003-888-685-8, demeurant et domicilié au numéro 1 Rue Jacques Roumain, Maïs Gâté, Port-au-Prince, agissant en ses qualités de Ministre de la Santé Publique et de la Population, ci-après dénommé&lt;&lt; l'Employeur&gt;&gt;.</p>
+
+  <span class="s2"></span>
+  <p class="center">Et</p>
+  <span class="s2"></span>
+
+  <p>Madame {{first_name}} {{last_name}}, identifiée par son NINU : {{ninu}} et son NIF : {{nif}} demeurant et domicilié à Jeremie, ci-après dénommée la &lt;&lt; Contractante &gt;&gt;.</p>
+
+  <span class="s8"></span>
+
+  <p>Considérant que pour pouvoir réaliser sa mission d'intérêt général et assurer le fonctionnement normal de ses différentes entités, l'employeur doit disposer de ressources humaines adéquates ; Qu'à cette fin, il convient d'engager des cadres compétents ;</p>
+
+  <p>Considérant que la Contractante Possède les compétences requises pour intervenir dans les tâches administratives de son entité d'affectation ;</p>
+
+  <p>Considérant qu'au regard de l'article 200-4 de la constitution et de l'article 5.3 de décret du 23 novembre 2005 régissant l'organisation et le fonctionnement de la CSC/CA la Cour Supérieure des Comptes et du Contentieux Administratif donne son avis sur tous les projets de contrats à caractère financier ou commercial auxquels l'Etat est partie ;</p>
+
+  <p>Considérant qu'il y a lieu de matérialiser les termes de cet accord dans un contrat</p>
+
+  <span class="s5"></span>
+  <p>Vu l'avis numéro ……………. de la Cour Supérieure des Comptes et du Contentieux Administratif en date du ………………….</p>
+
+  <span class="s5"></span>
+  <p class="center" style="font-style:italic;">Il a été convenu et arrêté ce qui suit :</p>
+  <span class="s5"></span>
+
+  <span class="art">Article 1.- Objet du contrat</span>
+  <p>L'employeur engage la Contractante, qui l'accepte, à titre {{position}} {{assignment}} selon la description de tâche annexée au présent contrat pour en faire partie.</p>
+
+  <span class="art">Article 2.- Pièces constitutives</span>
+  <p>Les documents contractuels sont les suivants :</p>
+  <p class="indent">- Le contrat dûment signé par les deux parties</p>
+  <p class="indent">- La description de taches de la contractante</p>
+  <p class="indent">- Le curriculum vitae de la contractante</p>
+  <p class="indent">- Copie de la CINU et matricule fiscal de la contractante.</p>
+
+  <span class="art">Article 3.- Obligation de la contractante</span>
+  <p>La contractante s'engage à fournir avec compétence, loyauté, dévouement et célérité ses connaissances techniques au bon fonctionnement du Ministère de la Santé Publique et de la Population.</p>
+
+  <div class="pgn">1</div>
+</div>
+
+<!-- ══════════════════════════ PAGE 2 ══════════════════════════ -->
+<div class="page">
+
+  <p>Elle fournira ses services dans les domaines spécifiés et accomplira ses tâches telles que définies dans sa description de tâches. Elle s'engage à présenter régulièrement à son supérieur hiérarchique immédiat des rapports de ses activités et un rapport global à la fin du contrat.</p>
+
+  <span class="art">Article 4.- Statut de la contractante</span>
+  <p>La contractante travaillera sous la supervision de son supérieur hiérarchique immédiat.</p>
+  <p>La contractante est un agent public contractuel. Elle ne sera pas considérée, à quelque fin que ce soit, comme fonctionnaire de l'Etat et ne sera donc pas couverte par le Statut Général de la Fonction Publique. Elle ne peut en aucun cas prétendre à des droits autres que ceux contenus dans le présent contrat.</p>
+
+  <p>La contractante reconnait qu'elle est astreinte au respect de la loi dans tous ses agissements sous peine de voir la responsabilité de l'administration ou la sienne propre engagée et d'attirer sur elle des sanctions disciplinaires ou pénales.</p>
+
+  <span class="art">Article 6.- Clause d'éthique</span>
+  <p>La contractante ne peut user de sa qualité, de son emploi ou des attributs de sa fonction en vue d'obtenir ou tenter d'obtenir un avantage de quelque nature que ce soit. De même, elle ne peut user de sa qualité pour entreprendre des démarches ayant pour objet une faveur personnelle, ou exercer une pression quelconque sur des tiers à des fins personnelles.</p>
+
+  <span class="art">Article 7.- Horaire de travail</span>
+  <p>La contractante s'engage à travailler huit heures par jour, du lundi au vendredi. Cependant, elle peut être appelée, en cas de besoin, à travailler au-delà des heures et/ou jours règlementaires sans pouvoir prétendre à une rémunération supplémentaire.</p>
+
+  <span class="art">Article 8.- Droits de propriété</span>
+  <p>Les droits de propriété, droits d'auteur et tous autres droits de quelque nature que ce soit, sur toute étude ou toute œuvre produite par la contractante dans le cadre de l'exécution du présent contrat, restent la propriété exclusive de l'Employeur.</p>
+  <p>Il est formellement interdit à la contractante de détruire, de détourner des dossiers, des pièces ou documents de service.</p>
+
+  <span class="art">Article 9.- Responsabilité relative au matériel de service</span>
+  <p>La contractante reconnait que le matériel mis à sa disposition pour les besoins du service reste et demeure la propriété de l'Employeur et qu'elle doit le gérer en bon chef de famille.</p>
+  <p>Elle engage sa responsabilité en cas de vol, perte, détérioration ou dégradation, ou toute autre cause pouvant affecter le bon fonctionnement ou la valeur du matériel pour laquelle elle ne peut pas se dégager de sa responsabilité directe.</p>
+  <p>Ce matériel doit être restitué à l'Employeur à la fin du contrat.</p>
+
+  <div class="pgn">2</div>
+</div>
+
+<!-- ══════════════════════════ PAGE 3 ══════════════════════════ -->
+<div class="page">
+
+  <span class="art">Article 10.- Obligation de confidentialité</span>
+  <p>La contractante s'abstiendra de communiquer à toute autre personne, à toute entité ou à tout organisme étranger à l'Employeur, les documents et les informations dont elle aurait eu connaissance dans le cadre de l'exécution de ses tâches conformément au présent contrat.</p>
+
+  <span class="art">Article 11.- Obligation de réserve et de discrétion professionnelle</span>
+  <p>La contractante est tenue à une obligation de réserve et doit notamment s'abstenir, même en dehors du service, de tout acte incompatible avec la dignité de la fonction qu'elle occupe.</p>
+  <p>Elle est liée par l'obligation de discrétion professionnelle pour tout ce qui concerne les faits, les informations et les documents dont elle a connaissance dans l'exercice ou à l'occasion de sa fonction.</p>
+
+  <span class="art">Article 12.- Normes de conduite</span>
+  <p>La contractante ne doit se livrer à aucune activité incompatible avec la mission de l'Employeur ou nuisible à l'accomplissement des tâches définies dans le présent contrat. Elle doit s'abstenir de toutes actions ou tous comportements susceptibles de nuire aux intérêts de l'Employeur.</p>
+
+  <span class="art">Article 13.- Discipline</span>
+  <p>La contractante reconnait que le manquement à ses obligations en vertu du présent contrat constitue une faute disciplinaire qui l'expose à une sanction disciplinaire sans préjudice des réparations liées à sa responsabilité civile et des peines prévues par les dispositions du Code Pénal consécutives à une infraction de droit commun.</p>
+  <p>Les sanctions disciplinaires auxquelles est exposée la contractante sont celles énumérées à l'article 188 alinéas 1 et 2 du décret du 17 mai 2005 portant révision du Statut Général de la Fonction Publique et sont subordonnées au principe de proportionnalité par rapport à la gravité de la faute. Elles seront prononcées par le supérieur hiérarchique immédiat de la contractante.</p>
+
+  <span class="art">Article 14.- Congé</span>
+  <p>La contractante a droit à un congé régulier payé de 15 jours ouvrables pour une année de service. Ce congé pourra être obtenu sur demande écrite adressée au Service d'Affectation, après approbation de la Direction ou Service des Ressources Humaines.</p>
+
+  <span class="art">Article 15.- Fin de contrat</span>
+  <p>Le présent contrat prend fin de plein droit le {{date_fin}}.</p>
+  <p>De même ce contrat prend automatiquement fin et sans aucune responsabilité pour aucune des parties</p>
+  <p class="indent">- Par le décès de la contractante ;</p>
+  <p class="indent">- Par le consentement mutuel des parties ;</p>
+  <p class="indent">- En cas d'incapacité dûment constatée de la Contractante ;</p>
+  <p class="indent">- Dans les autres cas prévus par la loi.</p>
+
+  <span class="art">Article 16.- Résiliation</span>
+  <p>Le présent contrat sera résilié de plein droit et sans indemnité :</p>
+  <p class="indent">- Pour non-respect des clauses du contrat ;</p>
+  <p class="indent">- Pour rendement insatisfaisant de la contractante ;</p>
+  <p class="indent">- En cas de conflit d'intérêts ; Pour faute grave de la contractante.</p>
+
+  <div class="pgn">3</div>
+</div>
+
+<!-- ══════════════════════════ PAGE 4 ══════════════════════════ -->
+<div class="page">
+
+  <span class="art">Article 17.- Rémunération</span>
+  <p>L'Etat Haïtien versera mensuellement à la Contractante, le montant de {{salary_text}} GOURDES ({{salary_number}}), en prélevant les retenues exigées par la loi.</p>
+
+  <span class="art">Article 18.- Durée du contrat</span>
+  <p>Le présent contrat est conclu pour une durée de {{duration_months_text}} ({{duration_months}}) mois débutant le {{date_debut}} et prenant fin le {{date_fin}}.</p>
+
+  <span class="art">Article 19.- Règlement des conflits</span>
+  <p>Tout différend relatif à l'interprétation ou à l'application du présent contrat qui ne pourra être résolu à l'amiable sera tranché par la Cour Supérieure des Comptes et du Contentieux Administratif.</p>
+
+  <span class="art">Article 20.- Loi applicable</span>
+  <p>Pour tout ce qui n'est pas stipulé dans le présent contrat, les parties devront se référer aux lois de la République.</p>
+
+  <span class="s16"></span>
+
+  <p>Fait à Port-au-Prince, en triple original, le {{date_debut}}</p>
+
+  <div class="sigs">
+    <div class="sig">
+      <div class="sig-line"></div>
+      <p><strong>{{first_name}} {{last_name}}</strong></p>
+      <p>Contractante</p>
+    </div>
+    <div class="sig">
+      <div class="sig-line"></div>
+      <p><strong>Dr Bertrand SINAL</strong></p>
+      <p>Ministre</p>
+    </div>
+  </div>
+
+  <div class="pgn">4</div>
+</div>
+
+</body>
+</html>
