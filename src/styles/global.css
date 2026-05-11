@@ -773,12 +773,13 @@ img {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-4);
+  padding: 20px 0;
+  margin-bottom: var(--spacing-5);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: var(--bg);
-  padding: var(--spacing-2) 0;
+  z-index: 100;
 }
 
 
@@ -787,10 +788,11 @@ img {
 }
 
 .section-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
   font-family: var(--font-heading);
   color: var(--ink);
+  letter-spacing: -0.02em;
 }
 
 .section-subtitle {
@@ -1926,22 +1928,23 @@ img {
 }
 
 .btn {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s var(--premium-ease);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  border: 1px solid transparent;
 }
 
 .btn:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow);
-  background: #e2e8f0;
 }
+
 
 .btn:disabled {
   opacity: 0.5;
@@ -1951,15 +1954,15 @@ img {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent) 0%, #059669 100%);
+  background: var(--ink);
   color: white;
-  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
 }
 
 .btn-primary:hover {
-  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: #000;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
+
 
 .btn-outline {
   background: transparent;
@@ -3158,18 +3161,14 @@ img {
   transform: scale(0.98);
 }
 
-/* Document Preview Stage (Premium) */
+/* Document Preview Stage (Clean White) */
 .preview-stage {
-  background: #e2e8f0;
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-6);
+  background: var(--bg);
+  padding: var(--spacing-5) 0;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  min-height: calc(100vh - 200px);
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);
+  min-height: 100%;
 }
 
 .preview-stage .paper-sheet {
@@ -3178,8 +3177,9 @@ img {
   max-width: 8.5in;
   min-height: 11in;
   padding: 1in;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
   border-radius: 4px;
   color: #1a1a1b;
-  transform-origin: top center;
 }
+
