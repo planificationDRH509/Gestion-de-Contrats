@@ -103,128 +103,93 @@ export function DraftHtmlPage() {
 
   return (
     <div className="draft-container">
-      <div className="section-header">
-        <div>
-          <h1 className="section-title">Modèles HTML</h1>
-          <div className="section-subtitle">Gérez et personnalisez les modèles de vos contrats.</div>
+      <header className="page-header-premium">
+        <div className="header-info">
+          <h1 className="header-title">Configuration des Modèles</h1>
+          <p className="header-subtitle">Personnalisez l'apparence et le contenu des contrats générés.</p>
         </div>
-        <div className="form-actions" style={{ marginTop: 0 }}>
-          <button className="btn btn-outline" type="button" onClick={handleReset}>
-            <span className="material-symbols-rounded icon">restart_alt</span>
+        <div className="header-actions">
+          <button className="btn btn-outline-premium" onClick={handleReset}>
+            <span className="material-symbols-rounded">restart_alt</span>
             Défaut
           </button>
-          <button className="btn btn-primary" type="button" onClick={handleSave}>
-            <span className="material-symbols-rounded icon">save</span>
+          <button className="btn btn-primary-premium" onClick={handleSave}>
+            <span className="material-symbols-rounded">save</span>
             Enregistrer
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="draft-switcher">
+      <div className="draft-type-selector">
         {draftTemplateOptions.map((option) => (
           <button
             key={option.type}
-            type="button"
-            className={`draft-switcher-btn ${selectedDraft === option.type ? "active" : ""}`}
+            className={`type-pill ${selectedDraft === option.type ? "active" : ""}`}
             onClick={() => setSelectedDraft(option.type)}
           >
-            <span className="draft-switcher-title">{option.label}</span>
-            <span className="draft-switcher-description">{option.description}</span>
+            {option.label}
           </button>
         ))}
       </div>
 
-      <div className="draft-page-grid">
-        <div className="card editor-card">
-          <div className="editor-heading">
-            <div className="editor-title">{selectedDraftOption.label}</div>
-            <div className="helper-text">{selectedDraftOption.description}</div>
-          </div>
-
-          <div className="editor-header">
-            <div className="tab-group">
+      <div className="draft-main-grid">
+        <div className="editor-section">
+          <div className="editor-card-premium">
+            <div className="editor-tabs">
               <button
-                className={`tab-btn ${activeTab === "html" ? "active" : ""}`}
+                className={`editor-tab ${activeTab === "html" ? "active" : ""}`}
                 onClick={() => setActiveTab("html")}
-                type="button"
               >
-                Structure (HTML)
+                Structure HTML
               </button>
               <button
-                className={`tab-btn ${activeTab === "css" ? "active" : ""}`}
+                className={`editor-tab ${activeTab === "css" ? "active" : ""}`}
                 onClick={() => setActiveTab("css")}
-                type="button"
               >
-                Style (CSS)
+                Styles CSS
               </button>
+              {message && <div className="save-toast">{message}</div>}
             </div>
-            {message && <span className="badge draft-status-badge">{message}</span>}
-          </div>
 
-          {activeTab === "html" ? (
-            <div className="code-field">
+            <div className="editor-content">
               <textarea
-                ref={htmlRef}
-                className="code-textarea"
-                value={template.html}
+                ref={activeTab === "html" ? htmlRef : cssRef}
+                className="code-editor-area"
+                value={activeTab === "html" ? template.html : template.css}
                 spellCheck={false}
-                placeholder={`Rédigez la structure HTML du draft \"${selectedDraftOption.label}\"...`}
-                onChange={(e) => setTemplate({ ...template, html: e.target.value })}
+                onChange={(e) => setTemplate({ ...template, [activeTab]: e.target.value })}
               />
-            </div>
-          ) : (
-            <div className="code-field">
-              <textarea
-                ref={cssRef}
-                className="code-textarea"
-                value={template.css}
-                spellCheck={false}
-                placeholder={`Rédigez le style CSS du draft \"${selectedDraftOption.label}\"...`}
-                onChange={(e) => setTemplate({ ...template, css: e.target.value })}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="sidebar-container">
-          <div className="card sidebar-card" style={{ padding: 0 }}>
-            <div className="vars-panel">
-              <div className="vars-header-row">
-                <div className="vars-header">Variables à insérer</div>
-                <div className="helper-text">Cliquez pour insérer au curseur.</div>
-              </div>
-
-              <div className="vars-list">
-                {templateVariables.map((variable) => (
-                  <button
-                    key={variable.key}
-                    className="var-pill"
-                    type="button"
-                    onClick={() => insertVariable(variable.key)}
-                    title={variable.label}
-                  >
-                    <span className="var-pill-key">{variable.key}</span>
-                    <span className="var-pill-label">{variable.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="preview-container-wrap">
-              <div className="preview-title-row">
-                <div className="vars-header">Aperçu</div>
-                <span className="badge">{selectedDraftOption.label}</span>
-              </div>
-
-              <div className="preview-container">
-                <div className="letter-preview-scroll" data-theme="light">
-                  <style>{template.css}</style>
-                  <div className="letter-paper" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                </div>
-              </div>
             </div>
           </div>
         </div>
+
+        <aside className="variables-sidebar-premium">
+          <div className="sidebar-section-title">Variables Disponibles</div>
+          <div className="variables-nav">
+            {templateVariables.map((variable) => (
+              <button
+                key={variable.key}
+                className="variable-nav-item"
+                onClick={() => insertVariable(variable.key)}
+                title={variable.label}
+              >
+                <span className="var-key">{variable.key}</span>
+                <span className="var-label">{variable.label}</span>
+                <span className="material-symbols-rounded add-icon">add</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="preview-mini-section">
+            <div className="sidebar-section-title">Aperçu en direct</div>
+            <div className="mini-preview-container">
+              <div className="preview-paper-scroller" data-theme="light">
+                <style>{template.css}</style>
+                <div className="preview-paper-content" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );
