@@ -42,11 +42,11 @@ export function DraftHtmlPage() {
   const [selectedDraft, setSelectedDraft] = useState<DraftTemplateType>("contract");
   const [template, setTemplate] = useState(() => loadTemplateByType("contract"));
   const [message, setMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"html" | "css">("html");
+  const [activeTab, setActiveTab] = useState<"html" | "preview">("html");
   const workspace = useMemo(() => ensureDefaultWorkspace(), []);
 
   const htmlRef = useRef<HTMLTextAreaElement>(null);
-  const cssRef = useRef<HTMLTextAreaElement>(null);
+
 
   const selectedDraftOption = useMemo(() => getDraftOption(selectedDraft), [selectedDraft]);
 
@@ -79,7 +79,8 @@ export function DraftHtmlPage() {
   }
 
   function insertVariable(variableKey: string) {
-    const target = activeTab === "html" ? htmlRef.current : cssRef.current;
+    if (activeTab !== "html") return;
+    const target = htmlRef.current;
     if (!target) return;
 
     const start = target.selectionStart;
