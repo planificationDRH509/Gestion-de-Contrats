@@ -103,93 +103,95 @@ export function DraftHtmlPage() {
 
   return (
     <div className="draft-container">
-      <header className="page-header-premium">
-        <div className="header-info">
-          <h1 className="header-title">Configuration des Modèles</h1>
-          <p className="header-subtitle">Personnalisez l'apparence et le contenu des contrats générés.</p>
+      <div className="section-header">
+        <div>
+          <h1 className="section-title">Studio des Modèles</h1>
+          <div className="section-subtitle">Gérez et visualisez vos modèles de contrats en temps réel.</div>
         </div>
-        <div className="header-actions">
-          <button className="btn btn-outline-premium" onClick={handleReset}>
+        <div className="toolbar">
+          <button className="btn btn-outline" onClick={handleReset}>
             <span className="material-symbols-rounded">restart_alt</span>
-            Défaut
+            Réinitialiser
           </button>
-          <button className="btn btn-primary-premium" onClick={handleSave}>
+          <button className="btn btn-primary" onClick={handleSave}>
             <span className="material-symbols-rounded">save</span>
-            Enregistrer
+            Enregistrer les modifications
           </button>
         </div>
-      </header>
-
-      <div className="draft-type-selector">
-        {draftTemplateOptions.map((option) => (
-          <button
-            key={option.type}
-            className={`type-pill ${selectedDraft === option.type ? "active" : ""}`}
-            onClick={() => setSelectedDraft(option.type)}
-          >
-            {option.label}
-          </button>
-        ))}
       </div>
 
-      <div className="draft-main-grid">
-        <div className="editor-section">
-          <div className="editor-card-premium">
-            <div className="editor-tabs">
+      <div className="draft-workbench">
+        <aside className="workbench-sidebar">
+          <div className="sidebar-label">SÉLECTEUR DE MODÈLE</div>
+          <div className="type-pills">
+            {draftTemplateOptions.map((option) => (
               <button
-                className={`editor-tab ${activeTab === "html" ? "active" : ""}`}
-                onClick={() => setActiveTab("html")}
+                key={option.type}
+                className={`type-pill ${selectedDraft === option.type ? "active" : ""}`}
+                onClick={() => setSelectedDraft(option.type)}
               >
-                Structure HTML
-              </button>
-              <button
-                className={`editor-tab ${activeTab === "css" ? "active" : ""}`}
-                onClick={() => setActiveTab("css")}
-              >
-                Styles CSS
-              </button>
-              {message && <div className="save-toast">{message}</div>}
-            </div>
-
-            <div className="editor-content">
-              <textarea
-                ref={activeTab === "html" ? htmlRef : cssRef}
-                className="code-editor-area"
-                value={activeTab === "html" ? template.html : template.css}
-                spellCheck={false}
-                onChange={(e) => setTemplate({ ...template, [activeTab]: e.target.value })}
-              />
-            </div>
-          </div>
-        </div>
-
-        <aside className="variables-sidebar-premium">
-          <div className="sidebar-section-title">Variables Disponibles</div>
-          <div className="variables-nav">
-            {templateVariables.map((variable) => (
-              <button
-                key={variable.key}
-                className="variable-nav-item"
-                onClick={() => insertVariable(variable.key)}
-                title={variable.label}
-              >
-                <span className="var-key">{variable.key}</span>
-                <span className="var-label">{variable.label}</span>
-                <span className="material-symbols-rounded add-icon">add</span>
+                {option.label}
               </button>
             ))}
           </div>
 
-          <div className="preview-mini-section">
-            <div className="sidebar-section-title">Aperçu en direct</div>
-            <div className="mini-preview-container">
-              <div className="preview-paper-scroller" data-theme="light">
-                <style>{template.css}</style>
-                <div className="preview-paper-content" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-              </div>
-            </div>
+          <div className="sidebar-divider" />
+          
+          <div className="sidebar-label">VARIABLES (CLIQUER POUR INSÉRER)</div>
+          <div className="variables-list-studio">
+            {templateVariables.map((variable) => (
+              <button
+                key={variable.key}
+                className="studio-var-item"
+                onClick={() => insertVariable(variable.key)}
+              >
+                <span className="var-key">{variable.key}</span>
+                <span className="var-label">{variable.label}</span>
+              </button>
+            ))}
           </div>
         </aside>
+
+        <main className="workbench-content">
+          <div className="workbench-tabs">
+            <button
+              className={`workbench-tab ${activeTab === "html" ? "active" : ""}`}
+              onClick={() => setActiveTab("html")}
+            >
+              <span className="material-symbols-rounded">code</span>
+              Édition du Code
+            </button>
+            <button
+              className={`workbench-tab ${activeTab === "preview" ? "active" : ""}`}
+              onClick={() => setActiveTab("preview")}
+            >
+              <span className="material-symbols-rounded">visibility</span>
+              Aperçu Final
+            </button>
+            {message && <div className="status-toast">{message}</div>}
+          </div>
+
+          <div className="workbench-view">
+            {activeTab === "html" ? (
+              <div className="editor-wrapper">
+                <textarea
+                  ref={htmlRef}
+                  className="studio-editor"
+                  value={template.html}
+                  spellCheck={false}
+                  placeholder="Écrivez votre HTML ici... (Incluez vos balises <style> pour le CSS)"
+                  onChange={(e) => setTemplate({ ...template, html: e.target.value })}
+                />
+              </div>
+            ) : (
+              <div className="preview-wrapper-studio">
+                <div className="preview-scroll-area" data-theme="light">
+                  <div className="paper-sheet" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

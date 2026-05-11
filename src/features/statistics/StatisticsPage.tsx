@@ -126,28 +126,6 @@ export function StatisticsPage() {
   const contracts = filteredContracts;
 
   // 3. STATS DATA & CALCULATIONS
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('fr-HT', { style: 'currency', currency: 'HTG', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const financialStats = useMemo(() => {
-    let totalMass = 0;
-    let totalSalary = 0;
-    let maxSalary = 0;
-    contracts.forEach(c => {
-      const sal = Number(c.salaryNumber) || 0;
-      const dur = Number(c.durationMonths) || 0;
-      totalMass += (sal * dur);
-      totalSalary += sal;
-      if (sal > maxSalary) maxSalary = sal;
-    });
-    return {
-      totalMass,
-      avgSalary: contracts.length > 0 ? totalSalary / contracts.length : 0,
-      maxSalary
-    };
-  }, [contracts]);
-
   const genderData = useMemo(() => {
     const counts = contracts.reduce((acc: any, curr) => {
       const g = curr.gender || "Inconnu";
@@ -237,7 +215,6 @@ export function StatisticsPage() {
 
   const evolutionData = useMemo(() => {
     const counts: Record<string, number> = {};
-    const costAcc: Record<string, number> = {};
     
     // Choose granularity based on filter
     const isShortPeriod = filterType === 'today' || filterType === 'week' || filterType === 'month';
@@ -249,13 +226,10 @@ export function StatisticsPage() {
         : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
       counts[key] = (counts[key] || 0) + 1;
-      const sal = Number(c.salaryNumber) || 0;
-      const dur = Number(c.durationMonths) || 0;
-      costAcc[key] = (costAcc[key] || 0) + (sal * dur);
     });
 
     return Object.entries(counts)
-      .map(([date, count]) => ({ date, count, cost: costAcc[date] }))
+      .map(([date, count]) => ({ date, count: count as number }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [contracts, filterType]);
 
@@ -268,7 +242,7 @@ export function StatisticsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '24px' }}>
           <div>
             <h1 className="section-title" style={{ fontSize: "32px", fontFamily: "var(--font-heading)", fontWeight: 800 }}>Tableau de Bord</h1>
-            <p style={{ color: "var(--ink-muted)", fontSize: "16px", marginTop: "6px" }}>Analyse approfondie des performances et de la masse salariale.</p>
+            <p style={{ color: "var(--ink-muted)", fontSize: "16px", marginTop: "6px" }}>Analyse approfondie des performances et des effectifs.</p>
           </div>
 
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -433,20 +407,18 @@ export function StatisticsPage() {
               bg="var(--info-soft)" 
             />
             <HeroStatCard 
-              label="Masse Salariale" 
-              value={formatCurrency(financialStats.totalMass)} 
-              icon="payments" 
+              label="Affectations Actives" 
+              value={uniqueAssignments.length} 
+              icon="lan" 
               color="var(--success)" 
               bg="var(--success-soft)" 
-              fontSize="24px"
             />
             <HeroStatCard 
-              label="Salaire Moyen" 
-              value={formatCurrency(financialStats.avgSalary)} 
-              icon="account_balance_wallet" 
+              label="Employés Actifs" 
+              value={createdByData.length} 
+              icon="person_check" 
               color="var(--warning)" 
               bg="var(--warning-soft)" 
-              fontSize="24px"
             />
             <HeroStatCard 
               label="Répartition Sexe" 
@@ -477,10 +449,7 @@ export function StatisticsPage() {
             <div className="card" style={{ gridColumn: "span 8", padding: "32px" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Dynamique Temporelle</h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', background: 'rgba(99, 102, 241, 0.1)', padding: '4px 10px', borderRadius: '8px', color: 'var(--primary)', fontWeight: '700' }}>VOLUME</span>
-                  <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '8px', color: 'var(--success)', fontWeight: '700' }}>COÛTS</span>
-                </div>
+                <span style={{ fontSize: '11px', background: 'rgba(99, 102, 241, 0.1)', padding: '4px 10px', borderRadius: '8px', color: 'var(--primary)', fontWeight: '700' }}>VOLUME DE SAISIES</span>
               </div>
               <div style={{ height: "350px" }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -489,10 +458,6 @@ export function StatisticsPage() {
                       <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.4} />
@@ -511,23 +476,186 @@ export function StatisticsPage() {
                       }}
                       dy={15}
                     />
-                    <YAxis yAxisId="left" stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-15} />
-                    <YAxis yAxisId="right" orientation="right" hide />
+                    <YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-15} />
                     
                     <Tooltip 
                       contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: 'var(--shadow-premium)', background: 'var(--surface-card)', padding: '16px' }}
-                      formatter={(value: any, name: any) => {
-                        if (name === 'cost') return [formatCurrency(value as number), 'Masse Salariale'];
-                        return [value, 'Nombre de Contrats'];
-                      }}
+                      formatter={(value: any) => [value, 'Nombre de Contrats']}
                       labelStyle={{ color: 'var(--ink)', marginBottom: '8px', fontWeight: '800', fontSize: '14px' }}
                     />
-                    <Area yAxisId="left" type="monotone" dataKey="count" name="count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} />
-                    <Area yAxisId="right" type="monotone" dataKey="cost" name="cost" stroke="#10b981" fillOpacity={1} fill="url(#colorCost)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="count" name="count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* Status Distribution */}
+            <div className="card" style={{ gridColumn: "span 4", padding: "32px" }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '32px', fontFamily: 'var(--font-heading)' }}>État d'Avancement</h3>
+              <div style={{ height: "350px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusData} layout="vertical" margin={{ top: 0, right: 30, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={110} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontWeight: 500 }} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--surface-sunken)', opacity: 0.5 }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
+                    />
+                    <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={20}>
+                      {statusData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Top Assignments */}
+            <div className="card" style={{ gridColumn: "span 8", padding: "32px" }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '32px', fontFamily: 'var(--font-heading)' }}>Top 10 Affectations</h3>
+              <div style={{ height: "380px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={assignmentData} margin={{ top: 10, right: 10, left: -10, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} tick={{angle: -35, textAnchor: 'end', fill: 'var(--ink)', fontWeight: 500 }} height={80} tickLine={false} axisLine={false} interval={0} />
+                    <YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-15} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--surface-sunken)', opacity: 0.5 }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
+                    />
+                    <Bar dataKey="count" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={40}>
+                      {assignmentData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Contracts by Employee */}
+            <div className="card" style={{ gridColumn: "span 4", padding: "32px" }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '32px', fontFamily: 'var(--font-heading)' }}>Performance Individuelle</h3>
+              <div style={{ height: "380px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={createdByData} layout="vertical" margin={{ top: 0, right: 30, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontWeight: 500 }} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--surface-sunken)', opacity: 0.5 }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} 
+                    />
+                    <Bar dataKey="count" fill="#ec4899" radius={[0, 6, 6, 0]} barSize={20}>
+                      {createdByData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Row 3: Smaller details */}
+            <div className="card" style={{ gridColumn: "span 4", padding: "32px" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Top 8 Postes</h3>
+              <div style={{ height: "300px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={positionData} layout="vertical" margin={{ top: 0, right: 20, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={10} width={110} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)' }} />
+                    <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={14}>
+                      {positionData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 1) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card" style={{ gridColumn: "span 4", padding: "32px" }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Durées des Contrats</h3>
+              <div style={{ height: "300px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={durationData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} dx={-10} />
+                    <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} barSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card" style={{ gridColumn: "span 4", padding: "32px", display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '800', color: 'var(--ink)', margin: 0, marginBottom: '24px', fontFamily: 'var(--font-heading)' }}>Mixité</h3>
+              <div style={{ flex: 1 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={genderData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={75}
+                      outerRadius={105}
+                      paddingAngle={8}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {genderData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.name === 'Homme' ? '#3b82f6' : entry.name === 'Femme' ? '#ec4899' : COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: 'var(--shadow)', background: 'var(--surface-card)' }} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeroStatCard({ label, value, icon, color, bg, fontSize = "28px" }: { label: string, value: any, icon: string, color: string, bg: string, fontSize?: string }) {
+  return (
+    <div className="card" style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '24px', 
+      padding: '32px',
+      transition: 'transform 0.3s var(--premium-ease), box-shadow 0.3s var(--premium-ease)',
+      cursor: 'default',
+      borderRadius: '24px',
+      border: '1px solid var(--border)'
+    }}>
+      <div style={{ 
+        width: '64px', 
+        height: '64px', 
+        borderRadius: '18px', 
+        background: bg, 
+        color: color, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        boxShadow: `0 8px 16px -4px ${bg}`
+      }}>
+        <span className="material-symbols-rounded" style={{ fontSize: '32px' }}>{icon}</span>
+      </div>
+      <div>
+        <div style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+        <div style={{ fontSize, fontWeight: '900', color: 'var(--ink)', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>{value}</div>
+      </div>
+    </div>
+  );
+}
 
             {/* Status Distribution */}
             <div className="card" style={{ gridColumn: "span 4", padding: "32px" }}>
