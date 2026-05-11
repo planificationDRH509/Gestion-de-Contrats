@@ -44,33 +44,43 @@ export function ContractPreviewPage() {
   }
 
   return (
-    <div>
+    <div className="page-container">
       <div className="section-header">
         <div>
-          <div className="section-title">Aperçu (non enregistré)</div>
+          <h1 className="section-title">Aperçu du Contrat</h1>
+          <div className="section-subtitle">Vérifiez les informations avant l'enregistrement final.</div>
         </div>
         <div className="toolbar">
-          <button className="btn btn-outline" onClick={() => navigate("/app/contrats/nouveau")}> 
-            Retour
+          <button className="btn btn-outline" onClick={() => navigate("/app/contrats/nouveau")}>
+            <span className="material-symbols-rounded">arrow_back</span>
+            Modifier
           </button>
+          <div className="nav-divider" style={{ height: '24px', margin: '0 8px' }} />
           <button
             className="btn btn-primary"
             onClick={() => handleSave("save")}
             disabled={createContract.isPending}
           >
+            <span className="material-symbols-rounded">save</span>
             Enregistrer
           </button>
           <button
             className="btn btn-outline"
             onClick={() => handleSave("print")}
             disabled={createContract.isPending}
+            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
           >
+            <span className="material-symbols-rounded">print</span>
             Imprimer
           </button>
         </div>
       </div>
 
-      <ContractDocument contract={draft} />
+      <div className="preview-stage" data-theme="light">
+        <div className="paper-sheet">
+          <ContractDocument contract={draft} />
+        </div>
+      </div>
     </div>
   );
 }
