@@ -263,119 +263,78 @@ export function StatisticsPage() {
   const totalContracts = contracts.length;
 
   return (
-    <div className="page-container" style={{ animation: "fade-in 0.4s ease-out", padding: "32px" }}>
-      <header className="section-header" style={{ marginBottom: "40px", display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '24px', position: 'relative', background: 'transparent' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '24px' }}>
-          <div>
-            <h1 className="section-title" style={{ fontSize: "32px", fontFamily: "var(--font-heading)", fontWeight: 800 }}>Tableau de Bord</h1>
-            <p style={{ color: "var(--ink-muted)", fontSize: "16px", marginTop: "6px" }}>Analyse approfondie des performances et de la masse salariale.</p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            {/* Fiscal Year Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-card)', padding: '6px 14px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
-              <span className="material-symbols-rounded" style={{ color: 'var(--primary)', fontSize: '20px' }}>calendar_month</span>
-              <select 
-                value={fiscalYear} 
-                onChange={e => setFiscalYear(e.target.value)}
-                style={{ 
-                  border: 'none', 
-                  background: 'transparent', 
-                  fontWeight: 700, 
-                  color: 'var(--ink)', 
-                  fontSize: '15px',
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                {fiscalYears.map(year => (
-                  <option key={year} value={year}>Exercice {year}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Time Filter Bar */}
-            <div className="stats-filters" style={{ 
-              display: 'flex', 
-              background: 'var(--surface-sunken)', 
-              padding: '6px', 
-              borderRadius: '16px', 
-              gap: '4px',
-              alignItems: 'center',
-              border: '1px solid var(--border)',
-              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)'
-            }}>
-              {['all', 'today', 'week', 'month', 'quarter', 'custom'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilterType(f as FilterType)}
-                  style={{
-                    padding: '10px 18px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: filterType === f ? 'var(--primary)' : 'transparent',
-                    color: filterType === f ? 'white' : 'var(--ink-muted)',
-                    fontWeight: filterType === f ? '600' : '500',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    transition: 'all 0.25s var(--premium-ease)',
-                    textTransform: 'capitalize',
-                    boxShadow: filterType === f ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none'
-                  }}
-                >
-                  {f === 'all' ? 'Tous' : 
-                   f === 'today' ? 'Aujourd\'hui' : 
-                   f === 'week' ? 'Semaine' : 
-                   f === 'month' ? 'Mois' : 
-                   f === 'quarter' ? 'Trimestre' : 'Personnalisé'}
-                </button>
-              ))}
-            </div>
-          </div>
+    <div className="page-container" style={{ animation: "fade-in 0.4s ease-out" }}>
+      <div className="section-header">
+        <div>
+          <div className="section-title">Tableau de Bord</div>
+          <div className="section-subtitle">Analyse approfondie des performances et de la masse salariale.</div>
         </div>
 
-        {/* Extended Filters */}
-        <div style={{ 
-          display: 'flex', 
-          gap: '24px', 
-          alignItems: 'center', 
-          flexWrap: 'wrap',
-          background: 'var(--surface-card)',
-          padding: '20px 24px',
-          borderRadius: '20px',
-          border: '1px solid var(--border)',
-          width: '100%',
-          boxShadow: 'var(--shadow-premium)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="material-symbols-rounded" style={{ color: 'var(--primary)', fontSize: '22px' }}>filter_alt</span>
-            <span style={{ fontSize: '15px', fontWeight: '700', color: 'var(--ink)' }}>Filtres Avancés :</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <label style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: 500 }}>Statut</label>
+        <div className="toolbar-unified">
+          {/* Fiscal Year Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--panel-muted)', padding: '4px 10px', borderRadius: '10px' }}>
+            <span className="material-symbols-rounded" style={{ color: 'var(--ink-muted)', fontSize: '18px' }}>calendar_month</span>
             <select 
-              value={statusFilter} 
-              onChange={e => setStatusFilter(e.target.value)}
-              className="input"
-              style={{ padding: '8px 14px', fontSize: '14px', minWidth: '160px', height: '40px', borderRadius: '10px' }}
+              value={fiscalYear} 
+              onChange={e => setFiscalYear(e.target.value)}
+              style={{ 
+                border: 'none', 
+                background: 'transparent', 
+                fontWeight: 600, 
+                color: 'var(--ink)', 
+                fontSize: '13px',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
             >
-              <option value="all">Tous les statuts</option>
-              {Object.entries(statusLabels).map(([val, label]) => (
-                <option key={val} value={val}>{label}</option>
+              {fiscalYears.map(year => (
+                <option key={year} value={year}>Exercice {year}</option>
               ))}
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <label style={{ fontSize: '14px', color: 'var(--ink-muted)', fontWeight: 500 }}>Affectation</label>
+          <div className="toolbar-divider" />
+
+          {/* Time Filter Bar */}
+          <div className="view-switch-unified">
+            {['all', 'today', 'week', 'month', 'quarter', 'custom'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilterType(f as FilterType)}
+                className={`view-pill-unified ${filterType === f ? "active" : ""}`}
+                style={{ padding: '4px 12px', fontSize: '12px' }}
+              >
+                {f === 'all' ? 'Tous' : 
+                 f === 'today' ? 'Aujourd\'hui' : 
+                 f === 'week' ? 'Semaine' : 
+                 f === 'month' ? 'Mois' : 
+                 f === 'quarter' ? 'Trimestre' : 'Perso.'}
+              </button>
+            ))}
+          </div>
+
+          <div className="toolbar-divider" />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <select 
+              value={statusFilter} 
+              onChange={e => setStatusFilter(e.target.value)}
+              className="input"
+              style={{ padding: '6px 12px', fontSize: '13px', height: '34px', borderRadius: '10px', width: '140px' }}
+            >
+              <option value="all">Tous statuts</option>
+              {Object.entries(statusLabels).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+
             <select 
               value={assignmentFilter} 
               onChange={e => setAssignmentFilter(e.target.value)}
               className="input"
-              style={{ padding: '8px 14px', fontSize: '14px', minWidth: '220px', height: '40px', borderRadius: '10px' }}
+              style={{ padding: '6px 12px', fontSize: '13px', height: '34px', borderRadius: '10px', width: '160px' }}
             >
-              <option value="all">Toutes les affectations</option>
+              <option value="all">Toutes affectations</option>
               {uniqueAssignments.map(a => (
                 <option key={a} value={a}>{a}</option>
               ))}
@@ -383,26 +342,26 @@ export function StatisticsPage() {
           </div>
 
           {filterType === 'custom' && (
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginLeft: 'auto', background: 'var(--surface-sunken)', padding: '6px 12px', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', background: 'var(--panel-muted)', padding: '2px 8px', borderRadius: '10px' }}>
               <input 
                 type="date" 
                 className="input"
                 value={startDate} 
                 onChange={e => setStartDate(e.target.value)}
-                style={{ padding: '4px 8px', fontSize: '13px', height: '32px', border: 'none', background: 'transparent' }}
+                style={{ padding: '2px 4px', fontSize: '12px', height: '28px', border: 'none', background: 'transparent' }}
               />
-              <span style={{ color: 'var(--ink-muted)', fontWeight: 800 }}>→</span>
+              <span style={{ color: 'var(--ink-muted)', fontSize: '12px' }}>→</span>
               <input 
                 type="date" 
                 className="input"
                 value={endDate} 
                 onChange={e => setEndDate(e.target.value)}
-                style={{ padding: '4px 8px', fontSize: '13px', height: '32px', border: 'none', background: 'transparent' }}
+                style={{ padding: '2px 4px', fontSize: '12px', height: '28px', border: 'none', background: 'transparent' }}
               />
             </div>
           )}
         </div>
-      </header>
+      </div>
 
       {isLoading ? (
         <div className="empty-state" style={{ minHeight: '500px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
