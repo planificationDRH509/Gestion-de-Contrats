@@ -24,7 +24,6 @@ export function ContractDetailPage() {
     : null;
 
   return (
-  return (
     <div className="page-container">
       <div className="section-header">
         <div>
