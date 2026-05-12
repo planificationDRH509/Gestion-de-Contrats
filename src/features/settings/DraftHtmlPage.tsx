@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildTemplateVariables,
   DraftTemplateType,
   draftTemplateOptions,
-  getDefaultTemplate,
   loadTemplateByType,
-  renderTemplate,
-  resetTemplateByType,
   saveTemplateByType,
-  templateVariables
+  templateVariables,
+  renderTemplate
 } from "./contractTemplate";
 import { Contract } from "../../data/types";
 import { ensureDefaultWorkspace } from "../../data/local/localDb";
@@ -22,8 +19,8 @@ const sampleContract: Contract = {
   gender: "Femme",
   firstName: "Nadine",
   lastName: "Pierre",
-  nif: "",
-  ninu: "",
+  nif: "000-000-000-0",
+  ninu: "0000000000",
   address: "12, Rue des Palmes, Port-au-Prince",
   position: "Assistante administrative",
   assignment: "Direction générale",
@@ -34,21 +31,14 @@ const sampleContract: Contract = {
   updatedAt: new Date().toISOString()
 };
 
-function getDraftOption(type: DraftTemplateType) {
-  return draftTemplateOptions.find((item) => item.type === type) ?? draftTemplateOptions[0];
-}
-
 export function DraftHtmlPage() {
   const [selectedDraft, setSelectedDraft] = useState<DraftTemplateType>("contract");
   const [template, setTemplate] = useState(() => loadTemplateByType("contract"));
+  const [activeTab, setActiveTab] = useState<"editor" | "preview">("editor");
   const [message, setMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"html" | "preview">("html");
-  const workspace = useMemo(() => ensureDefaultWorkspace(), []);
-
+  
   const htmlRef = useRef<HTMLTextAreaElement>(null);
-
-
-  const selectedDraftOption = useMemo(() => getDraftOption(selectedDraft), [selectedDraft]);
+  const workspace = useMemo(() => ensureDefaultWorkspace(), []);
 
   useEffect(() => {
     setTemplate(loadTemplateByType(selectedDraft));
@@ -56,138 +46,115 @@ export function DraftHtmlPage() {
   }, [selectedDraft]);
 
   const previewHtml = useMemo(() => {
-    const vars = buildTemplateVariables(sampleContract, workspace.name);
-    return renderTemplate(template.html, vars as Record<string, string>);
-  }, [template.html, workspace.name]);
+    return renderTemplate(template.html, sampleContract);
+  }, [template.html]);
 
-  function flashMessage(content: string) {
-    setMessage(content);
-    window.setTimeout(() => setMessage(null), 3000);
-  }
-
-  function handleSave() {
-    saveTemplateByType(selectedDraft, template);
-    flashMessage(`Template \"${selectedDraftOption.label}\" sauvegardé.`);
-  }
-
-  function handleReset() {
-    if (confirm(`Réinitialiser le template \"${selectedDraftOption.label}\" ?`)) {
-      resetTemplateByType(selectedDraft);
-      setTemplate(getDefaultTemplate(selectedDraft));
-      flashMessage(`Template \"${selectedDraftOption.label}\" réinitialisé.`);
+  const handleSave = async () => {
+    try {
+      saveTemplateByType(selectedDraft, template);
+      setMessage("Enregistré avec succès !");
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err) {
+      setMessage("Erreur lors de l'enregistrement");
     }
-  }
+  };
+
+  const handleReset = () => {
+    if (window.confirm("Réinitialiser ce modèle aux valeurs par défaut ?")) {
+      const defaultTpl = loadTemplateByType(selectedDraft);
+      setTemplate(defaultTpl);
+    }
+  };
 
   function insertVariable(variableKey: string) {
-    if (activeTab !== "html") return;
-    const target = htmlRef.current;
-    if (!target) return;
-
-    const start = target.selectionStart;
-    const end = target.selectionEnd;
-    const text = target.value;
-    const before = text.substring(0, start);
-    const after = text.substring(end);
-
-    const newValue = before + variableKey + after;
-
-    setTemplate((prev) => ({
-      ...prev,
-      [activeTab]: newValue
-    }));
-
-    window.setTimeout(() => {
-      target.focus();
-      target.setSelectionRange(start + variableKey.length, start + variableKey.length);
-    }, 0);
+    if (activeTab !== "editor") setActiveTab("editor");
+    setTimeout(() => {
+      const target = htmlRef.current;
+      if (!target) return;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const text = target.value;
+      const newValue = text.substring(0, start) + variableKey + text.substring(end);
+      setTemplate({ ...template, html: newValue });
+      setTimeout(() => {
+        target.focus();
+        target.setSelectionRange(start + variableKey.length, start + variableKey.length);
+      }, 0);
+    }, 100);
   }
 
   return (
-    <div className="draft-container">
+    <div className="page-container">
       <div className="section-header">
         <div>
-          <h1 className="section-title">Studio des Modèles</h1>
-          <div className="section-subtitle">Gérez et visualisez vos modèles de contrats en temps réel.</div>
+          <h1 className="section-title">Modèles de Documents</h1>
+          <div className="section-subtitle">Éditez le code HTML/CSS de vos contrats.</div>
         </div>
         <div className="toolbar">
           <button className="btn btn-outline" onClick={handleReset}>
             <span className="material-symbols-rounded">restart_alt</span>
-            Réinitialiser
+            Défaut
           </button>
           <button className="btn btn-primary" onClick={handleSave}>
             <span className="material-symbols-rounded">save</span>
-            Enregistrer les modifications
+            Enregistrer
           </button>
         </div>
       </div>
 
-      <div className="draft-workbench">
-        <aside className="workbench-sidebar">
-          <div className="sidebar-label">SÉLECTEUR DE MODÈLE</div>
-          <div className="type-pills">
-            {draftTemplateOptions.map((option) => (
-              <button
-                key={option.type}
-                className={`type-pill ${selectedDraft === option.type ? "active" : ""}`}
-                onClick={() => setSelectedDraft(option.type)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+      <div className="model-selector-bar">
+        {draftTemplateOptions.map((opt) => (
+          <button
+            key={opt.type}
+            className={`model-selector-btn ${selectedDraft === opt.type ? "active" : ""}`}
+            onClick={() => setSelectedDraft(opt.type)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="sidebar-divider" />
-          
-          <div className="sidebar-label">VARIABLES (CLIQUER POUR INSÉRER)</div>
-          <div className="variables-list-studio">
-            {templateVariables.map((variable) => (
-              <button
-                key={variable.key}
-                className="studio-var-item"
-                onClick={() => insertVariable(variable.key)}
-              >
-                <span className="var-key">{variable.key}</span>
-                <span className="var-label">{variable.label}</span>
+      <div className="editor-layout-grid">
+        <aside className="toolbox-sidebar">
+          <h3 className="toolbox-title">Variables</h3>
+          <p className="toolbox-help">Cliquez pour insérer</p>
+          <div className="variables-grid">
+            {templateVariables.map((v) => (
+              <button key={v.key} className="variable-item" onClick={() => insertVariable(v.key)}>
+                <span className="v-key">{v.key}</span>
+                <span className="v-label">{v.label}</span>
               </button>
             ))}
           </div>
         </aside>
 
-        <main className="workbench-content">
-          <div className="workbench-tabs">
-            <button
-              className={`workbench-tab ${activeTab === "html" ? "active" : ""}`}
-              onClick={() => setActiveTab("html")}
-            >
+        <main className="editor-workspace">
+          <div className="workspace-tabs">
+            <button className={`w-tab ${activeTab === "editor" ? "active" : ""}`} onClick={() => setActiveTab("editor")}>
               <span className="material-symbols-rounded">code</span>
-              Édition du Code
+              Éditeur de Code
             </button>
-            <button
-              className={`workbench-tab ${activeTab === "preview" ? "active" : ""}`}
-              onClick={() => setActiveTab("preview")}
-            >
+            <button className={`w-tab ${activeTab === "preview" ? "active" : ""}`} onClick={() => setActiveTab("preview")}>
               <span className="material-symbols-rounded">visibility</span>
-              Aperçu Final
+              Aperçu en Direct
             </button>
-            {message && <div className="status-toast">{message}</div>}
+            {message && <div className="save-indicator">{message}</div>}
           </div>
 
-          <div className="workbench-view">
-            {activeTab === "html" ? (
-              <div className="editor-wrapper">
-                <textarea
-                  ref={htmlRef}
-                  className="studio-editor"
-                  value={template.html}
-                  spellCheck={false}
-                  placeholder="Écrivez votre HTML ici... (Incluez vos balises <style> pour le CSS)"
-                  onChange={(e) => setTemplate({ ...template, html: e.target.value })}
-                />
-              </div>
+          <div className="workspace-view">
+            {activeTab === "editor" ? (
+              <textarea
+                ref={htmlRef}
+                className="code-editor"
+                value={template.html}
+                onChange={(e) => setTemplate({ ...template, html: e.target.value })}
+                spellCheck={false}
+                placeholder="Introduisez votre code HTML et <style> ici..."
+              />
             ) : (
-              <div className="preview-wrapper-studio">
-                <div className="preview-scroll-area" data-theme="light">
-                  <div className="paper-sheet" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              <div className="live-preview-container">
+                <div className="paper-preview">
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
                 </div>
               </div>
             )}
