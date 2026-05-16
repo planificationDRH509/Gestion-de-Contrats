@@ -107,7 +107,7 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 
 const EMPTY_NEW_ROWS_COUNT = 3;
 const NAVIGABLE_COLUMN_COUNT = 10;
-const STATUS_COLUMN_WIDTH = 64;
+const STATUS_COLUMN_WIDTH = 96;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT, durationMonths: getLastChoice("durationMonths") || "12" };
@@ -138,7 +138,11 @@ type ContractsSpreadsheetViewProps = {
   contracts: Contract[];
   isLoading: boolean;
   showToolbar?: boolean;
+  zoomMode?: SpreadsheetZoomMode;
+  zoomPercent?: number;
 };
+
+export type SpreadsheetZoomMode = "fit" | "custom";
 
 function formatNifInput(value: string): string {
   let digits = value.replace(/\D/g, "");
@@ -259,7 +263,9 @@ export function ContractsSpreadsheetView({
   userId,
   contracts,
   isLoading,
-  showToolbar = true
+  showToolbar = true,
+  zoomMode = "custom",
+  zoomPercent = 100
 }: ContractsSpreadsheetViewProps) {
   const createContract = useCreateContract();
   const updateContract = useUpdateContract();
@@ -368,6 +374,8 @@ export function ContractsSpreadsheetView({
   const draftByIdRef = useRef(draftById);
   const contractsMapRef = useRef<Map<string, Contract>>(new Map());
   const sheetRootRef = useRef<HTMLDivElement | null>(null);
+  const sheetScrollRef = useRef<HTMLDivElement | null>(null);
+  const [sheetViewportWidth, setSheetViewportWidth] = useState(0);
 
   useEffect(() => {
     draftByIdRef.current = draftById;
@@ -457,6 +465,23 @@ export function ContractsSpreadsheetView({
   }, [resizing]);
 
   useEffect(() => {
+    const target = sheetScrollRef.current;
+    if (!target) return;
+
+    const updateWidth = () => setSheetViewportWidth(target.clientWidth);
+    updateWidth();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(target);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  useEffect(() => {
     setNewRows((prev) =>
       prev.map((row) => {
         const isCurrentlyEmpty = isDraftEmpty(normalizeDraft(row.draft));
@@ -540,6 +565,14 @@ export function ContractsSpreadsheetView({
     () => COLUMNS.reduce((total, column) => total + columnWidths[column.key], 0),
     [columnWidths]
   );
+  const sheetGridWidth = totalWidth + STATUS_COLUMN_WIDTH;
+  const effectiveZoom = useMemo(() => {
+    if (zoomMode !== "fit") {
+      return Math.max(0.5, Math.min(2, zoomPercent / 100));
+    }
+    if (!sheetViewportWidth) return 1;
+    return Math.max(0.35, Math.min(1, (sheetViewportWidth - 16) / sheetGridWidth));
+  }, [sheetGridWidth, sheetViewportWidth, zoomMode, zoomPercent]);
 
   const rowOrder = useMemo(
     () => [
@@ -1275,36 +1308,40 @@ export function ContractsSpreadsheetView({
         <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
           {icon}
         </span>
-        {showCommentButton ? (
-          <button
-            type="button"
-            className={`icon-btn comment-trigger contracts-sheet-comment-btn ${hasComment ? "has-comment" : ""}`}
-            title={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
-            aria-label={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
-            onClick={(event) => {
-              event.stopPropagation();
-              options?.onCommentClick?.();
-            }}
-          >
-            <span className="material-symbols-rounded">chat_bubble</span>
-          </button>
-        ) : null}
-        {options?.onDeleteClick ? (
-          <button
-            type="button"
-            className="icon-btn contracts-sheet-delete-btn"
-            title={options.deleteLabel ?? "Supprimer ce contrat"}
-            aria-label={options.deleteLabel ?? "Supprimer ce contrat"}
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              options.onDeleteClick?.();
-            }}
-          >
-            <span className="material-symbols-rounded">delete</span>
-          </button>
+        {showCommentButton || options?.onDeleteClick ? (
+          <div className={`contracts-sheet-state-actions ${hasComment ? "has-visible-action" : ""}`}>
+            {showCommentButton ? (
+              <button
+                type="button"
+                className={`icon-btn comment-trigger contracts-sheet-comment-btn ${hasComment ? "has-comment" : ""}`}
+                title={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                aria-label={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  options?.onCommentClick?.();
+                }}
+              >
+                <span className="material-symbols-rounded">chat_bubble</span>
+              </button>
+            ) : null}
+            {options?.onDeleteClick ? (
+              <button
+                type="button"
+                className="icon-btn contracts-sheet-delete-btn"
+                title={options.deleteLabel ?? "Supprimer ce contrat"}
+                aria-label={options.deleteLabel ?? "Supprimer ce contrat"}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  options.onDeleteClick?.();
+                }}
+              >
+                <span className="material-symbols-rounded">delete</span>
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );
@@ -1438,8 +1475,14 @@ export function ContractsSpreadsheetView({
           </div>
         </div>
       ) : null}
-      <div className="contracts-sheet-scroll">
-        <div className="contracts-sheet-grid" style={{ minWidth: `${totalWidth + STATUS_COLUMN_WIDTH}px` }}>
+      <div className="contracts-sheet-scroll" ref={sheetScrollRef}>
+        <div
+          className="contracts-sheet-grid"
+          style={{
+            minWidth: `${sheetGridWidth}px`,
+            zoom: effectiveZoom
+          } as React.CSSProperties}
+        >
           <div className="contracts-sheet-header-shell">
             <div className="contracts-sheet-state-head" aria-hidden="true" />
             <div className="contracts-sheet-header" style={{ gridTemplateColumns }}>

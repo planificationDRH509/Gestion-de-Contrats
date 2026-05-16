@@ -127,15 +127,22 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
 }
 
 type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty";
+export type IdentificationSpreadsheetZoomMode = "fit" | "custom";
+
+const STATUS_COLUMN_WIDTH = 96;
 
 export function IdentificationSpreadsheetView({ 
   workspaceId, 
   userId, 
-  searchQuery = "" 
+  searchQuery = "",
+  zoomMode = "custom",
+  zoomPercent = 100
 }: { 
   workspaceId: string, 
   userId: string, 
-  searchQuery?: string 
+  searchQuery?: string,
+  zoomMode?: IdentificationSpreadsheetZoomMode,
+  zoomPercent?: number
 }) {
   const { data: identities = [], isLoading } = useIdentificationList(workspaceId);
   const createIdentity = useCreateIdentification();
@@ -180,6 +187,8 @@ export function IdentificationSpreadsheetView({
   );
 
   const sheetRootRef = useRef<HTMLDivElement>(null);
+  const sheetScrollRef = useRef<HTMLDivElement>(null);
+  const [sheetViewportWidth, setSheetViewportWidth] = useState(0);
   const identitiesMap = useMemo(() => new Map(identities.map(i => [i.nif, i])), [identities]);
 
   const addressItems: AutocompleteItem[] = useMemo(() => 
@@ -192,6 +201,23 @@ export function IdentificationSpreadsheetView({
     const target = sheetRootRef.current?.querySelector<HTMLElement>(selector);
     target?.focus();
   }
+
+  useEffect(() => {
+    const target = sheetScrollRef.current;
+    if (!target) return;
+
+    const updateWidth = () => setSheetViewportWidth(target.clientWidth);
+    updateWidth();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(target);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
 
   function clearNewRow(rowId: string) {
     setNewRows((prev) =>
@@ -243,21 +269,23 @@ export function IdentificationSpreadsheetView({
           {icon}
         </span>
         {options?.onDeleteClick ? (
-          <button
-            type="button"
-            className="icon-btn contracts-sheet-delete-btn"
-            title={options.deleteLabel ?? "Effacer cette ligne"}
-            aria-label={options.deleteLabel ?? "Effacer cette ligne"}
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              options.onDeleteClick?.();
-            }}
-          >
-            <span className="material-symbols-rounded">delete</span>
-          </button>
+          <div className="contracts-sheet-state-actions">
+            <button
+              type="button"
+              className="icon-btn contracts-sheet-delete-btn"
+              title={options.deleteLabel ?? "Effacer cette ligne"}
+              aria-label={options.deleteLabel ?? "Effacer cette ligne"}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                options.onDeleteClick?.();
+              }}
+            >
+              <span className="material-symbols-rounded">delete</span>
+            </button>
+          </div>
         ) : null}
       </div>
     );
@@ -445,11 +473,25 @@ export function IdentificationSpreadsheetView({
   if (isLoading) return <div className="empty-state">Chargement...</div>;
 
   const gridTemplateColumns = COLUMNS.map(c => `${columnWidths[c.key]}px`).join(" ");
+  const sheetGridWidth =
+    COLUMNS.reduce((total, column) => total + columnWidths[column.key], 0) + STATUS_COLUMN_WIDTH;
+  const effectiveZoom =
+    zoomMode === "fit"
+      ? sheetViewportWidth
+        ? Math.max(0.35, Math.min(1, (sheetViewportWidth - 16) / sheetGridWidth))
+        : 1
+      : Math.max(0.5, Math.min(2, zoomPercent / 100));
 
   return (
     <div className="contracts-sheet-wrapper" ref={sheetRootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="contracts-sheet-scroll" style={{ flex: 1, overflowY: 'auto' }}>
-        <div className="contracts-sheet-grid">
+      <div className="contracts-sheet-scroll" ref={sheetScrollRef} style={{ flex: 1, overflowY: 'auto' }}>
+        <div
+          className="contracts-sheet-grid"
+          style={{
+            minWidth: `${sheetGridWidth}px`,
+            zoom: effectiveZoom
+          } as React.CSSProperties}
+        >
           <div className="contracts-sheet-header-shell">
             <div className="contracts-sheet-state-head" />
             <div className="contracts-sheet-header" style={{ gridTemplateColumns }}>

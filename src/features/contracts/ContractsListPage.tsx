@@ -33,6 +33,12 @@ import { createId } from "../../lib/uuid";
 import { ContractCommentModal } from "./ContractCommentModal";
 
 type ContractsView = "contracts" | "dossiers";
+const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
+
+function readContractsPageSize() {
+  const value = Number(localStorage.getItem("contracts_page_size"));
+  return CONTRACT_PAGE_SIZE_OPTIONS.includes(value as any) ? value : 25;
+}
 
 const STATUS_FILTER_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "saisie", label: "Saisie" },
@@ -162,7 +168,7 @@ export function ContractsListPage() {
     "createdAt_desc"
   );
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(readContractsPageSize);
   const [selected, setSelected] = useState<string[]>([]);
   const [exportWithPrepositions, setExportWithPrepositions] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -212,6 +218,12 @@ export function ContractsListPage() {
     localStorage.setItem("contracts_view_all", String(newValue));
     setPage(1);
   };
+
+  function handlePageSizeChange(nextPageSize: number) {
+    setPageSize(nextPageSize);
+    setPage(1);
+    localStorage.setItem("contracts_page_size", String(nextPageSize));
+  }
 
   const queryParams = {
     workspaceId,
@@ -1876,6 +1888,8 @@ export function ContractsListPage() {
               pageSize={pageSize}
               total={data.total}
               onPageChange={setPage}
+              pageSizeOptions={CONTRACT_PAGE_SIZE_OPTIONS}
+              onPageSizeChange={handlePageSizeChange}
             />
           ) : null}
         </div>

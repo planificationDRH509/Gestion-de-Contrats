@@ -29,7 +29,15 @@ import {
   saveLastChoice,
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
-import { ContractsSpreadsheetView } from "./ContractsSpreadsheetView";
+import { ContractsSpreadsheetView, type SpreadsheetZoomMode } from "./ContractsSpreadsheetView";
+
+const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
+const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
+
+function readStoredPageSize(key: string, fallback = 25) {
+  const value = Number(localStorage.getItem(key));
+  return CONTRACT_PAGE_SIZE_OPTIONS.includes(value as any) ? value : fallback;
+}
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -62,20 +70,30 @@ export function ContractNewPage() {
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
   const { data: dossiers = [] } = useDossiersList(workspaceId);
+  const [sheetZoomMode, setSheetZoomMode] = useState<SpreadsheetZoomMode>(
+    () => (localStorage.getItem("new_contract_sheet_zoom_mode") === "fit" ? "fit" : "custom")
+  );
+  const [sheetZoomPercent, setSheetZoomPercent] = useState(() => {
+    const value = Number(localStorage.getItem("new_contract_sheet_zoom_percent"));
+    return SHEET_ZOOM_OPTIONS.includes(value as any) ? value : 100;
+  });
+  const [spreadsheetPageSize, setSpreadsheetPageSize] = useState(() =>
+    readStoredPageSize("new_contract_sheet_page_size", 25)
+  );
   const spreadsheetQueryParams = useMemo(
     () => ({
       workspaceId,
       sort: "createdAt_desc" as const,
       page: 1,
-      pageSize: 15,
+      pageSize: spreadsheetPageSize,
       onlyMine: true,
       userId
     }),
-    [workspaceId, userId]
+    [workspaceId, userId, spreadsheetPageSize]
   );
   const { data: spreadsheetData, isLoading: spreadsheetLoading } = useContractsList(spreadsheetQueryParams);
   const [entryMode, setEntryMode] = useState<"form" | "sheet">(
-    () => (localStorage.getItem("new_contract_entry_mode") === "sheet" ? "sheet" : "form")
+    () => "sheet"
   );
   const isSheetMode = entryMode === "sheet";
   const [isSheetFullscreen, setIsSheetFullscreen] = useState(false);
@@ -349,6 +367,18 @@ export function ContractNewPage() {
   }, [entryMode]);
 
   useEffect(() => {
+    localStorage.setItem("new_contract_sheet_zoom_mode", sheetZoomMode);
+  }, [sheetZoomMode]);
+
+  useEffect(() => {
+    localStorage.setItem("new_contract_sheet_zoom_percent", String(sheetZoomPercent));
+  }, [sheetZoomPercent]);
+
+  useEffect(() => {
+    localStorage.setItem("new_contract_sheet_page_size", String(spreadsheetPageSize));
+  }, [spreadsheetPageSize]);
+
+  useEffect(() => {
     if (!isSheetMode) {
       setIsSheetFullscreen(false);
     }
@@ -597,6 +627,52 @@ export function ContractNewPage() {
     }
   }
 
+  const sheetControls = isSheetMode ? (
+    <div className="sheet-top-controls" aria-label="Options du tableur">
+      <button
+        type="button"
+        className={`icon-btn ${sheetZoomMode === "fit" ? "primary" : ""}`}
+        title="Ajuster les colonnes à la largeur disponible"
+        aria-label="Ajuster les colonnes"
+        onClick={() => setSheetZoomMode("fit")}
+      >
+        <span className="material-symbols-rounded">fit_screen</span>
+      </button>
+      <label className="sheet-control-select" title="Zoom du tableur">
+        <span className="material-symbols-rounded">zoom_in</span>
+        <select
+          value={sheetZoomMode === "fit" ? "fit" : String(sheetZoomPercent)}
+          onChange={(event) => {
+            if (event.target.value === "fit") {
+              setSheetZoomMode("fit");
+              return;
+            }
+            setSheetZoomMode("custom");
+            setSheetZoomPercent(Number(event.target.value));
+          }}
+          aria-label="Zoom du tableur"
+        >
+          <option value="fit">Ajuster</option>
+          {SHEET_ZOOM_OPTIONS.map((value) => (
+            <option key={value} value={value}>{value}%</option>
+          ))}
+        </select>
+      </label>
+      <label className="sheet-control-select" title="Contrats maximum affichés">
+        <span className="material-symbols-rounded">view_week</span>
+        <select
+          value={spreadsheetPageSize}
+          onChange={(event) => setSpreadsheetPageSize(Number(event.target.value))}
+          aria-label="Contrats maximum affichés"
+        >
+          {CONTRACT_PAGE_SIZE_OPTIONS.map((value) => (
+            <option key={value} value={value}>{value}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  ) : null;
+
 
 
   return (
@@ -606,6 +682,7 @@ export function ContractNewPage() {
           <div className="section-title">Nouveau contrat</div>
         </div>
         <div className="new-contract-header-actions">
+          {sheetControls}
           {isSheetMode ? (
             <button
               type="button"
@@ -977,6 +1054,7 @@ export function ContractNewPage() {
         isSheetFullscreen ? (
           <div className="contracts-sheet-fullscreen">
             <div className="contracts-sheet-fullscreen-topbar">
+              {sheetControls}
               <button
                 type="button"
                 className="icon-btn primary"
@@ -994,6 +1072,8 @@ export function ContractNewPage() {
                 contracts={spreadsheetData?.items ?? []}
                 isLoading={spreadsheetLoading}
                 showToolbar={false}
+                zoomMode={sheetZoomMode}
+                zoomPercent={sheetZoomPercent}
               />
             </div>
           </div>
@@ -1004,6 +1084,8 @@ export function ContractNewPage() {
               userId={userId}
               contracts={spreadsheetData?.items ?? []}
               isLoading={spreadsheetLoading}
+              zoomMode={sheetZoomMode}
+              zoomPercent={sheetZoomPercent}
             />
           </div>
         )
