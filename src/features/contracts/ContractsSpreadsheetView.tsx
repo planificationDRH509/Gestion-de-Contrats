@@ -579,6 +579,45 @@ export function ContractsSpreadsheetView({
     focusGridCell(getNewRowKey(rowId), columnIndex);
   }
 
+  function buildResetDraft(durationValue?: string): SpreadsheetDraft {
+    const nextDraft = createEmptyDraft();
+    if (useDefaultAddress) nextDraft.address = defaultAddress;
+    if (useDefaultAssignment) nextDraft.assignment = defaultAssignment;
+    if (useDefaultComment) nextDraft.comment = defaultComment;
+    if (useDefaultDuration) nextDraft.durationMonths = String(defaultDuration);
+    else if (durationValue) nextDraft.durationMonths = durationValue;
+    return nextDraft;
+  }
+
+  function clearNewRow(rowId: string) {
+    const currentRow = newRowsRef.current.find((row) => row.id === rowId);
+    const resetDraft = buildResetDraft(currentRow?.draft.durationMonths);
+    setNewRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, draft: resetDraft } : row))
+    );
+    setNewRowErrors((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    setNifStatusByRow((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    setNifCheckingRows((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    window.requestAnimationFrame(() => {
+      focusNewRowCell(rowId, 0);
+    });
+  }
+
   function handleGridArrowNavigation(
     event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     rowKey: string,
@@ -1204,6 +1243,7 @@ export function ContractsSpreadsheetView({
       hasComment?: boolean;
       onCommentClick?: () => void;
       onDeleteClick?: () => void;
+      deleteLabel?: string;
     }
   ) {
     const showCommentButton = Boolean(options?.showCommentButton);
@@ -1253,8 +1293,11 @@ export function ContractsSpreadsheetView({
           <button
             type="button"
             className="icon-btn contracts-sheet-delete-btn"
-            title="Supprimer ce contrat"
-            aria-label="Supprimer ce contrat"
+            title={options.deleteLabel ?? "Supprimer ce contrat"}
+            aria-label={options.deleteLabel ?? "Supprimer ce contrat"}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={(event) => {
               event.stopPropagation();
               options.onDeleteClick?.();
@@ -1447,7 +1490,10 @@ export function ContractsSpreadsheetView({
             return (
               <div key={row.id} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${creating ? "is-saving" : ""}`}>
-                  {renderRowStatusIcon(syncState, label)}
+                  {renderRowStatusIcon(syncState, label, hasValues && !creating ? {
+                    onDeleteClick: () => clearNewRow(row.id),
+                    deleteLabel: "Effacer cette ligne"
+                  } : undefined)}
                   <div
                     className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
                     style={{ gridTemplateColumns, opacity: isBlocked ? 0.5 : 1, pointerEvents: isBlocked ? "none" : undefined }}

@@ -1052,6 +1052,44 @@ img {
   font-size: 12px;
 }
 
+.contracts-sheet-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.contracts-sheet-action-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+.contracts-sheet-action-btn span {
+  font-size: 14px;
+}
+
+.contracts-sheet-action-btn.save {
+  color: #059669;
+}
+
+.contracts-sheet-action-btn.cancel,
+.contracts-sheet-action-btn.delete {
+  color: var(--danger);
+}
+
+.contracts-sheet-action-btn.edit {
+  color: inherit;
+}
+
+.contracts-sheet-action-btn.save:hover {
+  background: rgba(5, 150, 105, 0.12);
+}
+
+.contracts-sheet-action-btn.cancel:hover,
+.contracts-sheet-action-btn.delete:hover {
+  background: var(--danger-soft);
+}
+
 .contracts-sheet-delete-btn {
   position: absolute;
   left: 14px;
@@ -3182,4 +3220,3 @@ img {
   border-radius: 4px;
   color: #1a1a1b;
 }
-

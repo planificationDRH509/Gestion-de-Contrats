@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DraftTemplateType,
   draftTemplateOptions,
+  buildTemplateVariables,
   loadTemplateByType,
   saveTemplateByType,
   templateVariables,
@@ -46,8 +47,11 @@ export function DraftHtmlPage() {
   }, [selectedDraft]);
 
   const previewHtml = useMemo(() => {
-    return renderTemplate(template.html, sampleContract);
-  }, [template.html]);
+    return renderTemplate(
+      template.html,
+      buildTemplateVariables(sampleContract, workspace.name)
+    );
+  }, [template.html, workspace.name]);
 
   const handleSave = async () => {
     try {

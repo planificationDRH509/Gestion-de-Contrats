@@ -126,6 +126,8 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
   return null;
 }
 
+type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty";
+
 export function IdentificationSpreadsheetView({ 
   workspaceId, 
   userId, 
@@ -189,6 +191,76 @@ export function IdentificationSpreadsheetView({
     const selector = `[data-sheet-row="${rowKey}"][data-sheet-col="${columnIndex}"]`;
     const target = sheetRootRef.current?.querySelector<HTMLElement>(selector);
     target?.focus();
+  }
+
+  function clearNewRow(rowId: string) {
+    setNewRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, draft: createEmptyDraft() } : row))
+    );
+    setRowErrors((prev) => {
+      if (!prev[rowId]) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    window.requestAnimationFrame(() => {
+      focusGridCell(rowId, 0);
+    });
+  }
+
+  function renderRowStatusIcon(
+    syncState: SyncState,
+    label: string,
+    options?: {
+      onDeleteClick?: () => void;
+      deleteLabel?: string;
+    }
+  ) {
+    let icon = "radio_button_unchecked";
+    let colorClass = "empty";
+
+    if (syncState === "saved") {
+      icon = "check_circle";
+      colorClass = "saved";
+    } else if (syncState === "saving") {
+      icon = "sync";
+      colorClass = "pending";
+    } else if (syncState === "unsaved") {
+      icon = "edit";
+      colorClass = "unsaved";
+    } else if (syncState === "error") {
+      icon = "error";
+      colorClass = "error";
+    }
+
+    return (
+      <div
+        className={`contracts-sheet-state-cell ${colorClass}`}
+        title={label}
+        aria-label={label}
+      >
+        <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
+          {icon}
+        </span>
+        {options?.onDeleteClick ? (
+          <button
+            type="button"
+            className="icon-btn contracts-sheet-delete-btn"
+            title={options.deleteLabel ?? "Effacer cette ligne"}
+            aria-label={options.deleteLabel ?? "Effacer cette ligne"}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              options.onDeleteClick?.();
+            }}
+          >
+            <span className="material-symbols-rounded">delete</span>
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   function handleGridArrowNavigation(event: React.KeyboardEvent, rowKey: string, columnIndex: number) {
@@ -392,10 +464,28 @@ export function IdentificationSpreadsheetView({
           {/* New Rows */}
           {newRows.map(row => (
             <div key={row.id} className="contracts-sheet-row-wrap">
+              {(() => {
+                const hasValues = !isDraftEmpty(row.draft);
+                let syncState: SyncState = "empty";
+                let label = "Vide";
+
+                if (savingRows[row.id]) {
+                  syncState = "saving";
+                  label = "Enregistrement en cours...";
+                } else if (rowErrors[row.id]) {
+                  syncState = "error";
+                  label = `Erreur: ${rowErrors[row.id]}`;
+                } else if (hasValues) {
+                  syncState = "unsaved";
+                  label = "Non synchronisé";
+                }
+
+                return (
               <div className="contracts-sheet-row-shell">
-                <div className="contracts-sheet-state-cell">
-                  {savingRows[row.id] ? <span className="material-symbols-rounded is-spinning">sync</span> : <span className="material-symbols-rounded">add</span>}
-                </div>
+                {renderRowStatusIcon(syncState, label, hasValues && !savingRows[row.id] ? {
+                  onDeleteClick: () => clearNewRow(row.id),
+                  deleteLabel: "Effacer cette ligne"
+                } : undefined)}
                 <div className="contracts-sheet-row" style={{ gridTemplateColumns }}>
                   <input
                     data-sheet-row={row.id}
@@ -486,6 +576,8 @@ export function IdentificationSpreadsheetView({
                   />
                 </div>
               </div>
+                );
+              })()}
               {rowErrors[row.id] && <div className="contracts-sheet-inline-error">{rowErrors[row.id]}</div>}
             </div>
           ))}
@@ -494,30 +586,45 @@ export function IdentificationSpreadsheetView({
           {paginatedIdentities.map(identity => {
             const isEditing = editingRowId === identity.nif;
             const draft = draftById[identity.nif] || toDraft(identity);
+            const hasChanges =
+              JSON.stringify(normalizeDraft(draft)) !== JSON.stringify(normalizeDraft(toDraft(identity)));
+            let syncState: SyncState = "saved";
+            let label = "Enregistré";
+
+            if (savingRows[identity.nif]) {
+              syncState = "saving";
+              label = "Enregistrement en cours...";
+            } else if (rowErrors[identity.nif]) {
+              syncState = "error";
+              label = `Erreur: ${rowErrors[identity.nif]}`;
+            } else if (isEditing || hasChanges) {
+              syncState = "unsaved";
+              label = "Modifications non synchronisées";
+            }
             
             return (
                <div key={identity.nif} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${isEditing ? 'is-editing' : ''}`}>
-                  <div className="contracts-sheet-state-cell">
+                  <div className={`contracts-sheet-state-cell ${syncState === "saved" ? "saved" : syncState === "saving" ? "pending" : syncState === "error" ? "error" : "unsaved"}`} title={label} aria-label={label}>
                     {savingRows[identity.nif] ? (
-                      <span className="material-symbols-rounded is-spinning">sync</span>
+                      <span className="material-symbols-rounded contracts-sheet-state-status-icon is-spinning">sync</span>
                     ) : isEditing ? (
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="icon-btn success-btn" onClick={() => handleSaveExisting(identity.nif)} title="Enregistrer">
-                          <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '20px'}}>check_circle</span>
+                      <div className="contracts-sheet-inline-actions">
+                        <button className="icon-btn contracts-sheet-action-btn save" onClick={() => handleSaveExisting(identity.nif)} title="Enregistrer" aria-label="Enregistrer">
+                          <span className="material-symbols-rounded">check_circle</span>
                         </button>
-                        <button className="icon-btn" onClick={() => cancelEditing(identity.nif)} title="Annuler">
-                          <span className="material-symbols-rounded" style={{color: 'var(--error)', fontSize: '20px'}}>cancel</span>
+                        <button className="icon-btn contracts-sheet-action-btn cancel" onClick={() => cancelEditing(identity.nif)} title="Annuler" aria-label="Annuler">
+                          <span className="material-symbols-rounded">cancel</span>
                         </button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <span className="material-symbols-rounded" style={{color: 'var(--success)', fontSize: '18px'}} title="Enregistré">check_circle</span>
-                        <button className="icon-btn edit-btn" onClick={() => startEditing(identity.nif)} title="Modifier">
-                          <span className="material-symbols-rounded" style={{fontSize: '18px'}}>edit</span>
+                      <div className="contracts-sheet-inline-actions">
+                        <span className="material-symbols-rounded contracts-sheet-state-status-icon" title="Enregistré">check_circle</span>
+                        <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
+                          <span className="material-symbols-rounded">edit</span>
                         </button>
-                        <button className="icon-btn delete-btn" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} style={{marginLeft: '4px'}}>
-                          <span className="material-symbols-rounded" style={{fontSize: '18px'}}>delete</span>
+                        <button className="icon-btn contracts-sheet-action-btn delete" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} title="Supprimer cette entrée" aria-label="Supprimer cette entrée">
+                          <span className="material-symbols-rounded">delete</span>
                         </button>
                       </div>
                     )}

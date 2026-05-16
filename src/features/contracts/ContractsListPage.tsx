@@ -22,6 +22,7 @@ import {
   getCurrentFiscalYearStart,
   getTodayDateInputValue
 } from "../../lib/contractDateFilters";
+import { createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
   PrintHistoryEntry,
   isPrintHistoryDuplicate,
@@ -53,8 +54,8 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 ];
 
 const FRENCH_ELISION_START = /^[aeiouyàâäéèêëîïôöùûüœh]/i;
-const CSV_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
-const CSV_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
+const EXPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
+const EXPORT_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
 const ASSIGNMENT_FEMININE_PREFIX_WORDS = [
   "direction",
   "maternite",
@@ -106,14 +107,14 @@ function joinCsvPrefix(prefix: string, value: string) {
 
 function addCsvPositionPrefix(value: string, explicitPrefix?: string | null) {
   const trimmed = value.trim();
-  if (!trimmed || CSV_PREFIXED_POSITION.test(trimmed)) return trimmed;
+  if (!trimmed || EXPORT_PREFIXED_POSITION.test(trimmed)) return trimmed;
   if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
   return startsWithFrenchElision(trimmed) ? `d'${trimmed}` : `de ${trimmed}`;
 }
 
 function addCsvLocationPrefix(value: string, explicitPrefix?: string | null, kind: "assignment" | "address" = "address") {
   const trimmed = value.trim();
-  if (!trimmed || CSV_PREFIXED_LOCATION.test(trimmed)) return trimmed;
+  if (!trimmed || EXPORT_PREFIXED_LOCATION.test(trimmed)) return trimmed;
   if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
   if (kind === "assignment") {
     const normalized = normalizeCsvGrammarValue(trimmed);
@@ -467,14 +468,7 @@ export function ContractsListPage() {
     setUndoAction(null);
   }
 
-  function escapeCsv(value: string) {
-    if (value.includes(";") || value.includes("\"") || value.includes("\n")) {
-      return `"${value.replace(/\"/g, "\"\"")}"`;
-    }
-    return value;
-  }
-
-  async function handleExportCsv() {
+  async function handleExportExcel() {
     if (selected.length === 0) return;
     try {
       const provider = getDataProvider();
@@ -493,10 +487,9 @@ export function ContractsListPage() {
       const addressPrefixes = new Map(
         addresses.map((address) => [normalizeCsvGrammarValue(address.label), address.prefix ?? null])
       );
-      const header =
-        "sexe; Nom; Prenom; Nif; Ninu; Poste; Affectation; Salaire en chiffre; Salaire en Lettre; Adresse";
-      const rows = contracts.map((contract) =>
-        [
+      const rows: ExcelCellValue[][] = [
+        ["sexe", "Nom", "Prenom", "Nif", "Ninu", "Poste", "Affectation", "Salaire en chiffre", "Salaire en Lettre", "Durée", "Adresse"],
+        ...contracts.map((contract) => [
           contract.gender,
           contract.lastName,
           contract.firstName,
@@ -515,8 +508,9 @@ export function ContractsListPage() {
                 "assignment"
               )
             : contract.assignment,
-          contract.salaryNumber.toLocaleString("en-US"),
+          String(contract.salaryNumber.toLocaleString("en-US")),
           contract.salaryText,
+          contract.durationMonths,
           exportWithPrepositions
             ? addCsvLocationPrefix(
                 contract.address,
@@ -524,23 +518,20 @@ export function ContractsListPage() {
                 "address"
               )
             : contract.address
-        ]
-          .map((value) => escapeCsv(String(value)))
-          .join("; ")
-      );
-      const csv = [header, ...rows].join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        ])
+      ];
+      const blob = createExcelWorkbookBlob("Contrats", rows);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `contrats_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `contrats_${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      setActionError("Impossible d'exporter les contrats en CSV.");
+      setActionError("Impossible d'exporter les contrats en Excel.");
     }
   }
 
@@ -1779,13 +1770,13 @@ export function ContractsListPage() {
                   ) : menuView === "export" ? (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
-                        <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700 }}>Export CSV</div>
+                        <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700 }}>Export Excel</div>
                       </div>
 
                       <div style={{ padding: "12px", display: "grid", gap: "12px" }}>
                         <label
                           className="switch"
-                          title="Ajouter les articles et prépositions dans le CSV selon les règles configurées"
+                          title="Ajouter les articles et prépositions dans le fichier Excel selon les règles configurées"
                           style={{ justifyContent: "space-between", gap: "10px" }}
                         >
                           <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
@@ -1807,7 +1798,7 @@ export function ContractsListPage() {
                           style={{ width: "100%", justifyContent: "center" }}
                           onClick={() => {
                             setContextMenu(null);
-                            void handleExportCsv();
+                            void handleExportExcel();
                           }}
                         >
                           Exporter
@@ -2006,7 +1997,7 @@ export function ContractsListPage() {
                   className="icon-btn"
                   type="button"
                   onClick={(event) => handleContextFromButton(event, "export-trigger")}
-                  title="Exporter CSV"
+                  title="Exporter Excel"
                 >
                   <span className="material-symbols-rounded">download_for_offline</span>
                 </button>
