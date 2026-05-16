@@ -154,15 +154,20 @@ export function AutocompleteField({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      const isInputFocused = document.activeElement === inputRef.current;
+      const hasShortcutModifier = e.altKey || e.ctrlKey || e.metaKey;
+      const canUseNumericShortcuts =
+        isInputFocused && !hasShortcutModifier && !Boolean(e.nativeEvent.isComposing);
+
       // 0 shortcut picks the featured item
-      if (open && featuredItem && e.key === "0") {
+      if (canUseNumericShortcuts && open && featuredItem && e.key === "0") {
         e.preventDefault();
         selectItem(featuredItem);
         return;
       }
 
       // Number shortcuts: 1-9 pick item
-      if (open && visibleItems.length > 0) {
+      if (canUseNumericShortcuts && open && visibleItems.length > 0) {
         const digit = parseInt(e.key, 10);
         if (!isNaN(digit) && digit >= 1 && digit <= maxShortcuts) {
           const offset = featuredItem ? 0 : -1;
