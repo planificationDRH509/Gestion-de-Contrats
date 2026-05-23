@@ -29,6 +29,7 @@ import {
 } from "./contractUnsavedDrafts";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
+import { TagBadge } from "./TagBadge";
 import { useDossiersList } from "../dossiers/dossiersApi";
 
 type SpreadsheetFieldKey =
@@ -1930,6 +1931,19 @@ export function ContractsSpreadsheetView({
                   </div>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+                {contract.tags && contract.tags.length > 0 && (
+                  <div style={{ 
+                    display: "flex", gap: "4px", flexWrap: "wrap",
+                    padding: "4px 8px 4px 104px", 
+                    borderBottom: "1px solid var(--border)", 
+                    background: "var(--bg)",
+                    borderRight: "1px solid var(--border)"
+                  }}>
+                    {contract.tags.map(tag => (
+                      <TagBadge key={tag.id} tag={tag} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

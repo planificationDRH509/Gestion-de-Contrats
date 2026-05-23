@@ -43,6 +43,8 @@ type ContractListPayload = {
   dateFilterDate?: string;
   dateFilterStart?: string;
   dateFilterEnd?: string;
+  assignments?: string[];
+  positions?: string[];
 };
 
 type ContractRow = {
@@ -1381,6 +1383,14 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     if (payload.dossierId !== undefined) {
       const targetDossier = payload.dossierId ?? null;
       items = items.filter((item) => (item.dossierId ?? null) === targetDossier);
+    }
+
+    if (payload.assignments && payload.assignments.length > 0) {
+      items = items.filter((item) => payload.assignments!.includes(item.assignment));
+    }
+
+    if (payload.positions && payload.positions.length > 0) {
+      items = items.filter((item) => payload.positions!.includes(item.position));
     }
 
     if (payload.dateFilterMode && payload.dateFilterMode !== "all") {

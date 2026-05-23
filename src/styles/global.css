@@ -767,6 +767,7 @@ img {
 
 .content {
   padding: var(--spacing-5);
+  padding-bottom: 120px;
 }
 
 .section-header {

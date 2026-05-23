@@ -30,6 +30,8 @@ import {
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
 import { ContractsSpreadsheetView, type SpreadsheetZoomMode } from "./ContractsSpreadsheetView";
+import { TagSelector } from "./TagSelector";
+import { Tag, useAssignTagToContract } from "./tagsApi";
 
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
 const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
@@ -57,6 +59,8 @@ export function ContractNewPage() {
   const createDossier = useCreateDossier();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const assignTagToContract = useAssignTagToContract();
   const genderFocusRef = useRef<HTMLButtonElement | null>(null);
   const addressContainerRef = useRef<HTMLDivElement | null>(null);
   const positionContainerRef = useRef<HTMLDivElement | null>(null);
@@ -496,6 +500,13 @@ export function ContractNewPage() {
     }
 
     const contract = await createContract.mutateAsync(contractPayload);
+    
+    if (selectedTags.length > 0) {
+      await Promise.all(
+        selectedTags.map(tag => assignTagToContract.mutateAsync({ contractId: contract.id, tagId: tag.id }))
+      );
+    }
+
     clearUnsavedDraft(unsavedDraftKey);
 
     if (mode === "print") {
@@ -505,6 +516,7 @@ export function ContractNewPage() {
 
     if (mode === "save") {
       setSuccessMessage("Contrat enregistré. Prêt pour une nouvelle saisie.");
+      setSelectedTags([]);
       reset(defaultValues);
       requestAnimationFrame(() => setFocus("nif"));
       return;
@@ -1014,6 +1026,16 @@ export function ContractNewPage() {
               <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.durationMonths.message}</span>
             ) : null}
           </label>
+          
+          <div className="field span-2" style={{ marginTop: "8px" }}>
+            <span>Tags</span>
+            <TagSelector 
+              selectedTags={selectedTags}
+              onAssignTag={(tag) => setSelectedTags(prev => [...prev, tag])}
+              onRemoveTag={(tagId) => setSelectedTags(prev => prev.filter(t => t.id !== tagId))}
+              disabled={assignTagToContract.isPending || isSubmitting}
+            />
+          </div>
         </div>
 
         {serverError ? <div className="form-error">{serverError}</div> : null}

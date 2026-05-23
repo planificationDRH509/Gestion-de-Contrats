@@ -86,7 +86,10 @@ function mapContract(row: any): Contract {
     updatedAt: row.updated_at || row.created_at,
     deletedAt: row.deleted_at || null,
     createdBy: row.created_by,
-    commentaire: row.commentaire || null
+    commentaire: row.commentaire || null,
+    tags: Array.isArray(row.contract_tags) 
+      ? row.contract_tags.map((ct: any) => ct.tags).filter(Boolean) 
+      : undefined
   };
 }
 
@@ -406,11 +409,21 @@ class SupabaseContractRepository implements ContractRepository {
     const to = from + pageSize - 1;
     const hasDateFilter = Boolean(params.dateFilterMode && params.dateFilterMode !== "all");
 
-    let query = client
-      .from("contrat")
-      .select("*, identification!inner(*)", { count: "exact" })
-      .eq("workspace_id", params.workspaceId)
-      .is("deleted_at", null);
+    let query;
+    if (params.tagId) {
+      query = client
+        .from("contrat")
+        .select("*, identification!inner(*), contract_tags!inner(tag_id, tags(*))", { count: "exact" })
+        .eq("workspace_id", params.workspaceId)
+        .is("deleted_at", null)
+        .eq("contract_tags.tag_id", params.tagId);
+    } else {
+      query = client
+        .from("contrat")
+        .select("*, identification!inner(*), contract_tags(tags(*))", { count: "exact" })
+        .eq("workspace_id", params.workspaceId)
+        .is("deleted_at", null);
+    }
 
     if (params.onlyMine && params.userId) {
       query = query.eq("created_by", params.userId);
@@ -423,6 +436,14 @@ class SupabaseContractRepository implements ContractRepository {
 
     if (params.status) {
       query = query.eq("status", params.status);
+    }
+
+    if (params.assignments && params.assignments.length > 0) {
+      query = query.in("lieu_affectation", params.assignments);
+    }
+
+    if (params.positions && params.positions.length > 0) {
+      query = query.in("titre", params.positions);
     }
 
     if (params.dossierId !== undefined) {
@@ -502,7 +523,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("contrat")
-      .select("*, identification(*)")
+      .select("*, identification(*), contract_tags(tags(*))")
       .eq("id_contrat", id)
       .is("deleted_at", null)
       .single();
@@ -514,7 +535,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("contrat")
-      .select("*, identification(*)")
+      .select("*, identification(*), contract_tags(tags(*))")
       .eq("workspace_id", workspaceId)
       .in("id_contrat", ids)
       .is("deleted_at", null);
@@ -545,7 +566,7 @@ class SupabaseContractRepository implements ContractRepository {
     const { data, error } = await (client
       .from("contrat")
       .insert(payload as any) as any)
-      .select("*, identification(*)")
+      .select("*, identification(*), contract_tags(tags(*))")
       .single();
 
     if (error || !data) {
@@ -573,7 +594,7 @@ class SupabaseContractRepository implements ContractRepository {
       .from("contrat")
       .update(payload as any) as any)
       .eq("id_contrat", input.id)
-      .select("*, identification(*)")
+      .select("*, identification(*), contract_tags(tags(*))")
       .single();
 
     if (error || !data) {

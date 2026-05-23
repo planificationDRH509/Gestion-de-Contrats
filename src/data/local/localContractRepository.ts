@@ -75,6 +75,14 @@ export class LocalContractRepository implements ContractRepository {
       items = items.filter((contract) => (contract.dossierId ?? null) === params.dossierId);
     }
 
+    if (params.assignments && params.assignments.length > 0) {
+      items = items.filter((contract) => params.assignments!.includes(contract.assignment));
+    }
+
+    if (params.positions && params.positions.length > 0) {
+      items = items.filter((contract) => params.positions!.includes(contract.position));
+    }
+
     if (params.dateFilterMode && params.dateFilterMode !== "all") {
       items = items.filter((contract) =>
         matchesContractDateFilter(contract, params.dateFilterMode, {

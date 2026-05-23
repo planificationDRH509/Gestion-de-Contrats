@@ -75,6 +75,7 @@ export type Contract = {
   deletedAt?: string | null;
   createdBy?: string | null;
   commentaire?: string | null;
+  tags?: { id: string; name: string; color: string }[];
 };
 
 export type ContractPrintJob = {
@@ -112,6 +113,9 @@ export type ContractListParams = {
   dateFilterDate?: string;
   dateFilterStart?: string;
   dateFilterEnd?: string;
+  tagId?: string;
+  assignments?: string[];
+  positions?: string[];
 };
 
 export type ContractDateFilterMode =

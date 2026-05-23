@@ -26,6 +26,8 @@ import {
   saveLastChoice,
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
+import { TagSelector } from "./TagSelector";
+import { useAssignTagToContract, useRemoveTagFromContract, Tag } from "./tagsApi";
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -56,6 +58,9 @@ export function ContractEditPage() {
   const salaryInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceId = user?.workspaceId ?? "";
   const { data: dossiers = [] } = useDossiersList(workspaceId);
+
+  const assignTag = useAssignTagToContract();
+  const removeTag = useRemoveTagFromContract();
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const [msppHtml, setMsppHtml] = useState("");
@@ -369,6 +374,24 @@ export function ContractEditPage() {
     }
   }
 
+  const handleAssignTag = async (tag: Tag) => {
+    if (!contractId) return;
+    try {
+      await assignTag.mutateAsync({ contractId, tagId: tag.id });
+    } catch (e) {
+      console.error("Error assigning tag", e);
+    }
+  };
+
+  const handleRemoveTag = async (tagId: string) => {
+    if (!contractId) return;
+    try {
+      await removeTag.mutateAsync({ contractId, tagId });
+    } catch (e) {
+      console.error("Error removing tag", e);
+    }
+  };
+
   if (isLoading) {
     return <div className="card">Chargement…</div>;
   }
@@ -623,6 +646,16 @@ export function ContractEditPage() {
               <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.durationMonths.message}</span>
             ) : null}
           </label>
+
+          <div className="field span-2" style={{ marginTop: "8px" }}>
+            <span>Tags</span>
+            <TagSelector 
+              selectedTags={data?.tags || []}
+              onAssignTag={handleAssignTag}
+              onRemoveTag={handleRemoveTag}
+              disabled={assignTag.isPending || removeTag.isPending}
+            />
+          </div>
         </div>
 
         {serverError ? <div className="form-error">{serverError}</div> : null}

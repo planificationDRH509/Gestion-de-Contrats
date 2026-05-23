@@ -14,10 +14,13 @@ import {
 import { useAppUsers } from "../auth/usersApi";
 import { Contract, ContractDateFilterMode, ContractStatus } from "../../data/types";
 import { Pagination } from "../../app/components/Pagination";
+import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { formatCurrency } from "../../lib/format";
 import { getDataProvider } from "../../data/dataProvider";
 import { useDossierContractMetrics, useDossiersList } from "../dossiers/dossiersApi";
 import { DossiersInlinePanel } from "../dossiers/DossiersInlinePanel";
+import { useTags } from "./tagsApi";
+import { usePositions, useInstitutions } from "../settings/suggestionsApi";
 import {
   getCurrentFiscalYearStart,
   getTodayDateInputValue
@@ -31,6 +34,7 @@ import {
 } from "../../lib/printHistory";
 import { createId } from "../../lib/uuid";
 import { ContractCommentModal } from "./ContractCommentModal";
+import { TagBadge } from "./TagBadge";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -163,6 +167,10 @@ export function ContractsListPage() {
   const [dateFilterDate, setDateFilterDate] = useState(() => getTodayDateInputValue());
   const [dateFilterStart, setDateFilterStart] = useState(() => getTodayDateInputValue());
   const [dateFilterEnd, setDateFilterEnd] = useState(() => getTodayDateInputValue());
+  const [tagFilterId, setTagFilterId] = useState<string | null>(null);
+  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
+  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc">(
     "createdAt_desc"
@@ -238,7 +246,10 @@ export function ContractsListPage() {
     dateFilterMode: dateFilterMode !== "all" ? dateFilterMode : undefined,
     dateFilterDate: dateFilterMode === "day" ? dateFilterDate : undefined,
     dateFilterStart: dateFilterMode === "range" ? dateFilterStart : undefined,
-    dateFilterEnd: dateFilterMode === "range" ? dateFilterEnd : undefined
+    dateFilterEnd: dateFilterMode === "range" ? dateFilterEnd : undefined,
+    tagId: tagFilterId ?? undefined,
+    assignments: selectedAssignments.length > 0 ? selectedAssignments : undefined,
+    positions: selectedPositions.length > 0 ? selectedPositions : undefined
   };
 
   const { data, isLoading } = useContractsList(queryParams);
@@ -263,7 +274,14 @@ export function ContractsListPage() {
   const updateContractComment = useUpdateContractComment();
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
+  const { data: tags = [] } = useTags();
   const { data: appUsers = [] } = useAppUsers();
+
+  const { data: positionsData = [] } = usePositions(workspaceId);
+  const { data: institutionsData = [] } = useInstitutions(workspaceId);
+
+  const positionOptions = useMemo(() => positionsData.map(p => p.label), [positionsData]);
+  const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
 
   const userMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -316,7 +334,9 @@ export function ContractsListPage() {
     statusFilter !== "all" ||
     Boolean(dossierFilterId) ||
     dateFilterMode !== "all" ||
-    query.trim().length > 0;
+    query.trim().length > 0 ||
+    selectedAssignments.length > 0 ||
+    selectedPositions.length > 0;
 
   function clearFilters() {
     const today = getTodayDateInputValue();
@@ -327,6 +347,8 @@ export function ContractsListPage() {
     setDateFilterStart(today);
     setDateFilterEnd(today);
     setQuery("");
+    setSelectedAssignments([]);
+    setSelectedPositions([]);
     setPage(1);
     setContextMenu(null);
   }
@@ -1121,6 +1143,45 @@ export function ContractsListPage() {
                 </button>
               ) : null}
 
+              {tagFilterId ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setTagFilterId(null); setPage(1); }}
+                  title="Retirer le filtre tag"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>label</span>
+                  Tag: {tags.find(t => t.id === tagFilterId)?.name ?? "Sélection"}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
+              {selectedAssignments.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedAssignments([]); setPage(1); }}
+                  title="Retirer le filtre affectation"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>corporate_fare</span>
+                  Affectation: {selectedAssignments.length === 1 ? selectedAssignments[0] : `${selectedAssignments.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
+              {selectedPositions.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedPositions([]); setPage(1); }}
+                  title="Retirer le filtre poste"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>work</span>
+                  Poste: {selectedPositions.length === 1 ? selectedPositions[0] : `${selectedPositions.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
               <button 
                 className={`icon-btn ${statusFilter !== "all" ? "primary" : ""}`}
                 title="Filtrer par état"
@@ -1137,12 +1198,28 @@ export function ContractsListPage() {
                 <span className="material-symbols-rounded">event</span>
               </button>
 
+              <button
+                className={`icon-btn ${tagFilterId ? "primary" : ""}`}
+                title="Filtrer par tag"
+                onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}
+              >
+                <span className="material-symbols-rounded">label</span>
+              </button>
+
               <button 
                 className="icon-btn"
                 title="Trier"
                 onClick={(e) => handleContextFromButton(e, "sort-trigger")}
               >
                 <span className="material-symbols-rounded">sort</span>
+              </button>
+
+              <button
+                className={`icon-btn ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 ? "primary" : ""}`}
+                title="Filtres avancés"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                <span className="material-symbols-rounded">tune</span>
               </button>
 
               <button
@@ -1178,6 +1255,35 @@ export function ContractsListPage() {
         />
       ) : (
         <div className="card" style={{ padding: "0", border: "none", background: "transparent", boxShadow: "none" }}>
+          {showAdvancedFilters && (
+            <div className="card" style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "24px",
+              padding: "20px",
+              marginBottom: "16px",
+              background: "var(--surface-card)",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              boxShadow: "var(--shadow-premium)",
+              animation: "slideDownAndFade 0.25s ease-out"
+            }}>
+              <MultiSelectDropdown
+                label="Institution (Affectation)"
+                options={institutionOptions}
+                selectedValues={selectedAssignments}
+                onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
+                placeholder="Toutes les institutions"
+              />
+              <MultiSelectDropdown
+                label="Fonction (Poste)"
+                options={positionOptions}
+                selectedValues={selectedPositions}
+                onChange={(values) => { setSelectedPositions(values); setPage(1); }}
+                placeholder="Toutes les fonctions"
+              />
+            </div>
+          )}
 
           {/* Bulk actions bar removed from here and moved to bottom as floating overlay */}
 
@@ -1317,7 +1423,14 @@ export function ContractsListPage() {
                             <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>monitoring</span>
                             {getContractStatusLabel(contract.status)}
                           </button>
-
+                          
+                          {contract.tags && contract.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginLeft: "4px" }}>
+                              {contract.tags.map(tag => (
+                                <TagBadge key={tag.id} tag={tag} />
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="contracts-meta">
@@ -1599,6 +1712,41 @@ export function ContractsListPage() {
                         <div className="helper-text" style={{ padding: "4px 10px 10px" }}>
                           Année fiscale actuelle: depuis le {fiscalYearStartLabel}
                         </div>
+                      </div>
+                    </>
+                  ) : contextMenu.id === "tag-filter-trigger" ? (
+                    <>
+                      <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
+                        <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>Filtrer par tag</div>
+                      </div>
+                      <div className="context-menu-scroll" style={{ padding: "4px" }}>
+                        <button
+                          className="context-menu-item"
+                          onClick={() => { setTagFilterId(null); setContextMenu(null); setPage(1); }}
+                          style={{ color: !tagFilterId ? "var(--accent)" : "inherit", fontWeight: !tagFilterId ? 600 : 400 }}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>
+                            {!tagFilterId ? "radio_button_checked" : "radio_button_unchecked"}
+                          </span>
+                          Tous les tags
+                        </button>
+                        {tags.map((tag) => (
+                          <button
+                            key={tag.id}
+                            className="context-menu-item"
+                            onClick={() => {
+                              setTagFilterId(tag.id);
+                              setContextMenu(null);
+                              setPage(1);
+                            }}
+                            style={{ color: tagFilterId === tag.id ? "var(--accent)" : "inherit", fontWeight: tagFilterId === tag.id ? 600 : 400 }}
+                          >
+                            <span className="material-symbols-rounded" style={{ fontSize: "18px", color: tag.color }}>
+                              {tagFilterId === tag.id ? "radio_button_checked" : "label"}
+                            </span>
+                            {tag.name}
+                          </button>
+                        ))}
                       </div>
                     </>
                   ) : contextMenu.id === "sort-trigger" ? (

@@ -326,6 +326,60 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_tags: {
+        Row: {
+          contract_id: string
+          created_at: string
+          tag_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          tag_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_tags_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contrat"
+            referencedColumns: ["id_contrat"]
+          },
+          {
+            foreignKeyName: "contract_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
