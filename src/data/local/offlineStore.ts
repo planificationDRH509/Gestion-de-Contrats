@@ -4,6 +4,7 @@ import {
   ContractListParams,
   CreateContractInput,
   OutboxItem,
+  Tag,
   UpsertApplicantInput
 } from "../types";
 import { createId } from "../../lib/uuid";
@@ -41,6 +42,7 @@ export function cacheContracts(contracts: Contract[]) {
   if (contracts.length === 0) return;
   const db = loadDb();
   const byId = new Map(db.contracts.map((contract, index) => [contract.id, index]));
+  const tagById = new Map(db.tags.map((tag, index) => [tag.id, index]));
   for (const contract of contracts) {
     const index = byId.get(contract.id);
     if (index === undefined) {
@@ -48,12 +50,94 @@ export function cacheContracts(contracts: Contract[]) {
     } else {
       db.contracts[index] = contract;
     }
+
+    const remoteTagIds = new Set((contract.tags ?? []).map((tag) => tag.id));
+    db.contractTags = db.contractTags.filter(
+      (link) => link.contractId !== contract.id || remoteTagIds.has(link.tagId)
+    );
+
+    for (const tag of contract.tags ?? []) {
+      const tagIndex = tagById.get(tag.id);
+      if (tagIndex === undefined) {
+        db.tags.push(tag);
+        tagById.set(tag.id, db.tags.length - 1);
+      } else {
+        db.tags[tagIndex] = tag;
+      }
+      const hasLink = db.contractTags.some(
+        (link) => link.contractId === contract.id && link.tagId === tag.id
+      );
+      if (!hasLink) {
+        db.contractTags.push({
+          contractId: contract.id,
+          tagId: tag.id,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
   }
   saveDb(db);
 }
 
 export function cacheContract(contract: Contract) {
   cacheContracts([contract]);
+}
+
+export function cacheTags(tags: Tag[]) {
+  if (tags.length === 0) return;
+  const db = loadDb();
+  const byId = new Map(db.tags.map((tag, index) => [tag.id, index]));
+  for (const tag of tags) {
+    const index = byId.get(tag.id);
+    if (index === undefined) {
+      db.tags.push(tag);
+    } else {
+      db.tags[index] = tag;
+    }
+  }
+  saveDb(db);
+}
+
+export function cacheTag(tag: Tag) {
+  cacheTags([tag]);
+}
+
+export function replaceLocalTagId(workspaceId: string, fromId: string, toTag: Tag) {
+  if (!fromId || fromId === toTag.id) return;
+
+  const db = loadDb();
+  db.tags = db.tags.filter((tag) => !(tag.workspaceId === workspaceId && tag.id === fromId));
+  const existingIndex = db.tags.findIndex((tag) => tag.id === toTag.id);
+  if (existingIndex >= 0) {
+    db.tags[existingIndex] = toTag;
+  } else {
+    db.tags.push(toTag);
+  }
+
+  db.contractTags = db.contractTags.map((link) =>
+    link.tagId === fromId ? { ...link, tagId: toTag.id } : link
+  );
+  db.contracts = db.contracts.map((contract) => ({
+    ...contract,
+    tags: (contract.tags ?? []).map((tag) => (tag.id === fromId ? toTag : tag))
+  }));
+  db.outbox = db.outbox.map((item) => {
+    if (item.workspaceId !== workspaceId || (item.type !== "tag.assign" && item.type !== "tag.remove")) {
+      return item;
+    }
+    const payload = item.payload as { tagId?: string };
+    if (payload.tagId !== fromId) {
+      return item;
+    }
+    return {
+      ...item,
+      payload: {
+        ...item.payload,
+        tagId: toTag.id
+      }
+    };
+  });
+  saveDb(db);
 }
 
 export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {

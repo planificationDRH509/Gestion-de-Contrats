@@ -26,6 +26,7 @@ export type Dossier = {
   id: string;
   workspaceId: string;
   name: string;
+  status: DossierStatus;
   isEphemeral: boolean;
   priority: DossierPriority;
   contractTargetCount: number;
@@ -40,6 +41,8 @@ export type Dossier = {
   createdBy?: string | null;
 };
 
+export type DossierStatus = "active" | "classified";
+
 export type DossierPriority = "normal" | "urgence";
 
 export type ContractStatus = 
@@ -52,6 +55,17 @@ export type ContractStatus =
   | "signe" 
   | "transfere" 
   | "classe";
+
+export type Tag = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  createdBy?: string | null;
+};
 
 export type Contract = {
   id: string;
@@ -75,7 +89,7 @@ export type Contract = {
   deletedAt?: string | null;
   createdBy?: string | null;
   commentaire?: string | null;
-  tags?: { id: string; name: string; color: string }[];
+  tags?: Tag[];
 };
 
 export type ContractPrintJob = {
@@ -93,7 +107,10 @@ export type OutboxItem = {
     | "contract.create"
     | "contract.update"
     | "contract.delete"
-    | "applicant.upsert";
+    | "applicant.upsert"
+    | "tag.create"
+    | "tag.assign"
+    | "tag.remove";
   payload: Record<string, unknown>;
   createdAt: string;
   syncedAt?: string | null;
@@ -148,6 +165,7 @@ export type UpsertApplicantInput = Omit<
 export type CreateDossierInput = {
   workspaceId: string;
   name: string;
+  status?: DossierStatus;
   isEphemeral?: boolean;
   priority?: DossierPriority;
   contractTargetCount?: number;
@@ -163,6 +181,7 @@ export type UpdateDossierInput = {
   id: string;
   workspaceId: string;
   name?: string;
+  status?: DossierStatus;
   isEphemeral?: boolean;
   priority?: DossierPriority;
   contractTargetCount?: number;

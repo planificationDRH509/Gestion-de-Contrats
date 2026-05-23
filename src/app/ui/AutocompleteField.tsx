@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { getPinnedChoices, togglePinnedChoice } from "../../data/local/suggestionsDb";
+import {
+  getPinnedChoices,
+  getRecentChoices,
+  recordRecentChoice,
+  togglePinnedChoice
+} from "../../data/local/suggestionsDb";
 
 export type AutocompleteItem = {
   id: string;
   label: string;
   sublabel?: string;
+};
+
+type AutocompleteDisplayItem = AutocompleteItem & {
+  isCustom?: boolean;
+  isRecent?: boolean;
+  matchStart?: number;
+  matchLength?: number;
+};
+
+type ScoredAutocompleteItem = {
+  item: AutocompleteDisplayItem;
+  score: number;
 };
 
 interface AutocompleteFieldProps {
@@ -73,6 +90,7 @@ export function AutocompleteField({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -82,43 +100,87 @@ export function AutocompleteField({
   
   useEffect(() => {
     if (!pinCategory) return;
-    const update = () => setPinnedIds(getPinnedChoices(pinCategory));
+    const update = () => {
+      setPinnedIds(getPinnedChoices(pinCategory));
+      setRecentIds(getRecentChoices(pinCategory));
+    };
     update();
     window.addEventListener("contribution_pinned_updated", update);
-    return () => window.removeEventListener("contribution_pinned_updated", update);
+    window.addEventListener("contribution_recent_updated", update);
+    return () => {
+      window.removeEventListener("contribution_pinned_updated", update);
+      window.removeEventListener("contribution_recent_updated", update);
+    };
   }, [pinCategory]);
 
-  const visibleItems = useMemo(() => {
+  const visibleItems = useMemo<AutocompleteDisplayItem[]>(() => {
     if (!open) return [];
-    
-    // Filter base items
-    const isExactMatch = q && items.some(it => normalize(it.label) === q);
-    let filtered = (q && (!showAllOnFocus || !isExactMatch))
-      ? items.filter((item) => normalize(item.label).includes(q))
-      : (q || showAllOnFocus ? items : []);
-      
-    // Handle featured item
-    if (featuredItem) {
-      filtered = filtered.filter(it => it.id !== featuredItem.id);
-    }
-    
-    // Sort pinned items to top
-    if (pinnedIds.length > 0) {
-      filtered.sort((a, b) => {
-        const aPinned = pinnedIds.includes(a.id);
-        const bPinned = pinnedIds.includes(b.id);
-        if (aPinned && !bPinned) return -1;
-        if (!aPinned && bPinned) return 1;
-        return 0;
-      });
-    }
+
+    const exactMatch = q ? items.find(it => normalize(it.label) === q) : null;
+    const scored = items
+      .map((item): ScoredAutocompleteItem | null => {
+        const normalizedLabel = normalize(item.label);
+        const matchStart = q ? normalizedLabel.indexOf(q) : -1;
+        const startsWithQuery = q ? normalizedLabel.startsWith(q) : false;
+        const wordStartsWithQuery = q ? normalizedLabel.split(/[\s\-']/).some((part) => part.startsWith(q)) : false;
+        const isPinned = pinnedIds.includes(item.id);
+        const recentIndex = recentIds.indexOf(item.id);
+        const isRecent = recentIndex >= 0;
+
+        if (q && matchStart < 0) return null;
+
+        let score = 0;
+        if (isPinned) score += 1000;
+        if (startsWithQuery) score += 500;
+        else if (wordStartsWithQuery) score += 350;
+        else if (q) score += 150 - Math.min(matchStart, 100);
+        if (isRecent) score += 80 - recentIndex;
+        score -= item.label.length / 100;
+
+        return {
+          item: {
+            ...item,
+            isRecent,
+            matchStart,
+            matchLength: q.length,
+          },
+          score,
+        };
+      })
+      .filter((entry): entry is ScoredAutocompleteItem => entry !== null);
+
+    let filtered = (q || showAllOnFocus)
+      ? scored.sort((a, b) => b.score - a.score).map((entry) => entry.item)
+      : [];
+
+    const seenLabels = new Set<string>();
+    filtered = filtered.filter((item) => {
+      const labelKey = normalize(item.label);
+      if (seenLabels.has(labelKey)) return false;
+      seenLabels.add(labelKey);
+      return true;
+    });
 
     if (featuredItem) {
-      return [featuredItem, ...filtered];
+      const featuredLabel = normalize(featuredItem.label);
+      filtered = filtered.filter(it => it.id !== featuredItem.id && normalize(it.label) !== featuredLabel);
     }
-    
-    return filtered;
-  }, [open, items, q, showAllOnFocus, featuredItem, pinnedIds]);
+
+    const customItem: AutocompleteDisplayItem | null = q && !exactMatch
+      ? {
+          id: `__custom_${q}`,
+          label: value.trim(),
+          sublabel: "Nouvelle valeur",
+          isCustom: true,
+        }
+      : null;
+    const baseItems = featuredItem ? [featuredItem, ...filtered] : filtered;
+    if (q && !exactMatch) {
+      return customItem ? [...baseItems, customItem] : baseItems;
+    }
+
+    return baseItems;
+  }, [open, items, q, showAllOnFocus, featuredItem, pinnedIds, recentIds, value]);
 
   // Close on outside click
   useEffect(() => {
@@ -141,9 +203,14 @@ export function AutocompleteField({
     }
   }, [activeIndex]);
 
-  function selectItem(item: AutocompleteItem) {
+  function selectItem(item: AutocompleteDisplayItem) {
     onChange(item.label);
-    onSelect?.(item);
+    if (pinCategory && !item.isCustom) {
+      recordRecentChoice(pinCategory, item.id);
+    }
+    if (!item.isCustom) {
+      onSelect?.(item);
+    }
     setOpen(false);
     setActiveIndex(-1);
     
@@ -213,6 +280,12 @@ export function AutocompleteField({
           e.preventDefault();
           if (activeIndex >= 0 && activeIndex < visibleItems.length) {
             selectItem(visibleItems[activeIndex]);
+          } else if (q) {
+            setOpen(false);
+            setActiveIndex(-1);
+            if (onAfterSelect) {
+              setTimeout(onAfterSelect, 0);
+            }
           }
           break;
         case "Escape":
@@ -225,6 +298,24 @@ export function AutocompleteField({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [open, activeIndex, visibleItems, maxShortcuts, featuredItem, enableArrowNavigationInMenu]
   );
+
+  function renderHighlightedLabel(item: AutocompleteDisplayItem) {
+    if (!q || item.isCustom || item.matchStart === undefined || item.matchStart < 0 || !item.matchLength) {
+      return item.label;
+    }
+
+    const before = item.label.slice(0, item.matchStart);
+    const match = item.label.slice(item.matchStart, item.matchStart + item.matchLength);
+    const after = item.label.slice(item.matchStart + item.matchLength);
+
+    return (
+      <>
+        {before}
+        <mark>{match}</mark>
+        {after}
+      </>
+    );
+  }
 
   return (
     <div className="autocomplete-container" ref={containerRef}>
@@ -273,10 +364,11 @@ export function AutocompleteField({
             }
             
             return (
-              <button
+              <div
                 key={`${item.id}-${idx}`}
-                type="button"
-                className={`autocomplete-item${idx === activeIndex ? " active" : ""}${isFeatured ? " featured" : ""}`}
+                role="option"
+                aria-selected={idx === activeIndex}
+                className={`autocomplete-item${idx === activeIndex ? " active" : ""}${isFeatured ? " featured" : ""}${item.isCustom ? " custom" : ""}`}
                 onMouseEnter={() => setActiveIndex(idx)}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -289,14 +381,17 @@ export function AutocompleteField({
 
                 <span className="autocomplete-item-label">
                   {isFeatured && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Dernier:</strong>}
-                  {item.label}
+                  {item.isCustom && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Utiliser:</strong>}
+                  {renderHighlightedLabel(item)}
                 </span>
                 
-                {item.sublabel && (
-                  <span className="autocomplete-item-sublabel">{item.sublabel}</span>
+                {(item.sublabel || (item.isRecent && !isFeatured && !item.isCustom)) && (
+                  <span className="autocomplete-item-sublabel">
+                    {item.sublabel || "Récent"}
+                  </span>
                 )}
                 
-                {pinCategory && !isFeatured && (
+                {pinCategory && !isFeatured && !item.isCustom && (
                   <button
                     type="button"
                     className={`autocomplete-pin-btn ${pinnedIds.includes(item.id) ? "active" : ""}`}
@@ -312,7 +407,7 @@ export function AutocompleteField({
                     </span>
                   </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>

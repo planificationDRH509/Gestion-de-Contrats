@@ -1,47 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSupabaseClient } from "../../data/supabase/supabaseClient";
+import { useAuth } from "../auth/auth";
+import { getDataProvider } from "../../data/dataProvider";
+import { Tag } from "../../data/types";
 
-export interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
+export type { Tag };
 
-export function useTags() {
+const provider = getDataProvider();
+
+export function useTags(workspaceId: string) {
   return useQuery({
-    queryKey: ["tags"],
-    queryFn: async () => {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw new Error(error.message);
-      return data as Tag[];
-    },
+    queryKey: ["tags", workspaceId],
+    queryFn: () => provider.tags.list(workspaceId),
+    enabled: Boolean(workspaceId),
   });
 }
 
 export function useCreateTag() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, color }: { name: string; color?: string }) => {
-      const supabase = getSupabaseClient();
-      // Generate a random nice color if not provided
-      const finalColor = color || `hsl(${Math.random() * 360}, 70%, 50%)`;
-      
-      const { data, error } = await supabase
-        .from("tags")
-        .insert({ name, color: finalColor })
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-      return data as Tag;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    mutationFn: ({ workspaceId, name, color }: { workspaceId: string; name: string; color?: string }) =>
+      provider.tags.create({ workspaceId, name, color, createdBy: user?.id }),
+    onSuccess: (tag) => {
+      queryClient.invalidateQueries({ queryKey: ["tags", tag.workspaceId] });
     },
   });
 }
@@ -49,17 +30,19 @@ export function useCreateTag() {
 export function useAssignTagToContract() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ contractId, tagId }: { contractId: string; tagId: string }) => {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from("contract_tags")
-        .insert({ contract_id: contractId, tag_id: tagId });
-
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: ({
+      workspaceId,
+      contractId,
+      tagId
+    }: {
+      workspaceId: string;
+      contractId: string;
+      tagId: string;
+    }) => provider.tags.assignToContract(workspaceId, contractId, tagId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.contractId] });
+      queryClient.invalidateQueries({ queryKey: ["tags", variables.workspaceId] });
     },
   });
 }
@@ -67,19 +50,19 @@ export function useAssignTagToContract() {
 export function useRemoveTagFromContract() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ contractId, tagId }: { contractId: string; tagId: string }) => {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from("contract_tags")
-        .delete()
-        .eq("contract_id", contractId)
-        .eq("tag_id", tagId);
-
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: ({
+      workspaceId,
+      contractId,
+      tagId
+    }: {
+      workspaceId: string;
+      contractId: string;
+      tagId: string;
+    }) => provider.tags.removeFromContract(workspaceId, contractId, tagId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.contractId] });
+      queryClient.invalidateQueries({ queryKey: ["tags", variables.workspaceId] });
     },
   });
 }

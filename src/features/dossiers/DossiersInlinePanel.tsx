@@ -2,7 +2,9 @@ import { CSSProperties, FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dossier } from "../../data/types";
 import {
+  getDossierGroups,
   getDossierProgressState,
+  isDossierArchived,
   normalizeNonNegativeInteger,
   normalizeOptionalDate
 } from "../../lib/dossier";
@@ -44,6 +46,7 @@ export function DossiersInlinePanel({
   const [editName, setEditName] = useState("");
   const [editIsEphemeral, setEditIsEphemeral] = useState(false);
   const [editPriority, setEditPriority] = useState<"normal" | "urgence">("normal");
+  const [editStatus, setEditStatus] = useState<"active" | "classified">("active");
   const [editContractTargetCount, setEditContractTargetCount] = useState("0");
   const [editDeadlineDate, setEditDeadlineDate] = useState("");
   const [editComment, setEditComment] = useState("");
@@ -71,6 +74,7 @@ export function DossiersInlinePanel({
     setEditName(dossier.name);
     setEditIsEphemeral(dossier.isEphemeral);
     setEditPriority(dossier.priority ?? "normal");
+    setEditStatus(dossier.status ?? "active");
     setEditContractTargetCount(String(dossier.contractTargetCount ?? 0));
     setEditDeadlineDate(dossier.deadlineDate ?? "");
     setEditComment(dossier.comment ?? "");
@@ -86,6 +90,7 @@ export function DossiersInlinePanel({
     setEditName("");
     setEditIsEphemeral(false);
     setEditPriority("normal");
+    setEditStatus("active");
     setEditContractTargetCount("0");
     setEditDeadlineDate("");
     setEditComment("");
@@ -179,6 +184,7 @@ export function DossiersInlinePanel({
         name: trimmedName,
         isEphemeral: editIsEphemeral,
         priority: editPriority,
+        status: editStatus,
         contractTargetCount: parseTargetCount(editContractTargetCount),
         deadlineDate: normalizeOptionalDate(editDeadlineDate),
         comment: editComment,
@@ -192,6 +198,31 @@ export function DossiersInlinePanel({
     } catch (error) {
       console.error(error);
       setErrorMessage("Impossible de mettre à jour le dossier.");
+      setSuccessMessage(null);
+    }
+  }
+
+  async function handleSetDossierStatus(dossier: Dossier, status: "active" | "classified") {
+    if (!workspaceId) return;
+
+    try {
+      const updated = await updateDossier.mutateAsync({
+        id: dossier.id,
+        workspaceId,
+        status
+      });
+      setSuccessMessage(
+        status === "classified"
+          ? `Dossier "${updated.name}" classé.`
+          : `Dossier "${updated.name}" remis en traitement.`
+      );
+      setErrorMessage(null);
+      if (editingDossierId === dossier.id) {
+        setEditStatus(status);
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Impossible de modifier le classement du dossier.");
       setSuccessMessage(null);
     }
   }
@@ -224,6 +255,13 @@ export function DossiersInlinePanel({
       setErrorMessage("Impossible de supprimer le dossier.");
     }
   }
+
+  const dossierGroups = getDossierGroups(dossiers);
+  const displayedDossiers = [
+    ...dossierGroups.active,
+    ...dossierGroups.archived,
+    ...dossierGroups.classified
+  ];
 
   return (
     <div className="dossiers-inline-panel dossier-modern-shell">
@@ -412,6 +450,18 @@ export function DossiersInlinePanel({
             </label>
 
             <label className="field">
+              <span>Classement</span>
+              <select
+                className="select"
+                value={editStatus}
+                onChange={(event) => setEditStatus(event.target.value as "active" | "classified")}
+              >
+                <option value="active">En traitement</option>
+                <option value="classified">Classé</option>
+              </select>
+            </label>
+
+            <label className="field">
               <span>Échéance</span>
               <input
                 type="date"
@@ -466,16 +516,18 @@ export function DossiersInlinePanel({
       <div className="dossier-modern-list">
         {isLoading ? (
           <div className="card empty-state">Chargement en cours…</div>
-        ) : dossiers.length === 0 ? (
+        ) : displayedDossiers.length === 0 ? (
           <div className="card empty-state">Aucun dossier pour le moment.</div>
         ) : (
-          dossiers.map((dossier) => {
+          displayedDossiers.map((dossier) => {
             const metrics = metricsByDossier[dossier.id] ?? {
               assignedCount: 0,
               doneCount: 0
             };
             const targetCount = Math.max(0, dossier.contractTargetCount);
             const ringStyle = buildRingStyle(metrics.doneCount, dossier.contractTargetCount);
+            const dossierIsClassified = dossier.status === "classified";
+            const dossierIsArchived = isDossierArchived(dossier);
 
             return (
               <article key={dossier.id} className="card dossier-modern-card">
@@ -517,6 +569,27 @@ export function DossiersInlinePanel({
                     <button
                       type="button"
                       className="icon-btn"
+                      onClick={() =>
+                        void handleSetDossierStatus(
+                          dossier,
+                          dossierIsClassified ? "active" : "classified"
+                        )
+                      }
+                      disabled={updateDossier.isPending}
+                      title={dossierIsClassified ? "Remettre en traitement" : "Classer le dossier"}
+                      aria-label={
+                        dossierIsClassified
+                          ? `Remettre ${dossier.name} en traitement`
+                          : `Classer ${dossier.name}`
+                      }
+                    >
+                      <span className="material-symbols-rounded">
+                        {dossierIsClassified ? "unarchive" : "archive"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
                       onClick={() => void handleDeleteDossier(dossier)}
                       disabled={deleteDossier.isPending}
                       title="Supprimer le dossier (les contrats sont conservés)"
@@ -528,6 +601,13 @@ export function DossiersInlinePanel({
                 </header>
 
                 <div className="dossier-modern-chips">
+                  <span className="badge">
+                    {dossierIsClassified
+                      ? "Classé"
+                      : dossierIsArchived
+                        ? "Archivé"
+                        : "En traitement"}
+                  </span>
                   <span className="badge">{dossier.isEphemeral ? "Éphémère" : "Permanent"}</span>
                   <span className="badge">{dossier.priority === "urgence" ? "Urgence" : "Normal"}</span>
                   <span className="badge">

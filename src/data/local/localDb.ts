@@ -4,11 +4,13 @@ import {
   ContractPrintJob,
   Dossier,
   OutboxItem,
+  Tag,
   Workspace
 } from "../types";
 import { createId } from "../../lib/uuid";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
+  normalizeDossierStatus,
   normalizeNonNegativeInteger,
   normalizeOptionalDate,
   normalizeOptionalText
@@ -19,6 +21,8 @@ export type LocalDb = {
   applicants: Applicant[];
   dossiers: Dossier[];
   contracts: Contract[];
+  tags: Tag[];
+  contractTags: Array<{ contractId: string; tagId: string; createdAt: string }>;
   printJobs: ContractPrintJob[];
   outbox: OutboxItem[];
 };
@@ -92,6 +96,8 @@ function seedDatabase(): LocalDb {
     applicants: [applicant],
     dossiers: [],
     contracts: [contract],
+    tags: [],
+    contractTags: [],
     printJobs: [],
     outbox: []
   };
@@ -102,8 +108,9 @@ function normalizeDb(value: LocalDb): LocalDb {
     ...value,
     workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
     dossiers: Array.isArray(value.dossiers)
-      ? value.dossiers.map((dossier) => ({
+        ? value.dossiers.map((dossier) => ({
           ...dossier,
+          status: normalizeDossierStatus(dossier.status),
           isEphemeral: dossier.isEphemeral ?? false,
           priority: dossier.priority ?? "normal",
           contractTargetCount: normalizeNonNegativeInteger(dossier.contractTargetCount),
@@ -117,9 +124,28 @@ function normalizeDb(value: LocalDb): LocalDb {
       ? value.contracts.map((contract) => ({
           ...contract,
           dossierId: contract.dossierId ?? null,
-          durationMonths: contract.durationMonths ?? 12
+          durationMonths: contract.durationMonths ?? 12,
+          tags: Array.isArray(contract.tags)
+            ? contract.tags.map((tag) => ({
+                ...tag,
+                workspaceId: tag.workspaceId ?? contract.workspaceId,
+                color: tag.color || "#64748b",
+                createdAt: tag.createdAt ?? contract.createdAt ?? now(),
+                updatedAt: tag.updatedAt ?? contract.updatedAt ?? now()
+              }))
+            : undefined
         }))
       : [],
+    tags: Array.isArray(value.tags)
+      ? value.tags.map((tag) => ({
+          ...tag,
+          workspaceId: tag.workspaceId ?? DEFAULT_WORKSPACE_ID,
+          color: tag.color || "#64748b",
+          updatedAt: tag.updatedAt ?? tag.createdAt ?? now(),
+          createdAt: tag.createdAt ?? now()
+        }))
+      : [],
+    contractTags: Array.isArray(value.contractTags) ? value.contractTags : [],
     printJobs: Array.isArray(value.printJobs) ? value.printJobs : [],
     outbox: Array.isArray(value.outbox) ? value.outbox : []
   };

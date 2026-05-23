@@ -2974,6 +2974,13 @@ img {
   line-height: 1.25;
 }
 
+.autocomplete-item-label mark {
+  background: rgba(16, 185, 129, 0.18);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
 .autocomplete-item.featured {
   background: rgba(16, 185, 129, 0.05);
   border-bottom: 1px solid var(--border-soft);
@@ -2997,6 +3004,12 @@ img {
 
 .autocomplete-item.active.featured {
   background: rgba(16, 185, 129, 0.1);
+}
+
+.autocomplete-item.custom {
+  border-top: 1px solid var(--border-soft);
+  margin-top: 4px;
+  color: var(--accent);
 }
 
 .autocomplete-item-sublabel {

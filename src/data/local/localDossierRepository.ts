@@ -4,6 +4,7 @@ import { createId } from "../../lib/uuid";
 import { loadDb, saveDb } from "./localDb";
 import {
   normalizeDossierName,
+  normalizeDossierStatus,
   normalizeNonNegativeInteger,
   normalizeOptionalDate,
   normalizeOptionalText
@@ -44,6 +45,7 @@ export class LocalDossierRepository implements DossierRepository {
       id: createId(),
       workspaceId: input.workspaceId,
       name,
+      status: normalizeDossierStatus(input.status),
       isEphemeral: input.isEphemeral ?? false,
       priority: input.priority ?? "normal",
       contractTargetCount: normalizeNonNegativeInteger(input.contractTargetCount),
@@ -87,6 +89,7 @@ export class LocalDossierRepository implements DossierRepository {
     const updated: Dossier = {
       ...current,
       name: nextName,
+      status: input.status !== undefined ? normalizeDossierStatus(input.status) : normalizeDossierStatus(current.status),
       isEphemeral: input.isEphemeral ?? current.isEphemeral ?? false,
       priority: input.priority ?? current.priority ?? "normal",
       contractTargetCount:

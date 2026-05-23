@@ -31,6 +31,7 @@ import { getStoredFiscalYear } from "../settings/settingsApi";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { TagBadge } from "./TagBadge";
 import { useDossiersList } from "../dossiers/dossiersApi";
+import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -1377,12 +1378,7 @@ export function ContractsSpreadsheetView({
                   value={defaultDossierId}
                   onChange={(e) => setDefaultDossierId(e.target.value)}
                 >
-                  <option value="">Aucun dossier</option>
-                  {dossiers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
+                  <DossierSelectOptions dossiers={dossiers} />
                 </select>
               )}
             </div>

@@ -48,13 +48,21 @@ function sortContracts(contracts: Contract[], sort?: ContractListParams["sort"])
   }
 }
 
+function withTags(contract: Contract, db: ReturnType<typeof loadDb>): Contract {
+  const links = db.contractTags.filter((link) => link.contractId === contract.id);
+  const tags = links
+    .map((link) => db.tags.find((tag) => tag.id === link.tagId && !tag.deletedAt))
+    .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
+  return { ...contract, tags: tags.length > 0 ? tags : contract.tags ?? [] };
+}
+
 export class LocalContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
     const db = loadDb();
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 10;
 
-    let items = db.contracts.filter(
+    let items = db.contracts.map((contract) => withTags(contract, db)).filter(
       (contract) =>
         contract.workspaceId === params.workspaceId && !contract.deletedAt
     );
@@ -73,6 +81,12 @@ export class LocalContractRepository implements ContractRepository {
 
     if (params.dossierId !== undefined) {
       items = items.filter((contract) => (contract.dossierId ?? null) === params.dossierId);
+    }
+
+    if (params.tagId) {
+      items = items.filter((contract) =>
+        (contract.tags ?? []).some((tag) => tag.id === params.tagId)
+      );
     }
 
     if (params.assignments && params.assignments.length > 0) {
@@ -103,13 +117,14 @@ export class LocalContractRepository implements ContractRepository {
 
   async getById(id: string): Promise<Contract | null> {
     const db = loadDb();
-    return db.contracts.find((contract) => contract.id === id && !contract.deletedAt) ?? null;
+    const contract = db.contracts.find((item) => item.id === id && !item.deletedAt);
+    return contract ? withTags(contract, db) : null;
   }
 
   async getByIds(ids: string[], workspaceId: string): Promise<Contract[]> {
     const db = loadDb();
     const set = new Set(ids);
-    return db.contracts.filter(
+    return db.contracts.map((contract) => withTags(contract, db)).filter(
       (contract) =>
         contract.workspaceId === workspaceId &&
         !contract.deletedAt &&

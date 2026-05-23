@@ -26,6 +26,7 @@ describe("LocalDossierRepository", () => {
     });
 
     expect(created.name).toBe("Dossier RH");
+    expect(created.status).toBe("active");
     expect(created.isEphemeral).toBe(true);
     expect(created.priority).toBe("urgence");
     expect(created.contractTargetCount).toBe(12);
@@ -40,6 +41,7 @@ describe("LocalDossierRepository", () => {
       name: "Dossier RH 2026",
       isEphemeral: false,
       priority: "normal",
+      status: "classified",
       contractTargetCount: 18,
       comment: "Validation finale",
       deadlineDate: "2026-08-15",
@@ -50,6 +52,7 @@ describe("LocalDossierRepository", () => {
     expect(updated.name).toBe("Dossier RH 2026");
     expect(updated.isEphemeral).toBe(false);
     expect(updated.priority).toBe("normal");
+    expect(updated.status).toBe("classified");
     expect(updated.contractTargetCount).toBe(18);
     expect(updated.comment).toBe("Validation finale");
     expect(updated.deadlineDate).toBe("2026-08-15");

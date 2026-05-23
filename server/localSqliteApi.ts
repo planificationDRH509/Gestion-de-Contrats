@@ -43,6 +43,7 @@ type ContractListPayload = {
   dateFilterDate?: string;
   dateFilterStart?: string;
   dateFilterEnd?: string;
+  tagId?: string;
   assignments?: string[];
   positions?: string[];
 };
@@ -68,6 +69,17 @@ type ContractRow = {
   sexe: "Homme" | "Femme";
   ninu: string | null;
   adresse: string;
+};
+
+type TagRow = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: string | null;
 };
 
 class HttpError extends Error {
@@ -426,6 +438,7 @@ function mapDossier(row: RawRecord) {
     id: asString(row.id),
     workspaceId: asString(row.workspace_id),
     name: asString(row.name),
+    status: asString(row.status) === "classified" ? "classified" : "active",
     isEphemeral: Number(row.is_ephemeral) === 1,
     priority: asString(row.priority) as "normal" | "urgence",
     contractTargetCount: asInteger(row.contract_target_count, 0),
@@ -459,8 +472,50 @@ function mapContract(row: ContractRow) {
     durationMonths: row.duree_contrat,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
+    deletedAt: row.deleted_at,
+    tags: getTagsForContract(row.id_contrat)
   };
+}
+
+function mapTag(row: TagRow) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    color: row.color,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    createdBy: row.created_by
+  };
+}
+
+function getTagsForContract(contractId: string) {
+  const db = getDb();
+  const rows = db
+    .prepare(`
+      SELECT t.*
+      FROM tags t
+      INNER JOIN contract_tags ct ON ct.tag_id = t.id
+      WHERE ct.contract_id = :contract_id
+        AND t.deleted_at IS NULL
+      ORDER BY t.name COLLATE NOCASE ASC
+    `)
+    .all({ contract_id: contractId }) as TagRow[];
+
+  return rows.map(mapTag);
+}
+
+function normalizeTagName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+function tagColor(name: string): string {
+  let hash = 0;
+  for (const char of name) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  }
+  return `hsl(${hash}, 70%, 42%)`;
 }
 
 function getDbFilePath(): string {
@@ -526,6 +581,7 @@ function getDb(): DatabaseSync {
       workspace_id TEXT NOT NULL,
       id_contrat TEXT,
       name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','classified')),
       is_ephemeral INTEGER NOT NULL DEFAULT 0,
       priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),
       contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),
@@ -577,6 +633,40 @@ function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS contrat_dossier_idx
       ON contrat (workspace_id, dossier_id);
 
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#64748b',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      created_by TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS tags_workspace_name_unique_idx
+      ON tags (workspace_id, name COLLATE NOCASE)
+      WHERE deleted_at IS NULL;
+
+    CREATE INDEX IF NOT EXISTS tags_workspace_idx
+      ON tags (workspace_id);
+
+    CREATE TABLE IF NOT EXISTS contract_tags (
+      contract_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (contract_id, tag_id),
+      FOREIGN KEY (contract_id) REFERENCES contrat(id_contrat) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS contract_tags_contract_id_idx
+      ON contract_tags (contract_id);
+
+    CREATE INDEX IF NOT EXISTS contract_tags_tag_id_idx
+      ON contract_tags (tag_id);
+
     CREATE TABLE IF NOT EXISTS contract_print_jobs (
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
@@ -604,6 +694,13 @@ function getDb(): DatabaseSync {
       const info = db.pragma("table_info(autocompletion)") as any[];
       if (!info.some(c => c.name === 'salaries')) {
         db.exec("ALTER TABLE autocompletion ADD COLUMN salaries TEXT;");
+      }
+    } catch(e) {}
+
+    try {
+      const info = db.pragma("table_info(dossiers)") as any[];
+      if (!info.some(c => c.name === "status")) {
+        db.exec("ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
       }
     } catch(e) {}
 
@@ -899,6 +996,163 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === `${API_PREFIX}/tags` && method === "GET") {
+    const workspaceId = url.searchParams.get("workspaceId")?.trim() || "";
+    if (!workspaceId) {
+      throw new HttpError(400, "workspaceId est obligatoire.");
+    }
+
+    const rows = db
+      .prepare(`
+        SELECT *
+        FROM tags
+        WHERE workspace_id = :workspace_id
+          AND deleted_at IS NULL
+        ORDER BY name COLLATE NOCASE ASC
+      `)
+      .all({ workspace_id: workspaceId }) as TagRow[];
+
+    sendJson(res, 200, rows.map(mapTag));
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/tags` && method === "POST") {
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const name = normalizeTagName(asString(body.name));
+    const color = asString(body.color).trim() || tagColor(name);
+
+    if (!workspaceId || !name) {
+      throw new HttpError(400, "workspaceId et nom du tag sont obligatoires.");
+    }
+
+    const existing = db
+      .prepare(`
+        SELECT *
+        FROM tags
+        WHERE workspace_id = :workspace_id
+          AND name = :name COLLATE NOCASE
+          AND deleted_at IS NULL
+        LIMIT 1
+      `)
+      .get({ workspace_id: workspaceId, name }) as TagRow | undefined;
+    if (existing) {
+      sendJson(res, 200, mapTag(existing));
+      return;
+    }
+
+    const timestamp = nowIso();
+    const id = randomUUID();
+    db.prepare(`
+      INSERT INTO tags (
+        id,
+        workspace_id,
+        name,
+        color,
+        created_at,
+        updated_at,
+        deleted_at,
+        created_by
+      ) VALUES (
+        :id,
+        :workspace_id,
+        :name,
+        :color,
+        :created_at,
+        :updated_at,
+        NULL,
+        :created_by
+      )
+    `).run({
+      id,
+      workspace_id: workspaceId,
+      name,
+      color,
+      created_at: timestamp,
+      updated_at: timestamp,
+      created_by: asNullableString(body.createdBy)
+    });
+
+    const row = db.prepare("SELECT * FROM tags WHERE id = :id").get({ id }) as TagRow;
+    sendJson(res, 200, mapTag(row));
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/tags/assign` && method === "POST") {
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const contractId = asString(body.contractId);
+    const tagId = asString(body.tagId);
+    if (!workspaceId || !contractId || !tagId) {
+      throw new HttpError(400, "workspaceId, contractId et tagId sont obligatoires.");
+    }
+
+    const contract = db
+      .prepare(`
+        SELECT id_contrat
+        FROM contrat
+        WHERE id_contrat = :contract_id
+          AND workspace_id = :workspace_id
+          AND deleted_at IS NULL
+        LIMIT 1
+      `)
+      .get({ contract_id: contractId, workspace_id: workspaceId }) as RawRecord | undefined;
+    const tag = db
+      .prepare(`
+        SELECT id
+        FROM tags
+        WHERE id = :tag_id
+          AND workspace_id = :workspace_id
+          AND deleted_at IS NULL
+        LIMIT 1
+      `)
+      .get({ tag_id: tagId, workspace_id: workspaceId }) as RawRecord | undefined;
+    if (!contract || !tag) {
+      throw new HttpError(404, "Contrat ou tag introuvable.");
+    }
+
+    db.prepare(`
+      INSERT OR IGNORE INTO contract_tags (contract_id, tag_id, created_at)
+      VALUES (:contract_id, :tag_id, :created_at)
+    `).run({
+      contract_id: contractId,
+      tag_id: tagId,
+      created_at: nowIso()
+    });
+
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/tags/remove` && method === "POST") {
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const contractId = asString(body.contractId);
+    const tagId = asString(body.tagId);
+    if (!workspaceId || !contractId || !tagId) {
+      throw new HttpError(400, "workspaceId, contractId et tagId sont obligatoires.");
+    }
+
+    db.prepare(`
+      DELETE FROM contract_tags
+      WHERE contract_id = :contract_id
+        AND tag_id = :tag_id
+        AND EXISTS (
+          SELECT 1
+          FROM contrat c
+          WHERE c.id_contrat = contract_tags.contract_id
+            AND c.workspace_id = :workspace_id
+        )
+    `).run({
+      contract_id: contractId,
+      tag_id: tagId,
+      workspace_id: workspaceId
+    });
+
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (pathname === `${API_PREFIX}/applicants/upsert` && method === "POST") {
     const body = await parseBody(req);
     const workspaceId = asString(body.workspaceId) || "workspace_default";
@@ -1137,6 +1391,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         workspace_id,
         id_contrat,
         name,
+        status,
         is_ephemeral,
         priority,
         contract_target_count,
@@ -1151,6 +1406,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         :workspace_id,
         NULL,
         :name,
+        :status,
         :is_ephemeral,
         :priority,
         :contract_target_count,
@@ -1165,6 +1421,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       id,
       workspace_id: workspaceId,
       name,
+      status: asString(body.status) === "classified" ? "classified" : "active",
       is_ephemeral: body.isEphemeral ? 1 : 0,
       priority: asString(body.priority) === "urgence" ? "urgence" : "normal",
       contract_target_count: Math.max(0, asInteger(body.contractTargetCount, 0)),
@@ -1300,6 +1557,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     db.prepare(`
       UPDATE dossiers
       SET name = :name,
+          status = :status,
           is_ephemeral = :is_ephemeral,
           priority = :priority,
           contract_target_count = :contract_target_count,
@@ -1312,6 +1570,14 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     `).run({
       id,
       name: nextName,
+      status:
+        body.status !== undefined
+          ? asString(body.status) === "classified"
+            ? "classified"
+            : "active"
+          : asString(current.status) === "classified"
+            ? "classified"
+            : "active",
       is_ephemeral:
         body.isEphemeral !== undefined
           ? (body.isEphemeral ? 1 : 0)
@@ -1383,6 +1649,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     if (payload.dossierId !== undefined) {
       const targetDossier = payload.dossierId ?? null;
       items = items.filter((item) => (item.dossierId ?? null) === targetDossier);
+    }
+
+    if (payload.tagId) {
+      items = items.filter((item) => item.tags.some((tag) => tag.id === payload.tagId));
     }
 
     if (payload.assignments && payload.assignments.length > 0) {

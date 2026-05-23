@@ -15,6 +15,7 @@ import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
+import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import {
   useAddresses,
@@ -377,7 +378,7 @@ export function ContractEditPage() {
   const handleAssignTag = async (tag: Tag) => {
     if (!contractId) return;
     try {
-      await assignTag.mutateAsync({ contractId, tagId: tag.id });
+      await assignTag.mutateAsync({ workspaceId, contractId, tagId: tag.id });
     } catch (e) {
       console.error("Error assigning tag", e);
     }
@@ -386,7 +387,7 @@ export function ContractEditPage() {
   const handleRemoveTag = async (tagId: string) => {
     if (!contractId) return;
     try {
-      await removeTag.mutateAsync({ contractId, tagId });
+      await removeTag.mutateAsync({ workspaceId, contractId, tagId });
     } catch (e) {
       console.error("Error removing tag", e);
     }
@@ -610,12 +611,7 @@ export function ContractEditPage() {
             <span>Dossier</span>
             <div className="field-inline-actions">
               <select className="select" {...register("dossierId")}>
-                <option value="">Aucun dossier</option>
-                {dossiers.map((dossier) => (
-                  <option key={dossier.id} value={dossier.id}>
-                    {dossier.name}
-                  </option>
-                ))}
+                <DossierSelectOptions dossiers={dossiers} />
               </select>
               <button
                 type="button"
@@ -650,6 +646,7 @@ export function ContractEditPage() {
           <div className="field span-2" style={{ marginTop: "8px" }}>
             <span>Tags</span>
             <TagSelector 
+              workspaceId={workspaceId}
               selectedTags={data?.tags || []}
               onAssignTag={handleAssignTag}
               onRemoveTag={handleRemoveTag}

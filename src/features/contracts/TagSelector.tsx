@@ -4,14 +4,15 @@ import { TagBadge } from './TagBadge';
 import { Plus, Loader2 } from 'lucide-react';
 
 interface TagSelectorProps {
+  workspaceId: string;
   selectedTags: Tag[];
   onAssignTag: (tag: Tag) => void;
   onRemoveTag: (tagId: string) => void;
   disabled?: boolean;
 }
 
-export function TagSelector({ selectedTags, onAssignTag, onRemoveTag, disabled }: TagSelectorProps) {
-  const { data: availableTags, isLoading: isLoadingTags } = useTags();
+export function TagSelector({ workspaceId, selectedTags, onAssignTag, onRemoveTag, disabled }: TagSelectorProps) {
+  const { data: availableTags, isLoading: isLoadingTags } = useTags(workspaceId);
   const createTag = useCreateTag();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -36,9 +37,9 @@ export function TagSelector({ selectedTags, onAssignTag, onRemoveTag, disabled }
   );
 
   const handleCreate = async () => {
-    if (!search.trim()) return;
+    if (!workspaceId || !search.trim()) return;
     try {
-      const newTag = await createTag.mutateAsync({ name: search.trim() });
+      const newTag = await createTag.mutateAsync({ workspaceId, name: search.trim() });
       onAssignTag(newTag);
       setSearch('');
       setIsOpen(false);
@@ -59,7 +60,7 @@ export function TagSelector({ selectedTags, onAssignTag, onRemoveTag, disabled }
         ))}
       </div>
       
-      {!disabled && (
+      {!disabled && workspaceId && (
         <div className="relative">
           <input
             type="text"

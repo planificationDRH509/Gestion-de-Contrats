@@ -12,7 +12,7 @@ import {
   useUpdateContractComment
 } from "./contractsApi";
 import { useAppUsers } from "../auth/usersApi";
-import { Contract, ContractDateFilterMode, ContractStatus } from "../../data/types";
+import { Contract, ContractDateFilterMode, ContractStatus, Dossier } from "../../data/types";
 import { Pagination } from "../../app/components/Pagination";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { formatCurrency } from "../../lib/format";
@@ -25,6 +25,7 @@ import {
   getCurrentFiscalYearStart,
   getTodayDateInputValue
 } from "../../lib/contractDateFilters";
+import { getDossierGroups } from "../../lib/dossier";
 import { createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
   PrintHistoryEntry,
@@ -191,6 +192,7 @@ export function ContractsListPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export">("main");
+  const [dossierSubmenu, setDossierSubmenu] = useState<"archived" | "classified" | null>(null);
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
@@ -202,6 +204,7 @@ export function ContractsListPage() {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
         setContextMenu(null);
         setMenuView("main");
+        setDossierSubmenu(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -274,7 +277,7 @@ export function ContractsListPage() {
   const updateContractComment = useUpdateContractComment();
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
-  const { data: tags = [] } = useTags();
+  const { data: tags = [] } = useTags(workspaceId);
   const { data: appUsers = [] } = useAppUsers();
 
   const { data: positionsData = [] } = usePositions(workspaceId);
@@ -322,6 +325,7 @@ export function ContractsListPage() {
     () => new Map(dossiers.map((dossier) => [dossier.id, dossier])),
     [dossiers]
   );
+  const dossierGroups = useMemo(() => getDossierGroups(dossiers), [dossiers]);
   const fiscalYearStartLabel = useMemo(
     () => getCurrentFiscalYearStart().toLocaleDateString("fr-FR"),
     []
@@ -730,6 +734,7 @@ export function ContractsListPage() {
           ? "export"
           : "main"
     );
+    setDossierSubmenu(null);
     setMenuMode(mode);
   }
 
@@ -750,6 +755,7 @@ export function ContractsListPage() {
       y: Math.max(padding, y)
     });
     setMenuView("dossiers");
+    setDossierSubmenu(null);
     setMenuMode("main");
   }
 
@@ -812,6 +818,50 @@ export function ContractsListPage() {
     const assignedCount = metrics?.assignedCount ?? 0;
     const targetCount = dossier.contractTargetCount ?? 0;
     return `Échéance: ${deadlineLabel} · Quantité: ${assignedCount} · Objectif: ${targetCount}`;
+  }
+
+  function handleDossierMenuSelect(dossier: Dossier) {
+    if (!contextMenu) return;
+
+    if (contextMenu.id === "bulk-dossier-trigger") {
+      setBulkDossierId(dossier.id);
+      setContextMenu(null);
+      setDossierSubmenu(null);
+      return;
+    }
+
+    void handleContextAssignToDossier(dossier.id);
+    setDossierSubmenu(null);
+  }
+
+  function renderDossierMenuItem(dossier: Dossier) {
+    return (
+      <button
+        key={dossier.id}
+        type="button"
+        className="context-menu-item"
+        style={{ padding: "8px 10px", fontSize: "12px" }}
+        onClick={() => handleDossierMenuSelect(dossier)}
+      >
+        <div
+          className="dossier-dot"
+          style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background:
+              dossier.status === "classified"
+                ? "#64748b"
+                : dossier.priority === "urgence"
+                  ? "#f59e0b"
+                  : dossier.isEphemeral
+                    ? "#94a3b8"
+                    : "var(--accent)"
+          }}
+        />
+        {dossier.name}
+      </button>
+    );
   }
 
   function getContractStatusLabel(status: string): string {
@@ -1985,42 +2035,79 @@ export function ContractsListPage() {
                         Nouveau dossier
                       </button>
 
-                      <div className="context-menu-scroll" style={{ maxHeight: "220px", overflowY: "auto", padding: "4px" }}>
+                      <div className="context-menu-scroll" style={{ maxHeight: "220px", overflowY: "auto", padding: "4px", position: "relative" }}>
                         {dossiers.length === 0 ? (
                           <div className="context-menu-empty" style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "var(--ink-muted)" }}>Aucun dossier</div>
                         ) : (
-                          dossiers.map((dossier) => (
-                            <button
-                              key={dossier.id}
-                              type="button"
-                              className="context-menu-item"
-                              style={{ padding: "8px 10px", fontSize: "12px" }}
-                              onClick={() => {
-                                if (contextMenu.id === "bulk-dossier-trigger") {
-                                  setBulkDossierId(dossier.id);
-                                  setContextMenu(null);
-                                } else {
-                                  void handleContextAssignToDossier(dossier.id);
+                          <>
+                            {dossierGroups.active.length === 0 ? (
+                              <div className="context-menu-empty" style={{ padding: "10px", fontSize: "12px", color: "var(--ink-muted)" }}>
+                                Aucun dossier en traitement
+                              </div>
+                            ) : (
+                              dossierGroups.active.map(renderDossierMenuItem)
+                            )}
+
+                            {dossierGroups.archived.length > 0 ? (
+                              <button
+                                type="button"
+                                className="context-menu-item"
+                                style={{ padding: "8px 10px", fontSize: "12px", fontWeight: 700 }}
+                                onClick={() =>
+                                  setDossierSubmenu((current) =>
+                                    current === "archived" ? null : "archived"
+                                  )
                                 }
-                              }}
-                            >
+                              >
+                                <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>inventory_2</span>
+                                Dossiers archivés
+                                <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.55 }}>chevron_right</span>
+                              </button>
+                            ) : null}
+
+                            {dossierGroups.classified.length > 0 ? (
+                              <button
+                                type="button"
+                                className="context-menu-item"
+                                style={{ padding: "8px 10px", fontSize: "12px", fontWeight: 700 }}
+                                onClick={() =>
+                                  setDossierSubmenu((current) =>
+                                    current === "classified" ? null : "classified"
+                                  )
+                                }
+                              >
+                                <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>archive</span>
+                                Dossiers classés
+                                <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.55 }}>chevron_right</span>
+                              </button>
+                            ) : null}
+
+                            {dossierSubmenu ? (
                               <div
-                                className="dossier-dot"
+                                className="context-menu dossier-submenu"
                                 style={{
-                                  width: "8px",
-                                  height: "8px",
-                                  borderRadius: "50%",
-                                  background:
-                                    dossier.priority === "urgence"
-                                      ? "#f59e0b"
-                                      : dossier.isEphemeral
-                                        ? "#94a3b8"
-                                        : "var(--accent)"
+                                  position: "fixed",
+                                  left: contextMenu ? Math.min(window.innerWidth - 230, contextMenu.x + 248) : 0,
+                                  top: contextMenu
+                                    ? Math.min(
+                                        window.innerHeight - 190,
+                                        contextMenu.y + (dossierSubmenu === "archived" ? 86 : 120)
+                                      )
+                                    : 0,
+                                  minWidth: "210px",
+                                  maxHeight: "180px",
+                                  overflowY: "auto",
+                                  padding: "4px",
+                                  zIndex: 5
                                 }}
-                              />
-                              {dossier.name}
-                            </button>
-                          ))
+                              >
+                                {(dossierSubmenu === "archived"
+                                  ? dossierGroups.archived
+                                  : dossierGroups.classified
+                                ).map(renderDossierMenuItem)}
+                              </div>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </>

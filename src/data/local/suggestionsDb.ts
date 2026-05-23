@@ -279,6 +279,21 @@ export function getPinnedChoices(category: string): string[] {
   return [];
 }
 
+export function getRecentChoices(category: string): string[] {
+  try {
+    const raw = localStorage.getItem(`contribution_recent_${category}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function recordRecentChoice(category: string, id: string) {
+  if (!id) return;
+  const current = getRecentChoices(category).filter((itemId) => itemId !== id);
+  localStorage.setItem(`contribution_recent_${category}`, JSON.stringify([id, ...current].slice(0, 8)));
+  window.dispatchEvent(new Event("contribution_recent_updated"));
+}
+
 export function togglePinnedChoice(category: string, id: string) {
   const current = getPinnedChoices(category);
   if (current.includes(id)) {

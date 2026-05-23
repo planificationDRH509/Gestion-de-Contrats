@@ -3,6 +3,7 @@ import { ContractRepository } from "../repositories/ContractRepository";
 import { DossierRepository } from "../repositories/DossierRepository";
 import { PrintJobRepository } from "../repositories/PrintJobRepository";
 import { AutocompleteRepository } from "../repositories/AutocompleteRepository";
+import { CreateTagInput, TagRepository } from "../repositories/TagRepository";
 import {
   AddressSuggestion,
   PositionSuggestion,
@@ -18,6 +19,7 @@ import {
   CreateContractInput,
   CreateDossierInput,
   Dossier,
+  Tag,
   UpdateContractInput,
   UpdateDossierInput,
   UpsertApplicantInput
@@ -27,18 +29,23 @@ import { formatFirstName, formatLastName } from "../../lib/format";
 import { getSupabaseClient } from "./supabaseClient";
 import { LocalApplicantRepository } from "../local/localApplicantRepository";
 import { LocalContractRepository } from "../local/localContractRepository";
+import { LocalTagRepository } from "../local/localTagRepository";
 import {
   cacheApplicant,
   cacheContract,
   cacheContracts,
+  cacheTag,
+  cacheTags,
   getPendingContractIds,
   getPendingOutbox,
   isOfflineFailure,
+  replaceLocalTagId,
   removeOutboxItem,
   upsertApplicantOffline
 } from "../local/offlineStore";
 import {
   normalizeDossierName,
+  normalizeDossierStatus,
   normalizeNonNegativeInteger,
   normalizeOptionalDate,
   normalizeOptionalText
@@ -87,9 +94,22 @@ function mapContract(row: any): Contract {
     deletedAt: row.deleted_at || null,
     createdBy: row.created_by,
     commentaire: row.commentaire || null,
-    tags: Array.isArray(row.contract_tags) 
-      ? row.contract_tags.map((ct: any) => ct.tags).filter(Boolean) 
+    tags: Array.isArray(row.contract_tags)
+      ? row.contract_tags.map((ct: any) => ct.tags).filter(Boolean).map(mapTag)
       : undefined
+  };
+}
+
+function mapTag(row: any): Tag {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    color: row.color || "#64748b",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    deletedAt: row.deleted_at || null,
+    createdBy: row.created_by || null
   };
 }
 
@@ -98,6 +118,7 @@ function mapDossier(row: any): Dossier {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
+    status: normalizeDossierStatus(row.status),
     isEphemeral: row.is_ephemeral,
     priority: row.priority as Dossier["priority"],
     contractTargetCount: normalizeNonNegativeInteger(row.contract_target_count),
@@ -291,6 +312,7 @@ class SupabaseDossierRepository implements DossierRepository {
       id: crypto.randomUUID(),
       workspace_id: input.workspaceId,
       name: normalizedName,
+      status: normalizeDossierStatus(input.status),
       is_ephemeral: input.isEphemeral || false,
       priority: input.priority || "normal",
       contract_target_count: contractTargetCount,
@@ -328,6 +350,10 @@ class SupabaseDossierRepository implements DossierRepository {
         input.name !== undefined
           ? normalizeDossierName(input.name)
           : existing.name,
+      status:
+        input.status !== undefined
+          ? normalizeDossierStatus(input.status)
+          : normalizeDossierStatus(existing.status),
       is_ephemeral: input.isEphemeral ?? existing.isEphemeral,
       priority: input.priority ?? existing.priority,
       contract_target_count:
@@ -718,6 +744,102 @@ class SupabasePrintJobRepository implements PrintJobRepository {
   }
 }
 
+function normalizeTagName(name: string) {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+function fallbackTagColor(name: string) {
+  let hash = 0;
+  for (const char of name) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  }
+  return `hsl(${hash}, 70%, 42%)`;
+}
+
+class SupabaseTagRepository implements TagRepository {
+  async list(workspaceId: string): Promise<Tag[]> {
+    const client = getSupabaseClient();
+    const { data, error } = await (client
+      .from("tags")
+      .select("*") as any)
+      .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
+      .order("name", { ascending: true });
+
+    if (error || !data) {
+      throw new Error("Impossible de charger les tags.");
+    }
+    return data.map(mapTag);
+  }
+
+  async create(input: CreateTagInput): Promise<Tag> {
+    const client = getSupabaseClient();
+    const name = normalizeTagName(input.name);
+    if (!name) {
+      throw new Error("Le nom du tag est obligatoire.");
+    }
+
+    const { data: existing, error: existingError } = await (client
+      .from("tags")
+      .select("*") as any)
+      .eq("workspace_id", input.workspaceId)
+      .ilike("name", name)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) {
+      throw new Error("Impossible de vérifier le tag.");
+    }
+    if (existing) {
+      return mapTag(existing);
+    }
+
+    const payload = {
+      id: (input as CreateTagInput & { id?: string }).id || crypto.randomUUID(),
+      workspace_id: input.workspaceId,
+      name,
+      color: input.color || fallbackTagColor(name),
+      created_by: input.createdBy ?? null
+    };
+    const { data, error } = await (client
+      .from("tags")
+      .insert(payload as any) as any)
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      throw new Error("Impossible de créer le tag.");
+    }
+    return mapTag(data);
+  }
+
+  async assignToContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
+    void workspaceId;
+    const client = getSupabaseClient();
+    const { error } = await (client
+      .from("contract_tags")
+      .upsert({ contract_id: contractId, tag_id: tagId } as any) as any);
+
+    if (error) {
+      throw new Error("Impossible d'ajouter le tag au contrat.");
+    }
+  }
+
+  async removeFromContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
+    void workspaceId;
+    const client = getSupabaseClient();
+    const { error } = await client
+      .from("contract_tags")
+      .delete()
+      .eq("contract_id", contractId)
+      .eq("tag_id", tagId);
+
+    if (error) {
+      throw new Error("Impossible de retirer le tag du contrat.");
+    }
+  }
+}
+
 class SupabaseAutocompleteRepository implements AutocompleteRepository {
   private async getByType(workspaceId: string, type: string): Promise<any[]> {
     const client = getSupabaseClient();
@@ -859,6 +981,7 @@ function syncPendingOutbox() {
 
     const applicants = new SupabaseApplicantRepository();
     const contracts = new SupabaseContractRepository();
+    const tags = new SupabaseTagRepository();
 
     for (const item of getPendingOutbox()) {
       try {
@@ -890,6 +1013,23 @@ function syncPendingOutbox() {
           const payload = item.payload as { id?: string };
           if (payload.id) {
             await contracts.softDelete(payload.id, item.workspaceId);
+          }
+        } else if (item.type === "tag.create") {
+          const payload = item.payload as unknown as CreateTagInput & { id?: string };
+          const tag = await tags.create(payload);
+          if (payload.id && payload.id !== tag.id) {
+            replaceLocalTagId(item.workspaceId, payload.id, tag);
+          }
+          cacheTag(tag);
+        } else if (item.type === "tag.assign") {
+          const payload = item.payload as { contractId?: string; tagId?: string };
+          if (payload.contractId && payload.tagId) {
+            await tags.assignToContract(item.workspaceId, payload.contractId, payload.tagId);
+          }
+        } else if (item.type === "tag.remove") {
+          const payload = item.payload as { contractId?: string; tagId?: string };
+          if (payload.contractId && payload.tagId) {
+            await tags.removeFromContract(item.workspaceId, payload.contractId, payload.tagId);
           }
         }
         removeOutboxItem(item.id);
@@ -1088,12 +1228,64 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 }
 
+class OfflineFirstTagRepository implements TagRepository {
+  private readonly local = new LocalTagRepository();
+  private readonly remote = new SupabaseTagRepository();
+
+  async list(workspaceId: string): Promise<Tag[]> {
+    try {
+      await syncPendingOutbox();
+      const tags = await this.remote.list(workspaceId);
+      cacheTags(tags);
+      return tags;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.list(workspaceId);
+    }
+  }
+
+  async create(input: CreateTagInput): Promise<Tag> {
+    try {
+      await syncPendingOutbox();
+      const tag = await this.remote.create(input);
+      cacheTag(tag);
+      return tag;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.create(input);
+    }
+  }
+
+  async assignToContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
+    try {
+      await syncPendingOutbox();
+      await this.remote.assignToContract(workspaceId, contractId, tagId);
+      await this.local.applyAssignment(workspaceId, contractId, tagId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      await this.local.assignToContract(workspaceId, contractId, tagId);
+    }
+  }
+
+  async removeFromContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
+    try {
+      await syncPendingOutbox();
+      await this.remote.removeFromContract(workspaceId, contractId, tagId);
+      await this.local.applyRemoval(workspaceId, contractId, tagId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      await this.local.removeFromContract(workspaceId, contractId, tagId);
+    }
+  }
+}
+
 export function createSupabaseProvider(): DataProvider {
   return {
     applicants: new OfflineFirstApplicantRepository(),
     dossiers: new SupabaseDossierRepository(),
     contracts: new OfflineFirstContractRepository(),
     printJobs: new SupabasePrintJobRepository(),
-    suggestions: new SupabaseAutocompleteRepository()
+    suggestions: new SupabaseAutocompleteRepository(),
+    tags: new OfflineFirstTagRepository()
   };
 }

@@ -17,6 +17,7 @@ import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { saveDraftContract } from "./contractDraft";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
+import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 
 import {
@@ -503,7 +504,9 @@ export function ContractNewPage() {
     
     if (selectedTags.length > 0) {
       await Promise.all(
-        selectedTags.map(tag => assignTagToContract.mutateAsync({ contractId: contract.id, tagId: tag.id }))
+        selectedTags.map(tag =>
+          assignTagToContract.mutateAsync({ workspaceId, contractId: contract.id, tagId: tag.id })
+        )
       );
     }
 
@@ -986,12 +989,7 @@ export function ContractNewPage() {
                   dossierSelectRef.current = element;
                 }}
               >
-                <option value="">Aucun dossier</option>
-                {dossiers.map((dossier) => (
-                  <option key={dossier.id} value={dossier.id}>
-                    {dossier.name}
-                  </option>
-                ))}
+                <DossierSelectOptions dossiers={dossiers} />
               </select>
               <button
                 type="button"
@@ -1030,8 +1028,11 @@ export function ContractNewPage() {
           <div className="field span-2" style={{ marginTop: "8px" }}>
             <span>Tags</span>
             <TagSelector 
+              workspaceId={workspaceId}
               selectedTags={selectedTags}
-              onAssignTag={(tag) => setSelectedTags(prev => [...prev, tag])}
+              onAssignTag={(tag) =>
+                setSelectedTags(prev => prev.some((item) => item.id === tag.id) ? prev : [...prev, tag])
+              }
               onRemoveTag={(tagId) => setSelectedTags(prev => prev.filter(t => t.id !== tagId))}
               disabled={assignTagToContract.isPending || isSubmitting}
             />

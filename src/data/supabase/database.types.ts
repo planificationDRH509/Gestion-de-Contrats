@@ -210,6 +210,7 @@ export type Database = {
           name: string
           priority: string
           roadmap_sheet_number: string | null
+          status: string
           updated_at: string | null
           workspace_id: string | null
         }
@@ -226,6 +227,7 @@ export type Database = {
           name: string
           priority?: string
           roadmap_sheet_number?: string | null
+          status?: string
           updated_at?: string | null
           workspace_id?: string | null
         }
@@ -242,6 +244,7 @@ export type Database = {
           name?: string
           priority?: string
           roadmap_sheet_number?: string | null
+          status?: string
           updated_at?: string | null
           workspace_id?: string | null
         }
