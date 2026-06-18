@@ -12,9 +12,9 @@ export function TagBadge({ tag, onRemove, className = '' }: TagBadgeProps) {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium shadow-sm transition-colors ${className}`}
       style={{
-        backgroundColor: `${tag.color}20`,
+        backgroundColor: `color-mix(in srgb, ${tag.color} 20%, transparent)`,
         color: tag.color,
-        border: `1px solid ${tag.color}40`
+        border: `1px solid color-mix(in srgb, ${tag.color} 40%, transparent)`
       }}
     >
       {tag.name}
