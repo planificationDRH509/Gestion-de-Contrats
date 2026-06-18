@@ -20,7 +20,7 @@ import { getDataProvider } from "../../data/dataProvider";
 import { useDossierContractMetrics, useDossiersList } from "../dossiers/dossiersApi";
 import { DossiersInlinePanel } from "../dossiers/DossiersInlinePanel";
 import { useTags } from "./tagsApi";
-import { usePositions, useInstitutions } from "../settings/suggestionsApi";
+import { useAddresses, usePositions, useInstitutions } from "../settings/suggestionsApi";
 import {
   getCurrentFiscalYearStart,
   getTodayDateInputValue
@@ -284,6 +284,7 @@ export function ContractsListPage() {
 
   const { data: positionsData = [] } = usePositions(workspaceId);
   const { data: institutionsData = [] } = useInstitutions(workspaceId);
+  const { data: addressesData = [] } = useAddresses(workspaceId);
 
   const positionOptions = useMemo(() => positionsData.map(p => p.label), [positionsData]);
   const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
@@ -508,14 +509,12 @@ export function ContractsListPage() {
     setUndoAction(null);
   }
 
-  async function buildExportRows() {
-    const provider = getDataProvider();
-    const [contracts, positions, institutions, addresses] = await Promise.all([
-      provider.contracts.getByIds(selected, workspaceId),
-      provider.suggestions.getPositions(workspaceId),
-      provider.suggestions.getInstitutions(workspaceId),
-      provider.suggestions.getAddresses(workspaceId)
-    ]);
+  function buildExportRowsFromContracts(
+    contracts: Contract[],
+    positions: typeof positionsData,
+    institutions: typeof institutionsData,
+    addresses: typeof addressesData
+  ) {
     const positionPrefixes = new Map(
       positions.map((position) => [normalizeCsvGrammarValue(position.label), position.prefix ?? null])
     );
@@ -560,12 +559,18 @@ export function ContractsListPage() {
     ] satisfies ExcelCellValue[][];
   }
 
-  async function copyTextToClipboard(text: string) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
+  async function buildExportRows() {
+    const provider = getDataProvider();
+    const [contracts, positions, institutions, addresses] = await Promise.all([
+      provider.contracts.getByIds(selected, workspaceId),
+      provider.suggestions.getPositions(workspaceId),
+      provider.suggestions.getInstitutions(workspaceId),
+      provider.suggestions.getAddresses(workspaceId)
+    ]);
+    return buildExportRowsFromContracts(contracts, positions, institutions, addresses);
+  }
 
+  function copyTextWithTextarea(text: string) {
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
@@ -573,12 +578,24 @@ export function ContractsListPage() {
     textarea.style.left = "-9999px";
     textarea.style.top = "0";
     document.body.appendChild(textarea);
+    textarea.focus();
     textarea.select();
     const copied = document.execCommand("copy");
     textarea.remove();
-    if (!copied) {
-      throw new Error("Clipboard copy failed");
+    return copied;
+  }
+
+  async function copyTextToClipboard(text: string) {
+    if (copyTextWithTextarea(text)) {
+      return;
     }
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    throw new Error("Clipboard copy failed");
   }
 
   async function handleExportExcel() {
@@ -607,7 +624,14 @@ export function ContractsListPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      const rows = await buildExportRows();
+      const contractsById = new Map(items.map((contract) => [contract.id, contract]));
+      const selectedContracts = selected
+        .map((id) => contractsById.get(id))
+        .filter((contract): contract is Contract => Boolean(contract));
+      const rows =
+        selectedContracts.length === selected.length
+          ? buildExportRowsFromContracts(selectedContracts, positionsData, institutionsData, addressesData)
+          : await buildExportRows();
       await copyTextToClipboard(createExcelClipboardText(rows));
       setActionMessage(`${selected.length} contrat(s) copié(s). Collez maintenant dans Excel.`);
     } catch (error) {
