@@ -10,13 +10,21 @@ interface TagBadgeProps {
 export function TagBadge({ tag, onRemove, className = '' }: TagBadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium shadow-sm transition-colors ${className}`}
+      className={`badge ${className}`}
       style={{
         backgroundColor: `color-mix(in srgb, ${tag.color} 20%, transparent)`,
         color: tag.color,
-        border: `1px solid color-mix(in srgb, ${tag.color} 40%, transparent)`
+        borderColor: `color-mix(in srgb, ${tag.color} 40%, transparent)`,
+        fontSize: "11px",
+        padding: "2px 8px",
+        fontWeight: 500,
+        lineHeight: "1",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px"
       }}
     >
+      <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>sell</span>
       {tag.name}
       {onRemove && (
         <button
@@ -28,6 +36,7 @@ export function TagBadge({ tag, onRemove, className = '' }: TagBadgeProps) {
           }}
           className="hover:bg-black/10 rounded-full p-0.5 transition-colors focus:outline-none"
           aria-label={`Retirer ${tag.name}`}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <X className="w-3 h-3" />
         </button>
