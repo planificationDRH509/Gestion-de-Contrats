@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { ensureDefaultWorkspace } from "./localDb";
+import { ensureDefaultWorkspace, loadDb } from "./localDb";
 import { LocalApplicantRepository } from "./localApplicantRepository";
 import { LocalContractRepository } from "./localContractRepository";
 import { LocalDossierRepository } from "./localDossierRepository";
@@ -22,7 +22,9 @@ describe("LocalDossierRepository", () => {
       comment: "Vérifier les pièces RH.",
       deadlineDate: "2026-06-30",
       focalPoint: "Direction RH",
-      roadmapSheetNumber: "FR-27"
+      roadmapSheetNumber: "FR-27",
+      defaultDurationMonths: 9,
+      createdBy: "user-1"
     });
 
     expect(created.name).toBe("Dossier RH");
@@ -34,6 +36,9 @@ describe("LocalDossierRepository", () => {
     expect(created.deadlineDate).toBe("2026-06-30");
     expect(created.focalPoint).toBe("Direction RH");
     expect(created.roadmapSheetNumber).toBe("FR-27");
+    expect(created.defaultDurationMonths).toBe(9);
+    expect(created.createdBy).toBe("user-1");
+    expect(loadDb().outbox.some((item) => item.type === "dossier.create")).toBe(true);
 
     const updated = await dossiers.update({
       id: created.id,
@@ -46,7 +51,8 @@ describe("LocalDossierRepository", () => {
       comment: "Validation finale",
       deadlineDate: "2026-08-15",
       focalPoint: "Direction RH - pole contrats",
-      roadmapSheetNumber: "FR-28"
+      roadmapSheetNumber: "FR-28",
+      defaultDurationMonths: 12
     });
 
     expect(updated.name).toBe("Dossier RH 2026");
@@ -58,6 +64,8 @@ describe("LocalDossierRepository", () => {
     expect(updated.deadlineDate).toBe("2026-08-15");
     expect(updated.focalPoint).toContain("pole contrats");
     expect(updated.roadmapSheetNumber).toBe("FR-28");
+    expect(updated.defaultDurationMonths).toBe(12);
+    expect(loadDb().outbox.some((item) => item.type === "dossier.update")).toBe(true);
   });
 
   it("deletes dossier and keeps contracts by removing the dossier link", async () => {
@@ -101,6 +109,7 @@ describe("LocalDossierRepository", () => {
 
     const unassignedCount = await dossiers.delete(dossier.id, workspace.id);
     expect(unassignedCount).toBe(1);
+    expect(loadDb().outbox.some((item) => item.type === "dossier.delete")).toBe(true);
 
     const stillThere = await contracts.getById(contract.id);
     expect(stillThere).not.toBeNull();

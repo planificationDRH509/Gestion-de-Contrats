@@ -26,7 +26,7 @@ import {
   getTodayDateInputValue
 } from "../../lib/contractDateFilters";
 import { getDossierGroups } from "../../lib/dossier";
-import { createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
+import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
   PrintHistoryEntry,
   isPrintHistoryDuplicate,
@@ -35,6 +35,7 @@ import {
 } from "../../lib/printHistory";
 import { createId } from "../../lib/uuid";
 import { ContractCommentModal } from "./ContractCommentModal";
+import { ContractsImportModal } from "./ContractsImportModal";
 import { TagBadge } from "./TagBadge";
 
 type ContractsView = "contracts" | "dossiers";
@@ -179,7 +180,7 @@ export function ContractsListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(readContractsPageSize);
   const [selected, setSelected] = useState<string[]>([]);
-  const [exportWithPrepositions, setExportWithPrepositions] = useState(false);
+  const [exportWithPrepositions, setExportWithPrepositions] = useState(true);
   const [contextMenu, setContextMenu] = useState<{
     id: string;
     x: number;
@@ -197,6 +198,7 @@ export function ContractsListPage() {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -506,58 +508,85 @@ export function ContractsListPage() {
     setUndoAction(null);
   }
 
+  async function buildExportRows() {
+    const provider = getDataProvider();
+    const [contracts, positions, institutions, addresses] = await Promise.all([
+      provider.contracts.getByIds(selected, workspaceId),
+      provider.suggestions.getPositions(workspaceId),
+      provider.suggestions.getInstitutions(workspaceId),
+      provider.suggestions.getAddresses(workspaceId)
+    ]);
+    const positionPrefixes = new Map(
+      positions.map((position) => [normalizeCsvGrammarValue(position.label), position.prefix ?? null])
+    );
+    const institutionPrefixes = new Map(
+      institutions.map((institution) => [normalizeCsvGrammarValue(institution.label), institution.prefix ?? null])
+    );
+    const addressPrefixes = new Map(
+      addresses.map((address) => [normalizeCsvGrammarValue(address.label), address.prefix ?? null])
+    );
+    return [
+      ["sexe", "Nom", "Prenom", "Nif", "Ninu", "Poste", "Affectation", "Salaire en chiffre", "Salaire en Lettre", "Durée", "Adresse"],
+      ...contracts.map((contract) => [
+        contract.gender,
+        contract.lastName,
+        contract.firstName,
+        contract.nif ?? "",
+        contract.ninu ?? "",
+        exportWithPrepositions
+          ? addCsvPositionPrefix(
+              contract.position,
+              positionPrefixes.get(normalizeCsvGrammarValue(contract.position))
+            )
+          : contract.position,
+        exportWithPrepositions
+          ? addCsvLocationPrefix(
+              contract.assignment,
+              institutionPrefixes.get(normalizeCsvGrammarValue(contract.assignment)),
+              "assignment"
+            )
+          : contract.assignment,
+        String(contract.salaryNumber.toLocaleString("en-US")),
+        contract.salaryText,
+        contract.durationMonths,
+        exportWithPrepositions
+          ? addCsvLocationPrefix(
+              contract.address,
+              addressPrefixes.get(normalizeCsvGrammarValue(contract.address)),
+              "address"
+            )
+          : contract.address
+      ])
+    ] satisfies ExcelCellValue[][];
+  }
+
+  async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) {
+      throw new Error("Clipboard copy failed");
+    }
+  }
+
   async function handleExportExcel() {
     if (selected.length === 0) return;
+    setActionMessage(null);
+    setActionError(null);
     try {
-      const provider = getDataProvider();
-      const [contracts, positions, institutions, addresses] = await Promise.all([
-        provider.contracts.getByIds(selected, workspaceId),
-        provider.suggestions.getPositions(workspaceId),
-        provider.suggestions.getInstitutions(workspaceId),
-        provider.suggestions.getAddresses(workspaceId)
-      ]);
-      const positionPrefixes = new Map(
-        positions.map((position) => [normalizeCsvGrammarValue(position.label), position.prefix ?? null])
-      );
-      const institutionPrefixes = new Map(
-        institutions.map((institution) => [normalizeCsvGrammarValue(institution.label), institution.prefix ?? null])
-      );
-      const addressPrefixes = new Map(
-        addresses.map((address) => [normalizeCsvGrammarValue(address.label), address.prefix ?? null])
-      );
-      const rows: ExcelCellValue[][] = [
-        ["sexe", "Nom", "Prenom", "Nif", "Ninu", "Poste", "Affectation", "Salaire en chiffre", "Salaire en Lettre", "Durée", "Adresse"],
-        ...contracts.map((contract) => [
-          contract.gender,
-          contract.lastName,
-          contract.firstName,
-          contract.nif ?? "",
-          contract.ninu ?? "",
-          exportWithPrepositions
-            ? addCsvPositionPrefix(
-                contract.position,
-                positionPrefixes.get(normalizeCsvGrammarValue(contract.position))
-              )
-            : contract.position,
-          exportWithPrepositions
-            ? addCsvLocationPrefix(
-                contract.assignment,
-                institutionPrefixes.get(normalizeCsvGrammarValue(contract.assignment)),
-                "assignment"
-              )
-            : contract.assignment,
-          String(contract.salaryNumber.toLocaleString("en-US")),
-          contract.salaryText,
-          contract.durationMonths,
-          exportWithPrepositions
-            ? addCsvLocationPrefix(
-                contract.address,
-                addressPrefixes.get(normalizeCsvGrammarValue(contract.address)),
-                "address"
-              )
-            : contract.address
-        ])
-      ];
+      const rows = await buildExportRows();
       const blob = createExcelWorkbookBlob("Contrats", rows);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -570,6 +599,20 @@ export function ContractsListPage() {
     } catch (error) {
       console.error(error);
       setActionError("Impossible d'exporter les contrats en Excel.");
+    }
+  }
+
+  async function handleCopyExcelData() {
+    if (selected.length === 0) return;
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      const rows = await buildExportRows();
+      await copyTextToClipboard(createExcelClipboardText(rows));
+      setActionMessage(`${selected.length} contrat(s) copié(s). Collez maintenant dans Excel.`);
+    } catch (error) {
+      console.error(error);
+      setActionError("Impossible de copier les données pour Excel.");
     }
   }
 
@@ -1356,7 +1399,13 @@ export function ContractsListPage() {
                       />
                       <span>Sélectionner tout</span>
                     </label>
-                    <button type="button" className="contracts-import" aria-label="Importer" title="Importer">
+                    <button
+                      type="button"
+                      className="contracts-import"
+                      aria-label="Importer"
+                      title="Importer"
+                      onClick={() => setImportOpen(true)}
+                    >
                       <span className="material-symbols-rounded icon">file_upload</span>
                       <span>Importer</span>
                     </button>
@@ -2003,6 +2052,18 @@ export function ContractsListPage() {
                         </label>
 
                         <button
+                          className="btn btn-secondary"
+                          type="button"
+                          style={{ width: "100%", justifyContent: "center" }}
+                          onClick={() => {
+                            setContextMenu(null);
+                            void handleCopyExcelData();
+                          }}
+                        >
+                          Copier pour Excel
+                        </button>
+
+                        <button
                           className="btn btn-primary"
                           type="button"
                           style={{ width: "100%", justifyContent: "center" }}
@@ -2447,6 +2508,22 @@ export function ContractsListPage() {
         onSave={() => {
           if (!activeCommentContract) return;
           saveComment(activeCommentContract.id);
+        }}
+      />
+      <ContractsImportModal
+        isOpen={importOpen}
+        workspaceId={workspaceId}
+        currentUserId={userId}
+        currentUserName={user?.name ?? "Utilisateur connecté"}
+        dossiers={dossiers}
+        appUsers={appUsers}
+        existingContracts={items}
+        onClose={() => setImportOpen(false)}
+        onImported={(count) => {
+          setImportOpen(false);
+          setActionError(null);
+          setActionMessage(`${count} contrat(s) importé(s).`);
+          setPage(1);
         }}
       />
     </div>

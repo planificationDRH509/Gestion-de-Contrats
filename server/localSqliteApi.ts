@@ -446,9 +446,11 @@ function mapDossier(row: RawRecord) {
     deadlineDate: asNullableString(row.deadline_date),
     focalPoint: asNullableString(row.focal_point),
     roadmapSheetNumber: asNullableString(row.roadmap_sheet_number),
+    defaultDurationMonths: asInteger(row.default_duration_months, 0) || null,
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
-    deletedAt: asNullableString(row.deleted_at)
+    deletedAt: asNullableString(row.deleted_at),
+    createdBy: asNullableString(row.created_by)
   };
 }
 
@@ -589,9 +591,11 @@ function getDb(): DatabaseSync {
       deadline_date TEXT,
       focal_point TEXT,
       roadmap_sheet_number TEXT,
+      default_duration_months INTEGER,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       deleted_at TEXT,
+      created_by TEXT,
       FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
     );
 
@@ -701,6 +705,12 @@ function getDb(): DatabaseSync {
       const info = db.pragma("table_info(dossiers)") as any[];
       if (!info.some(c => c.name === "status")) {
         db.exec("ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+      }
+      if (!info.some(c => c.name === "default_duration_months")) {
+        db.exec("ALTER TABLE dossiers ADD COLUMN default_duration_months INTEGER;");
+      }
+      if (!info.some(c => c.name === "created_by")) {
+        db.exec("ALTER TABLE dossiers ADD COLUMN created_by TEXT;");
       }
     } catch(e) {}
 
@@ -1383,7 +1393,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const timestamp = nowIso();
-    const id = randomUUID();
+    const id = asString(body.id) || randomUUID();
 
     db.prepare(`
       INSERT INTO dossiers (
@@ -1399,8 +1409,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         deadline_date,
         focal_point,
         roadmap_sheet_number,
+        default_duration_months,
         created_at,
-        updated_at
+        updated_at,
+        created_by
       ) VALUES (
         :id,
         :workspace_id,
@@ -1414,8 +1426,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         :deadline_date,
         :focal_point,
         :roadmap_sheet_number,
+        :default_duration_months,
         :created_at,
-        :updated_at
+        :updated_at,
+        :created_by
       )
     `).run({
       id,
@@ -1429,8 +1443,13 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       deadline_date: asNullableString(body.deadlineDate),
       focal_point: asNullableString(body.focalPoint),
       roadmap_sheet_number: asNullableString(body.roadmapSheetNumber),
+      default_duration_months:
+        body.defaultDurationMonths === null || body.defaultDurationMonths === undefined
+          ? null
+          : Math.max(1, asInteger(body.defaultDurationMonths, 0)) || null,
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      created_by: asNullableString(body.createdBy)
     });
 
     const created = db
@@ -1565,6 +1584,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           deadline_date = :deadline_date,
           focal_point = :focal_point,
           roadmap_sheet_number = :roadmap_sheet_number,
+          default_duration_months = :default_duration_months,
           updated_at = :updated_at
       WHERE id = :id
     `).run({
@@ -1612,6 +1632,12 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         body.roadmapSheetNumber !== undefined
           ? asNullableString(body.roadmapSheetNumber)
           : asNullableString(current.roadmap_sheet_number),
+      default_duration_months:
+        body.defaultDurationMonths !== undefined
+          ? body.defaultDurationMonths === null
+            ? null
+            : Math.max(1, asInteger(body.defaultDurationMonths, 0)) || null
+          : asInteger(current.default_duration_months, 0) || null,
       updated_at: timestamp
     });
 

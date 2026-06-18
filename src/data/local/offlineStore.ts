@@ -3,6 +3,7 @@ import {
   Contract,
   ContractListParams,
   CreateContractInput,
+  Dossier,
   OutboxItem,
   Tag,
   UpsertApplicantInput
@@ -83,6 +84,25 @@ export function cacheContract(contract: Contract) {
   cacheContracts([contract]);
 }
 
+export function cacheDossiers(dossiers: Dossier[]) {
+  if (dossiers.length === 0) return;
+  const db = loadDb();
+  const byId = new Map(db.dossiers.map((dossier, index) => [dossier.id, index]));
+  for (const dossier of dossiers) {
+    const index = byId.get(dossier.id);
+    if (index === undefined) {
+      db.dossiers.push(dossier);
+    } else {
+      db.dossiers[index] = dossier;
+    }
+  }
+  saveDb(db);
+}
+
+export function cacheDossier(dossier: Dossier) {
+  cacheDossiers([dossier]);
+}
+
 export function cacheTags(tags: Tag[]) {
   if (tags.length === 0) return;
   const db = loadDb();
@@ -134,6 +154,47 @@ export function replaceLocalTagId(workspaceId: string, fromId: string, toTag: Ta
       payload: {
         ...item.payload,
         tagId: toTag.id
+      }
+    };
+  });
+  saveDb(db);
+}
+
+export function replaceLocalDossierId(workspaceId: string, fromId: string, toDossier: Dossier) {
+  if (!fromId || fromId === toDossier.id) return;
+
+  const db = loadDb();
+  db.dossiers = db.dossiers.filter(
+    (dossier) => !(dossier.workspaceId === workspaceId && dossier.id === fromId)
+  );
+  const existingIndex = db.dossiers.findIndex((dossier) => dossier.id === toDossier.id);
+  if (existingIndex >= 0) {
+    db.dossiers[existingIndex] = toDossier;
+  } else {
+    db.dossiers.push(toDossier);
+  }
+
+  db.contracts = db.contracts.map((contract) =>
+    contract.workspaceId === workspaceId && contract.dossierId === fromId
+      ? { ...contract, dossierId: toDossier.id }
+      : contract
+  );
+  db.outbox = db.outbox.map((item) => {
+    if (
+      item.workspaceId !== workspaceId ||
+      (item.type !== "contract.create" && item.type !== "contract.update")
+    ) {
+      return item;
+    }
+    const payload = item.payload as { dossierId?: string | null };
+    if (payload.dossierId !== fromId) {
+      return item;
+    }
+    return {
+      ...item,
+      payload: {
+        ...item.payload,
+        dossierId: toDossier.id
       }
     };
   });

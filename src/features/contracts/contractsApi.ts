@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
+  Contract,
   ContractListParams,
   ContractListResult,
   ContractStatus,
@@ -10,6 +11,7 @@ import {
   UpsertApplicantInput
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
+import type { ContractImportDraft } from "./contractImport";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
@@ -318,6 +320,67 @@ export function useChangeContractsDuration() {
       });
       variables.contractIds.forEach((id) => {
         queryClient.invalidateQueries({ queryKey: ["contract", id] });
+      });
+    }
+  });
+}
+
+export function useImportContracts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      dossierId,
+      responsibleUserId,
+      rows
+    }: {
+      workspaceId: string;
+      dossierId: string | null;
+      responsibleUserId: string;
+      rows: ContractImportDraft[];
+    }) => {
+      const createdContracts: Contract[] = [];
+
+      for (const row of rows) {
+        const applicant = await provider.applicants.upsert({
+          workspaceId,
+          gender: row.gender,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          nif: row.nif,
+          ninu: row.ninu,
+          address: row.address,
+          createdBy: responsibleUserId
+        });
+
+        const contract = await provider.contracts.create({
+          workspaceId,
+          applicantId: applicant.id,
+          dossierId,
+          status: "saisie",
+          gender: row.gender,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          nif: row.nif,
+          ninu: row.ninu,
+          address: row.address,
+          position: row.position,
+          assignment: row.assignment,
+          salaryNumber: row.salaryNumber,
+          salaryText: row.salaryText,
+          durationMonths: row.durationMonths,
+          commentaire: row.commentaire,
+          createdBy: responsibleUserId
+        });
+        createdContracts.push(contract);
+      }
+
+      return createdContracts;
+    },
+    onSuccess: (_contracts, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
     }
   });

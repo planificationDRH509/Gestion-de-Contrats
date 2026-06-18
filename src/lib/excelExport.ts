@@ -206,3 +206,13 @@ export function createExcelWorkbookBlob(sheetName: string, rows: ExcelCellValue[
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
 }
+
+function escapeClipboardCell(cell: ExcelCellValue) {
+  const value = cell == null ? "" : String(cell);
+  if (!/[\t\r\n"]/.test(value)) return value;
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+export function createExcelClipboardText(rows: ExcelCellValue[][]) {
+  return rows.map((row) => row.map(escapeClipboardCell).join("\t")).join("\r\n");
+}

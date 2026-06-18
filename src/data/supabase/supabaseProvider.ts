@@ -29,16 +29,20 @@ import { formatFirstName, formatLastName } from "../../lib/format";
 import { getSupabaseClient } from "./supabaseClient";
 import { LocalApplicantRepository } from "../local/localApplicantRepository";
 import { LocalContractRepository } from "../local/localContractRepository";
+import { LocalDossierRepository } from "../local/localDossierRepository";
 import { LocalTagRepository } from "../local/localTagRepository";
 import {
   cacheApplicant,
   cacheContract,
   cacheContracts,
+  cacheDossier,
+  cacheDossiers,
   cacheTag,
   cacheTags,
   getPendingContractIds,
   getPendingOutbox,
   isOfflineFailure,
+  replaceLocalDossierId,
   replaceLocalTagId,
   removeOutboxItem,
   upsertApplicantOffline
@@ -309,7 +313,7 @@ class SupabaseDossierRepository implements DossierRepository {
     }
 
     const payload = {
-      id: crypto.randomUUID(),
+      id: (input as CreateDossierInput & { id?: string }).id || crypto.randomUUID(),
       workspace_id: input.workspaceId,
       name: normalizedName,
       status: normalizeDossierStatus(input.status),
@@ -584,6 +588,7 @@ class SupabaseContractRepository implements ContractRepository {
       salaire_en_chiffre: input.salaryNumber,
       salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
+      commentaire: input.commentaire || null,
       annee_fiscale: getStoredFiscalYear(),
       historique_saisie: "[]",
       created_by: input.createdBy
@@ -981,6 +986,7 @@ function syncPendingOutbox() {
 
     const applicants = new SupabaseApplicantRepository();
     const contracts = new SupabaseContractRepository();
+    const dossiers = new SupabaseDossierRepository();
     const tags = new SupabaseTagRepository();
 
     for (const item of getPendingOutbox()) {
@@ -1013,6 +1019,22 @@ function syncPendingOutbox() {
           const payload = item.payload as { id?: string };
           if (payload.id) {
             await contracts.softDelete(payload.id, item.workspaceId);
+          }
+        } else if (item.type === "dossier.create") {
+          const payload = item.payload as unknown as CreateDossierInput & { id?: string };
+          const dossier = await dossiers.create(payload);
+          if (payload.id && payload.id !== dossier.id) {
+            replaceLocalDossierId(item.workspaceId, payload.id, dossier);
+          }
+          cacheDossier(dossier);
+        } else if (item.type === "dossier.update") {
+          const payload = item.payload as unknown as UpdateDossierInput;
+          const dossier = await dossiers.update(payload);
+          cacheDossier(dossier);
+        } else if (item.type === "dossier.delete") {
+          const payload = item.payload as { id?: string; workspaceId?: string };
+          if (payload.id) {
+            await dossiers.delete(payload.id, payload.workspaceId ?? item.workspaceId);
           }
         } else if (item.type === "tag.create") {
           const payload = item.payload as unknown as CreateTagInput & { id?: string };
@@ -1088,6 +1110,69 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return upsertApplicantOffline(input);
+    }
+  }
+}
+
+class OfflineFirstDossierRepository implements DossierRepository {
+  private readonly local = new LocalDossierRepository();
+  private readonly remote = new SupabaseDossierRepository();
+
+  async list(workspaceId: string): Promise<Dossier[]> {
+    try {
+      await syncPendingOutbox();
+      const dossiers = await this.remote.list(workspaceId);
+      cacheDossiers(dossiers);
+      return dossiers;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.list(workspaceId);
+    }
+  }
+
+  async getById(id: string): Promise<Dossier | null> {
+    try {
+      await syncPendingOutbox();
+      const dossier = await this.remote.getById(id);
+      if (dossier) cacheDossier(dossier);
+      return dossier;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getById(id);
+    }
+  }
+
+  async create(input: CreateDossierInput): Promise<Dossier> {
+    try {
+      await syncPendingOutbox();
+      const dossier = await this.remote.create(input);
+      cacheDossier(dossier);
+      return dossier;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.create(input);
+    }
+  }
+
+  async update(input: UpdateDossierInput): Promise<Dossier> {
+    try {
+      await syncPendingOutbox();
+      const dossier = await this.remote.update(input);
+      cacheDossier(dossier);
+      return dossier;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.update(input);
+    }
+  }
+
+  async delete(id: string, workspaceId: string): Promise<number> {
+    try {
+      await syncPendingOutbox();
+      return await this.remote.delete(id, workspaceId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.delete(id, workspaceId);
     }
   }
 }
@@ -1282,7 +1367,7 @@ class OfflineFirstTagRepository implements TagRepository {
 export function createSupabaseProvider(): DataProvider {
   return {
     applicants: new OfflineFirstApplicantRepository(),
-    dossiers: new SupabaseDossierRepository(),
+    dossiers: new OfflineFirstDossierRepository(),
     contracts: new OfflineFirstContractRepository(),
     printJobs: new SupabasePrintJobRepository(),
     suggestions: new SupabaseAutocompleteRepository(),

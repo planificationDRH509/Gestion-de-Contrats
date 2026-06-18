@@ -117,7 +117,9 @@ function normalizeDb(value: LocalDb): LocalDb {
           comment: normalizeOptionalText(dossier.comment),
           deadlineDate: normalizeOptionalDate(dossier.deadlineDate),
           focalPoint: normalizeOptionalText(dossier.focalPoint),
-          roadmapSheetNumber: normalizeOptionalText(dossier.roadmapSheetNumber)
+          roadmapSheetNumber: normalizeOptionalText(dossier.roadmapSheetNumber),
+          defaultDurationMonths: dossier.defaultDurationMonths ?? null,
+          createdBy: dossier.createdBy ?? null
         }))
       : [],
     contracts: Array.isArray(value.contracts)
