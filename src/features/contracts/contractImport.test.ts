@@ -56,6 +56,18 @@ describe("contractImport", () => {
     expect(parseImportMoney("45000,50")).toBe(45000.5);
   });
 
+  it("removes the l' preposition in assignment values", () => {
+    const table = parsePastedContractTable(
+      [
+        "NIF\tNom\tPrénom\tSexe\tAdresse\tSalaire\tPoste\tAffectation",
+        "0010020034\tDOE\tJean\tHomme\tRue 1\t45000\tAgent\tà l'hôpital"
+      ].join("\n")
+    );
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
+
+    expect(rows[0].assignment).toBe("hôpital");
+  });
+
   it("allows rows to be edited or excluded before validation", () => {
     const table = parsePastedContractTable(
       [
@@ -83,5 +95,18 @@ describe("contractImport", () => {
     const validatedRows = validateImportEditableRows(excludedRows);
 
     expect(validatedRows[1]).toMatchObject({ excluded: true, values: null, errors: [] });
+  });
+
+  it("caps the practical import size at 250 rows for the editor", () => {
+    const lines = ["NIF\tNom\tPrénom\tSexe\tAdresse\tSalaire\tPoste\tAffectation"];
+    for (let index = 0; index < 260; index += 1) {
+      lines.push(
+        `${String(1000000000 + index)}\tDOE\tJean\tHomme\tRue ${index}\t45000\tAgent\tMSPP`
+      );
+    }
+    const table = parsePastedContractTable(lines.join("\n"));
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers)).slice(0, 250);
+
+    expect(rows).toHaveLength(250);
   });
 });

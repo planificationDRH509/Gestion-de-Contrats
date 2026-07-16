@@ -2,7 +2,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
-  Contract,
   ContractListParams,
   ContractListResult,
   ContractStatus,
@@ -339,10 +338,13 @@ export function useImportContracts() {
       responsibleUserId: string;
       rows: ContractImportDraft[];
     }) => {
-      const createdContracts: Contract[] = [];
-
+      const applicantRows = new Map<string, ContractImportDraft>();
       for (const row of rows) {
-        const applicant = await provider.applicants.upsert({
+        applicantRows.set(row.nif, row);
+      }
+
+      for (const row of applicantRows.values()) {
+        await provider.applicants.upsert({
           workspaceId,
           gender: row.gender,
           firstName: row.firstName,
@@ -352,10 +354,11 @@ export function useImportContracts() {
           address: row.address,
           createdBy: responsibleUserId
         });
-
-        const contract = await provider.contracts.create({
+      }
+      const createdContracts = await provider.contracts.createMany(
+        rows.map((row) => ({
           workspaceId,
-          applicantId: applicant.id,
+          applicantId: row.nif,
           dossierId,
           status: "saisie",
           gender: row.gender,
@@ -371,10 +374,8 @@ export function useImportContracts() {
           durationMonths: row.durationMonths,
           commentaire: row.commentaire,
           createdBy: responsibleUserId
-        });
-        createdContracts.push(contract);
-      }
-
+        }))
+      );
       return createdContracts;
     },
     onSuccess: (_contracts, variables) => {

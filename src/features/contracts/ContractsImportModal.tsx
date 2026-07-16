@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react
 import type { AppUser, Contract, Dossier } from "../../data/types";
 import {
   CONTRACT_IMPORT_FIELDS,
+  MAX_IMPORT_ROWS,
   buildImportEditableRows,
   getImportFieldLabel,
   inferImportMapping,
@@ -13,6 +14,11 @@ import {
   type ContractImportFieldId,
   type ContractImportMapping
 } from "./contractImport";
+import {
+  clearContractImportDraft,
+  loadContractImportDraft,
+  saveContractImportDraft
+} from "./contractImportDraft";
 import { useImportContracts } from "./contractsApi";
 
 type UserOption = {
@@ -64,30 +70,60 @@ export function ContractsImportModal({
   const [responsibleUserId, setResponsibleUserId] = useState(currentUserId);
   const [importError, setImportError] = useState<string | null>(null);
   const pasteRef = useRef<HTMLTextAreaElement>(null);
+  const restoreTimerRef = useRef<number | null>(null);
+  const restoringRef = useRef(false);
+  const hydratedSourceSignatureRef = useRef<string | null>(null);
   const importContracts = useImportContracts();
 
   const table = useMemo(() => parsePastedContractTable(clipboardText), [clipboardText]);
   const headerSignature = table.headers.join("\u001f");
   const mappingSignature = mapping.join("\u001f");
+  const sourceSignature = `${clipboardText}\u001f${mappingSignature}`;
 
   useEffect(() => {
     if (!isOpen) return;
-    setClipboardText("");
-    setMapping([]);
-    setEditableRows([]);
-    setSelectedRowIds([]);
-    setBulkField("assignment");
-    setBulkValue("");
-    setSelectedDossierId("");
-    setResponsibleUserId(currentUserId);
+    restoringRef.current = true;
+    const draft = loadContractImportDraft(workspaceId, currentUserId);
+    if (draft) {
+      setClipboardText(draft.clipboardText);
+      setMapping(draft.mapping);
+      setEditableRows(draft.editableRows);
+      setSelectedRowIds(draft.selectedRowIds);
+      setBulkField(draft.bulkField);
+      setBulkValue(draft.bulkValue);
+      setSelectedDossierId(draft.selectedDossierId);
+      setResponsibleUserId(draft.responsibleUserId || currentUserId);
+    } else {
+      setClipboardText("");
+      setMapping([]);
+      setEditableRows([]);
+      setSelectedRowIds([]);
+      setBulkField("assignment");
+      setBulkValue("");
+      setSelectedDossierId("");
+      setResponsibleUserId(currentUserId);
+    }
     setImportError(null);
-    window.setTimeout(() => pasteRef.current?.focus(), 0);
-  }, [currentUserId, isOpen]);
+    hydratedSourceSignatureRef.current = draft
+      ? `${draft.clipboardText}\u001f${draft.mapping.join("\u001f")}`
+      : "\u001f";
+    restoreTimerRef.current = window.setTimeout(() => {
+      pasteRef.current?.focus();
+      restoringRef.current = false;
+    }, 0);
+    return () => {
+      if (restoreTimerRef.current) {
+        window.clearTimeout(restoreTimerRef.current);
+      }
+      restoringRef.current = false;
+    };
+  }, [currentUserId, isOpen, workspaceId]);
 
   useEffect(() => {
     if (!isOpen || table.headers.length === 0) return;
+    if (hydratedSourceSignatureRef.current === sourceSignature) return;
     setMapping(inferImportMapping(table.headers));
-  }, [headerSignature, isOpen, table.headers]);
+  }, [headerSignature, isOpen, sourceSignature, table.headers]);
 
   useEffect(() => {
     if (!isOpen || table.rows.length === 0 || mapping.length === 0) {
@@ -95,10 +131,38 @@ export function ContractsImportModal({
       setSelectedRowIds([]);
       return;
     }
-    const rows = buildImportEditableRows(table, mapping);
+    if (hydratedSourceSignatureRef.current === sourceSignature) return;
+    const rows = buildImportEditableRows(table, mapping).slice(0, MAX_IMPORT_ROWS);
     setEditableRows(rows);
     setSelectedRowIds(rows.map((row) => row.id));
-  }, [isOpen, mapping.length, mappingSignature, table]);
+    hydratedSourceSignatureRef.current = sourceSignature;
+  }, [isOpen, mapping.length, mappingSignature, sourceSignature, table]);
+
+  useEffect(() => {
+    if (!isOpen || restoringRef.current) return;
+    saveContractImportDraft(workspaceId, currentUserId, {
+      clipboardText,
+      mapping,
+      editableRows,
+      selectedRowIds,
+      bulkField,
+      bulkValue,
+      selectedDossierId,
+      responsibleUserId
+    });
+  }, [
+    clipboardText,
+    currentUserId,
+    editableRows,
+    isOpen,
+    mapping,
+    responsibleUserId,
+    selectedDossierId,
+    selectedRowIds,
+    bulkField,
+    bulkValue,
+    workspaceId
+  ]);
 
   const userOptions = useMemo<UserOption[]>(() => {
     const options = appUsers
@@ -125,18 +189,33 @@ export function ContractsImportModal({
   );
   const includedRows = validatedRows.filter((row) => !row.excluded);
   const validRows = includedRows.filter((row) => row.values && row.errors.length === 0);
+  const selectedRows = validatedRows.filter(
+    (row) => selectedRowIds.includes(row.id) && !row.excluded
+  );
+  const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
+  const selectedErrorRowCount = selectedRows.filter((row) => row.errors.length > 0).length;
   const errorRowCount = includedRows.filter((row) => row.errors.length > 0).length;
   const warningRowCount = includedRows.filter((row) => row.warnings.length > 0).length;
   const excludedRowCount = validatedRows.filter((row) => row.excluded).length;
+  const problemRowIds = useMemo(
+    () =>
+      new Set(
+        validatedRows
+          .filter((row) => !row.excluded && (row.errors.length > 0 || row.warnings.length > 0))
+          .map((row) => row.id)
+      ),
+    [validatedRows]
+  );
   const allRowsSelected =
     editableRows.length > 0 && editableRows.every((row) => selectedRowIds.includes(row.id));
+  const isOverflow = table.rows.length > MAX_IMPORT_ROWS;
   const canImport =
-    includedRows.length > 0 &&
+    selectedValidRows.length > 0 &&
     Boolean(selectedDossierId) &&
     Boolean(responsibleUserId) &&
     mappingIssues.missingFields.length === 0 &&
     mappingIssues.duplicateFields.length === 0 &&
-    errorRowCount === 0 &&
+    selectedErrorRowCount === 0 &&
     !importContracts.isPending;
 
   if (!isOpen) return null;
@@ -189,6 +268,10 @@ export function ContractsImportModal({
     );
   }
 
+  function removeProblemRowsFromSelection() {
+    setSelectedRowIds((prev) => prev.filter((rowId) => !problemRowIds.has(rowId)));
+  }
+
   function closeModal() {
     if (importContracts.isPending) return;
     onClose();
@@ -210,9 +293,10 @@ export function ContractsImportModal({
         workspaceId,
         dossierId: selectedDossierId,
         responsibleUserId,
-        rows: validRows.map((row) => row.values!)
+        rows: selectedValidRows.map((row) => row.values!)
       });
       onImported(createdContracts.length);
+      clearContractImportDraft(workspaceId, currentUserId);
       onClose();
     } catch (error) {
       console.error(error);
@@ -287,6 +371,7 @@ export function ContractsImportModal({
               <span>{errorRowCount} erreur(s)</span>
               <span>{warningRowCount} alerte(s)</span>
               <span>{excludedRowCount} retirée(s)</span>
+              {isOverflow ? <span>Limité à {MAX_IMPORT_ROWS} ligne(s)</span> : null}
             </div>
 
             {mappingIssues.missingFields.length > 0 ? (
@@ -390,6 +475,14 @@ export function ContractsImportModal({
                 disabled={selectedRowIds.length === 0}
               >
                 Réintégrer
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={removeProblemRowsFromSelection}
+                disabled={problemRowIds.size === 0}
+              >
+                Retirer alertes / erreurs
               </button>
             </div>
             <div className="contracts-import-preview">

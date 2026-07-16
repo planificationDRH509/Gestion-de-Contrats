@@ -27,7 +27,6 @@ export type ParsedContractImportTable = {
 };
 
 const IMPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
-const IMPORT_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
 
 
 export type ContractImportDraft = {
@@ -109,18 +108,18 @@ export const REQUIRED_IMPORT_FIELDS: DestinationFieldId[] = [
 ];
 
 const FIELD_ALIASES: Record<DestinationFieldId, string[]> = {
-  nif: ["nif", "numero nif", "numéro nif", "identifiant fiscal", "matricule fiscale"],
-  ninu: ["ninu", "ni nu", "numero unique", "numéro unique"],
-  lastName: ["nom", "nom de famille", "lastname", "last name", "surname"],
-  firstName: ["prenom", "prénom", "prenoms", "prénoms", "first name", "firstname"],
-  gender: ["sexe", "genre", "gender", "sex"],
-  address: ["adresse", "address", "domicile", "residence", "résidence"],
-  salaryNumber: ["salaire", "salaire en chiffre", "salaire chiffre", "montant", "salary", "traitement"],
-  salaryText: ["salaire en lettre", "salaire en lettres", "salaire lettre", "salary text"],
-  position: ["poste", "fonction", "titre", "emploi", "position"],
-  assignment: ["affectation", "lieu affectation", "lieu d affectation", "institution", "service", "site"],
-  durationMonths: ["duree", "durée", "duree contrat", "durée contrat", "mois", "duration"],
-  commentaire: ["commentaire", "commentaires", "observation", "observations", "note", "notes"]
+  nif: ["nif", "numero nif", "numéro nif", "identifiant fiscal", "matricule fiscale", "nif employe"],
+  ninu: ["ninu", "ni nu", "numero unique", "numéro unique", "numero ninu"],
+  lastName: ["nom", "nom de famille", "nom complet", "lastname", "last name", "surname"],
+  firstName: ["prenom", "prénom", "prenoms", "prénoms", "first name", "firstname", "given name"],
+  gender: ["sexe", "genre", "gender", "sex", "civilite", "civilité"],
+  address: ["adresse", "address", "domicile", "residence", "résidence", "adresse complète"],
+  salaryNumber: ["salaire", "salaire en chiffre", "salaire chiffre", "montant", "salary", "traitement", "salaire brut"],
+  salaryText: ["salaire en lettre", "salaire en lettres", "salaire lettre", "salary text", "montant en lettres"],
+  position: ["poste", "fonction", "titre", "emploi", "position", "poste occupe"],
+  assignment: ["affectation", "lieu affectation", "lieu d affectation", "institution", "service", "site", "affectation principale"],
+  durationMonths: ["duree", "durée", "duree contrat", "durée contrat", "mois", "duration", "duree en mois"],
+  commentaire: ["commentaire", "commentaires", "observation", "observations", "note", "notes", "remarque"]
 };
 
 const FIELD_DETECTION_ORDER: DestinationFieldId[] = [
@@ -139,6 +138,7 @@ const FIELD_DETECTION_ORDER: DestinationFieldId[] = [
 ];
 
 const FIELD_LABELS = new Map(CONTRACT_IMPORT_FIELDS.map((field) => [field.id, field.label]));
+export const MAX_IMPORT_ROWS = 250;
 
 function normalizeHeader(value: string) {
   return value
@@ -280,8 +280,10 @@ function getMappedValue(row: string[], mapping: ContractImportMapping, field: De
   if (field === "position") {
     return value.replace(IMPORT_PREFIXED_POSITION, "");
   }
-  if (field === "address" || field === "assignment") {
-    return value.replace(IMPORT_PREFIXED_LOCATION, "");
+  if (field === "assignment") {
+    return value
+      .replace(/^((?:a|à)\s|au\s|aux\s|chez\s|en\s)/i, "")
+      .replace(/^l['’]/i, "");
   }
 
   return value;
@@ -314,7 +316,25 @@ export function parseImportMoney(value: string) {
   const compact = value.trim().replace(/\s|\u00a0/g, "").replace(/[^\d,.-]/g, "");
   if (!compact) return null;
 
-  const normalized = compact.replace(/[,.]/g, "");
+  const lastComma = compact.lastIndexOf(",");
+  const lastDot = compact.lastIndexOf(".");
+  let normalized = compact;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized =
+      lastComma > lastDot
+        ? compact.replace(/\./g, "").replace(",", ".")
+        : compact.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    const digitsAfterComma = compact.length - lastComma - 1;
+    normalized = digitsAfterComma > 0 && digitsAfterComma <= 2
+      ? compact.replace(",", ".")
+      : compact.replace(/,/g, "");
+  } else if (lastDot >= 0) {
+    const digitsAfterDot = compact.length - lastDot - 1;
+    normalized = digitsAfterDot === 3 ? compact.replace(/\./g, "") : compact;
+  }
+
   const parsed = Number.parseFloat(normalized);
   if (!Number.isFinite(parsed)) return null;
   return parsed;

@@ -431,6 +431,25 @@ class SupabaseDossierRepository implements DossierRepository {
 }
 
 class SupabaseContractRepository implements ContractRepository {
+  private buildInsertPayload(input: CreateContractInput) {
+    return {
+      id_contrat: (input as CreateContractInput & { id?: string }).id || crypto.randomUUID(),
+      workspace_id: input.workspaceId,
+      dossier_id: input.dossierId || null,
+      nif: input.applicantId || input.nif || "",
+      status: input.status,
+      titre: input.position,
+      lieu_affectation: input.assignment,
+      salaire_en_chiffre: input.salaryNumber,
+      salaire: input.salaryText,
+      duree_contrat: input.durationMonths || 12,
+      commentaire: input.commentaire || null,
+      annee_fiscale: getStoredFiscalYear(),
+      historique_saisie: "[]",
+      created_by: input.createdBy
+    };
+  }
+
   async list(params: ContractListParams): Promise<ContractListResult> {
     const client = getSupabaseClient();
     const page = params.page ?? 1;
@@ -576,34 +595,32 @@ class SupabaseContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
-    const client = getSupabaseClient();
-    const payload = {
-      id_contrat: (input as CreateContractInput & { id?: string }).id || crypto.randomUUID(),
-      workspace_id: input.workspaceId,
-      dossier_id: input.dossierId || null,
-      nif: input.applicantId || input.nif || "",
-      status: input.status,
-      titre: input.position,
-      lieu_affectation: input.assignment,
-      salaire_en_chiffre: input.salaryNumber,
-      salaire: input.salaryText,
-      duree_contrat: input.durationMonths || 12,
-      commentaire: input.commentaire || null,
-      annee_fiscale: getStoredFiscalYear(),
-      historique_saisie: "[]",
-      created_by: input.createdBy
-    };
-
-    const { data, error } = await (client
-      .from("contrat")
-      .insert(payload as any) as any)
-      .select("*, identification(*), contract_tags(tags(*))")
-      .single();
-
-    if (error || !data) {
+    const created = await this.createMany([input]);
+    const contract = created[0];
+    if (!contract) {
       throw new Error("Impossible de créer le contrat.");
     }
-    return mapContract(data);
+    return contract;
+  }
+
+  async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const client = getSupabaseClient();
+    const payloads = inputs.map((input) => this.buildInsertPayload(input));
+    const { data, error } = await (client
+      .from("contrat")
+      .insert(payloads as any) as any)
+      .select("*, identification(*), contract_tags(tags(*))");
+
+    if (error || !data) {
+      throw new Error("Impossible de créer les contrats.");
+    }
+
+    const rows = Array.isArray(data) ? data : [data];
+    return rows.map(mapContract);
   }
 
   async update(input: UpdateContractInput): Promise<Contract> {
@@ -1245,6 +1262,18 @@ class OfflineFirstContractRepository implements ContractRepository {
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.create(input);
+    }
+  }
+
+  async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    try {
+      await syncPendingOutbox();
+      const contracts = await this.remote.createMany(inputs);
+      cacheContracts(contracts);
+      return contracts;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.createMany(inputs);
     }
   }
 

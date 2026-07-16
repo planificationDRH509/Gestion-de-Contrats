@@ -43,6 +43,14 @@ export class SqliteContractRepository implements ContractRepository {
     });
   }
 
+  async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    const created: Contract[] = [];
+    for (const input of inputs) {
+      created.push(await this.create(input));
+    }
+    return created;
+  }
+
   async update(input: UpdateContractInput): Promise<Contract> {
     return sqliteApiRequest<Contract>(`/contracts/${encodeURIComponent(input.id)}`, {
       method: "PATCH",

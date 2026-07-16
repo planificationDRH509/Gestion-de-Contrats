@@ -12,6 +12,7 @@ export interface ContractRepository {
   getById(id: string): Promise<Contract | null>;
   getByIds(ids: string[], workspaceId: string): Promise<Contract[]>;
   create(input: CreateContractInput): Promise<Contract>;
+  createMany(inputs: CreateContractInput[]): Promise<Contract[]>;
   update(input: UpdateContractInput): Promise<Contract>;
   assignToDossier(
     workspaceId: string,
