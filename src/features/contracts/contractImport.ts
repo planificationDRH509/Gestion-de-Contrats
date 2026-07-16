@@ -26,6 +26,10 @@ export type ParsedContractImportTable = {
   delimiter: string;
 };
 
+const IMPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
+const IMPORT_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
+
+
 export type ContractImportDraft = {
   gender: Gender;
   firstName: string;
@@ -271,7 +275,16 @@ export function validateImportMapping(mapping: ContractImportMapping) {
 
 function getMappedValue(row: string[], mapping: ContractImportMapping, field: DestinationFieldId) {
   const index = mapping.findIndex((mappedField) => mappedField === field);
-  return index >= 0 ? (row[index] ?? "").trim() : "";
+  const value = index >= 0 ? (row[index] ?? "").trim() : "";
+
+  if (field === "position") {
+    return value.replace(IMPORT_PREFIXED_POSITION, "");
+  }
+  if (field === "address" || field === "assignment") {
+    return value.replace(IMPORT_PREFIXED_LOCATION, "");
+  }
+
+  return value;
 }
 
 function normalizeNif(value: string) {
@@ -301,28 +314,10 @@ export function parseImportMoney(value: string) {
   const compact = value.trim().replace(/\s|\u00a0/g, "").replace(/[^\d,.-]/g, "");
   if (!compact) return null;
 
-  const lastComma = compact.lastIndexOf(",");
-  const lastDot = compact.lastIndexOf(".");
-  let normalized = compact;
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    normalized =
-      lastComma > lastDot
-        ? compact.replace(/\./g, "").replace(",", ".")
-        : compact.replace(/,/g, "");
-  } else if (lastComma >= 0) {
-    const digitsAfterComma = compact.length - lastComma - 1;
-    normalized = digitsAfterComma > 0 && digitsAfterComma <= 2
-      ? compact.replace(",", ".")
-      : compact.replace(/,/g, "");
-  } else if (lastDot >= 0) {
-    const digitsAfterDot = compact.length - lastDot - 1;
-    normalized = digitsAfterDot === 3 ? compact.replace(/\./g, "") : compact;
-  }
-
+  const normalized = compact.replace(/[,.]/g, "");
   const parsed = Number.parseFloat(normalized);
   if (!Number.isFinite(parsed)) return null;
-  return Math.round(parsed * 100) / 100;
+  return parsed;
 }
 
 function parseDurationMonths(value: string) {
