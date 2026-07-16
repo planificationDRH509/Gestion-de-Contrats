@@ -72,13 +72,12 @@ export function ContractsImportModal({
   const pasteRef = useRef<HTMLTextAreaElement>(null);
   const restoreTimerRef = useRef<number | null>(null);
   const restoringRef = useRef(false);
-  const hydratedSourceSignatureRef = useRef<string | null>(null);
+  const hydratedClipboardSignatureRef = useRef<string | null>(null);
   const importContracts = useImportContracts();
 
   const table = useMemo(() => parsePastedContractTable(clipboardText), [clipboardText]);
   const headerSignature = table.headers.join("\u001f");
-  const mappingSignature = mapping.join("\u001f");
-  const sourceSignature = `${clipboardText}\u001f${mappingSignature}`;
+  const clipboardSignature = clipboardText;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -104,9 +103,7 @@ export function ContractsImportModal({
       setResponsibleUserId(currentUserId);
     }
     setImportError(null);
-    hydratedSourceSignatureRef.current = draft
-      ? `${draft.clipboardText}\u001f${draft.mapping.join("\u001f")}`
-      : "\u001f";
+    hydratedClipboardSignatureRef.current = draft?.clipboardText ?? "";
     restoreTimerRef.current = window.setTimeout(() => {
       pasteRef.current?.focus();
       restoringRef.current = false;
@@ -121,9 +118,10 @@ export function ContractsImportModal({
 
   useEffect(() => {
     if (!isOpen || table.headers.length === 0) return;
-    if (hydratedSourceSignatureRef.current === sourceSignature) return;
+    if (hydratedClipboardSignatureRef.current === clipboardSignature) return;
     setMapping(inferImportMapping(table.headers));
-  }, [headerSignature, isOpen, sourceSignature, table.headers]);
+    hydratedClipboardSignatureRef.current = clipboardSignature;
+  }, [clipboardSignature, headerSignature, isOpen, table.headers]);
 
   useEffect(() => {
     if (!isOpen || table.rows.length === 0 || mapping.length === 0) {
@@ -131,12 +129,10 @@ export function ContractsImportModal({
       setSelectedRowIds([]);
       return;
     }
-    if (hydratedSourceSignatureRef.current === sourceSignature) return;
     const rows = buildImportEditableRows(table, mapping).slice(0, MAX_IMPORT_ROWS);
     setEditableRows(rows);
     setSelectedRowIds(rows.map((row) => row.id));
-    hydratedSourceSignatureRef.current = sourceSignature;
-  }, [isOpen, mapping.length, mappingSignature, sourceSignature, table]);
+  }, [isOpen, mapping, table]);
 
   useEffect(() => {
     if (!isOpen || restoringRef.current) return;
