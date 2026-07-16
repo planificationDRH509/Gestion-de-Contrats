@@ -68,6 +68,18 @@ describe("contractImport", () => {
     expect(rows[0].assignment).toBe("hôpital");
   });
 
+  it("removes leading prepositions in address values too", () => {
+    const table = parsePastedContractTable(
+      [
+        "NIF\tNom\tPrénom\tSexe\tAdresse\tSalaire\tPoste\tAffectation",
+        "0010020034\tDOE\tJean\tHomme\tà l'Hôpital Général\t45000\tAgent\tMSPP"
+      ].join("\n")
+    );
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
+
+    expect(rows[0].address).toBe("Hôpital Général");
+  });
+
   it("allows rows to be edited or excluded before validation", () => {
     const table = parsePastedContractTable(
       [

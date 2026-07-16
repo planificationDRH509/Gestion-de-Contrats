@@ -280,7 +280,7 @@ function getMappedValue(row: string[], mapping: ContractImportMapping, field: De
   if (field === "position") {
     return value.replace(IMPORT_PREFIXED_POSITION, "");
   }
-  if (field === "assignment") {
+  if (field === "assignment" || field === "address") {
     return value
       .replace(/^((?:a|à)\s|au\s|aux\s|chez\s|en\s)/i, "")
       .replace(/^l['’]/i, "");
