@@ -264,8 +264,12 @@ export function ContractsImportModal({
     );
   }
 
-  function removeProblemRowsFromSelection() {
-    setSelectedRowIds((prev) => prev.filter((rowId) => !problemRowIds.has(rowId)));
+  function selectProblemRows() {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      problemRowIds.forEach((rowId) => next.add(rowId));
+      return Array.from(next);
+    });
   }
 
   function closeModal() {
@@ -475,10 +479,10 @@ export function ContractsImportModal({
               <button
                 className="btn btn-outline"
                 type="button"
-                onClick={removeProblemRowsFromSelection}
+                onClick={selectProblemRows}
                 disabled={problemRowIds.size === 0}
               >
-                Retirer alertes / erreurs
+                Sélectionner alertes / erreurs
               </button>
             </div>
             <div className="contracts-import-preview">
