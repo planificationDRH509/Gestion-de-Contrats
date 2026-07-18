@@ -108,6 +108,7 @@ export type OutboxItem = {
     | "contract.update"
     | "contract.delete"
     | "applicant.upsert"
+    | "applicant.delete"
     | "dossier.create"
     | "dossier.update"
     | "dossier.delete"

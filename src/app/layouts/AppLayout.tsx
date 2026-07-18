@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
-import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
+import {
+  getSupabaseSyncState,
+  syncSupabaseWorkspace
+} from "../../data/supabase/supabaseProvider";
+import { useAuth } from "../../features/auth/auth";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -10,6 +15,10 @@ const MIN_W = 200;
 const MAX_W = 480;
 
 export function AppLayout() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const workspaceId = user?.workspaceId ?? "";
+  const isSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === "true";
@@ -29,24 +38,61 @@ export function AppLayout() {
 
   const [isResizing, setIsResizing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncState, setSyncState] = useState(() => getSupabaseSyncState(workspaceId));
+
+  const refreshSyncState = useCallback(() => {
+    setIsOnline(navigator.onLine);
+    setSyncState(getSupabaseSyncState(workspaceId));
+  }, [workspaceId]);
+
+  const synchronize = useCallback(async () => {
+    if (!isSupabase || !workspaceId || !navigator.onLine) {
+      refreshSyncState();
+      return;
+    }
+    try {
+      await syncSupabaseWorkspace(workspaceId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contracts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
+        queryClient.invalidateQueries({ queryKey: ["identification"] }),
+        queryClient.invalidateQueries({ queryKey: ["tags"] })
+      ]);
+    } catch (error) {
+      console.error("Synchronisation hors ligne impossible.", error);
+    } finally {
+      refreshSyncState();
+    }
+  }, [isSupabase, queryClient, refreshSyncState, workspaceId]);
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      if ((import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase") {
-        syncSupabaseOutbox();
+      void synchronize();
+    };
+    const handleOffline = () => refreshSyncState();
+    const handleSyncState = () => refreshSyncState();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void synchronize();
       }
     };
-    const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("contribution-offline-sync", handleSyncState);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    refreshSyncState();
+    if (navigator.onLine) void synchronize();
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("contribution-offline-sync", handleSyncState);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, [refreshSyncState, synchronize]);
 
   useEffect(() => {
     try {
@@ -108,6 +154,8 @@ export function AppLayout() {
         onResizeStart={startResizing}
         isResizing={isResizing}
         isOnline={isOnline}
+        syncState={syncState}
+        onSync={() => void synchronize()}
       />
       <div className="main">
         <main className="app-content">

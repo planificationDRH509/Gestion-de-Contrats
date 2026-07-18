@@ -140,6 +140,18 @@ export function saveSuggestions(db: SuggestionsDb) {
   }
 }
 
+export function cacheSuggestions(partial: Partial<SuggestionsDb>) {
+  const current = loadSuggestions();
+  localStorage.setItem(
+    SUGGESTIONS_KEY,
+    JSON.stringify({
+      addresses: partial.addresses ?? current.addresses,
+      positions: partial.positions ?? current.positions,
+      institutions: partial.institutions ?? current.institutions
+    })
+  );
+}
+
 export async function syncSuggestionsFromServer(workspaceId: string) {
   try {
     const data = await sqliteApiRequest<SuggestionsDb>(`/autocompletion?workspaceId=${workspaceId}`);

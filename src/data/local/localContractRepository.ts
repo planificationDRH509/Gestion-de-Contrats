@@ -186,6 +186,15 @@ export class LocalContractRepository implements ContractRepository {
     contractIds: string[],
     dossierId: string | null
   ): Promise<number> {
+    return this.applyAssignToDossier(workspaceId, contractIds, dossierId, true);
+  }
+
+  async applyAssignToDossier(
+    workspaceId: string,
+    contractIds: string[],
+    dossierId: string | null,
+    shouldQueue = false
+  ): Promise<number> {
     if (contractIds.length === 0) {
       return 0;
     }
@@ -213,7 +222,7 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      queueOutbox(workspaceId, "contract.update", {
+      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
         contractIds,
         dossierId
       });
@@ -226,6 +235,15 @@ export class LocalContractRepository implements ContractRepository {
     workspaceId: string,
     contractIds: string[],
     status: ContractStatus
+  ): Promise<number> {
+    return this.applyUpdateStatus(workspaceId, contractIds, status, true);
+  }
+
+  async applyUpdateStatus(
+    workspaceId: string,
+    contractIds: string[],
+    status: ContractStatus,
+    shouldQueue = false
   ): Promise<number> {
     if (contractIds.length === 0) {
       return 0;
@@ -254,7 +272,7 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      queueOutbox(workspaceId, "contract.update", {
+      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
         contractIds,
         status
       });
@@ -267,6 +285,15 @@ export class LocalContractRepository implements ContractRepository {
     workspaceId: string,
     contractIds: string[],
     durationMonths: number
+  ): Promise<number> {
+    return this.applyUpdateDuration(workspaceId, contractIds, durationMonths, true);
+  }
+
+  async applyUpdateDuration(
+    workspaceId: string,
+    contractIds: string[],
+    durationMonths: number,
+    shouldQueue = false
   ): Promise<number> {
     if (contractIds.length === 0) {
       return 0;
@@ -295,7 +322,7 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      queueOutbox(workspaceId, "contract.update", {
+      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
         contractIds,
         durationMonths
       });
@@ -305,6 +332,10 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async softDelete(id: string, workspaceId: string): Promise<void> {
+    await this.applySoftDelete(id, workspaceId, true);
+  }
+
+  async applySoftDelete(id: string, workspaceId: string, shouldQueue = false): Promise<void> {
     const db = loadDb();
     const contractIndex = db.contracts.findIndex(
       (contract) => contract.id === id && contract.workspaceId === workspaceId
@@ -318,6 +349,6 @@ export class LocalContractRepository implements ContractRepository {
       updatedAt: now()
     };
     saveDb(db);
-    queueOutbox(workspaceId, "contract.delete", { id });
+    if (shouldQueue) queueOutbox(workspaceId, "contract.delete", { id });
   }
 }

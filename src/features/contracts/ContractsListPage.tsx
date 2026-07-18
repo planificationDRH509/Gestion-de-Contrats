@@ -202,6 +202,12 @@ export function ContractsListPage() {
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!actionMessage) return;
+    const timeout = window.setTimeout(() => setActionMessage(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [actionMessage]);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
         setContextMenu(null);
@@ -1208,12 +1214,18 @@ export function ContractsListPage() {
     <div className="page-container contracts-page">
       <header className="section-header contracts-page-header">
         <div className="list-page-heading">
-          <span className="page-eyebrow">Gestion RH</span>
-          <h1 className="section-title">Contrats</h1>
-          <p className="section-subtitle">Consultez, filtrez et organisez les contrats de votre espace.</p>
+          <div>
+            <span className="page-eyebrow">Gestion RH</span>
+            <h1 className="section-title">Contrats</h1>
+            <p className="section-subtitle">Consultez, filtrez et organisez les contrats de votre espace.</p>
+          </div>
+          <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
+            <span className="material-symbols-rounded icon">add</span>
+            Nouveau contrat
+          </button>
         </div>
         <div className="toolbar-unified">
-          <div className="view-switch-unified">
+          <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
             <button
               className={`view-pill-unified ${activeView === "contracts" ? "active" : ""}`}
               onClick={() => setActiveView("contracts")}
@@ -1228,17 +1240,7 @@ export function ContractsListPage() {
               <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder</span>
               Dossiers
             </button>
-            <button
-              className="view-pill-unified"
-              onClick={() => navigate("/app/contrats/nouveau")}
-              style={{ color: "var(--accent)" }}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>add_circle</span>
-              Nouveau
-            </button>
           </div>
-
-          <div className="toolbar-divider" />
 
           {activeView === "contracts" && (
             <>
@@ -1304,76 +1306,65 @@ export function ContractsListPage() {
                 </button>
               ) : null}
 
-              <button 
-                className={`icon-btn ${statusFilter !== "all" ? "primary" : ""}`}
-                title="Filtrer par état"
-                onClick={(e) => handleContextFromButton(e, "filter-trigger")}
-              >
-                <span className="material-symbols-rounded">filter_list</span>
-              </button>
-
-              <button
-                className={`icon-btn ${dateFilterMode !== "all" ? "primary" : ""}`}
-                title="Filtrer par date"
-                onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}
-              >
-                <span className="material-symbols-rounded">event</span>
-              </button>
-
-              <button
-                className={`icon-btn ${tagFilterId ? "primary" : ""}`}
-                title="Filtrer par tag"
-                onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}
-              >
-                <span className="material-symbols-rounded">label</span>
-              </button>
-
-              <button 
-                className="icon-btn"
-                title="Trier"
-                onClick={(e) => handleContextFromButton(e, "sort-trigger")}
-              >
-                <span className="material-symbols-rounded">sort</span>
-              </button>
-
-              <button
-                className={`icon-btn ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 ? "primary" : ""}`}
-                title="Filtres avancés"
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              >
-                <span className="material-symbols-rounded">tune</span>
-              </button>
-
-              <button
-                className="icon-btn"
-                title="Annuler les filtres"
-                onClick={clearFilters}
-                disabled={!hasActiveFilters}
-              >
-                <span className="material-symbols-rounded">filter_alt_off</span>
-              </button>
-
-              <div className="toolbar-divider" />
-
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "4px" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-muted)" }}>Global</span>
-                <label className="switch" style={{ transform: "scale(0.7)" }}>
-                  <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                  <span className="switch-slider" />
-                </label>
+              <div className="contracts-toolbar-actions" role="group" aria-label="Filtres et tri">
+                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
+                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
+                </button>
+                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
+                  <span className="material-symbols-rounded">event</span><span>Date</span>
+                </button>
+                <button className={`toolbar-action-button ${tagFilterId ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}>
+                  <span className="material-symbols-rounded">label</span><span>Tag</span>
+                </button>
+                <button className="toolbar-action-button" onClick={(e) => handleContextFromButton(e, "sort-trigger")}>
+                  <span className="material-symbols-rounded">sort</span><span>Trier</span>
+                </button>
+                <button
+                  className={`toolbar-action-button ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 ? "active" : ""}`}
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  aria-expanded={showAdvancedFilters}
+                >
+                  <span className="material-symbols-rounded">tune</span><span>Plus</span>
+                </button>
               </div>
+
+              {hasActiveFilters ? <button className="toolbar-clear-button" onClick={clearFilters}>Réinitialiser</button> : null}
+
+              <label className="contracts-scope-switch">
+                <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
+                <span className="material-symbols-rounded">{showAll ? "groups" : "person"}</span>
+                <span>{showAll ? "Tous les contrats" : "Mes contrats"}</span>
+              </label>
+
             </>
           )}
         </div>
       </header>
 
-      {actionError ? <div className="form-error">{actionError}</div> : null}
-      {actionMessage ? <div className="form-success">{actionMessage}</div> : null}
+      {actionError ? (
+        <div className="app-toast app-toast-error" role="alert">
+          <span className="material-symbols-rounded">error</span>
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button>
+        </div>
+      ) : null}
+      {actionMessage ? (
+        <div className="app-toast app-toast-success" role="status">
+          <span className="material-symbols-rounded">check_circle</span>
+          <span>{actionMessage}</span>
+          <button type="button" onClick={() => setActionMessage(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button>
+        </div>
+      ) : null}
 
       {activeView === "dossiers" ? (
         <DossiersInlinePanel
           workspaceId={workspaceId}
           onDossierCreated={(dossierId) => void handleDossierCreated(dossierId)}
+          onViewDossier={(dossierId) => {
+            setDossierFilterId(dossierId);
+            setActiveView("contracts");
+            setPage(1);
+          }}
         />
       ) : (
         <div className="card" style={{ padding: "0", border: "none", background: "transparent", boxShadow: "none" }}>

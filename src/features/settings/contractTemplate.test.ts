@@ -40,6 +40,8 @@ describe("reference contract template", () => {
     expect(template.css).toContain("height: 11in");
     expect(template.css).toContain("padding: 53.4pt 72pt 49pt");
     expect(template.css).toContain("p.contract-title");
+    expect(template.css).toContain('.contract-sheet[data-page="3"] p');
+    expect(template.css).toContain("margin-bottom: 7.4pt");
   });
 
   it("renders dates and duration in the same presentation as the reference", () => {

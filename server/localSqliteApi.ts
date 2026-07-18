@@ -1163,9 +1163,28 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === `${API_PREFIX}/applicants` && method === "GET") {
+    const workspaceId = asString(url.searchParams.get("workspaceId"));
+    if (!workspaceId) {
+      throw new HttpError(400, "workspaceId est obligatoire.");
+    }
+    const rows = db
+      .prepare(`
+        SELECT *
+        FROM identification
+        WHERE workspace_id = :workspace_id
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+      `)
+      .all({ workspace_id: workspaceId }) as RawRecord[];
+    sendJson(res, 200, rows.map(mapApplicant));
+    return;
+  }
+
   if (pathname === `${API_PREFIX}/applicants/upsert` && method === "POST") {
     const body = await parseBody(req);
     const workspaceId = asString(body.workspaceId) || "workspace_default";
+    const existingId = asNullableString(body.id);
     const nif = asNullableString(body.nif);
     const ninu = asNullableString(body.ninu);
     const gender = asString(body.gender) as "Homme" | "Femme";
@@ -1213,7 +1232,18 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       );
     }
 
-    const target = byNif ?? byNinu;
+    const byExistingId = existingId
+      ? (db
+          .prepare(`
+            SELECT *
+            FROM identification
+            WHERE nif = :nif
+              AND deleted_at IS NULL
+            LIMIT 1
+          `)
+          .get({ nif: existingId }) as RawRecord | undefined)
+      : undefined;
+    const target = byExistingId ?? byNif ?? byNinu;
 
     if (target) {
       const previousNif = asString(target.nif);
@@ -1296,6 +1326,29 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       .get({ nif }) as RawRecord;
 
     sendJson(res, 200, mapApplicant(saved));
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/applicants/soft-delete` && method === "POST") {
+    const body = await parseBody(req);
+    const id = asString(body.id);
+    const workspaceId = asString(body.workspaceId);
+    if (!id || !workspaceId) {
+      throw new HttpError(400, "id et workspaceId sont obligatoires.");
+    }
+    db.prepare(`
+      UPDATE identification
+      SET deleted_at = :deleted_at,
+          updated_at = :updated_at
+      WHERE nif = :nif
+        AND workspace_id = :workspace_id
+    `).run({
+      deleted_at: nowIso(),
+      updated_at: nowIso(),
+      nif: id,
+      workspace_id: workspaceId
+    });
+    sendJson(res, 200, { ok: true });
     return;
   }
 

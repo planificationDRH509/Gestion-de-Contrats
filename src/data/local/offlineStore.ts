@@ -25,7 +25,14 @@ export function isOfflineFailure(error: unknown): boolean {
     return true;
   }
   const message = error instanceof Error ? error.message.toLowerCase() : "";
-  return /failed to fetch|network|fetch|load failed|internet|offline/.test(message);
+  if (/failed to fetch|network|fetch|load failed|internet|offline/.test(message)) {
+    return true;
+  }
+  const cause =
+    error && typeof error === "object" && "cause" in error
+      ? (error as { cause?: unknown }).cause
+      : undefined;
+  return cause !== undefined && cause !== error ? isOfflineFailure(cause) : false;
 }
 
 export function cacheApplicant(applicant: Applicant) {
@@ -36,6 +43,43 @@ export function cacheApplicant(applicant: Applicant) {
   } else {
     db.applicants.push(applicant);
   }
+  saveDb(db);
+}
+
+export function cacheApplicants(applicants: Applicant[]) {
+  if (applicants.length === 0) return;
+  const db = loadDb();
+  const byId = new Map(db.applicants.map((applicant, index) => [applicant.id, index]));
+  for (const applicant of applicants) {
+    const index = byId.get(applicant.id);
+    if (index === undefined) {
+      db.applicants.push(applicant);
+      byId.set(applicant.id, db.applicants.length - 1);
+    } else {
+      db.applicants[index] = applicant;
+    }
+  }
+  saveDb(db);
+}
+
+export function replaceLocalApplicantId(
+  workspaceId: string,
+  fromId: string,
+  applicant: Applicant
+) {
+  const db = loadDb();
+  db.applicants = db.applicants.filter(
+    (item) => !(item.workspaceId === workspaceId && item.id === fromId)
+  );
+  const existingIndex = db.applicants.findIndex((item) => item.id === applicant.id);
+  if (existingIndex >= 0) db.applicants[existingIndex] = applicant;
+  else db.applicants.push(applicant);
+  db.contracts = db.contracts.map((contract) =>
+    contract.workspaceId === workspaceId &&
+    (contract.applicantId === fromId || contract.nif === fromId)
+      ? { ...contract, applicantId: applicant.id, nif: applicant.nif ?? applicant.id }
+      : contract
+  );
   saveDb(db);
 }
 
@@ -216,12 +260,26 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
         );
       });
 
+  const nextId = normalizedNif || existing?.id || input.id || createId();
+  const duplicate = db.applicants.find(
+    (applicant) =>
+      applicant.id !== existing?.id &&
+      applicant.workspaceId === input.workspaceId &&
+      !applicant.deletedAt &&
+      (applicant.id === nextId ||
+        Boolean(normalizedNinu && applicant.ninu?.trim() === normalizedNinu))
+  );
+  if (duplicate) {
+    throw new Error("Ce NIF ou ce NINU appartient déjà à une autre personne.");
+  }
+
   const applicant: Applicant = {
     ...(existing ?? {
-      id: input.id || normalizedNif || createId(),
+      id: normalizedNif || input.id || createId(),
       workspaceId: input.workspaceId,
       createdAt: timestamp
     }),
+    id: nextId,
     gender: input.gender,
     firstName: formatFirstName(input.firstName),
     lastName: formatLastName(input.lastName),
@@ -234,6 +292,21 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
   };
 
   const index = db.applicants.findIndex((item) => item.id === applicant.id);
+  if (existing && existing.id !== applicant.id) {
+    const oldIndex = db.applicants.findIndex((item) => item.id === existing.id);
+    if (oldIndex >= 0) db.applicants.splice(oldIndex, 1);
+    db.contracts = db.contracts.map((contract) =>
+      contract.workspaceId === input.workspaceId &&
+      (contract.applicantId === existing.id || contract.nif === existing.id)
+        ? {
+            ...contract,
+            applicantId: applicant.id,
+            nif: applicant.nif,
+            updatedAt: timestamp
+          }
+        : contract
+    );
+  }
   if (index >= 0) {
     db.applicants[index] = applicant;
   } else {
@@ -242,6 +315,22 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
   saveDb(db);
   queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
   return applicant;
+}
+
+export function deleteApplicantOffline(id: string, workspaceId: string) {
+  const db = loadDb();
+  const index = db.applicants.findIndex(
+    (applicant) => applicant.id === id && applicant.workspaceId === workspaceId
+  );
+  if (index === -1) return;
+  const timestamp = now();
+  db.applicants[index] = {
+    ...db.applicants[index],
+    deletedAt: timestamp,
+    updatedAt: timestamp
+  };
+  saveDb(db);
+  queueOutbox(workspaceId, "applicant.delete", { id });
 }
 
 export function getPendingOutbox(): OutboxItem[] {
@@ -268,6 +357,129 @@ export function getPendingContractIds(): Set<string> {
     }
   }
   return ids;
+}
+
+export function getPendingOutboxCount(workspaceId?: string): number {
+  return getPendingOutbox().filter(
+    (item) => !workspaceId || item.workspaceId === workspaceId
+  ).length;
+}
+
+export function setWorkspaceSyncMetadata(
+  workspaceId: string,
+  metadata: { lastSyncedAt?: string | null; lastError?: string | null }
+) {
+  const db = loadDb();
+  db.syncMetadata[workspaceId] = {
+    ...db.syncMetadata[workspaceId],
+    ...metadata
+  };
+  saveDb(db);
+}
+
+export function getWorkspaceSyncMetadata(workspaceId: string) {
+  return loadDb().syncMetadata[workspaceId] ?? {};
+}
+
+export function getWorkspaceCacheCounts(workspaceId: string) {
+  const db = loadDb();
+  return {
+    applicants: db.applicants.filter(
+      (item) => item.workspaceId === workspaceId && !item.deletedAt
+    ).length,
+    contracts: db.contracts.filter(
+      (item) => item.workspaceId === workspaceId && !item.deletedAt
+    ).length,
+    dossiers: db.dossiers.filter(
+      (item) => item.workspaceId === workspaceId && !item.deletedAt
+    ).length,
+    tags: db.tags.filter((item) => item.workspaceId === workspaceId && !item.deletedAt).length
+  };
+}
+
+export function replaceWorkspaceCache(
+  workspaceId: string,
+  snapshot: {
+    applicants: Applicant[];
+    contracts: Contract[];
+    dossiers: Dossier[];
+    tags: Tag[];
+  }
+) {
+  const db = loadDb();
+  const pending = db.outbox.filter(
+    (item) => item.workspaceId === workspaceId && !item.syncedAt
+  );
+
+  const pendingApplicantIds = new Set<string>();
+  const pendingContractIds = new Set<string>();
+  const pendingDossierIds = new Set<string>();
+  const pendingTagIds = new Set<string>();
+  const pendingTagContractIds = new Set<string>();
+
+  for (const item of pending) {
+    const payload = item.payload as {
+      id?: string;
+      nif?: string;
+      contractId?: string;
+      contractIds?: string[];
+      tagId?: string;
+    };
+    if (item.type.startsWith("applicant.")) {
+      if (payload.id) pendingApplicantIds.add(payload.id);
+      if (payload.nif) pendingApplicantIds.add(payload.nif);
+    }
+    if (item.type.startsWith("contract.")) {
+      if (payload.id) pendingContractIds.add(payload.id);
+      payload.contractIds?.forEach((id) => pendingContractIds.add(id));
+    }
+    if (item.type.startsWith("dossier.") && payload.id) pendingDossierIds.add(payload.id);
+    if (item.type === "tag.create" && payload.id) pendingTagIds.add(payload.id);
+    if ((item.type === "tag.assign" || item.type === "tag.remove") && payload.contractId) {
+      pendingTagContractIds.add(payload.contractId);
+    }
+  }
+
+  const overlayPending = <T extends { id: string }>(remote: T[], local: T[], ids: Set<string>) => {
+    const byId = new Map(remote.map((item) => [item.id, item]));
+    local.filter((item) => ids.has(item.id)).forEach((item) => byId.set(item.id, item));
+    return Array.from(byId.values());
+  };
+
+  const localApplicants = db.applicants.filter((item) => item.workspaceId === workspaceId);
+  const localContracts = db.contracts.filter((item) => item.workspaceId === workspaceId);
+  const previousWorkspaceContractIds = new Set(localContracts.map((contract) => contract.id));
+  const localDossiers = db.dossiers.filter((item) => item.workspaceId === workspaceId);
+  const localTags = db.tags.filter((item) => item.workspaceId === workspaceId);
+  pendingTagContractIds.forEach((id) => pendingContractIds.add(id));
+
+  db.applicants = [
+    ...db.applicants.filter((item) => item.workspaceId !== workspaceId),
+    ...overlayPending(snapshot.applicants, localApplicants, pendingApplicantIds)
+  ];
+  db.contracts = [
+    ...db.contracts.filter((item) => item.workspaceId !== workspaceId),
+    ...overlayPending(snapshot.contracts, localContracts, pendingContractIds)
+  ];
+  db.dossiers = [
+    ...db.dossiers.filter((item) => item.workspaceId !== workspaceId),
+    ...overlayPending(snapshot.dossiers, localDossiers, pendingDossierIds)
+  ];
+  db.tags = [
+    ...db.tags.filter((item) => item.workspaceId !== workspaceId),
+    ...overlayPending(snapshot.tags, localTags, pendingTagIds)
+  ];
+
+  db.contractTags = db.contractTags.filter(
+    (link) => !previousWorkspaceContractIds.has(link.contractId)
+  );
+  for (const contract of db.contracts.filter((item) => item.workspaceId === workspaceId)) {
+    for (const tag of contract.tags ?? []) {
+      db.contractTags.push({ contractId: contract.id, tagId: tag.id, createdAt: now() });
+    }
+  }
+
+  saveDb(db);
 }
 
 export function buildOfflineContract(input: CreateContractInput): Contract {

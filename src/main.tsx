@@ -14,9 +14,15 @@ import "@fontsource/space-grotesk/600.css";
 import "material-symbols/rounded.css";
 import "./styles/global.css";
 import "./styles/print.css";
+import { initializeLocalDb } from "./data/local/localDb";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+async function bootstrap() {
+  await initializeLocalDb();
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
+
+void bootstrap();

@@ -1,6 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSupabaseClient } from "../../data/supabase/supabaseClient";
-import { Gender } from "../../data/types";
+import { Applicant, Gender } from "../../data/types";
+import { getDataProvider } from "../../data/dataProvider";
+
+const provider = getDataProvider();
+
+function mapApplicant(applicant: Applicant): IdentificationRow {
+  return {
+    nif: applicant.nif || applicant.id,
+    nom: applicant.lastName,
+    prenom: applicant.firstName,
+    sexe: applicant.gender,
+    ninu: applicant.ninu ?? null,
+    adresse: applicant.address,
+    workspace_id: applicant.workspaceId,
+    created_at: applicant.createdAt,
+    updated_at: applicant.updatedAt ?? null,
+    deleted_at: applicant.deletedAt ?? null,
+    created_by: applicant.createdBy ?? null
+  };
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +49,7 @@ export interface CreateIdentificationInput {
 
 export interface UpdateIdentificationInput {
   oldNif: string; // Used to locate the row
+  workspaceId: string;
   nif?: string;   // New NIF value
   nom?: string;
   prenom?: string;
@@ -44,18 +63,7 @@ export interface UpdateIdentificationInput {
 export function useIdentificationList(workspaceId: string) {
   return useQuery<IdentificationRow[]>({
     queryKey: ["identification", workspaceId],
-    queryFn: async () => {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("identification")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-
-      if (error) throw new Error(error.message);
-      return (data ?? []) as unknown as IdentificationRow[];
-    },
+    queryFn: async () => (await provider.applicants.list(workspaceId)).map(mapApplicant),
     enabled: !!workspaceId,
   });
 }
@@ -64,37 +72,24 @@ export function useCreateIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateIdentificationInput) => {
-      const supabase = getSupabaseClient();
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("identification")
-        .insert({
-          nif: input.nif,
-          nom: input.nom,
-          prenom: input.prenom,
-          sexe: input.sexe,
-          ninu: input.ninu,
-          adresse: input.adresse,
-          workspace_id: input.workspace_id,
-          created_by: input.created_by ?? null,
-          created_at: now,
-          updated_at: now,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        // Duplicate NIF
-        if (error.code === "23505" && error.message.includes("identification_pkey")) {
-          throw new Error("Ce NIF existe déjà dans la base d'identification.");
-        }
-        // Duplicate NINU
-        if (error.code === "23505" && error.message.includes("ninu")) {
-          throw new Error("Ce NINU est déjà attribué à une autre personne.");
-        }
-        throw new Error(error.message);
+      const existing = await provider.applicants.findByNifOrNinu(
+        input.workspace_id,
+        input.nif,
+        input.ninu
+      );
+      if (existing) {
+        throw new Error("Ce NIF ou ce NINU existe déjà dans la base d'identification.");
       }
-      return data as unknown as IdentificationRow;
+      return mapApplicant(await provider.applicants.upsert({
+        workspaceId: input.workspace_id,
+        gender: input.sexe,
+        firstName: input.prenom,
+        lastName: input.nom,
+        nif: input.nif,
+        ninu: input.ninu,
+        address: input.adresse,
+        createdBy: input.created_by ?? null
+      }));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
@@ -106,31 +101,19 @@ export function useUpdateIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpdateIdentificationInput) => {
-      const supabase = getSupabaseClient();
-      const updates: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-      };
-      if (input.nif !== undefined) updates.nif = input.nif;
-      if (input.nom !== undefined) updates.nom = input.nom;
-      if (input.prenom !== undefined) updates.prenom = input.prenom;
-      if (input.sexe !== undefined) updates.sexe = input.sexe;
-      if (input.ninu !== undefined) updates.ninu = input.ninu;
-      if (input.adresse !== undefined) updates.adresse = input.adresse;
-
-      const { data, error } = await supabase
-        .from("identification")
-        .update(updates)
-        .eq("nif", input.oldNif)
-        .select()
-        .single();
-
-      if (error) {
-        if (error.code === "23505" && error.message.includes("ninu")) {
-          throw new Error("Ce NINU est déjà attribué à une autre personne.");
-        }
-        throw new Error(error.message);
-      }
-      return data as unknown as IdentificationRow;
+      const current = await provider.applicants.getById(input.oldNif);
+      if (!current) throw new Error("Fiche d'identification introuvable.");
+      return mapApplicant(await provider.applicants.upsert({
+        id: input.oldNif,
+        workspaceId: input.workspaceId,
+        gender: input.sexe ?? current.gender,
+        firstName: input.prenom ?? current.firstName,
+        lastName: input.nom ?? current.lastName,
+        nif: input.nif ?? current.nif ?? current.id,
+        ninu: input.ninu !== undefined ? input.ninu : current.ninu,
+        address: input.adresse ?? current.address,
+        createdBy: current.createdBy
+      }));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
@@ -141,15 +124,8 @@ export function useUpdateIdentification() {
 export function useDeleteIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (nif: string) => {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from("identification")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("nif", nif);
-
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: ({ nif, workspaceId }: { nif: string; workspaceId: string }) =>
+      provider.applicants.softDelete(nif, workspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
     },
@@ -160,15 +136,6 @@ export function useDeleteIdentification() {
  * Check if a NIF already exists in the identification table.
  * Returns true if the NIF is already taken.
  */
-export async function checkNifExists(nif: string): Promise<boolean> {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("identification")
-    .select("nif")
-    .eq("nif", nif)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data !== null;
+export async function checkNifExists(nif: string, workspaceId: string): Promise<boolean> {
+  return (await provider.applicants.findByNifOrNinu(workspaceId, nif, null)) !== null;
 }

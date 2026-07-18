@@ -98,7 +98,7 @@ export function ContractNewPage() {
   );
   const { data: spreadsheetData, isLoading: spreadsheetLoading } = useContractsList(spreadsheetQueryParams);
   const [entryMode, setEntryMode] = useState<"form" | "sheet">(
-    () => "sheet"
+    () => (localStorage.getItem("new_contract_entry_mode") === "form" ? "form" : "sheet")
   );
   const isSheetMode = entryMode === "sheet";
   const [isSheetFullscreen, setIsSheetFullscreen] = useState(false);
@@ -141,7 +141,7 @@ export function ContractNewPage() {
     watch,
     reset,
     setFocus,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting, isDirty }
   } = useForm<ContractFormSchema>({
     resolver: zodResolver(contractFormSchema),
     defaultValues
@@ -699,6 +699,16 @@ export function ContractNewPage() {
           <p className="section-subtitle">Renseignez les informations du collaborateur et de son affectation.</p>
         </div>
         <div className="new-contract-header-actions">
+          <div className="entry-mode-switch" role="group" aria-label="Mode de saisie">
+            <button type="button" className={!isSheetMode ? "active" : ""} onClick={() => setEntryMode("form")}>
+              <span className="material-symbols-rounded">description</span>
+              Formulaire
+            </button>
+            <button type="button" className={isSheetMode ? "active" : ""} onClick={() => setEntryMode("sheet")}>
+              <span className="material-symbols-rounded">table_view</span>
+              Tableur
+            </button>
+          </div>
           {sheetControls}
           {isSheetMode ? (
             <button
@@ -713,17 +723,6 @@ export function ContractNewPage() {
               </span>
             </button>
           ) : null}
-          <button
-            type="button"
-            className={`icon-btn ${isSheetMode ? "primary" : ""}`}
-            title={isSheetMode ? "Basculer vers le formulaire" : "Basculer vers la vue tableur"}
-            onClick={() => setEntryMode((prev) => (prev === "form" ? "sheet" : "form"))}
-            aria-label={isSheetMode ? "Afficher le formulaire" : "Afficher la vue tableur"}
-          >
-            <span className="material-symbols-rounded">
-              {isSheetMode ? "description" : "table_view"}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -756,6 +755,10 @@ export function ContractNewPage() {
         {nifError && null}
 
         <div className="form-grid compact">
+          <div className="form-section-heading span-2 form-section-heading-first">
+            <span className="material-symbols-rounded">person</span>
+            <div><h2>Identité</h2><p>Informations personnelles et coordonnées.</p></div>
+          </div>
           <label className="field">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
               <span>NIF *</span>
@@ -899,6 +902,11 @@ export function ContractNewPage() {
             ) : null}
           </div>
 
+          <div className="form-section-heading span-2">
+            <span className="material-symbols-rounded">work</span>
+            <div><h2>Affectation et rémunération</h2><p>Fonction, établissement et conditions du contrat.</p></div>
+          </div>
+
           <div className="field" ref={positionContainerRef}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>Poste *</span>
@@ -980,6 +988,11 @@ export function ContractNewPage() {
             />
           </div>
 
+          <div className="form-section-heading span-2">
+            <span className="material-symbols-rounded">folder</span>
+            <div><h2>Classement</h2><p>Dossier, durée et étiquettes de suivi.</p></div>
+          </div>
+
           <div className="field span-2">
             <span>Dossier</span>
             <div className="field-inline-actions">
@@ -1041,10 +1054,14 @@ export function ContractNewPage() {
           </div>
         </div>
 
-        {serverError ? <div className="form-error">{serverError}</div> : null}
-        {successMessage ? <div className="form-success">{successMessage}</div> : null}
+        {serverError ? <div className="app-toast app-toast-error" role="alert"><span className="material-symbols-rounded">error</span><span>{serverError}</span><button type="button" onClick={() => setServerError(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button></div> : null}
+        {successMessage ? <div className="app-toast app-toast-success" role="status"><span className="material-symbols-rounded">check_circle</span><span>{successMessage}</span><button type="button" onClick={() => setSuccessMessage(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button></div> : null}
 
-        <div className="form-actions">
+        <div className="form-actions form-actions-sticky">
+          <div className="form-save-status" aria-live="polite">
+            <span className="material-symbols-rounded">{isSubmitting ? "sync" : isDirty ? "cloud_done" : "check_circle"}</span>
+            <span>{isSubmitting ? "Enregistrement…" : isDirty ? "Brouillon enregistré automatiquement" : "Aucune modification en attente"}</span>
+          </div>
           <button
             ref={saveButtonRef}
             className="btn btn-primary"

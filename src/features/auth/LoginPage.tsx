@@ -29,15 +29,10 @@ export function LoginPage() {
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth-brand-icon material-symbols-rounded">diversity_3</span>
-          <span>Ressources Humaines</span>
+          <span>Connexion</span>
         </div>
         <div className="auth-heading">
-          <span className="auth-eyebrow">Espace sécurisé</span>
-          <h1>Heureux de vous revoir</h1>
-          <p className="auth-subtitle">
-            Connectez-vous pour gérer les contrats et les dossiers de votre équipe.
-          </p>
+          <h1>Connexion</h1>
         </div>
         <form onSubmit={handleSubmit} className="auth-form" aria-label="Connexion">
           <label className="field">
@@ -47,7 +42,7 @@ export function LoginPage() {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
-              placeholder="Votre nom d’utilisateur"
+              placeholder="Nom d’utilisateur"
             />
           </label>
           <label className="field">
@@ -58,7 +53,7 @@ export function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
-              placeholder="Votre mot de passe"
+              placeholder="Mot de passe"
             />
           </label>
           {error ? <div className="form-error">{error}</div> : null}
@@ -70,15 +65,10 @@ export function LoginPage() {
       </div>
       <div className="auth-side">
         <div className="auth-side-card">
-          <span className="auth-side-kicker">Pilotage RH</span>
-          <div className="auth-side-title">Le travail administratif, enfin plus fluide.</div>
-          <div className="auth-side-text">
-            Centralisez les contrats, suivez les dossiers et gardez une vision claire de vos effectifs.
-          </div>
-          <div className="auth-feature-list">
-            <span><i className="material-symbols-rounded">check_circle</i> Données centralisées</span>
-            <span><i className="material-symbols-rounded">check_circle</i> Impression optimisée</span>
-            <span><i className="material-symbols-rounded">check_circle</i> Suivi en temps réel</span>
+          <div className="auth-side-title">MSPP - DRH</div>
+          <div className="haitian-emblem" aria-label="Armoirie haïtienne" role="img">
+            <span className="material-symbols-rounded">park</span>
+            <span className="material-symbols-rounded">flag</span>
           </div>
         </div>
       </div>

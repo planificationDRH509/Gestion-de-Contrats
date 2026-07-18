@@ -15,6 +15,12 @@ import {
   normalizeOptionalDate,
   normalizeOptionalText
 } from "../../lib/dossier";
+import { get, set } from "idb-keyval";
+
+export type LocalSyncMetadata = {
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+};
 
 export type LocalDb = {
   workspaces: Workspace[];
@@ -25,10 +31,16 @@ export type LocalDb = {
   contractTags: Array<{ contractId: string; tagId: string; createdAt: string }>;
   printJobs: ContractPrintJob[];
   outbox: OutboxItem[];
+  syncMetadata: Record<string, LocalSyncMetadata>;
 };
 
 const DB_KEY = "contribution_local_db";
+const IDB_KEY = "contribution_offline_database_v2";
+const INIT_MARKER_KEY = "contribution_offline_database_ready";
 export const DEFAULT_WORKSPACE_ID = "workspace_default";
+
+let memoryDb: LocalDb | null = null;
+let persistenceQueue: Promise<void> = Promise.resolve();
 
 function now() {
   return new Date().toISOString();
@@ -99,7 +111,8 @@ function seedDatabase(): LocalDb {
     tags: [],
     contractTags: [],
     printJobs: [],
-    outbox: []
+    outbox: [],
+    syncMetadata: {}
   };
 }
 
@@ -107,6 +120,7 @@ function normalizeDb(value: LocalDb): LocalDb {
   return {
     ...value,
     workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
+    applicants: Array.isArray(value.applicants) ? value.applicants : [],
     dossiers: Array.isArray(value.dossiers)
         ? value.dossiers.map((dossier) => ({
           ...dossier,
@@ -149,27 +163,109 @@ function normalizeDb(value: LocalDb): LocalDb {
       : [],
     contractTags: Array.isArray(value.contractTags) ? value.contractTags : [],
     printJobs: Array.isArray(value.printJobs) ? value.printJobs : [],
-    outbox: Array.isArray(value.outbox) ? value.outbox : []
+    outbox: Array.isArray(value.outbox) ? value.outbox : [],
+    syncMetadata:
+      value.syncMetadata && typeof value.syncMetadata === "object"
+        ? value.syncMetadata
+        : {}
   };
 }
 
+function cloneDb(db: LocalDb): LocalDb {
+  if (typeof structuredClone === "function") {
+    return structuredClone(db);
+  }
+  return JSON.parse(JSON.stringify(db)) as LocalDb;
+}
+
+function loadLegacyDb(): LocalDb | null {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    return raw ? normalizeDb(JSON.parse(raw) as LocalDb) : null;
+  } catch {
+    return null;
+  }
+}
+
+function queueIndexedDbWrite(db: LocalDb): Promise<void> {
+  if (typeof indexedDB === "undefined") {
+    return Promise.resolve();
+  }
+  const snapshot = cloneDb(db);
+  persistenceQueue = persistenceQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await set(IDB_KEY, snapshot);
+    });
+  return persistenceQueue;
+}
+
+/**
+ * Hydrates the synchronous repository snapshot from IndexedDB before React starts.
+ * Existing localStorage data is migrated once, then only a tiny readiness marker
+ * remains in localStorage so the offline database is not constrained by its quota.
+ */
+export async function initializeLocalDb(): Promise<void> {
+  if (memoryDb) return;
+
+  let stored: LocalDb | undefined;
+  if (typeof indexedDB !== "undefined") {
+    try {
+      stored = await get<LocalDb>(IDB_KEY);
+    } catch {
+      // Private browsing or a denied IndexedDB falls back to the legacy store.
+    }
+  }
+
+  const legacy = loadLegacyDb();
+  memoryDb = normalizeDb(stored ?? legacy ?? seedDatabase());
+
+  try {
+    if (typeof indexedDB !== "undefined") {
+      await set(IDB_KEY, cloneDb(memoryDb));
+      localStorage.removeItem(DB_KEY);
+    }
+    localStorage.setItem(INIT_MARKER_KEY, "1");
+  } catch {
+    // The in-memory database still keeps the current session usable.
+  }
+}
+
 export function loadDb(): LocalDb {
-  const raw = localStorage.getItem(DB_KEY);
-  if (!raw) {
-    const seeded = seedDatabase();
-    localStorage.setItem(DB_KEY, JSON.stringify(seeded));
-    return seeded;
+  // Vitest clears localStorage between tests while retaining ES modules.
+  if (import.meta.env.MODE === "test" && !localStorage.getItem(INIT_MARKER_KEY)) {
+    memoryDb = null;
   }
-  const parsed = JSON.parse(raw) as LocalDb;
-  const normalized = normalizeDb(parsed);
-  if (JSON.stringify(parsed) !== JSON.stringify(normalized)) {
-    saveDb(normalized);
+
+  if (!memoryDb) {
+    memoryDb = loadLegacyDb() ?? seedDatabase();
+    try {
+      localStorage.setItem(INIT_MARKER_KEY, "1");
+    } catch {
+      // Ignore storage failures; callers can still use the in-memory snapshot.
+    }
+    void queueIndexedDbWrite(memoryDb);
   }
-  return normalized;
+  return cloneDb(memoryDb);
 }
 
 export function saveDb(db: LocalDb) {
-  localStorage.setItem(DB_KEY, JSON.stringify(db));
+  memoryDb = normalizeDb(cloneDb(db));
+  try {
+    localStorage.setItem(INIT_MARKER_KEY, "1");
+    if (typeof indexedDB === "undefined") {
+      localStorage.setItem(DB_KEY, JSON.stringify(memoryDb));
+    } else {
+      localStorage.removeItem(DB_KEY);
+    }
+  } catch {
+    // IndexedDB remains the primary persistence mechanism.
+  }
+  void queueIndexedDbWrite(memoryDb);
+}
+
+export async function flushLocalDbWrites(): Promise<void> {
+  await persistenceQueue;
 }
 
 export function listWorkspaces(): Workspace[] {

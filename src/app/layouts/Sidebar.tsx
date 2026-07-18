@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth, AuthUser } from "../../features/auth/auth";
 import { listLocalWorkspaces } from "../../data/local/workspaces";
 import { syncSuggestionsFromServer } from "../../data/local/suggestionsDb";
+import type { SupabaseSyncState } from "../../data/supabase/supabaseProvider";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -10,18 +11,20 @@ interface SidebarProps {
   onResizeStart?: () => void;
   isResizing?: boolean;
   isOnline?: boolean;
+  syncState: SupabaseSyncState;
+  onSync: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
   const { user, logout, switchWorkspace } = useAuth();
   const workspaces = listLocalWorkspaces().filter(w => user?.allowedWorkspaces?.includes(w.id));
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
   useEffect(() => {
-    if (user?.workspaceId) {
+    if (user?.workspaceId && mode === "local") {
       syncSuggestionsFromServer(user.workspaceId);
     }
-  }, [user?.workspaceId]);
+  }, [mode, user?.workspaceId]);
 
   if (!user) return null;
 
@@ -102,6 +105,8 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
         collapsed={collapsed} 
         mode={mode} 
         isOnline={isOnline}
+        syncState={syncState}
+        onSync={onSync}
         onLogout={logout} 
       />
 
@@ -164,7 +169,7 @@ function WorkspaceSwitcher({ user, workspaces, onSwitch }: { user: AuthUser, wor
   );
 }
 
-function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, onLogout: () => void }) {
+function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, syncState: SupabaseSyncState, onSync: () => void, onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -172,8 +177,38 @@ function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: Au
       {!isOnline && !collapsed && (
         <div className="offline-notice">
           <span className="material-symbols-rounded">cloud_off</span>
-          Hors ligne (Cache actif)
+          <span>
+            Hors ligne · {syncState.cached.contracts} contrats et {syncState.cached.applicants} fiches disponibles
+          </span>
         </div>
+      )}
+
+      {mode === "supabase" && !collapsed && (
+        <button
+          type="button"
+          className="offline-sync-card"
+          onClick={onSync}
+          disabled={!isOnline || syncState.isSyncing}
+          title={syncState.lastError ?? "Actualiser les données disponibles hors ligne"}
+        >
+          <span className={`material-symbols-rounded${syncState.isSyncing ? " is-spinning" : ""}`}>
+            {syncState.isSyncing ? "sync" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
+          </span>
+          <span className="offline-sync-copy">
+            <strong>
+              {syncState.isSyncing
+                ? "Synchronisation…"
+                : syncState.pendingCount > 0
+                  ? `${syncState.pendingCount} modification${syncState.pendingCount > 1 ? "s" : ""} en attente`
+                  : "Disponible hors ligne"}
+            </strong>
+            <small>
+              {syncState.lastSyncedAt
+                ? `Mis à jour ${new Date(syncState.lastSyncedAt).toLocaleString("fr-HT", { dateStyle: "short", timeStyle: "short" })}`
+                : "Cliquez pour télécharger les données"}
+            </small>
+          </span>
+        </button>
       )}
       
       {!collapsed ? (

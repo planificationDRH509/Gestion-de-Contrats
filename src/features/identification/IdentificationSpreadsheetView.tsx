@@ -426,6 +426,7 @@ export function IdentificationSpreadsheetView({
     try {
       await updateIdentity.mutateAsync({
         oldNif: originalNif,
+        workspaceId,
         nif: candidate.nif,
         prenom: candidate.firstName,
         nom: candidate.lastName,
@@ -665,7 +666,7 @@ export function IdentificationSpreadsheetView({
                         <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
                           <span className="material-symbols-rounded">edit</span>
                         </button>
-                        <button className="icon-btn contracts-sheet-action-btn delete" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate(identity.nif); }} title="Supprimer cette entrée" aria-label="Supprimer cette entrée">
+                        <button className="icon-btn contracts-sheet-action-btn delete" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate({ nif: identity.nif, workspaceId }); }} title="Supprimer cette entrée" aria-label="Supprimer cette entrée">
                           <span className="material-symbols-rounded">delete</span>
                         </button>
                       </div>

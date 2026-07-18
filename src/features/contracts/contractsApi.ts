@@ -11,7 +11,6 @@ import {
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
 import type { ContractImportDraft } from "./contractImport";
-import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
 
@@ -41,42 +40,39 @@ export interface NifLookupResult {
 }
 
 export async function lookupNif(rawNif: string, workspaceId: string): Promise<NifLookupResult> {
-  const supabase = getSupabaseClient();
   const nif = rawNif.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d)/, "$1-$2-$3-$4");
-
-  // Query identification table
-  const { data: idData, error: idError } = await supabase
-    .from("identification")
-    .select("nif, nom, prenom, sexe, ninu, adresse")
-    .eq("nif", nif)
-    .maybeSingle();
-
-  if (idError) throw new Error(idError.message);
-
-  // Query contrat table (only if identification exists)
+  const applicant = await provider.applicants.findByNifOrNinu(workspaceId, nif, null);
   let contracts: NifContractMatch[] = [];
-  if (idData) {
-    const { data: contractData, error: contractError } = await supabase
-      .from("contrat")
-      .select("id_contrat, annee_fiscale, titre, lieu_affectation, salaire, salaire_en_chiffre, duree_contrat")
-      .eq("nif", nif)
-      .eq("workspace_id", workspaceId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
-
-    if (contractError) throw new Error(contractError.message);
-    contracts = (contractData ?? []) as unknown as NifContractMatch[];
+  if (applicant) {
+    const matches = await provider.contracts.list({
+      workspaceId,
+      query: nif,
+      page: 1,
+      pageSize: 250,
+      sort: "createdAt_desc"
+    });
+    contracts = matches.items
+      .filter((contract) => contract.nif === nif || contract.applicantId === nif)
+      .map((contract) => ({
+        id_contrat: contract.id,
+        annee_fiscale: "",
+        titre: contract.position,
+        lieu_affectation: contract.assignment,
+        salaire: contract.salaryText,
+        salaire_en_chiffre: contract.salaryNumber,
+        duree_contrat: contract.durationMonths
+      }));
   }
 
   return {
-    identification: idData
+    identification: applicant
       ? {
-          nif: idData.nif,
-          nom: idData.nom,
-          prenom: idData.prenom,
-          sexe: idData.sexe ?? null,
-          ninu: idData.ninu ?? null,
-          adresse: idData.adresse,
+          nif: applicant.nif || applicant.id,
+          nom: applicant.lastName,
+          prenom: applicant.firstName,
+          sexe: applicant.gender,
+          ninu: applicant.ninu ?? null,
+          adresse: applicant.address,
         }
       : null,
     contracts,

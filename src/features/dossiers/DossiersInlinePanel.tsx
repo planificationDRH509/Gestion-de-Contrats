@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dossier } from "../../data/types";
 import {
@@ -19,11 +19,13 @@ import {
 type DossiersInlinePanelProps = {
   workspaceId: string;
   onDossierCreated?: (dossierId: string) => void;
+  onViewDossier?: (dossierId: string) => void;
 };
 
 export function DossiersInlinePanel({
   workspaceId,
-  onDossierCreated
+  onDossierCreated,
+  onViewDossier
 }: DossiersInlinePanelProps) {
   const navigate = useNavigate();
   const { data: dossiers = [], isLoading } = useDossiersList(workspaceId);
@@ -41,6 +43,10 @@ export function DossiersInlinePanel({
   const [focalPoint, setFocalPoint] = useState("");
   const [roadmapSheetNumber, setRoadmapSheetNumber] = useState("");
   const [defaultDurationMonths, setDefaultDurationMonths] = useState("");
+  const [createFormOpen, setCreateFormOpen] = useState(false);
+  const [dossierQuery, setDossierQuery] = useState("");
+  const [dossierView, setDossierView] = useState<"active" | "archived" | "classified" | "all">("active");
+  const [justCreatedDossierId, setJustCreatedDossierId] = useState<string | null>(null);
 
   const [editingDossierId, setEditingDossierId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -56,6 +62,12 @@ export function DossiersInlinePanel({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
 
   function resetCreateForm() {
     setName("");
@@ -126,7 +138,7 @@ export function DossiersInlinePanel({
         : `${Math.max(22, Math.round(progress.ratio * 360))}deg`;
 
     return {
-      ["--dossier-ring-color" as string]: progress.color,
+      ["--dossier-ring-color" as string]: "var(--ink)",
       ["--dossier-ring-degree" as string]: degree
     };
   }
@@ -157,6 +169,9 @@ export function DossiersInlinePanel({
       });
       resetCreateForm();
       onDossierCreated?.(dossier.id);
+      setCreateFormOpen(false);
+      setJustCreatedDossierId(dossier.id);
+      setDossierView("active");
       setSuccessMessage(`Dossier "${dossier.name}" prêt.`);
       setErrorMessage(null);
     } catch (error) {
@@ -257,22 +272,105 @@ export function DossiersInlinePanel({
   }
 
   const dossierGroups = getDossierGroups(dossiers);
-  const displayedDossiers = [
-    ...dossierGroups.active,
-    ...dossierGroups.archived,
-    ...dossierGroups.classified
-  ];
+  const displayedDossiers = useMemo(() => {
+    const source = dossierView === "active"
+      ? dossierGroups.active
+      : dossierView === "archived"
+        ? dossierGroups.archived
+      : dossierView === "classified"
+        ? dossierGroups.classified
+        : [...dossierGroups.active, ...dossierGroups.archived, ...dossierGroups.classified];
+    const normalizedQuery = dossierQuery.trim().toLocaleLowerCase("fr");
+    if (!normalizedQuery) return source;
+    return source.filter((dossier) =>
+      [dossier.name, dossier.focalPoint, dossier.roadmapSheetNumber, dossier.comment]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase("fr").includes(normalizedQuery))
+    );
+  }, [dossierGroups.active, dossierGroups.archived, dossierGroups.classified, dossierQuery, dossierView]);
 
   return (
     <div className="dossiers-inline-panel dossier-modern-shell">
+      <section className="dossier-overview" aria-labelledby="dossiers-overview-title">
+        <div className="dossier-overview-heading">
+          <div>
+            <span className="page-eyebrow">Organisation</span>
+            <h2 id="dossiers-overview-title">Vos dossiers</h2>
+            <p>Regroupez les contrats par campagne, échéance ou équipe responsable.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setCreateFormOpen((open) => !open);
+              setEditingDossierId(null);
+              setErrorMessage(null);
+            }}
+            aria-expanded={createFormOpen}
+          >
+            <span className="material-symbols-rounded icon">{createFormOpen ? "close" : "create_new_folder"}</span>
+            {createFormOpen ? "Fermer" : "Nouveau dossier"}
+          </button>
+        </div>
+
+        <div className="dossier-overview-stats" aria-label="Résumé des dossiers">
+          <div><strong>{dossierGroups.active.length}</strong><span>En traitement</span></div>
+          <div><strong>{dossierGroups.archived.length}</strong><span>Archivés</span></div>
+          <div><strong>{dossierGroups.classified.length}</strong><span>Classés</span></div>
+        </div>
+
+        <div className="dossier-list-toolbar">
+          <div className="view-switch-unified" role="group" aria-label="Filtrer les dossiers">
+            <button type="button" className={`view-pill-unified ${dossierView === "active" ? "active" : ""}`} onClick={() => setDossierView("active")}>
+              En traitement <span className="dossier-filter-count">{dossierGroups.active.length}</span>
+            </button>
+            <button type="button" className={`view-pill-unified ${dossierView === "archived" ? "active" : ""}`} onClick={() => setDossierView("archived")}>
+              Archivés <span className="dossier-filter-count">{dossierGroups.archived.length}</span>
+            </button>
+            <button type="button" className={`view-pill-unified ${dossierView === "classified" ? "active" : ""}`} onClick={() => setDossierView("classified")}>
+              Classés <span className="dossier-filter-count">{dossierGroups.classified.length}</span>
+            </button>
+            <button type="button" className={`view-pill-unified ${dossierView === "all" ? "active" : ""}`} onClick={() => setDossierView("all")}>
+              Tous <span className="dossier-filter-count">{dossiers.length}</span>
+            </button>
+          </div>
+          <label className="dossier-search-field">
+            <span className="material-symbols-rounded">search</span>
+            <input value={dossierQuery} onChange={(event) => setDossierQuery(event.target.value)} placeholder="Rechercher un dossier…" />
+            {dossierQuery ? (
+              <button type="button" onClick={() => setDossierQuery("")} aria-label="Effacer la recherche"><span className="material-symbols-rounded">close</span></button>
+            ) : null}
+          </label>
+        </div>
+      </section>
+
+      {errorMessage ? (
+        <div className="app-toast app-toast-error" role="alert">
+          <span className="material-symbols-rounded">error</span>
+          <span>{errorMessage}</span>
+          <button type="button" onClick={() => setErrorMessage(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button>
+        </div>
+      ) : null}
+      {successMessage ? (
+        <div className="app-toast app-toast-success" role="status">
+          <span className="material-symbols-rounded">check_circle</span>
+          <span>{successMessage}</span>
+          <button type="button" onClick={() => setSuccessMessage(null)} aria-label="Fermer"><span className="material-symbols-rounded">close</span></button>
+        </div>
+      ) : null}
+
+      {createFormOpen ? (
       <form className="card dossier-modern-form-card" onSubmit={handleCreate}>
         <div className="dossier-modern-form-head">
-          <div className="section-title">Nouveau dossier</div>
-          <div className="helper-text">Planifiez la charge, l'échéance et les notes.</div>
+          <div>
+            <div className="section-title">Créer un dossier</div>
+            <div className="helper-text">Commencez par un nom. Les options de planification peuvent être complétées maintenant ou plus tard.</div>
+          </div>
+          <span className="dossier-form-step">1 étape essentielle</span>
         </div>
 
         <div className="dossier-modern-form-grid">
-          <label className="field">
+          <label className="field full dossier-name-field">
             <span>Nom du dossier *</span>
             <input
               className="input"
@@ -282,6 +380,12 @@ export function DossiersInlinePanel({
             />
           </label>
 
+          <details className="dossier-advanced-fields full">
+            <summary>
+              <span><span className="material-symbols-rounded">tune</span> Options de planification</span>
+              <small>Objectif, échéance, responsable et notes</small>
+            </summary>
+            <div className="dossier-modern-form-grid dossier-advanced-grid">
           <label className="field">
             <span>Objectif de contrats</span>
             <input
@@ -371,6 +475,8 @@ export function DossiersInlinePanel({
               placeholder="Notes et consignes de suivi..."
             />
           </label>
+            </div>
+          </details>
         </div>
 
         <div className="form-actions">
@@ -380,9 +486,8 @@ export function DossiersInlinePanel({
           </button>
         </div>
 
-        {errorMessage ? <div className="form-error">{errorMessage}</div> : null}
-        {successMessage ? <div className="form-success">{successMessage}</div> : null}
       </form>
+      ) : null}
 
       {editingDossierId ? (
         <form className="card dossier-modern-form-card" onSubmit={handleEdit}>
@@ -513,11 +618,31 @@ export function DossiersInlinePanel({
         </form>
       ) : null}
 
+      <div className="dossier-results-summary" aria-live="polite">
+        <span>{displayedDossiers.length} dossier{displayedDossiers.length > 1 ? "s" : ""}</span>
+        {dossierQuery ? <span>pour « {dossierQuery} »</span> : null}
+      </div>
+
       <div className="dossier-modern-list">
         {isLoading ? (
-          <div className="card empty-state">Chargement en cours…</div>
+          <div className="dossier-loading-grid" aria-label="Chargement des dossiers">
+            <div className="dossier-skeleton" /><div className="dossier-skeleton" />
+          </div>
         ) : displayedDossiers.length === 0 ? (
-          <div className="card empty-state">Aucun dossier pour le moment.</div>
+          <div className="card dossier-empty-state">
+            <span className="material-symbols-rounded">folder_open</span>
+            <h3>{dossierQuery ? "Aucun résultat" : dossierView === "classified" ? "Aucun dossier classé" : dossierView === "archived" ? "Aucun dossier archivé" : "Aucun dossier pour le moment"}</h3>
+            <p>{dossierQuery ? "Essayez un autre nom, point focal ou numéro de feuille de route." : "Créez votre premier dossier pour regrouper et suivre les contrats associés."}</p>
+            {dossierQuery ? (
+              <button type="button" className="btn btn-outline" onClick={() => setDossierQuery("")}>Effacer la recherche</button>
+            ) : dossierView === "classified" || dossierView === "archived" ? (
+              <button type="button" className="btn btn-outline" onClick={() => setDossierView("active")}>Voir les dossiers en traitement</button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => setCreateFormOpen(true)}>
+                <span className="material-symbols-rounded icon">create_new_folder</span>Créer un dossier
+              </button>
+            )}
+          </div>
         ) : (
           displayedDossiers.map((dossier) => {
             const metrics = metricsByDossier[dossier.id] ?? {
@@ -530,7 +655,7 @@ export function DossiersInlinePanel({
             const dossierIsArchived = isDossierArchived(dossier);
 
             return (
-              <article key={dossier.id} className="card dossier-modern-card">
+              <article key={dossier.id} className={`card dossier-modern-card ${justCreatedDossierId === dossier.id ? "just-created" : ""}`}>
                 <header className="dossier-modern-card-head">
                   <div className="dossier-modern-progress" style={ringStyle}>
                     <span className="dossier-modern-progress-text">
@@ -556,15 +681,6 @@ export function DossiersInlinePanel({
                       aria-label={`Modifier ${dossier.name}`}
                     >
                       <span className="material-symbols-rounded">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => navigate(`/app/contrats/nouveau?dossierId=${dossier.id}`)}
-                      title="Créer un contrat dans ce dossier"
-                      aria-label={`Créer un contrat dans ${dossier.name}`}
-                    >
-                      <span className="material-symbols-rounded">note_add</span>
                     </button>
                     <button
                       type="button"
@@ -641,6 +757,18 @@ export function DossiersInlinePanel({
                     Aucun commentaire.
                   </p>
                 )}
+
+                <footer className="dossier-modern-card-footer">
+                  <button type="button" className="btn btn-outline" onClick={() => onViewDossier?.(dossier.id)}>
+                    <span className="material-symbols-rounded icon">description</span>
+                    Voir les contrats
+                    <span className="dossier-action-count">{metrics.assignedCount}</span>
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={() => navigate(`/app/contrats/nouveau?dossierId=${dossier.id}`)}>
+                    <span className="material-symbols-rounded icon">note_add</span>
+                    Ajouter un contrat
+                  </button>
+                </footer>
               </article>
             );
           })

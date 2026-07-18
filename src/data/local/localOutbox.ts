@@ -17,5 +17,8 @@ export function queueOutbox(
   };
   db.outbox.push(item);
   saveDb(db);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync"));
+  }
   return item;
 }

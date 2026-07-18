@@ -7,7 +7,8 @@ import { CreateTagInput, TagRepository } from "../repositories/TagRepository";
 import {
   AddressSuggestion,
   PositionSuggestion,
-  InstitutionSuggestion
+  InstitutionSuggestion,
+  cacheSuggestions
 } from "../local/suggestionsDb";
 import {
   Applicant,
@@ -31,20 +32,30 @@ import { LocalApplicantRepository } from "../local/localApplicantRepository";
 import { LocalContractRepository } from "../local/localContractRepository";
 import { LocalDossierRepository } from "../local/localDossierRepository";
 import { LocalTagRepository } from "../local/localTagRepository";
+import { LocalPrintJobRepository } from "../local/localPrintJobRepository";
+import { SqliteAutocompleteRepository } from "../local/sqliteAutocompleteRepository";
 import {
   cacheApplicant,
+  cacheApplicants,
   cacheContract,
   cacheContracts,
   cacheDossier,
   cacheDossiers,
   cacheTag,
   cacheTags,
+  deleteApplicantOffline,
   getPendingContractIds,
   getPendingOutbox,
+  getPendingOutboxCount,
+  getWorkspaceCacheCounts,
+  getWorkspaceSyncMetadata,
   isOfflineFailure,
+  replaceLocalApplicantId,
   replaceLocalDossierId,
   replaceLocalTagId,
+  replaceWorkspaceCache,
   removeOutboxItem,
+  setWorkspaceSyncMetadata,
   upsertApplicantOffline
 } from "../local/offlineStore";
 import {
@@ -56,6 +67,12 @@ import {
 } from "../../lib/dossier";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
+
+function repositoryError(message: string, cause?: unknown): Error {
+  const error = new Error(message) as Error & { cause?: unknown };
+  error.cause = cause;
+  return error;
+}
 
 function mapApplicant(row: any): Applicant {
   return {
@@ -139,6 +156,20 @@ function mapDossier(row: any): Dossier {
 }
 
 class SupabaseApplicantRepository implements ApplicantRepository {
+  async list(workspaceId: string): Promise<Applicant[]> {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("identification")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+    if (error || !data) {
+      throw repositoryError("Impossible de charger la base d'identification.", error);
+    }
+    return data.map(mapApplicant);
+  }
+
   async getById(id: string): Promise<Applicant | null> {
     const client = getSupabaseClient();
     const { data, error } = await client
@@ -146,8 +177,9 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       .select("*")
       .eq("nif", id)
       .is("deleted_at", null)
-      .single();
-    if (error || !data) return null;
+      .maybeSingle();
+    if (error) throw repositoryError("Impossible de charger le postulant.", error);
+    if (!data) return null;
     return mapApplicant(data);
   }
 
@@ -176,24 +208,29 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     }
 
     const { data, error } = await query.limit(1).maybeSingle();
-    if (error || !data) return null;
+    if (error) throw repositoryError("Impossible de rechercher le postulant.", error);
+    if (!data) return null;
     return mapApplicant(data);
   }
 
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     const client = getSupabaseClient();
     const nif = (input.nif || input.id || "").trim();
+    const existingNif = (input.id || nif).trim();
     if (!nif) throw new Error("NIF obligatoire pour enregistrer un postulant.");
 
     const formattedFirstName = formatFirstName(input.firstName);
     const formattedLastName  = formatLastName(input.lastName);
 
     // ── 1. Check if the record already exists ─────────────────────────────
-    const { data: existing } = await client
+    const { data: existing, error: existingError } = await client
       .from("identification")
       .select("*")
-      .eq("nif", nif)
+      .eq("nif", existingNif)
       .maybeSingle();
+    if (existingError) {
+      throw repositoryError("Impossible de vérifier le postulant.", existingError);
+    }
 
     if (!existing) {
       // ── 2a. NIF not found → INSERT ────────────────────────────────────
@@ -215,7 +252,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
         .single();
 
       if (error || !data) {
-        throw new Error("Impossible d'enregistrer le postulant.");
+        throw repositoryError("Impossible d'enregistrer le postulant.", error);
       }
       return mapApplicant(data);
     }
@@ -239,6 +276,9 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     if (input.address && input.address !== existing.adresse) {
       changes.adresse = input.address;
     }
+    if (nif !== existing.nif) {
+      changes.nif = nif;
+    }
 
     if (Object.keys(changes).length === 0) {
       // Nothing changed — return existing data as-is
@@ -250,15 +290,27 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     const { data: updated, error: updateError } = await (client
       .from("identification")
       .update(changes as any) as any)
-      .eq("nif", nif)
+      .eq("nif", existingNif)
       .eq("workspace_id", input.workspaceId)
       .select("*")
       .single();
 
     if (updateError || !updated) {
-      throw new Error("Impossible de mettre à jour le postulant.");
+      throw repositoryError("Impossible de mettre à jour le postulant.", updateError);
     }
     return mapApplicant(updated);
+  }
+
+  async softDelete(id: string, workspaceId: string): Promise<void> {
+    const client = getSupabaseClient();
+    const { error } = await client
+      .from("identification")
+      .update({ deleted_at: new Date().toISOString() } as any)
+      .eq("nif", id)
+      .eq("workspace_id", workspaceId);
+    if (error) {
+      throw repositoryError("Impossible de supprimer la fiche d'identification.", error);
+    }
   }
 }
 
@@ -273,7 +325,7 @@ class SupabaseDossierRepository implements DossierRepository {
       .order("created_at", { ascending: false });
 
     if (error || !data) {
-      throw new Error("Impossible de charger les dossiers.");
+      throw repositoryError("Impossible de charger les dossiers.", error);
     }
 
     return data.map(mapDossier);
@@ -287,7 +339,8 @@ class SupabaseDossierRepository implements DossierRepository {
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
-    if (error || !data) return null;
+    if (error) throw repositoryError("Impossible de charger le dossier.", error);
+    if (!data) return null;
     return mapDossier(data);
   }
 
@@ -336,7 +389,10 @@ class SupabaseDossierRepository implements DossierRepository {
 
     if (error || !data) {
       console.error("Dossier create error:", error);
-      throw new Error(`Impossible de créer le dossier: ${error?.message || "Erreur Supabase"}`);
+      throw repositoryError(
+        `Impossible de créer le dossier: ${error?.message || "Erreur Supabase"}`,
+        error
+      );
     }
 
     return mapDossier(data);
@@ -396,7 +452,7 @@ class SupabaseDossierRepository implements DossierRepository {
       .single();
 
     if (error || !data) {
-      throw new Error("Impossible de mettre à jour le dossier.");
+      throw repositoryError("Impossible de mettre à jour le dossier.", error);
     }
 
     return mapDossier(data);
@@ -413,7 +469,7 @@ class SupabaseDossierRepository implements DossierRepository {
       .is("deleted_at", null)
       .select("id_contrat");
     if (detachError) {
-      throw new Error("Impossible de dissocier les contrats du dossier.");
+      throw repositoryError("Impossible de dissocier les contrats du dossier.", detachError);
     }
 
     const { error: deleteError } = await client
@@ -423,7 +479,7 @@ class SupabaseDossierRepository implements DossierRepository {
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null);
     if (deleteError) {
-      throw new Error("Impossible de supprimer le dossier.");
+      throw repositoryError("Impossible de supprimer le dossier.", deleteError);
     }
 
     return detachedContracts?.length ?? 0;
@@ -515,7 +571,7 @@ class SupabaseContractRepository implements ContractRepository {
     if (hasDateFilter) {
       const { data, error } = await query;
       if (error || !data) {
-        throw new Error("Impossible de charger les contrats.");
+        throw repositoryError("Impossible de charger les contrats.", error);
       }
 
       const filteredItems = data
@@ -550,7 +606,7 @@ class SupabaseContractRepository implements ContractRepository {
     const { data, error, count } = await query.range(from, to);
     if (error || !data) {
       console.error(error);
-      throw new Error("Impossible de charger les contrats.");
+      throw repositoryError("Impossible de charger les contrats.", error);
     }
     
     let items = data.map(mapContract);
@@ -575,8 +631,9 @@ class SupabaseContractRepository implements ContractRepository {
       .select("*, identification(*), contract_tags(tags(*))")
       .eq("id_contrat", id)
       .is("deleted_at", null)
-      .single();
-    if (error || !data) return null;
+      .maybeSingle();
+    if (error) throw repositoryError("Impossible de charger le contrat.", error);
+    if (!data) return null;
     return mapContract(data);
   }
 
@@ -589,7 +646,7 @@ class SupabaseContractRepository implements ContractRepository {
       .in("id_contrat", ids)
       .is("deleted_at", null);
     if (error || !data) {
-      throw new Error("Impossible de charger les contrats sélectionnés.");
+      throw repositoryError("Impossible de charger les contrats sélectionnés.", error);
     }
     return data.map(mapContract);
   }
@@ -616,7 +673,7 @@ class SupabaseContractRepository implements ContractRepository {
       .select("*, identification(*), contract_tags(tags(*))");
 
     if (error || !data) {
-      throw new Error("Impossible de créer les contrats.");
+      throw repositoryError("Impossible de créer les contrats.", error);
     }
 
     const rows = Array.isArray(data) ? data : [data];
@@ -646,7 +703,7 @@ class SupabaseContractRepository implements ContractRepository {
       .single();
 
     if (error || !data) {
-      throw new Error("Impossible de mettre à jour le contrat.");
+      throw repositoryError("Impossible de mettre à jour le contrat.", error);
     }
     return mapContract(data);
   }
@@ -670,7 +727,7 @@ class SupabaseContractRepository implements ContractRepository {
       .select("id_contrat");
 
     if (error) {
-      throw new Error("Impossible d'affecter les contrats au dossier.");
+      throw repositoryError("Impossible d'affecter les contrats au dossier.", error);
     }
 
     return data?.length ?? 0;
@@ -695,7 +752,7 @@ class SupabaseContractRepository implements ContractRepository {
       .select("id_contrat");
 
     if (error) {
-      throw new Error("Impossible de modifier l'état des contrats.");
+      throw repositoryError("Impossible de modifier l'état des contrats.", error);
     }
 
     return data?.length ?? 0;
@@ -720,7 +777,7 @@ class SupabaseContractRepository implements ContractRepository {
       .select("id_contrat");
 
     if (error) {
-      throw new Error("Impossible de modifier la durée des contrats.");
+      throw repositoryError("Impossible de modifier la durée des contrats.", error);
     }
 
     return data?.length ?? 0;
@@ -734,7 +791,7 @@ class SupabaseContractRepository implements ContractRepository {
       .eq("id_contrat", id)
       .eq("workspace_id", workspaceId);
     if (error) {
-      throw new Error("Impossible de supprimer le contrat.");
+      throw repositoryError("Impossible de supprimer le contrat.", error);
     }
   }
 }
@@ -753,7 +810,7 @@ class SupabasePrintJobRepository implements PrintJobRepository {
       .select("*")
       .single();
     if (error || !data) {
-      throw new Error("Impossible de créer l'historique d'impression.");
+      throw repositoryError("Impossible de créer l'historique d'impression.", error);
     }
     const ids = typeof data.contract_ids_json === 'string' ? JSON.parse(data.contract_ids_json) : [];
     return {
@@ -789,7 +846,7 @@ class SupabaseTagRepository implements TagRepository {
       .order("name", { ascending: true });
 
     if (error || !data) {
-      throw new Error("Impossible de charger les tags.");
+      throw repositoryError("Impossible de charger les tags.", error);
     }
     return data.map(mapTag);
   }
@@ -810,7 +867,7 @@ class SupabaseTagRepository implements TagRepository {
       .limit(1)
       .maybeSingle();
     if (existingError) {
-      throw new Error("Impossible de vérifier le tag.");
+      throw repositoryError("Impossible de vérifier le tag.", existingError);
     }
     if (existing) {
       return mapTag(existing);
@@ -830,7 +887,7 @@ class SupabaseTagRepository implements TagRepository {
       .single();
 
     if (error || !data) {
-      throw new Error("Impossible de créer le tag.");
+      throw repositoryError("Impossible de créer le tag.", error);
     }
     return mapTag(data);
   }
@@ -843,7 +900,7 @@ class SupabaseTagRepository implements TagRepository {
       .upsert({ contract_id: contractId, tag_id: tagId } as any) as any);
 
     if (error) {
-      throw new Error("Impossible d'ajouter le tag au contrat.");
+      throw repositoryError("Impossible d'ajouter le tag au contrat.", error);
     }
   }
 
@@ -857,7 +914,7 @@ class SupabaseTagRepository implements TagRepository {
       .eq("tag_id", tagId);
 
     if (error) {
-      throw new Error("Impossible de retirer le tag du contrat.");
+      throw repositoryError("Impossible de retirer le tag du contrat.", error);
     }
   }
 }
@@ -871,7 +928,7 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       .eq("workspace_id", workspaceId)
       .eq("type", type)
       .order("order_index", { ascending: true });
-    if (error) return [];
+    if (error) throw repositoryError("Impossible de charger les suggestions.", error);
     return data || [];
   }
 
@@ -916,18 +973,21 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
     const payload = { id, workspace_id: workspaceId, type: "address", label, order_index: 0, created_by: createdBy };
-    await (client.from("autocompletion").insert(payload as any) as any);
+    const { error } = await (client.from("autocompletion").insert(payload as any) as any);
+    if (error) throw repositoryError("Impossible d'ajouter l'adresse.", error);
     return { id, label, order: 0 };
   }
 
   async updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ label, prefix, label_feminine: labelFeminine } as any).eq("id", id) as any);
+    const { error } = await (client.from("autocompletion").update({ label, prefix, label_feminine: labelFeminine } as any).eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de modifier l'adresse.", error);
   }
 
   async deleteAddress(id: string): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").delete().eq("id", id) as any);
+    const { error } = await (client.from("autocompletion").delete().eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de supprimer l'adresse.", error);
   }
 
   async addPosition(workspaceId: string, label: string, salaries: number[], createdBy?: string): Promise<PositionSuggestion> {
@@ -942,23 +1002,26 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       order_index: 0, 
       created_by: createdBy 
     };
-    await (client.from("autocompletion").insert(payload as any) as any);
+    const { error } = await (client.from("autocompletion").insert(payload as any) as any);
+    if (error) throw repositoryError("Impossible d'ajouter le poste.", error);
     return { id, label, salaries, order: 0 };
   }
 
   async updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ 
+    const { error } = await (client.from("autocompletion").update({
       label, 
       salaries,
       prefix,
       label_feminine: labelFeminine
     } as any).eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de modifier le poste.", error);
   }
 
   async deletePosition(id: string): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").delete().eq("id", id) as any);
+    const { error } = await (client.from("autocompletion").delete().eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de supprimer le poste.", error);
   }
 
   async addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion> {
@@ -973,33 +1036,158 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       order_index: 0,
       created_by: createdBy
     };
-    await (client.from("autocompletion").insert(payload as any) as any);
+    const { error } = await (client.from("autocompletion").insert(payload as any) as any);
+    if (error) throw repositoryError("Impossible d'ajouter l'affectation.", error);
     return { id, label, addressKeywords, order: 0 };
   }
 
   async updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").update({ 
+    const { error } = await (client.from("autocompletion").update({
       label, 
       address_keywords: JSON.stringify(addressKeywords),
       prefix,
       label_feminine: labelFeminine
     } as any).eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de modifier l'affectation.", error);
   }
 
   async deleteInstitution(id: string): Promise<void> {
     const client = getSupabaseClient();
-    await (client.from("autocompletion").delete().eq("id", id) as any);
+    const { error } = await (client.from("autocompletion").delete().eq("id", id) as any);
+    if (error) throw repositoryError("Impossible de supprimer l'affectation.", error);
   }
 }
 
+class OfflineFirstAutocompleteRepository implements AutocompleteRepository {
+  private readonly local = new SqliteAutocompleteRepository();
+  private readonly remote = new SupabaseAutocompleteRepository();
+
+  async getAddresses(workspaceId: string): Promise<AddressSuggestion[]> {
+    try {
+      const items = await this.remote.getAddresses(workspaceId);
+      cacheSuggestions({ addresses: items });
+      return items;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getAddresses(workspaceId);
+    }
+  }
+
+  async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
+    try {
+      const items = await this.remote.getPositions(workspaceId);
+      cacheSuggestions({ positions: items });
+      return items;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getPositions(workspaceId);
+    }
+  }
+
+  async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
+    try {
+      const items = await this.remote.getInstitutions(workspaceId);
+      cacheSuggestions({ institutions: items });
+      return items;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.getInstitutions(workspaceId);
+    }
+  }
+
+  addAddress(workspaceId: string, label: string, createdBy?: string) {
+    return this.remote.addAddress(workspaceId, label, createdBy);
+  }
+  updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null) {
+    return this.remote.updateAddress(id, label, prefix, labelFeminine);
+  }
+  deleteAddress(id: string) {
+    return this.remote.deleteAddress(id);
+  }
+  addPosition(workspaceId: string, label: string, salaries: number[], createdBy?: string) {
+    return this.remote.addPosition(workspaceId, label, salaries, createdBy);
+  }
+  updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null) {
+    return this.remote.updatePosition(id, label, salaries, prefix, labelFeminine);
+  }
+  deletePosition(id: string) {
+    return this.remote.deletePosition(id);
+  }
+  addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string) {
+    return this.remote.addInstitution(workspaceId, label, addressKeywords, createdBy);
+  }
+  updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null) {
+    return this.remote.updateInstitution(id, label, addressKeywords, prefix, labelFeminine);
+  }
+  deleteInstitution(id: string) {
+    return this.remote.deleteInstitution(id);
+  }
+}
+
+class OfflineFirstPrintJobRepository implements PrintJobRepository {
+  private readonly local = new LocalPrintJobRepository();
+  private readonly remote = new SupabasePrintJobRepository();
+
+  async create(workspaceId: string, contractIds: string[]): Promise<ContractPrintJob> {
+    try {
+      return await this.remote.create(workspaceId, contractIds);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.create(workspaceId, contractIds);
+    }
+  }
+}
+
+export type SupabaseSyncState = {
+  isOnline: boolean;
+  isSyncing: boolean;
+  pendingCount: number;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  cached: ReturnType<typeof getWorkspaceCacheCounts>;
+};
+
 let outboxSyncPromise: Promise<void> | null = null;
+let activeSyncOperations = 0;
+const workspaceSyncPromises = new Map<string, Promise<void>>();
+
+function notifySyncState() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync"));
+  }
+}
+
+function beginSyncOperation() {
+  activeSyncOperations += 1;
+  notifySyncState();
+}
+
+function endSyncOperation() {
+  activeSyncOperations = Math.max(0, activeSyncOperations - 1);
+  notifySyncState();
+}
+
+export function getSupabaseSyncState(workspaceId: string): SupabaseSyncState {
+  const metadata = getWorkspaceSyncMetadata(workspaceId);
+  return {
+    isOnline: typeof navigator === "undefined" ? true : navigator.onLine,
+    isSyncing: activeSyncOperations > 0,
+    pendingCount: getPendingOutboxCount(workspaceId),
+    lastSyncedAt: metadata.lastSyncedAt ?? null,
+    lastError: metadata.lastError ?? null,
+    cached: getWorkspaceCacheCounts(workspaceId)
+  };
+}
 
 function syncPendingOutbox() {
   if (outboxSyncPromise) return outboxSyncPromise;
+  let didBegin = false;
 
   outboxSyncPromise = (async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    beginSyncOperation();
+    didBegin = true;
 
     const applicants = new SupabaseApplicantRepository();
     const contracts = new SupabaseContractRepository();
@@ -1009,8 +1197,17 @@ function syncPendingOutbox() {
     for (const item of getPendingOutbox()) {
       try {
         if (item.type === "applicant.upsert") {
-          const applicant = await applicants.upsert(item.payload as unknown as UpsertApplicantInput);
+          const payload = item.payload as unknown as UpsertApplicantInput;
+          const applicant = await applicants.upsert(payload);
+          if (payload.id && payload.id !== applicant.id) {
+            replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
+          }
           cacheApplicant(applicant);
+        } else if (item.type === "applicant.delete") {
+          const payload = item.payload as { id?: string };
+          if (payload.id) {
+            await applicants.softDelete(payload.id, item.workspaceId);
+          }
         } else if (item.type === "contract.create") {
           const contract = await contracts.create(item.payload as unknown as CreateContractInput);
           cacheContract(contract);
@@ -1072,13 +1269,22 @@ function syncPendingOutbox() {
           }
         }
         removeOutboxItem(item.id);
+        setWorkspaceSyncMetadata(item.workspaceId, {
+          lastSyncedAt: new Date().toISOString(),
+          lastError: null
+        });
+        notifySyncState();
       } catch (error) {
+        const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
+        setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
+        notifySyncState();
         if (isOfflineFailure(error)) return;
         console.error("Impossible de synchroniser une action locale.", error);
       }
     }
   })().finally(() => {
     outboxSyncPromise = null;
+    if (didBegin) endSyncOperation();
   });
 
   return outboxSyncPromise;
@@ -1088,9 +1294,91 @@ export function syncSupabaseOutbox() {
   return syncPendingOutbox();
 }
 
+/** Downloads the complete main workspace dataset in pages for offline use. */
+export function syncSupabaseWorkspace(workspaceId: string): Promise<void> {
+  if (!workspaceId || (typeof navigator !== "undefined" && !navigator.onLine)) {
+    return Promise.resolve();
+  }
+  const existing = workspaceSyncPromises.get(workspaceId);
+  if (existing) return existing;
+
+  const syncPromise = (async () => {
+    beginSyncOperation();
+    try {
+      await syncPendingOutbox();
+
+      const applicantsRepo = new SupabaseApplicantRepository();
+      const contractsRepo = new SupabaseContractRepository();
+      const dossiersRepo = new SupabaseDossierRepository();
+      const tagsRepo = new SupabaseTagRepository();
+      const suggestionsRepo = new SupabaseAutocompleteRepository();
+
+      const [applicants, dossiers, tags] = await Promise.all([
+        applicantsRepo.list(workspaceId),
+        dossiersRepo.list(workspaceId),
+        tagsRepo.list(workspaceId)
+      ]);
+      try {
+        const [addresses, positions, institutions] = await Promise.all([
+          suggestionsRepo.getAddresses(workspaceId),
+          suggestionsRepo.getPositions(workspaceId),
+          suggestionsRepo.getInstitutions(workspaceId)
+        ]);
+        cacheSuggestions({ addresses, positions, institutions });
+      } catch (error) {
+        console.warn("Les suggestions n'ont pas pu être actualisées pour le mode hors ligne.", error);
+      }
+
+      const contracts: Contract[] = [];
+      const pageSize = 250;
+      let page = 1;
+      let total = 0;
+      do {
+        const result = await contractsRepo.list({
+          workspaceId,
+          page,
+          pageSize,
+          sort: "createdAt_desc"
+        });
+        contracts.push(...result.items);
+        total = result.total;
+        page += 1;
+      } while ((page - 1) * pageSize < total);
+
+      replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
+      setWorkspaceSyncMetadata(workspaceId, {
+        lastSyncedAt: new Date().toISOString(),
+        lastError: null
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
+      setWorkspaceSyncMetadata(workspaceId, { lastError: message });
+      throw error;
+    } finally {
+      workspaceSyncPromises.delete(workspaceId);
+      endSyncOperation();
+    }
+  })();
+
+  workspaceSyncPromises.set(workspaceId, syncPromise);
+  return syncPromise;
+}
+
 class OfflineFirstApplicantRepository implements ApplicantRepository {
   private readonly local = new LocalApplicantRepository();
   private readonly remote = new SupabaseApplicantRepository();
+
+  async list(workspaceId: string): Promise<Applicant[]> {
+    try {
+      await syncPendingOutbox();
+      const applicants = await this.remote.list(workspaceId);
+      cacheApplicants(applicants);
+      return applicants;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.list(workspaceId);
+    }
+  }
 
   async getById(id: string): Promise<Applicant | null> {
     try {
@@ -1122,11 +1410,25 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     try {
       await syncPendingOutbox();
       const applicant = await this.remote.upsert(input);
+      if (input.id && input.id !== applicant.id) {
+        replaceLocalApplicantId(input.workspaceId, input.id, applicant);
+      }
       cacheApplicant(applicant);
       return applicant;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return upsertApplicantOffline(input);
+    }
+  }
+
+  async softDelete(id: string, workspaceId: string): Promise<void> {
+    try {
+      await syncPendingOutbox();
+      await this.remote.softDelete(id, workspaceId);
+      await this.local.applySoftDelete(id, workspaceId);
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      deleteApplicantOffline(id, workspaceId);
     }
   }
 }
@@ -1186,7 +1488,9 @@ class OfflineFirstDossierRepository implements DossierRepository {
   async delete(id: string, workspaceId: string): Promise<number> {
     try {
       await syncPendingOutbox();
-      return await this.remote.delete(id, workspaceId);
+      const count = await this.remote.delete(id, workspaceId);
+      await this.local.applyDelete(id, workspaceId);
+      return count;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.delete(id, workspaceId);
@@ -1296,7 +1600,9 @@ class OfflineFirstContractRepository implements ContractRepository {
   ): Promise<number> {
     try {
       await syncPendingOutbox();
-      return await this.remote.assignToDossier(workspaceId, contractIds, dossierId);
+      const count = await this.remote.assignToDossier(workspaceId, contractIds, dossierId);
+      await this.local.applyAssignToDossier(workspaceId, contractIds, dossierId);
+      return count;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.assignToDossier(workspaceId, contractIds, dossierId);
@@ -1310,7 +1616,9 @@ class OfflineFirstContractRepository implements ContractRepository {
   ): Promise<number> {
     try {
       await syncPendingOutbox();
-      return await this.remote.updateStatus(workspaceId, contractIds, status);
+      const count = await this.remote.updateStatus(workspaceId, contractIds, status);
+      await this.local.applyUpdateStatus(workspaceId, contractIds, status);
+      return count;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.updateStatus(workspaceId, contractIds, status);
@@ -1324,7 +1632,9 @@ class OfflineFirstContractRepository implements ContractRepository {
   ): Promise<number> {
     try {
       await syncPendingOutbox();
-      return await this.remote.updateDuration(workspaceId, contractIds, durationMonths);
+      const count = await this.remote.updateDuration(workspaceId, contractIds, durationMonths);
+      await this.local.applyUpdateDuration(workspaceId, contractIds, durationMonths);
+      return count;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.updateDuration(workspaceId, contractIds, durationMonths);
@@ -1335,6 +1645,7 @@ class OfflineFirstContractRepository implements ContractRepository {
     try {
       await syncPendingOutbox();
       await this.remote.softDelete(id, workspaceId);
+      await this.local.applySoftDelete(id, workspaceId);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       await this.local.softDelete(id, workspaceId);
@@ -1398,8 +1709,8 @@ export function createSupabaseProvider(): DataProvider {
     applicants: new OfflineFirstApplicantRepository(),
     dossiers: new OfflineFirstDossierRepository(),
     contracts: new OfflineFirstContractRepository(),
-    printJobs: new SupabasePrintJobRepository(),
-    suggestions: new SupabaseAutocompleteRepository(),
+    printJobs: new OfflineFirstPrintJobRepository(),
+    suggestions: new OfflineFirstAutocompleteRepository(),
     tags: new OfflineFirstTagRepository()
   };
 }

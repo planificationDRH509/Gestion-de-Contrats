@@ -191,6 +191,12 @@ export const referenceContractTemplate: ContractTemplate = {
   text-align: justify;
 }
 
+/* La page 3 est la plus dense. Cette réserve empêche la dernière ligne de
+   l'article 16 d'être rognée par les variations des moteurs d'impression. */
+.draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-sheet[data-page="3"] p {
+  margin-bottom: 7.4pt;
+}
+
 .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-header {
   display: flex;
   justify-content: space-between;

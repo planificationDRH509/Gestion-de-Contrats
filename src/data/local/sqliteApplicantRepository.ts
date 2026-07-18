@@ -4,6 +4,11 @@ import { sqliteApiRequest } from "./sqliteApiClient";
 import { formatFirstName, formatLastName } from "../../lib/format";
 
 export class SqliteApplicantRepository implements ApplicantRepository {
+  async list(workspaceId: string): Promise<Applicant[]> {
+    const params = new URLSearchParams({ workspaceId });
+    return sqliteApiRequest<Applicant[]>(`/applicants?${params.toString()}`);
+  }
+
   async getById(id: string): Promise<Applicant | null> {
     return sqliteApiRequest<Applicant | null>(`/applicants/${encodeURIComponent(id)}`);
   }
@@ -32,6 +37,13 @@ export class SqliteApplicantRepository implements ApplicantRepository {
         firstName: formatFirstName(input.firstName),
         lastName: formatLastName(input.lastName)
       }
+    });
+  }
+
+  async softDelete(id: string, workspaceId: string): Promise<void> {
+    await sqliteApiRequest<{ ok: boolean }>("/applicants/soft-delete", {
+      method: "POST",
+      body: { id, workspaceId }
     });
   }
 }
