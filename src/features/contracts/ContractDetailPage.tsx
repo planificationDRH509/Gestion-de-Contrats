@@ -25,9 +25,10 @@ export function ContractDetailPage() {
 
   return (
     <div className="page-container">
-      <div className="section-header">
+      <div className="section-header page-header">
         <div>
-          <h1 className="section-title">Aperçu du Contrat</h1>
+          <span className="page-eyebrow">Contrats</span>
+          <h1 className="section-title">Aperçu du contrat</h1>
           <div className="section-subtitle">Consultation du document finalisé.</div>
           {dossier && (
             <div style={{ marginTop: "12px" }}>

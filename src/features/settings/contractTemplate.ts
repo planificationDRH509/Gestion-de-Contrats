@@ -1,6 +1,7 @@
 import { Contract } from "../../data/types";
 import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import { loadSuggestions } from "../../data/local/suggestionsDb";
+import { referenceContractTemplate } from "./referenceContractTemplate";
 
 export type ContractTemplate = {
   html: string;
@@ -21,7 +22,7 @@ type DraftTemplateDefinition = DraftTemplateOption & {
   defaultTemplate: ContractTemplate;
 };
 
-const defaultContractTemplate: ContractTemplate = {
+const legacyContractTemplate: ContractTemplate = {
   html: `
 <div class="draft-doc">
     <p style="margin-top:0pt; margin-bottom:8pt; text-align:justify;"><span style="font-family:'Times New Roman';">No&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;..&nbsp;</span><span style="width:34.31pt; font-family:'Times New Roman'; display:inline-block;">&nbsp;</span><span style="width:36pt; font-family:'Times New Roman'; display:inline-block;">&nbsp;</span><span style="width:36pt; font-family:'Times New Roman'; display:inline-block;">&nbsp;</span><span style="width:36pt; font-family:'Times New Roman'; display:inline-block;">&nbsp;</span><span style="width:36pt; font-family:'Times New Roman'; display:inline-block;">&nbsp;</span><span style="font-family:'Times New Roman';">Port-au-Prince, le {{created_date_long}}</span></p>
@@ -456,7 +457,7 @@ const TEMPLATE_DEFINITIONS: Record<DraftTemplateType, DraftTemplateDefinition> =
     description: "Template utilisé pour les contrats et impressions actuelles.",
     storageKey: "contribution_contract_template",
     eventName: "contract-template-updated",
-    defaultTemplate: defaultContractTemplate
+    defaultTemplate: referenceContractTemplate
   },
   assignment_letter: {
     type: "assignment_letter",
@@ -503,6 +504,14 @@ export function loadTemplateByType(type: DraftTemplateType): ContractTemplate {
   try {
     const parsed = JSON.parse(raw) as Partial<ContractTemplate>;
     if (typeof parsed.html !== "string" || typeof parsed.css !== "string") {
+      return getDefaultTemplate(type);
+    }
+
+    if (
+      type === "contract" &&
+      parsed.html === legacyContractTemplate.html &&
+      parsed.css === legacyContractTemplate.css
+    ) {
       return getDefaultTemplate(type);
     }
 
@@ -568,9 +577,19 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     startDate.setDate(startDate.getDate() + 1);
   }
 
-  const dateOptions: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
-  const dateDebut = startDate.toLocaleDateString("fr-FR", dateOptions);
-  const dateFin = endDate.toLocaleDateString("fr-FR", dateOptions);
+  const formatReferenceDate = (value: Date) => {
+    const parts = new Intl.DateTimeFormat("fr-FR", {
+      year: "numeric",
+      month: "long",
+      day: "2-digit"
+    }).formatToParts(value);
+    const day = parts.find((part) => part.type === "day")?.value ?? "";
+    const month = parts.find((part) => part.type === "month")?.value ?? "";
+    const year = parts.find((part) => part.type === "year")?.value ?? "";
+    return `${day} ${month.charAt(0).toUpperCase()}${month.slice(1)} ${year}`.trim();
+  };
+  const dateDebut = formatReferenceDate(startDate);
+  const dateFin = formatReferenceDate(endDate);
 
   const isFeminine = contract.gender === "Femme";
 
@@ -621,6 +640,15 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     honorific: isFeminine ? "Madame" : "Monsieur",
     identifiee_identifie: isFeminine ? "identifiée" : "identifié",
     denommee_denomme: isFeminine ? "dénommée" : "dénommé",
+    consideree_considere: isFeminine ? "considérée" : "considéré",
+    couverte_couvert: isFeminine ? "couverte" : "couvert",
+    astreinte_astreint: isFeminine ? "astreinte" : "astreint",
+    engagee_engage: isFeminine ? "engagée" : "engagé",
+    elle_lui: isFeminine ? "elle" : "lui",
+    appelee_appele: isFeminine ? "appelée" : "appelé",
+    tenue_tenu: isFeminine ? "tenue" : "tenu",
+    liee_lie: isFeminine ? "liée" : "lié",
+    exposee_expose: isFeminine ? "exposée" : "exposé",
     contractant_legal: isFeminine ? "la << Contractante >>" : "le << Contractant >>",
     contractant_label: isFeminine ? "Contractante" : "Contractant",
     La_Le_Contractant: isFeminine ? "La contractante" : "Le contractant",
@@ -636,15 +664,12 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     salary_number_raw: contract.salaryNumber.toString(),
     salary_text: contract.salaryText,
     duration_months: contract.durationMonths.toString(),
+    duration_months_padded: contract.durationMonths.toString().padStart(2, "0"),
     duration_months_text: numToLetters[contract.durationMonths] ?? contract.durationMonths.toString(),
     date_debut: dateDebut,
     date_fin: dateFin,
     created_date: date.toLocaleDateString("fr-FR"),
-    created_date_long: date.toLocaleDateString("fr-FR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    }),
+    created_date_long: formatReferenceDate(date),
     workspace_name: workspaceName
   };
 }
@@ -664,6 +689,15 @@ export const templateVariables = [
   { key: "{{honorific}}", label: "Monsieur / Madame" },
   { key: "{{identifiee_identifie}}", label: "Identifié(e)" },
   { key: "{{denommee_denomme}}", label: "Dénommé(e)" },
+  { key: "{{consideree_considere}}", label: "Considéré(e)" },
+  { key: "{{couverte_couvert}}", label: "Couvert(e)" },
+  { key: "{{astreinte_astreint}}", label: "Astreint(e)" },
+  { key: "{{engagee_engage}}", label: "Engagé(e)" },
+  { key: "{{elle_lui}}", label: "Elle / Lui" },
+  { key: "{{appelee_appele}}", label: "Appelé(e)" },
+  { key: "{{tenue_tenu}}", label: "Tenu(e)" },
+  { key: "{{liee_lie}}", label: "Lié(e)" },
+  { key: "{{exposee_expose}}", label: "Exposé(e)" },
   { key: "{{contractant_legal}}", label: "le/la << Contractant(e) >>" },
   { key: "{{contractant_label}}", label: "Contractant(e)" },
   { key: "{{La_Le_Contractant}}", label: "Le/La contractant(e) (Début de phrase)" },
@@ -679,6 +713,7 @@ export const templateVariables = [
   { key: "{{salary_number_raw}}", label: "Salaire brut" },
   { key: "{{salary_text}}", label: "Salaire en lettres" },
   { key: "{{duration_months}}", label: "Durée (mois)" },
+  { key: "{{duration_months_padded}}", label: "Durée (2 chiffres)" },
   { key: "{{duration_months_text}}", label: "Durée en lettres" },
   { key: "{{date_debut}}", label: "Date de début" },
   { key: "{{date_fin}}", label: "Date de fin" },

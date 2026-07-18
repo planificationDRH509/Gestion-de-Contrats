@@ -14,24 +14,25 @@ export function GeneralSettingsPage() {
   };
 
   return (
-    <div className="page-container" style={{ animation: 'fade-in 0.4s var(--premium-ease)' }}>
-      <header className="section-header" style={{ background: 'transparent' }}>
+    <div className="page-container settings-detail-page">
+      <header className="section-header page-header">
         <div>
-          <h1 className="section-title" style={{ fontSize: '28px' }}>Paramètres Généraux</h1>
+          <span className="page-eyebrow">Paramètres</span>
+          <h1 className="section-title">Paramètres généraux</h1>
           <p className="section-subtitle">Configuration globale de l'application.</p>
         </div>
-        <Link to="/app/parametres" className="button button-secondary" style={{ marginLeft: "auto", display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>arrow_back</span>
+        <Link to="/app/parametres" className="button button-secondary">
+          <span className="material-symbols-rounded icon">arrow_back</span>
           Retour
         </Link>
       </header>
 
-      <div className="card" style={{ padding: "32px", maxWidth: "640px", marginTop: "12px" }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-           <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="card settings-form-card">
+        <div className="card-heading">
+           <div className="card-heading-icon">
              <span className="material-symbols-rounded">settings</span>
            </div>
-           <h2 style={{ fontSize: '18px', margin: 0, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>Année Fiscale</h2>
+           <h2>Année fiscale</h2>
         </div>
 
         <div className="form-group">
@@ -44,13 +45,13 @@ export function GeneralSettingsPage() {
             placeholder="ex: 2023-2024"
             style={{ height: '44px' }}
           />
-          <p style={{ fontSize: "13px", color: "var(--ink-muted)", marginTop: "10px", lineHeight: '1.5' }}>
+          <p className="helper-text field-help">
             Cette valeur sera automatiquement associée aux nouveaux contrats créés dans le système.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "32px" }}>
-          <button className="button button-primary" onClick={handleSave} style={{ height: '44px', padding: '0 24px', fontWeight: '600' }}>
+        <div className="form-actions settings-form-actions">
+          <button className="button button-primary" onClick={handleSave}>
             Sauvegarder les modifications
           </button>
           {saved && (

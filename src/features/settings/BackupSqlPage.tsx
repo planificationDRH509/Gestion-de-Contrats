@@ -79,11 +79,12 @@ export function BackupSqlPage() {
   }
 
   return (
-    <div className="content">
-      <div className="section-header">
+    <div className="page-container settings-detail-page">
+      <div className="section-header page-header">
         <div>
-          <div className="section-title">Backup SQL</div>
-          <p className="helper-text" style={{ marginTop: "8px" }}>
+          <span className="page-eyebrow">Paramètres</span>
+          <h1 className="section-title">Backup SQL</h1>
+          <p className="section-subtitle">
             Téléchargez un export SQL complet de la base locale SQLite pour sauvegarde.
           </p>
         </div>

@@ -42,8 +42,11 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           
           {!collapsed && (
             <div className="app-mark">
-              <span>RESSOURCES</span>
-              <span>HUMAINES</span>
+              <span className="app-mark-icon material-symbols-rounded">diversity_3</span>
+              <span className="app-mark-copy">
+                <strong>Ressources</strong>
+                <small>Humaines</small>
+              </span>
             </div>
           )}
         </div>
@@ -174,110 +177,48 @@ function SidebarFooter({ user, collapsed, mode, isOnline, onLogout }: { user: Au
       )}
       
       {!collapsed ? (
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div className="user-menu-shell">
           <button 
             className="user-card-btn"
             onClick={() => setMenuOpen(!menuOpen)}
-            style={{ 
-              width: '100%', 
-              textAlign: 'left', 
-              background: 'none', 
-              border: 'none', 
-              padding: '0', 
-              cursor: 'pointer',
-              borderRadius: '12px',
-              transition: 'background 0.2s'
-            }}
+            type="button"
+            aria-expanded={menuOpen}
           >
-            <div className="user-card" style={{ 
-              margin: '0', 
-              padding: '12px',
-              backgroundColor: menuOpen ? 'var(--accent-soft)' : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <div className="user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
-                <div className="user-meta" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.username}</div>
+            <div className={`user-card${menuOpen ? " is-open" : ""}`}>
+              <span className="user-avatar" aria-hidden="true">
+                {user.name.trim().charAt(0).toUpperCase() || "U"}
+              </span>
+              <div className="user-copy">
+                <div className="user-name">{user.name}</div>
+                <div className="user-meta">@{user.username}</div>
               </div>
-              <span className="material-symbols-rounded" style={{ fontSize: '18px', color: 'var(--ink-muted)' }}>
+              <span className="material-symbols-rounded user-chevron">
                 {menuOpen ? 'expand_less' : 'expand_more'}
               </span>
             </div>
           </button>
 
           {menuOpen && (
-            <div className="user-dropdown-menu" style={{
-              position: 'absolute',
-              bottom: '100%',
-              left: '0',
-              width: '100%',
-              backgroundColor: 'var(--surface)',
-              borderRadius: '12px',
-              boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
-              border: '1px solid var(--border)',
-              padding: '8px',
-              marginBottom: '8px',
-              zIndex: 100,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }}>
-              <button className="dropdown-item" onClick={() => { setMenuOpen(false); onLogout(); }} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                width: '100%',
-                fontSize: '14px',
-                color: 'var(--ink)'
-              }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>sync_alt</span>
+            <div className="user-dropdown-menu">
+              <button className="dropdown-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+                <span className="material-symbols-rounded">sync_alt</span>
                 Changer d'utilisateur
               </button>
-              <button className="dropdown-item" onClick={() => { setMenuOpen(false); onLogout(); }} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                width: '100%',
-                fontSize: '14px',
-                color: 'var(--ink)'
-              }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>lock</span>
+              <button className="dropdown-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+                <span className="material-symbols-rounded">lock</span>
                 Verrouiller la session
               </button>
-              <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '4px 0' }} />
-              <button className="dropdown-item" onClick={onLogout} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                width: '100%',
-                fontSize: '14px',
-                color: '#d93025'
-              }}>
-                <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>logout</span>
+              <div className="dropdown-divider" />
+              <button className="dropdown-item danger" type="button" onClick={onLogout}>
+                <span className="material-symbols-rounded">logout</span>
                 Se déconnecter
               </button>
             </div>
           )}
           
-          <div className="status-pill" style={{ marginTop: '8px', marginBottom: '8px', fontSize: '11px', padding: '4px 10px' }}>
-            Mode: {mode === "supabase" ? "Supabase" : "Local"}
+          <div className="sidebar-mode">
+            <span className={`sidebar-mode-dot${isOnline ? " is-online" : ""}`} />
+            {mode === "supabase" ? "Données synchronisées" : "Données locales"}
           </div>
         </div>
       ) : (

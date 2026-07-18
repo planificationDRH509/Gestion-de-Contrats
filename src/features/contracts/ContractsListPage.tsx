@@ -1205,8 +1205,13 @@ export function ContractsListPage() {
   }
 
   return (
-    <div className="contracts-page">
-      <header className="section-header" style={{ marginBottom: "16px" }}>
+    <div className="page-container contracts-page">
+      <header className="section-header contracts-page-header">
+        <div className="list-page-heading">
+          <span className="page-eyebrow">Gestion RH</span>
+          <h1 className="section-title">Contrats</h1>
+          <p className="section-subtitle">Consultez, filtrez et organisez les contrats de votre espace.</p>
+        </div>
         <div className="toolbar-unified">
           <div className="view-switch-unified">
             <button

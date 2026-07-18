@@ -191,13 +191,13 @@
 }
 
 .paper-preview {
-  background: white;
+  background: transparent;
   width: 100%;
-  max-width: 800px;
-  min-height: 1000px;
-  padding: 60px;
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+  max-width: 8.5in;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
   color: #1a1a1b;
 }
 

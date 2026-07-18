@@ -410,7 +410,7 @@ export function StatisticsPage() {
   const isAdvancedFilterActive = statusFilter !== 'all' || selectedAssignments.length > 0 || selectedPositions.length > 0;
 
   return (
-    <div className="page-container" style={{ padding: "32px", maxWidth: "1600px", margin: "0 auto" }}>
+    <div className="page-container statistics-page">
       {/* 0. INJECTED STYLES FOR DYNAMIC INTERACTIONS */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes slideUpAndFade {
@@ -598,7 +598,7 @@ export function StatisticsPage() {
       </svg>
 
       {/* 1. HEADER PANEL */}
-      <header className="premium-card stagger-1" style={{ 
+      <header className="section-header statistics-header" style={{
         marginBottom: "32px", 
         padding: "24px 32px",
         display: 'flex', 
@@ -612,11 +612,9 @@ export function StatisticsPage() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '24px' }}>
           <div>
-            <h1 className="section-title" style={{ fontSize: "32px", fontFamily: "var(--font-heading)", fontWeight: 900, letterSpacing: "-0.03em", margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
-              Tableau de Bord
-              <span style={{ fontSize: '13px', background: 'var(--accent-soft)', padding: '6px 14px', borderRadius: '12px', color: 'var(--accent)', fontWeight: '700', letterSpacing: '0.05em' }}>PRO</span>
-            </h1>
-            <p style={{ color: "var(--ink-muted)", fontSize: "15px", marginTop: "6px", margin: 0, fontWeight: 500 }}>Analyse approfondie des performances administratives et des effectifs.</p>
+            <span className="page-eyebrow">Vue d'ensemble</span>
+            <h1 className="section-title">Statistiques</h1>
+            <p className="section-subtitle">Analyse des contrats, des affectations et des effectifs.</p>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1186,5 +1184,3 @@ export function StatisticsPage() {
     </div>
   );
 }
-
-

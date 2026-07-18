@@ -2,15 +2,16 @@ import { Link } from "react-router-dom";
 
 export function SettingsPage() {
   return (
-    <div className="page-container" style={{ animation: 'fade-in 0.4s var(--premium-ease)' }}>
-      <header className="section-header" style={{ background: 'transparent' }}>
+    <div className="page-container settings-page">
+      <header className="section-header">
         <div>
-          <h1 className="section-title" style={{ fontSize: '28px' }}>Paramètres</h1>
+          <span className="page-eyebrow">Administration</span>
+          <h1 className="section-title">Paramètres</h1>
           <p className="section-subtitle">Configuration et personnalisation de votre espace de travail.</p>
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '24px', marginTop: '12px' }}>
+      <div className="settings-grid">
         <SettingsCard 
           to="/app/parametres/general" 
           icon="settings" 
@@ -54,33 +55,15 @@ export function SettingsPage() {
 
 function SettingsCard({ to, icon, title, description }: { to: string, icon: string, title: string, description: string }) {
   return (
-    <Link to={to} className="card" style={{ 
-      display: 'flex', 
-      gap: '20px', 
-      alignItems: 'center', 
-      padding: '24px',
-      textDecoration: 'none',
-      color: 'inherit',
-      transition: 'all 0.3s var(--premium-ease)'
-    }}>
-      <div style={{ 
-        width: '56px', 
-        height: '56px', 
-        borderRadius: '14px', 
-        background: 'var(--accent-soft)', 
-        color: 'var(--accent)',
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        flexShrink: 0
-      }}>
-        <span className="material-symbols-rounded" style={{ fontSize: '28px' }}>{icon}</span>
+    <Link to={to} className="settings-card">
+      <div className="settings-card-icon">
+        <span className="material-symbols-rounded">{icon}</span>
       </div>
-      <div style={{ flex: 1 }}>
-        <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>{title}</h3>
-        <p style={{ margin: '4px 0 0 0', fontSize: '13.5px', color: 'var(--ink-muted)', lineHeight: '1.6' }}>{description}</p>
+      <div className="settings-card-copy">
+        <h3>{title}</h3>
+        <p>{description}</p>
       </div>
-      <span className="material-symbols-rounded" style={{ color: 'var(--border)', fontSize: '22px' }}>chevron_right</span>
+      <span className="material-symbols-rounded settings-card-arrow">arrow_forward</span>
     </Link>
   );
 }

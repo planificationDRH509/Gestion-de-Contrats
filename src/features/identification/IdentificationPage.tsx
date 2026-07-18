@@ -30,11 +30,12 @@ export function IdentificationPage() {
   }
 
   return (
-    <div className="page-container" style={{ animation: "fade-in 0.4s ease-out" }}>
-      <header className="section-header" style={{ background: 'transparent' }}>
+    <div className="page-container identification-page">
+      <header className="section-header page-header">
         <div>
+          <span className="page-eyebrow">Répertoire</span>
           <h1 className="section-title">Base d'identification</h1>
-          <p className="section-subtitle">Gérez les informations personnelles (NIF, Prénom, Nom, NINU, Adresse, Sexe)</p>
+          <p className="section-subtitle">Retrouvez et mettez à jour les informations d'identification des collaborateurs.</p>
         </div>
         
         <div className="new-contract-header-actions">

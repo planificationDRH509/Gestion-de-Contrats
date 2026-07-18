@@ -110,7 +110,7 @@ export function AppLayout() {
         isOnline={isOnline}
       />
       <div className="main">
-        <main className="content">
+        <main className="app-content">
           <Outlet />
         </main>
       </div>

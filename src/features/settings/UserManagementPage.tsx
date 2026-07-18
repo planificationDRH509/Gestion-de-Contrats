@@ -81,22 +81,23 @@ export function UserManagementPage() {
   };
 
   return (
-    <div className="page-container" style={{ animation: 'fade-in 0.4s var(--premium-ease)' }}>
-      <header className="section-header" style={{ background: 'transparent' }}>
+    <div className="page-container settings-detail-page user-management-page">
+      <header className="section-header page-header">
         <div>
-          <h1 className="section-title" style={{ fontSize: '28px' }}>Gestion des Utilisateurs</h1>
+          <span className="page-eyebrow">Paramètres</span>
+          <h1 className="section-title">Gestion des utilisateurs</h1>
           <p className="section-subtitle">Créez et gérez les comptes des collaborateurs.</p>
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '32px', marginTop: '12px' }}>
+      <div className="user-management-grid">
         {/* Form Section */}
-        <div className="card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="card settings-panel-card">
+          <div className="card-heading">
+             <div className="card-heading-icon">
                <span className="material-symbols-rounded">person_add</span>
              </div>
-             <h2 style={{ fontSize: '18px', margin: 0, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>Nouveau Collaborateur</h2>
+             <h2>Nouveau collaborateur</h2>
           </div>
           
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -176,12 +177,12 @@ export function UserManagementPage() {
         </div>
 
         {/* List Section */}
-        <div className="card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--info-soft)', color: 'var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="card settings-panel-card">
+          <div className="card-heading">
+             <div className="card-heading-icon info">
                <span className="material-symbols-rounded">group</span>
              </div>
-             <h2 style={{ fontSize: '18px', margin: 0, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>Utilisateurs Existants</h2>
+             <h2>Utilisateurs existants</h2>
           </div>
 
           {loading ? (

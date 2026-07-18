@@ -22,7 +22,7 @@ export function ContractDocument({ contract }: { contract: Contract }) {
   }, [contract, template.html, user?.workspaceName]);
 
   return (
-    <div data-theme="light">
+    <div className="contract-document" data-theme="light">
       <style>{template.css}</style>
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>

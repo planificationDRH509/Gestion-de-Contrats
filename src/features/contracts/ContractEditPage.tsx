@@ -402,10 +402,12 @@ export function ContractEditPage() {
   }
 
   return (
-    <div>
-      <div className="section-header">
+    <div className="page-container contract-editor-page">
+      <div className="section-header page-header">
         <div>
-          <div className="section-title">Modifier le contrat</div>
+          <span className="page-eyebrow">Contrats</span>
+          <h1 className="section-title">Modifier le contrat</h1>
+          <p className="section-subtitle">Mettez à jour les informations enregistrées pour ce contrat.</p>
         </div>
       </div>
 

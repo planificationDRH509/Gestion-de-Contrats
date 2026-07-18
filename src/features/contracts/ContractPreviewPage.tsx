@@ -45,9 +45,10 @@ export function ContractPreviewPage() {
 
   return (
     <div className="page-container">
-      <div className="section-header">
+      <div className="section-header page-header">
         <div>
-          <h1 className="section-title">Aperçu du Contrat</h1>
+          <span className="page-eyebrow">Contrats</span>
+          <h1 className="section-title">Vérification du contrat</h1>
           <div className="section-subtitle">Vérifiez les informations avant l'enregistrement final.</div>
         </div>
         <div className="toolbar">

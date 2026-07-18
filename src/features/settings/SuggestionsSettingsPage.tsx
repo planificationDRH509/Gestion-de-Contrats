@@ -13,11 +13,12 @@ export function SuggestionsSettingsPage() {
   const [tab, setTab] = useState<Tab>("addresses");
 
   return (
-    <div>
-      <div className="section-header">
+    <div className="page-container settings-detail-page">
+      <div className="section-header page-header">
         <div>
-          <div className="section-title">Suggestions & Auto-complétion</div>
-          <p className="helper-text" style={{ marginTop: 4 }}>
+          <span className="page-eyebrow">Paramètres</span>
+          <h1 className="section-title">Suggestions et autocomplétion</h1>
+          <p className="section-subtitle">
             Gérez les listes de suggestions partagées via Supabase.
           </p>
         </div>

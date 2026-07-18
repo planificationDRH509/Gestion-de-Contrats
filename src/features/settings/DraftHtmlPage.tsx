@@ -3,6 +3,7 @@ import {
   DraftTemplateType,
   draftTemplateOptions,
   buildTemplateVariables,
+  getDefaultTemplate,
   loadTemplateByType,
   saveTemplateByType,
   templateVariables,
@@ -65,7 +66,7 @@ export function DraftHtmlPage() {
 
   const handleReset = () => {
     if (window.confirm("Réinitialiser ce modèle aux valeurs par défaut ?")) {
-      const defaultTpl = loadTemplateByType(selectedDraft);
+      const defaultTpl = getDefaultTemplate(selectedDraft);
       setTemplate(defaultTpl);
     }
   };
@@ -91,6 +92,7 @@ export function DraftHtmlPage() {
     <div className="page-container">
       <div className="section-header">
         <div>
+          <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Modèles de Documents</h1>
           <div className="section-subtitle">Éditez le code HTML/CSS de vos contrats.</div>
         </div>
