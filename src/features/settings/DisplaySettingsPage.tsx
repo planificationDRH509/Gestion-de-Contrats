@@ -9,7 +9,6 @@ export function DisplaySettingsPage() {
         <div>
           <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Affichage</h1>
-          <p className="section-subtitle">Choisissez une apparence confortable pour votre environnement de travail.</p>
         </div>
       </div>
 

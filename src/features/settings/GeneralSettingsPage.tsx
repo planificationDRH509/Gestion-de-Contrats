@@ -19,7 +19,6 @@ export function GeneralSettingsPage() {
         <div>
           <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Paramètres généraux</h1>
-          <p className="section-subtitle">Configuration globale de l'application.</p>
         </div>
         <Link to="/app/parametres" className="button button-secondary">
           <span className="material-symbols-rounded icon">arrow_back</span>

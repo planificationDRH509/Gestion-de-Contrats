@@ -86,7 +86,6 @@ export function UserManagementPage() {
         <div>
           <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Gestion des utilisateurs</h1>
-          <p className="section-subtitle">Créez et gérez les comptes des collaborateurs.</p>
         </div>
       </header>
 

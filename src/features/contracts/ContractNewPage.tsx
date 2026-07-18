@@ -696,7 +696,6 @@ export function ContractNewPage() {
         <div>
           <span className="page-eyebrow">Contrats</span>
           <h1 className="section-title">Nouveau contrat</h1>
-          <p className="section-subtitle">Renseignez les informations du collaborateur et de son affectation.</p>
         </div>
         <div className="new-contract-header-actions">
           <div className="entry-mode-switch" role="group" aria-label="Mode de saisie">

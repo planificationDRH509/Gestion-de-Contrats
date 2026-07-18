@@ -75,6 +75,7 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           to="/app/contrats/nouveau" 
           icon="add_circle" 
           label="Nouveau contrat" 
+          shortLabel="Nouveau"
           collapsed={collapsed} 
         />
         <NavItem 
@@ -118,7 +119,7 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
   );
 }
 
-function NavItem({ to, icon, label, collapsed, end }: { to: string, icon: string, label: string, collapsed: boolean, end?: boolean }) {
+function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, icon: string, label: string, shortLabel?: string, collapsed: boolean, end?: boolean }) {
   return (
     <NavLink
       to={to}
@@ -127,7 +128,8 @@ function NavItem({ to, icon, label, collapsed, end }: { to: string, icon: string
       title={collapsed ? label : undefined}
     >
       <span className="material-symbols-rounded nav-icon">{icon}</span>
-      <span className="sidebar-label">{label}</span>
+      <span className="sidebar-label sidebar-label-full">{label}</span>
+      <span className="sidebar-label sidebar-label-short">{shortLabel ?? label}</span>
     </NavLink>
   );
 }

@@ -35,7 +35,6 @@ export function IdentificationPage() {
         <div>
           <span className="page-eyebrow">Répertoire</span>
           <h1 className="section-title">Base d'identification</h1>
-          <p className="section-subtitle">Retrouvez et mettez à jour les informations d'identification des collaborateurs.</p>
         </div>
         
         <div className="new-contract-header-actions">

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Outlet } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import {
@@ -16,7 +16,9 @@ const MAX_W = 480;
 
 export function AppLayout() {
   const { user } = useAuth();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const mainRef = useRef<HTMLDivElement>(null);
   const workspaceId = user?.workspaceId ?? "";
   const isSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
   const [collapsed, setCollapsed] = useState(() => {
@@ -106,6 +108,10 @@ export function AppLayout() {
     } catch {}
   }, [sidebarWidth]);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
+
   const startResizing = useCallback(() => {
     setIsResizing(true);
   }, []);
@@ -157,7 +163,7 @@ export function AppLayout() {
         syncState={syncState}
         onSync={() => void synchronize()}
       />
-      <div className="main">
+      <div className="main" ref={mainRef}>
         <main className="app-content">
           <Outlet />
         </main>

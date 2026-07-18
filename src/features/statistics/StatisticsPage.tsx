@@ -610,16 +610,15 @@ export function StatisticsPage() {
         borderRadius: '24px',
         animation: 'slideUpAndFade 0.6s cubic-bezier(0.16, 1, 0.3, 1)'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '24px' }}>
+        <div className="statistics-header-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '24px' }}>
           <div>
             <span className="page-eyebrow">Vue d'ensemble</span>
             <h1 className="section-title">Statistiques</h1>
-            <p className="section-subtitle">Analyse des contrats, des affectations et des effectifs.</p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="statistics-header-controls" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Fiscal Year Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-sunken)', padding: '6px 14px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+            <div className="fiscal-year-control" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-sunken)', padding: '6px 14px', borderRadius: '16px', border: '1px solid var(--border)' }}>
               <span className="material-symbols-rounded" style={{ color: 'var(--accent)', fontSize: '20px' }}>calendar_month</span>
               <select 
                 value={fiscalYear} 
@@ -660,6 +659,7 @@ export function StatisticsPage() {
 
             {/* Advanced Filters Button */}
             <button
+              className="statistics-advanced-toggle"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               style={{
                 display: 'flex',
@@ -699,7 +699,7 @@ export function StatisticsPage() {
 
         {/* 2. ADVANCED FILTERS PANEL */}
         {showAdvancedFilters && (
-          <div style={{ 
+          <div className="statistics-advanced-panel" style={{
             display: 'flex', 
             gap: '20px', 
             alignItems: 'center', 
@@ -748,7 +748,7 @@ export function StatisticsPage() {
             />
 
             {filterType === 'custom' && (
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginLeft: 'auto', background: 'var(--surface-card)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div className="statistics-custom-range" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginLeft: 'auto', background: 'var(--surface-card)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                 <input 
                   type="date" 
                   value={startDate} 

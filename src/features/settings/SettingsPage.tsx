@@ -7,7 +7,6 @@ export function SettingsPage() {
         <div>
           <span className="page-eyebrow">Administration</span>
           <h1 className="section-title">Paramètres</h1>
-          <p className="section-subtitle">Configuration et personnalisation de votre espace de travail.</p>
         </div>
       </header>
 

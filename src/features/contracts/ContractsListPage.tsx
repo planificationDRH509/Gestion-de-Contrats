@@ -1217,7 +1217,6 @@ export function ContractsListPage() {
           <div>
             <span className="page-eyebrow">Gestion RH</span>
             <h1 className="section-title">Contrats</h1>
-            <p className="section-subtitle">Consultez, filtrez et organisez les contrats de votre espace.</p>
           </div>
           <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
             <span className="material-symbols-rounded icon">add</span>

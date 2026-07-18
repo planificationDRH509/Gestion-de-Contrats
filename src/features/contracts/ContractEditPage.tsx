@@ -407,7 +407,6 @@ export function ContractEditPage() {
         <div>
           <span className="page-eyebrow">Contrats</span>
           <h1 className="section-title">Modifier le contrat</h1>
-          <p className="section-subtitle">Mettez à jour les informations enregistrées pour ce contrat.</p>
         </div>
       </div>
 
