@@ -1,21 +1,19 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
-import { listLocalWorkspaces, getDefaultWorkspace } from "../../data/local/workspaces";
+import { getDefaultWorkspace, listLocalWorkspaces } from "../../data/local/workspaces";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 
 export type AuthUser = {
   id: string;
   username: string;
   name: string;
+  // Kept as an internal data partition key for backward compatibility.
   workspaceId: string;
-  workspaceName: string;
-  allowedWorkspaces: string[]; // Added this
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  switchWorkspace: (workspaceId: string, workspaceName: string) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -33,14 +31,17 @@ function loadSession(): AuthUser | null {
       typeof parsed.id !== "string" ||
       typeof parsed.username !== "string" ||
       typeof parsed.name !== "string" ||
-      typeof parsed.workspaceId !== "string" ||
-      typeof parsed.workspaceName !== "string" ||
-      !Array.isArray(parsed.allowedWorkspaces)
+      typeof parsed.workspaceId !== "string"
     ) {
       localStorage.removeItem(AUTH_KEY);
       return null;
     }
-    return parsed as AuthUser;
+    return {
+      id: parsed.id,
+      username: parsed.username,
+      name: parsed.name,
+      workspaceId: parsed.workspaceId
+    };
   } catch {
     localStorage.removeItem(AUTH_KEY);
     return null;
@@ -79,17 +80,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return false;
         }
 
-        const allowedWorkspaces = data.workspaces || [];
-        // Default to first allowed workspace or the global default
-        const defaultWp = listLocalWorkspaces().find(w => allowedWorkspaces.includes(w.id)) || getDefaultWorkspace();
+        // Existing accounts keep their historical data partition, while the
+        // workspace concept is no longer exposed in the product.
+        const legacyWorkspaceIds = data.workspaces || [];
+        const dataPartition =
+          listLocalWorkspaces().find((item) => legacyWorkspaceIds.includes(item.id)) ||
+          getDefaultWorkspace();
 
         const sessionUser: AuthUser = {
           id: data.id,
           username: data.username,
           name: data.full_name,
-          workspaceId: defaultWp.id,
-          workspaceName: defaultWp.name,
-          allowedWorkspaces: allowedWorkspaces
+          workspaceId: dataPartition.id
         };
         setUser(sessionUser);
         saveSession(sessionUser);
@@ -98,17 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: () => {
         setUser(null);
         saveSession(null);
-      },
-      switchWorkspace: (workspaceId: string, workspaceName: string) => {
-        if (!user) return;
-        // Check if user is allowed to access this workspace
-        if (!user.allowedWorkspaces.includes(workspaceId)) {
-          console.warn(`Tentative d'accès non autorisée à l'espace: ${workspaceName}`);
-          return;
-        }
-        const updatedUser = { ...user, workspaceId, workspaceName };
-        setUser(updatedUser);
-        saveSession(updatedUser);
       }
     }),
     [user]

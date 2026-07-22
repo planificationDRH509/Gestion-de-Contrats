@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
-import { listLocalWorkspaces } from "../../data/local/workspaces";
-import { AppUser, Workspace } from "../../data/types";
+import { getDefaultWorkspace } from "../../data/local/workspaces";
+import { AppUser } from "../../data/types";
 
 export function UserManagementPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   
   // Form state
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedWorkspaces, setSelectedWorkspaces] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     fetchUsers();
-    setWorkspaces(listLocalWorkspaces());
   }, []);
 
   async function fetchUsers() {
@@ -35,7 +32,6 @@ export function UserManagementPage() {
         id: u.id,
         username: u.username,
         fullName: u.full_name,
-        workspaces: u.workspaces || [],
         createdAt: u.created_at,
         updatedAt: u.updated_at
       })));
@@ -43,16 +39,10 @@ export function UserManagementPage() {
     setLoading(false);
   }
 
-  const toggleWorkspace = (id: string) => {
-    setSelectedWorkspaces(prev => 
-      prev.includes(id) ? prev.filter(w => w !== id) : [...prev, id]
-    );
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password || !fullName || selectedWorkspaces.length === 0) {
-      setMessage({ type: 'error', text: "Veuillez remplir tous les champs et sélectionner au moins un espace de travail." });
+    if (!username || !password || !fullName) {
+      setMessage({ type: 'error', text: "Veuillez remplir tous les champs." });
       return;
     }
 
@@ -64,7 +54,8 @@ export function UserManagementPage() {
       username,
       full_name: fullName,
       password,
-      workspaces: selectedWorkspaces
+      // Legacy database column retained until the schema can be migrated.
+      workspaces: [getDefaultWorkspace().id]
     });
 
     if (error) {
@@ -74,7 +65,6 @@ export function UserManagementPage() {
       setUsername("");
       setFullName("");
       setPassword("");
-      setSelectedWorkspaces([]);
       fetchUsers();
     }
     setIsSubmitting(false);
@@ -133,23 +123,6 @@ export function UserManagementPage() {
               />
             </div>
 
-            <div className="form-group">
-              <label className="label" style={{ marginBottom: '12px' }}>Espaces de travail autorisés</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: 'var(--surface-sunken)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                {workspaces.map(wp => (
-                  <label key={wp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: 'var(--ink)' }}>
-                    <input 
-                      type="checkbox" 
-                      className="checkbox"
-                      checked={selectedWorkspaces.includes(wp.id)} 
-                      onChange={() => toggleWorkspace(wp.id)}
-                    />
-                    {wp.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-
             {message && (
               <div style={{ 
                 padding: '12px', 
@@ -206,23 +179,6 @@ export function UserManagementPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: '700', color: 'var(--ink)', fontSize: '15px' }}>{u.fullName}</div>
                     <div style={{ fontSize: '12px', color: 'var(--ink-muted)', background: 'var(--panel)', padding: '2px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}>@{u.username}</div>
-                  </div>
-                  <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {u.workspaces.map(wpId => {
-                      const wp = workspaces.find(w => w.id === wpId);
-                      return (
-                        <span key={wpId} style={{ 
-                          fontSize: '11px', 
-                          padding: '2px 8px', 
-                          borderRadius: '8px', 
-                          backgroundColor: 'var(--accent-soft)', 
-                          color: 'var(--accent)',
-                          fontWeight: '600'
-                        }}>
-                          {wp?.name || wpId}
-                        </span>
-                      );
-                    })}
                   </div>
                 </div>
               ))}

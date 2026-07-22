@@ -12,18 +12,34 @@ export function ContractsPrintPage() {
   const workspaceId = user?.workspaceId ?? "";
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
+  const lastAutoPrintedSelectionRef = useRef<string | null>(null);
 
   const idsParam = searchParams.get("ids") ?? "";
   const ids = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
+  const printSelectionKey = `${workspaceId}:${ids.join(",")}`;
   const { data, isLoading } = useContractsByIds(ids, workspaceId);
 
   useEffect(() => {
-    if (!isLoading && data && data.length > 0) {
-      const timer = setTimeout(() => window.print(), 300);
+    if (
+      !isLoading &&
+      data &&
+      data.length > 0 &&
+      lastAutoPrintedSelectionRef.current !== printSelectionKey
+    ) {
+      const timer = setTimeout(() => {
+        if (lastAutoPrintedSelectionRef.current === printSelectionKey) return;
+        lastAutoPrintedSelectionRef.current = printSelectionKey;
+        window.print();
+      }, 300);
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [isLoading, data]);
+  }, [isLoading, data, printSelectionKey]);
+
+  function handlePrint() {
+    lastAutoPrintedSelectionRef.current = printSelectionKey;
+    window.print();
+  }
 
   useEffect(() => {
     if (ids.length === 0 || !workspaceId) return;
@@ -72,7 +88,7 @@ export function ContractsPrintPage() {
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
-          <button className="btn btn-primary" onClick={() => window.print()}>
+          <button className="btn btn-primary" onClick={handlePrint}>
             Imprimer
           </button>
         </div>

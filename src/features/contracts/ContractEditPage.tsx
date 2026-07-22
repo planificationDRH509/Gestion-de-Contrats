@@ -181,6 +181,9 @@ export function ContractEditPage() {
 
   useEffect(() => {
     if (!data) return;
+    // A background refresh may replace cached data after the user has already
+    // started editing. Never overwrite those in-progress local changes.
+    if (draftHydratedRef.current && isDirty) return;
     draftHydratedRef.current = false;
     const savedDraft = loadDraftValue<ContractFormSchema>(unsavedDraftKey);
     reset({
@@ -199,7 +202,7 @@ export function ContractEditPage() {
       ...savedDraft
     });
     draftHydratedRef.current = true;
-  }, [data, reset, unsavedDraftKey]);
+  }, [data, isDirty, reset, unsavedDraftKey]);
 
   useEffect(() => {
     if (!draftHydratedRef.current || !workspaceId || !userId) return;

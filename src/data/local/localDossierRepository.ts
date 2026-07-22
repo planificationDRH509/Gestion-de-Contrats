@@ -1,7 +1,7 @@
 import { DossierRepository } from "../repositories/DossierRepository";
 import { CreateDossierInput, Dossier, UpdateDossierInput } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import {
   normalizeDossierName,
@@ -15,17 +15,27 @@ function now() {
   return new Date().toISOString();
 }
 
+export function readCachedDossiers(workspaceId: string): Dossier[] {
+  return selectDb((db) =>
+    db.dossiers
+      .filter((dossier) => dossier.workspaceId === workspaceId && !dossier.deletedAt)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  );
+}
+
+export function readCachedDossier(id: string): Dossier | null {
+  return selectDb(
+    (db) => db.dossiers.find((dossier) => dossier.id === id && !dossier.deletedAt) ?? null
+  );
+}
+
 export class LocalDossierRepository implements DossierRepository {
   async list(workspaceId: string): Promise<Dossier[]> {
-    const db = loadDb();
-    return db.dossiers
-      .filter((dossier) => dossier.workspaceId === workspaceId && !dossier.deletedAt)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return readCachedDossiers(workspaceId);
   }
 
   async getById(id: string): Promise<Dossier | null> {
-    const db = loadDb();
-    return db.dossiers.find((dossier) => dossier.id === id && !dossier.deletedAt) ?? null;
+    return readCachedDossier(id);
   }
 
   async create(input: CreateDossierInput): Promise<Dossier> {

@@ -9,5 +9,6 @@ export interface ApplicantRepository {
     ninu?: string | null
   ): Promise<Applicant | null>;
   upsert(input: UpsertApplicantInput): Promise<Applicant>;
+  upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]>;
   softDelete(id: string, workspaceId: string): Promise<void>;
 }

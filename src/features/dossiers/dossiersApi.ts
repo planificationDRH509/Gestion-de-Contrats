@@ -3,8 +3,12 @@ import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import { CreateDossierInput, UpdateDossierInput } from "../../data/types";
 import { isContractDone } from "../../lib/dossier";
+import { readCachedDossiers } from "../../data/local/localDossierRepository";
+import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
+import { selectDb } from "../../data/local/localDb";
 
 const provider = getDataProvider();
+const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
 export type DossierContractMetrics = Record<
   string,
@@ -14,11 +18,43 @@ export type DossierContractMetrics = Record<
   }
 >;
 
+export function readCachedDossierContractMetrics(workspaceId: string): DossierContractMetrics {
+  return selectDb((db) => {
+    const metrics: DossierContractMetrics = {};
+    db.contracts.forEach((contract) => {
+      if (
+        contract.workspaceId !== workspaceId ||
+        contract.deletedAt ||
+        !contract.dossierId
+      ) {
+        return;
+      }
+
+      const dossierMetrics = metrics[contract.dossierId] ?? {
+        assignedCount: 0,
+        doneCount: 0
+      };
+      dossierMetrics.assignedCount += 1;
+      if (isContractDone(contract.status)) dossierMetrics.doneCount += 1;
+      metrics[contract.dossierId] = dossierMetrics;
+    });
+    return metrics;
+  });
+}
+
 export function useDossiersList(workspaceId: string) {
   return useQuery({
     queryKey: ["dossiers", workspaceId],
     queryFn: () => provider.dossiers.list(workspaceId),
-    enabled: Boolean(workspaceId)
+    enabled: Boolean(workspaceId),
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(workspaceId) ? readCachedDossiers(workspaceId) : undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -27,6 +63,12 @@ export function useDossierContractMetrics(workspaceId: string) {
     queryKey: ["dossiers", "metrics", workspaceId],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
+      // Supabase workspaces already keep a complete local snapshot. Reusing it
+      // avoids downloading every contract again just to calculate counters.
+      if (usesSupabase) {
+        return readCachedDossierContractMetrics(workspaceId);
+      }
+
       const pageSize = 200;
       let page = 1;
       let total = 0;
@@ -63,7 +105,13 @@ export function useDossierContractMetrics(workspaceId: string) {
       } while ((page - 1) * pageSize < total);
 
       return metrics;
-    }
+    },
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(workspaceId)
+        ? readCachedDossierContractMetrics(workspaceId)
+        : undefined
+      : undefined,
+    initialDataUpdatedAt: 0
   });
 }
 

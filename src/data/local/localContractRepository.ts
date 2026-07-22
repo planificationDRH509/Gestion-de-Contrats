@@ -8,7 +8,7 @@ import {
   UpdateContractInput
 } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, selectDb, type LocalDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
@@ -48,7 +48,7 @@ function sortContracts(contracts: Contract[], sort?: ContractListParams["sort"])
   }
 }
 
-function withTags(contract: Contract, db: ReturnType<typeof loadDb>): Contract {
+function withTags(contract: Contract, db: LocalDb): Contract {
   const links = db.contractTags.filter((link) => link.contractId === contract.id);
   const tags = links
     .map((link) => db.tags.find((tag) => tag.id === link.tagId && !tag.deletedAt))
@@ -56,15 +56,14 @@ function withTags(contract: Contract, db: ReturnType<typeof loadDb>): Contract {
   return { ...contract, tags: tags.length > 0 ? tags : contract.tags ?? [] };
 }
 
-export class LocalContractRepository implements ContractRepository {
-  async list(params: ContractListParams): Promise<ContractListResult> {
-    const db = loadDb();
+/** Returns the immediately available offline page without touching the network. */
+export function readCachedContracts(params: ContractListParams): ContractListResult {
+  return selectDb((db) => {
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 10;
 
-    let items = db.contracts.map((contract) => withTags(contract, db)).filter(
-      (contract) =>
-        contract.workspaceId === params.workspaceId && !contract.deletedAt
+    let items = db.contracts.filter(
+      (contract) => contract.workspaceId === params.workspaceId && !contract.deletedAt
     );
 
     if (params.onlyMine && params.userId) {
@@ -84,7 +83,13 @@ export class LocalContractRepository implements ContractRepository {
     }
 
     if (params.tagId) {
+      const linkedContractIds = new Set(
+        db.contractTags
+          .filter((link) => link.tagId === params.tagId)
+          .map((link) => link.contractId)
+      );
       items = items.filter((contract) =>
+        linkedContractIds.has(contract.id) ||
         (contract.tags ?? []).some((tag) => tag.id === params.tagId)
       );
     }
@@ -110,26 +115,46 @@ export class LocalContractRepository implements ContractRepository {
     const total = items.length;
     items = sortContracts(items, params.sort);
     const start = (page - 1) * pageSize;
-    const paged = items.slice(start, start + pageSize);
 
-    return { items: paged, total, page, pageSize };
-  }
+    return {
+      items: items.slice(start, start + pageSize).map((contract) => withTags(contract, db)),
+      total,
+      page,
+      pageSize
+    };
+  });
+}
 
-  async getById(id: string): Promise<Contract | null> {
-    const db = loadDb();
+export function readCachedContract(id: string): Contract | null {
+  return selectDb((db) => {
     const contract = db.contracts.find((item) => item.id === id && !item.deletedAt);
     return contract ? withTags(contract, db) : null;
-  }
+  });
+}
 
-  async getByIds(ids: string[], workspaceId: string): Promise<Contract[]> {
-    const db = loadDb();
-    const set = new Set(ids);
-    return db.contracts.map((contract) => withTags(contract, db)).filter(
+export function readCachedContractsByIds(ids: string[], workspaceId: string): Contract[] {
+  const idSet = new Set(ids);
+  return selectDb((db) =>
+    db.contracts.filter(
       (contract) =>
         contract.workspaceId === workspaceId &&
         !contract.deletedAt &&
-        set.has(contract.id)
-    );
+        idSet.has(contract.id)
+    ).map((contract) => withTags(contract, db))
+  );
+}
+
+export class LocalContractRepository implements ContractRepository {
+  async list(params: ContractListParams): Promise<ContractListResult> {
+    return readCachedContracts(params);
+  }
+
+  async getById(id: string): Promise<Contract | null> {
+    return readCachedContract(id);
+  }
+
+  async getByIds(ids: string[], workspaceId: string): Promise<Contract[]> {
+    return readCachedContractsByIds(ids, workspaceId);
   }
 
   async create(input: CreateContractInput): Promise<Contract> {

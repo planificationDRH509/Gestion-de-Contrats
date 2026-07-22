@@ -138,7 +138,9 @@ const FIELD_DETECTION_ORDER: DestinationFieldId[] = [
 ];
 
 const FIELD_LABELS = new Map(CONTRACT_IMPORT_FIELDS.map((field) => [field.id, field.label]));
-export const MAX_IMPORT_ROWS = 250;
+// Keep a safety ceiling for malformed/accidental clipboard pastes while allowing
+// normal operational imports to be handled in a single pass.
+export const MAX_IMPORT_ROWS = 5_000;
 
 function normalizeHeader(value: string) {
   return value

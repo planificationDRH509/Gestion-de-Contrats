@@ -18,7 +18,6 @@ export function useAppUsers() {
         id: u.id,
         username: u.username,
         fullName: u.full_name,
-        workspaces: u.workspaces || [],
         createdAt: u.created_at,
         updatedAt: u.updated_at
       })) as AppUser[];

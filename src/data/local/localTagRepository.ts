@@ -1,7 +1,7 @@
 import { CreateTagInput, TagRepository } from "../repositories/TagRepository";
 import { Tag } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 
 function now() {
@@ -20,12 +20,17 @@ function tagColor(name: string) {
   return `hsl(${hash}, 70%, 42%)`;
 }
 
+export function readCachedTags(workspaceId: string): Tag[] {
+  return selectDb((db) =>
+    db.tags
+      .filter((tag) => tag.workspaceId === workspaceId && !tag.deletedAt)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
+}
+
 export class LocalTagRepository implements TagRepository {
   async list(workspaceId: string): Promise<Tag[]> {
-    const db = loadDb();
-    return db.tags
-      .filter((tag) => tag.workspaceId === workspaceId && !tag.deletedAt)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return readCachedTags(workspaceId);
   }
 
   async create(input: CreateTagInput): Promise<Tag> {

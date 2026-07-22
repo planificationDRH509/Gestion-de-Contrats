@@ -130,7 +130,7 @@ export const referenceContractTemplate: ContractTemplate = {
     <p><strong>Article 20.- Loi applicable</strong></p>
     <p>Pour tout ce qui n’est pas stipulé dans le présent contrat, les parties devront se référer aux lois de la République.</p>
 
-    <p class="contract-made-at">Fait à Port-au-Prince, en triple original, <strong>le {{created_date_long}}</strong></p>
+    <p class="contract-made-at">Fait à Port-au-Prince, en triple original, <strong>le {{date_debut}}</strong></p>
 
     <div class="contract-signatures" aria-label="Signatures">
       <div class="contract-signature contract-signature-left">

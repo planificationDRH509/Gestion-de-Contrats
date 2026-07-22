@@ -19,6 +19,7 @@ import { get, set } from "idb-keyval";
 
 export type LocalSyncMetadata = {
   lastSyncedAt?: string | null;
+  lastFullSyncedAt?: string | null;
   lastError?: string | null;
 };
 
@@ -41,6 +42,8 @@ export const DEFAULT_WORKSPACE_ID = "workspace_default";
 
 let memoryDb: LocalDb | null = null;
 let persistenceQueue: Promise<void> = Promise.resolve();
+let pendingPersistenceSnapshot: LocalDb | null = null;
+let persistenceDrainScheduled = false;
 
 function now() {
   return new Date().toISOString();
@@ -171,11 +174,18 @@ function normalizeDb(value: LocalDb): LocalDb {
   };
 }
 
-function cloneDb(db: LocalDb): LocalDb {
-  if (typeof structuredClone === "function") {
-    return structuredClone(db);
+function cloneValue<T>(value: T): T {
+  if (value === undefined || value === null) {
+    return value;
   }
-  return JSON.parse(JSON.stringify(db)) as LocalDb;
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cloneDb(db: LocalDb): LocalDb {
+  return cloneValue(db);
 }
 
 function loadLegacyDb(): LocalDb | null {
@@ -191,11 +201,30 @@ function queueIndexedDbWrite(db: LocalDb): Promise<void> {
   if (typeof indexedDB === "undefined") {
     return Promise.resolve();
   }
-  const snapshot = cloneDb(db);
+
+  // Keep only the newest immutable snapshot while a write is in progress. A
+  // workspace refresh can update several pages in quick succession; persisting
+  // every intermediate full database made the UI noticeably sluggish.
+  pendingPersistenceSnapshot = db;
+  if (persistenceDrainScheduled) {
+    return persistenceQueue;
+  }
+
+  persistenceDrainScheduled = true;
   persistenceQueue = persistenceQueue
     .catch(() => undefined)
     .then(async () => {
-      await set(IDB_KEY, snapshot);
+      while (pendingPersistenceSnapshot) {
+        const snapshot = pendingPersistenceSnapshot;
+        pendingPersistenceSnapshot = null;
+        await set(IDB_KEY, snapshot);
+      }
+    })
+    .finally(() => {
+      persistenceDrainScheduled = false;
+      if (pendingPersistenceSnapshot) {
+        void queueIndexedDbWrite(pendingPersistenceSnapshot);
+      }
     });
   return persistenceQueue;
 }
@@ -222,7 +251,11 @@ export async function initializeLocalDb(): Promise<void> {
 
   try {
     if (typeof indexedDB !== "undefined") {
-      await set(IDB_KEY, cloneDb(memoryDb));
+      // Existing IndexedDB content has already been persisted. Avoid rewriting
+      // the complete offline database on every launch before React can render.
+      if (!stored) {
+        await set(IDB_KEY, cloneDb(memoryDb));
+      }
       localStorage.removeItem(DB_KEY);
     }
     localStorage.setItem(INIT_MARKER_KEY, "1");
@@ -231,7 +264,7 @@ export async function initializeLocalDb(): Promise<void> {
   }
 }
 
-export function loadDb(): LocalDb {
+function getMemoryDb(): LocalDb {
   // Vitest clears localStorage between tests while retaining ES modules.
   if (import.meta.env.MODE === "test" && !localStorage.getItem(INIT_MARKER_KEY)) {
     memoryDb = null;
@@ -246,7 +279,19 @@ export function loadDb(): LocalDb {
     }
     void queueIndexedDbWrite(memoryDb);
   }
-  return cloneDb(memoryDb);
+  return memoryDb;
+}
+
+export function loadDb(): LocalDb {
+  return cloneDb(getMemoryDb());
+}
+
+/**
+ * Reads and clones only the selected offline data instead of cloning the whole
+ * database. Selectors must remain pure and must not mutate the supplied value.
+ */
+export function selectDb<T>(selector: (db: LocalDb) => T): T {
+  return cloneValue(selector(getMemoryDb()));
 }
 
 export function saveDb(db: LocalDb) {
@@ -265,7 +310,9 @@ export function saveDb(db: LocalDb) {
 }
 
 export async function flushLocalDbWrites(): Promise<void> {
-  await persistenceQueue;
+  do {
+    await persistenceQueue;
+  } while (persistenceDrainScheduled || pendingPersistenceSnapshot);
 }
 
 export function listWorkspaces(): Workspace[] {

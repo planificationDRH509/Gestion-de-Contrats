@@ -10,7 +10,7 @@ import {
 } from "../types";
 import { createId } from "../../lib/uuid";
 import { formatFirstName, formatLastName } from "../../lib/format";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 
 function now() {
@@ -334,7 +334,7 @@ export function deleteApplicantOffline(id: string, workspaceId: string) {
 }
 
 export function getPendingOutbox(): OutboxItem[] {
-  return loadDb().outbox.filter((item) => !item.syncedAt);
+  return selectDb((db) => db.outbox.filter((item) => !item.syncedAt));
 }
 
 export function removeOutboxItem(id: string) {
@@ -367,7 +367,11 @@ export function getPendingOutboxCount(workspaceId?: string): number {
 
 export function setWorkspaceSyncMetadata(
   workspaceId: string,
-  metadata: { lastSyncedAt?: string | null; lastError?: string | null }
+  metadata: {
+    lastSyncedAt?: string | null;
+    lastFullSyncedAt?: string | null;
+    lastError?: string | null;
+  }
 ) {
   const db = loadDb();
   db.syncMetadata[workspaceId] = {
@@ -378,12 +382,11 @@ export function setWorkspaceSyncMetadata(
 }
 
 export function getWorkspaceSyncMetadata(workspaceId: string) {
-  return loadDb().syncMetadata[workspaceId] ?? {};
+  return selectDb((db) => db.syncMetadata[workspaceId] ?? {});
 }
 
 export function getWorkspaceCacheCounts(workspaceId: string) {
-  const db = loadDb();
-  return {
+  return selectDb((db) => ({
     applicants: db.applicants.filter(
       (item) => item.workspaceId === workspaceId && !item.deletedAt
     ).length,
@@ -394,7 +397,17 @@ export function getWorkspaceCacheCounts(workspaceId: string) {
       (item) => item.workspaceId === workspaceId && !item.deletedAt
     ).length,
     tags: db.tags.filter((item) => item.workspaceId === workspaceId && !item.deletedAt).length
-  };
+  }));
+}
+
+/** Whether this workspace has anything useful to render before the network responds. */
+export function hasWorkspaceOfflineCache(workspaceId: string): boolean {
+  if (!workspaceId) return false;
+  return selectDb((db) => {
+    const metadata = db.syncMetadata[workspaceId];
+    if (metadata?.lastFullSyncedAt || metadata?.lastSyncedAt) return true;
+    return db.outbox.some((item) => item.workspaceId === workspaceId && !item.syncedAt);
+  });
 }
 
 export function replaceWorkspaceCache(

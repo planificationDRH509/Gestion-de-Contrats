@@ -10,7 +10,6 @@ import {
   renderTemplate
 } from "./contractTemplate";
 import { Contract } from "../../data/types";
-import { ensureDefaultWorkspace } from "../../data/local/localDb";
 import "./DraftHtmlPage.css";
 
 const sampleContract: Contract = {
@@ -40,7 +39,6 @@ export function DraftHtmlPage() {
   const [message, setMessage] = useState<string | null>(null);
   
   const htmlRef = useRef<HTMLTextAreaElement>(null);
-  const workspace = useMemo(() => ensureDefaultWorkspace(), []);
 
   useEffect(() => {
     setTemplate(loadTemplateByType(selectedDraft));
@@ -50,9 +48,9 @@ export function DraftHtmlPage() {
   const previewHtml = useMemo(() => {
     return renderTemplate(
       template.html,
-      buildTemplateVariables(sampleContract, workspace.name)
+      buildTemplateVariables(sampleContract)
     );
-  }, [template.html, workspace.name]);
+  }, [template.html]);
 
   const handleSave = async () => {
     try {

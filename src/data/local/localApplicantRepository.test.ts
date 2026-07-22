@@ -46,4 +46,33 @@ describe("LocalApplicantRepository offline mutations", () => {
     expect(await repository.list(workspaceId)).toHaveLength(0);
     expect(loadDb().outbox.some((item) => item.type === "applicant.delete")).toBe(true);
   });
+
+  it("upserts an import batch", async () => {
+    const repository = new LocalApplicantRepository();
+    const workspaceId = "workspace_batch_test";
+
+    const saved = await repository.upsertMany([
+      {
+        workspaceId,
+        gender: "Homme",
+        firstName: "Jean",
+        lastName: "Louis",
+        nif: "100-000-000-1",
+        ninu: null,
+        address: "Delmas"
+      },
+      {
+        workspaceId,
+        gender: "Femme",
+        firstName: "Anne",
+        lastName: "Pierre",
+        nif: "100-000-000-2",
+        ninu: null,
+        address: "Pétion-Ville"
+      }
+    ]);
+
+    expect(saved).toHaveLength(2);
+    expect(await repository.list(workspaceId)).toHaveLength(2);
+  });
 });

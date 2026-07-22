@@ -2,6 +2,7 @@ import { Contract } from "../../data/types";
 import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import { loadSuggestions } from "../../data/local/suggestionsDb";
 import { referenceContractTemplate } from "./referenceContractTemplate";
+import { getStoredContractStartDate } from "./settingsApi";
 
 export type ContractTemplate = {
   html: string;
@@ -177,7 +178,7 @@ const legacyContractTemplate: ContractTemplate = {
 
     <p style="margin-top:0pt; margin-bottom:8pt; text-align:justify;"><span style="font-family:'Times New Roman';">&nbsp;</span></p>
 
-    <p style="margin-top:0pt; margin-bottom:8pt; text-indent:36pt; text-align:justify;"><span style="font-family:'Times New Roman';">Fait &agrave; Port-au-Prince, en triple original,&nbsp;</span><strong><span style="font-family:'Times New Roman';">le {{created_date_long}}</span></strong></p>
+    <p style="margin-top:0pt; margin-bottom:8pt; text-indent:36pt; text-align:justify;"><span style="font-family:'Times New Roman';">Fait &agrave; Port-au-Prince, en triple original,&nbsp;</span><strong><span style="font-family:'Times New Roman';">le {{date_debut}}</span></strong></p>
 
     <p style="margin-top:0pt; margin-bottom:8pt; text-align:justify;"><span style="font-family:'Times New Roman';">&nbsp;</span></p>
 
@@ -232,7 +233,6 @@ const defaultAssignmentLetterTemplate: ContractTemplate = {
       <div class="draft-title">Notification de poste</div>
       <div class="draft-subtitle">Réf. {{contract_id}}</div>
     </div>
-    <div class="draft-badge">{{workspace_name}}</div>
   </header>
 
   <section class="draft-section">
@@ -296,14 +296,6 @@ const defaultAssignmentLetterTemplate: ContractTemplate = {
   text-transform: uppercase;
 }
 
-.draft-badge {
-  background: #f4f8f4;
-  color: #39764c;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-}
-
 .draft-section {
   margin-bottom: 16px;
 }
@@ -346,7 +338,6 @@ const defaultNominationTemplate: ContractTemplate = {
       <div class="draft-title">Décision de nomination</div>
       <div class="draft-subtitle">N° {{contract_id}}</div>
     </div>
-    <div class="draft-badge">{{workspace_name}}</div>
   </header>
 
   <section class="draft-section">
@@ -405,14 +396,6 @@ const defaultNominationTemplate: ContractTemplate = {
   font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-}
-
-.draft-badge {
-  background: #f4f5fb;
-  color: #4b4f90;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
 }
 
 .draft-section {
@@ -484,6 +467,15 @@ function cloneTemplate(template: ContractTemplate): ContractTemplate {
   };
 }
 
+function withoutLegacyWorkspaceMarkup(html: string): string {
+  return html
+    .replace(
+      /<([a-z][\w:-]*)(?:\s[^>]*)?>\s*\{\{\s*workspace_name\s*\}\}\s*<\/\1>/gi,
+      ""
+    )
+    .replace(/\{\{\s*workspace_name\s*\}\}/gi, "");
+}
+
 function getTemplateDefinition(type: DraftTemplateType): DraftTemplateDefinition {
   return TEMPLATE_DEFINITIONS[type];
 }
@@ -516,7 +508,7 @@ export function loadTemplateByType(type: DraftTemplateType): ContractTemplate {
     }
 
     return {
-      html: parsed.html,
+      html: withoutLegacyWorkspaceMarkup(parsed.html),
       css: parsed.css
     };
   } catch {
@@ -526,7 +518,10 @@ export function loadTemplateByType(type: DraftTemplateType): ContractTemplate {
 
 export function saveTemplateByType(type: DraftTemplateType, template: ContractTemplate) {
   const definition = getTemplateDefinition(type);
-  localStorage.setItem(definition.storageKey, JSON.stringify(template));
+  localStorage.setItem(
+    definition.storageKey,
+    JSON.stringify({ ...template, html: withoutLegacyWorkspaceMarkup(template.html) })
+  );
   window.dispatchEvent(new Event(definition.eventName));
 }
 
@@ -561,7 +556,7 @@ export function subscribeTemplate(listener: () => void) {
   return subscribeTemplateByType("contract", listener);
 }
 
-export function buildTemplateVariables(contract: Contract, workspaceName = "Planification") {
+export function buildTemplateVariables(contract: Contract) {
   const date = new Date(contract.createdAt);
 
   let endYear = date.getFullYear();
@@ -572,10 +567,12 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
 
   const d = contract.durationMonths ?? 12;
   const targetStartMonth = 8 - d + 1;
-  const startDate = new Date(endYear, targetStartMonth, 1);
-  while (startDate.getDay() !== 1) {
-    startDate.setDate(startDate.getDate() + 1);
+  const automaticStartDate = new Date(endYear, targetStartMonth, 1);
+  while (automaticStartDate.getDay() !== 1) {
+    automaticStartDate.setDate(automaticStartDate.getDate() + 1);
   }
+  const startDate =
+    getStoredContractStartDate(contract.workspaceId, d) ?? automaticStartDate;
 
   const formatReferenceDate = (value: Date) => {
     const parts = new Intl.DateTimeFormat("fr-FR", {
@@ -669,13 +666,14 @@ export function buildTemplateVariables(contract: Contract, workspaceName = "Plan
     date_debut: dateDebut,
     date_fin: dateFin,
     created_date: date.toLocaleDateString("fr-FR"),
-    created_date_long: formatReferenceDate(date),
-    workspace_name: workspaceName
+    // Older customized contract templates use this variable for the signing
+    // date. Keep it aligned with the configured contract start date.
+    created_date_long: dateDebut
   };
 }
 
 export function renderTemplate(html: string, variables: Record<string, string>) {
-  return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+  return withoutLegacyWorkspaceMarkup(html).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
     return variables[key] ?? "";
   });
 }
@@ -718,6 +716,5 @@ export const templateVariables = [
   { key: "{{date_debut}}", label: "Date de début" },
   { key: "{{date_fin}}", label: "Date de fin" },
   { key: "{{created_date}}", label: "Date courte" },
-  { key: "{{created_date_long}}", label: "Date longue" },
-  { key: "{{workspace_name}}", label: "Nom du workspace" }
+  { key: "{{created_date_long}}", label: "Date longue" }
 ];

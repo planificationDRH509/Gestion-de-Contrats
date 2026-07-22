@@ -301,6 +301,38 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     return mapApplicant(updated);
   }
 
+  async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {
+    if (inputs.length === 0) return [];
+
+    const client = getSupabaseClient();
+    const timestamp = new Date().toISOString();
+    const payloads = inputs.map((input) => ({
+      nif: (input.nif || input.id || "").trim(),
+      workspace_id: input.workspaceId,
+      sexe: input.gender,
+      prenom: formatFirstName(input.firstName),
+      nom: formatLastName(input.lastName),
+      ninu: input.ninu || null,
+      adresse: input.address,
+      updated_at: timestamp,
+      deleted_at: null
+    }));
+
+    if (payloads.some((payload) => !payload.nif)) {
+      throw new Error("NIF obligatoire pour enregistrer un postulant.");
+    }
+
+    const { data, error } = await (client
+      .from("identification")
+      .upsert(payloads as any, { onConflict: "nif" }) as any)
+      .select("*");
+
+    if (error || !data) {
+      throw repositoryError("Impossible d'enregistrer les postulants importés.", error);
+    }
+    return (Array.isArray(data) ? data : [data]).map(mapApplicant);
+  }
+
   async softDelete(id: string, workspaceId: string): Promise<void> {
     const client = getSupabaseClient();
     const { error } = await client
@@ -1150,7 +1182,8 @@ export type SupabaseSyncState = {
 
 let outboxSyncPromise: Promise<void> | null = null;
 let activeSyncOperations = 0;
-const workspaceSyncPromises = new Map<string, Promise<void>>();
+const workspaceSyncPromises = new Map<string, Promise<boolean>>();
+const WORKSPACE_SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 function notifySyncState() {
   if (typeof window !== "undefined") {
@@ -1294,13 +1327,33 @@ export function syncSupabaseOutbox() {
   return syncPendingOutbox();
 }
 
-/** Downloads the complete main workspace dataset in pages for offline use. */
-export function syncSupabaseWorkspace(workspaceId: string): Promise<void> {
+/**
+ * Downloads the complete workspace dataset for offline use. Automatic calls are
+ * throttled because visible queries already refresh their current page.
+ */
+export function syncSupabaseWorkspace(
+  workspaceId: string,
+  options: { force?: boolean } = {}
+): Promise<boolean> {
   if (!workspaceId || (typeof navigator !== "undefined" && !navigator.onLine)) {
-    return Promise.resolve();
+    return Promise.resolve(false);
   }
   const existing = workspaceSyncPromises.get(workspaceId);
   if (existing) return existing;
+
+  const metadata = getWorkspaceSyncMetadata(workspaceId);
+  const lastFullSync = metadata.lastFullSyncedAt
+    ? new Date(metadata.lastFullSyncedAt).getTime()
+    : 0;
+  const hasPendingChanges = getPendingOutboxCount(workspaceId) > 0;
+  if (
+    !options.force &&
+    !hasPendingChanges &&
+    Number.isFinite(lastFullSync) &&
+    Date.now() - lastFullSync < WORKSPACE_SYNC_MIN_INTERVAL_MS
+  ) {
+    return Promise.resolve(false);
+  }
 
   const syncPromise = (async () => {
     beginSyncOperation();
@@ -1346,10 +1399,13 @@ export function syncSupabaseWorkspace(workspaceId: string): Promise<void> {
       } while ((page - 1) * pageSize < total);
 
       replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
+      const syncedAt = new Date().toISOString();
       setWorkspaceSyncMetadata(workspaceId, {
-        lastSyncedAt: new Date().toISOString(),
+        lastSyncedAt: syncedAt,
+        lastFullSyncedAt: syncedAt,
         lastError: null
       });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
       setWorkspaceSyncMetadata(workspaceId, { lastError: message });
@@ -1418,6 +1474,29 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return upsertApplicantOffline(input);
+    }
+  }
+
+  async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {
+    if (inputs.length === 0) return [];
+    try {
+      await syncPendingOutbox();
+      const applicants = await this.remote.upsertMany(inputs);
+      const inputsByNif = new Map(
+        inputs.map((input) => [(input.nif || input.id || "").trim(), input])
+      );
+      applicants.forEach((applicant) => {
+        const input = inputsByNif.get(applicant.nif?.trim() || applicant.id);
+        const previousId = input?.id;
+        if (previousId && previousId !== applicant.id) {
+          replaceLocalApplicantId(input.workspaceId, previousId, applicant);
+        }
+      });
+      cacheApplicants(applicants);
+      return applicants;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.upsertMany(inputs);
     }
   }
 

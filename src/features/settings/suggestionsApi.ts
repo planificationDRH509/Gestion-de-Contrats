@@ -1,14 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
+import {
+  getAddresses as readCachedAddresses,
+  getInstitutions as readCachedInstitutions,
+  getPositions as readCachedPositions
+} from "../../data/local/suggestionsDb";
 
 const repo = () => getDataProvider().suggestions;
+const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
 export function useAddresses(workspaceId: string) {
   return useQuery({
     queryKey: ["suggestions", "addresses", workspaceId],
     queryFn: () => repo().getAddresses(workspaceId),
-    enabled: !!workspaceId
+    enabled: !!workspaceId,
+    initialData: usesSupabase ? readCachedAddresses : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always"
   });
 }
 
@@ -16,7 +27,12 @@ export function usePositions(workspaceId: string) {
   return useQuery({
     queryKey: ["suggestions", "positions", workspaceId],
     queryFn: () => repo().getPositions(workspaceId),
-    enabled: !!workspaceId
+    enabled: !!workspaceId,
+    initialData: usesSupabase ? readCachedPositions : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always"
   });
 }
 
@@ -24,7 +40,12 @@ export function useInstitutions(workspaceId: string) {
   return useQuery({
     queryKey: ["suggestions", "institutions", workspaceId],
     queryFn: () => repo().getInstitutions(workspaceId),
-    enabled: !!workspaceId
+    enabled: !!workspaceId,
+    initialData: usesSupabase ? readCachedInstitutions : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always"
   });
 }
 

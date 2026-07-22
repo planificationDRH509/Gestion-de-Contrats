@@ -40,6 +40,10 @@ export class SqliteApplicantRepository implements ApplicantRepository {
     });
   }
 
+  async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {
+    return Promise.all(inputs.map((input) => this.upsert(input)));
+  }
+
   async softDelete(id: string, workspaceId: string): Promise<void> {
     await sqliteApiRequest<{ ok: boolean }>("/applicants/soft-delete", {
       method: "POST",

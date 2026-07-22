@@ -244,7 +244,7 @@ export function ContractsListPage() {
     localStorage.setItem("contracts_page_size", String(nextPageSize));
   }
 
-  const queryParams = {
+  const queryParams = useMemo(() => ({
     workspaceId,
     query: query.trim() ? query : undefined,
     sort,
@@ -261,21 +261,40 @@ export function ContractsListPage() {
     tagId: tagFilterId ?? undefined,
     assignments: selectedAssignments.length > 0 ? selectedAssignments : undefined,
     positions: selectedPositions.length > 0 ? selectedPositions : undefined
-  };
+  }), [
+    dateFilterDate,
+    dateFilterEnd,
+    dateFilterMode,
+    dateFilterStart,
+    dossierFilterId,
+    page,
+    pageSize,
+    query,
+    selectedAssignments,
+    selectedPositions,
+    showAll,
+    sort,
+    statusFilter,
+    tagFilterId,
+    userId,
+    workspaceId
+  ]);
 
-  const { data, isLoading } = useContractsList(queryParams);
+  const { data, isLoading, isFetching } = useContractsList(queryParams);
 
   // Prefetch next page for a smoother offline experience
   const queryClient = useQueryClient();
   useEffect(() => {
-    if (data && data.page * data.pageSize < data.total) {
+    // Prioritize refreshing the visible cached page before using the network
+    // for speculative work.
+    if (!isFetching && data && data.page * data.pageSize < data.total) {
       const nextPageParams = { ...queryParams, page: page + 1 };
       queryClient.prefetchQuery({
         queryKey: ["contracts", nextPageParams],
         queryFn: () => getDataProvider().contracts.list(nextPageParams),
       });
     }
-  }, [data, page, queryParams, queryClient]);
+  }, [data, isFetching, page, queryParams, queryClient]);
 
   const printJob = usePrintJob();
   const assignToDossier = useAssignContractsToDossier();
@@ -1216,7 +1235,15 @@ export function ContractsListPage() {
         <div className="list-page-heading">
           <div>
             <span className="page-eyebrow">Gestion RH</span>
-            <h1 className="section-title">Contrats</h1>
+            <div className="contracts-title-line">
+              <h1 className="section-title">Contrats</h1>
+              {activeView === "contracts" && isFetching && !isLoading ? (
+                <span className="contracts-refresh-status" role="status">
+                  <span className="material-symbols-rounded is-spinning">sync</span>
+                  Actualisation…
+                </span>
+              ) : null}
+            </div>
           </div>
           <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
             <span className="material-symbols-rounded icon">add</span>

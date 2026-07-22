@@ -2,16 +2,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import { Tag } from "../../data/types";
+import { readCachedTags } from "../../data/local/localTagRepository";
+import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
 
 export type { Tag };
 
 const provider = getDataProvider();
+const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
 export function useTags(workspaceId: string) {
   return useQuery({
     queryKey: ["tags", workspaceId],
     queryFn: () => provider.tags.list(workspaceId),
     enabled: Boolean(workspaceId),
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(workspaceId) ? readCachedTags(workspaceId) : undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 

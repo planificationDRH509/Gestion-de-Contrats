@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { Contract } from "../../data/types";
 import {
   buildTemplateVariables,
   getDefaultTemplate,
   renderTemplate
 } from "./contractTemplate";
+import { setStoredContractStartDates } from "./settingsApi";
 
 const contract: Contract = {
   id: "contract-reference",
@@ -27,6 +28,10 @@ const contract: Contract = {
 };
 
 describe("reference contract template", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("defines the four fixed reference pages and their exact transitions", () => {
     const template = getDefaultTemplate("contract");
 
@@ -54,5 +59,29 @@ describe("reference contract template", () => {
     expect(html).toContain("Sainte-Mise MORQUETTE");
     expect(html).toContain("(09) mois");
     expect(html).not.toMatch(/\{\{[^}]+\}\}/);
+  });
+
+  it("uses the configured duration date for the start and signature", () => {
+    setStoredContractStartDates(contract.workspaceId, { 9: "2026-01-12" });
+
+    const template = getDefaultTemplate("contract");
+    const variables = buildTemplateVariables(contract);
+    const html = renderTemplate(template.html, variables);
+
+    expect(variables.date_debut).toBe("12 Janvier 2026");
+    expect(variables.created_date_long).toBe("12 Janvier 2026");
+    expect(html).toContain("débutant le <strong>12 Janvier 2026</strong>");
+    expect(html).toContain(
+      "Fait à Port-au-Prince, en triple original, <strong>le 12 Janvier 2026</strong>"
+    );
+  });
+
+  it("removes the legacy workspace marker from saved templates", () => {
+    const html = renderTemplate(
+      '<header><h1>Document</h1><div class="draft-badge">{{workspace_name}}</div></header>',
+      {}
+    );
+
+    expect(html).toBe("<header><h1>Document</h1></header>");
   });
 });

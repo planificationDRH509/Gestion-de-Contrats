@@ -6,7 +6,8 @@ import {
   parseImportMoney,
   parsePastedContractTable,
   validateImportEditableRows,
-  validateImportMapping
+  validateImportMapping,
+  MAX_IMPORT_ROWS
 } from "./contractImport";
 
 describe("contractImport", () => {
@@ -109,16 +110,16 @@ describe("contractImport", () => {
     expect(validatedRows[1]).toMatchObject({ excluded: true, values: null, errors: [] });
   });
 
-  it("caps the practical import size at 250 rows for the editor", () => {
+  it("supports large imports up to the editor safety ceiling", () => {
     const lines = ["NIF\tNom\tPrénom\tSexe\tAdresse\tSalaire\tPoste\tAffectation"];
-    for (let index = 0; index < 260; index += 1) {
+    for (let index = 0; index < MAX_IMPORT_ROWS + 10; index += 1) {
       lines.push(
         `${String(1000000000 + index)}\tDOE\tJean\tHomme\tRue ${index}\t45000\tAgent\tMSPP`
       );
     }
     const table = parsePastedContractTable(lines.join("\n"));
-    const rows = buildImportEditableRows(table, inferImportMapping(table.headers)).slice(0, 250);
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers)).slice(0, MAX_IMPORT_ROWS);
 
-    expect(rows).toHaveLength(250);
+    expect(rows).toHaveLength(5_000);
   });
 });

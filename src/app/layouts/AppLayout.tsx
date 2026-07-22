@@ -47,19 +47,21 @@ export function AppLayout() {
     setSyncState(getSupabaseSyncState(workspaceId));
   }, [workspaceId]);
 
-  const synchronize = useCallback(async () => {
+  const synchronize = useCallback(async (force = false) => {
     if (!isSupabase || !workspaceId || !navigator.onLine) {
       refreshSyncState();
       return;
     }
     try {
-      await syncSupabaseWorkspace(workspaceId);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["contracts"] }),
-        queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
-        queryClient.invalidateQueries({ queryKey: ["identification"] }),
-        queryClient.invalidateQueries({ queryKey: ["tags"] })
-      ]);
+      const refreshed = await syncSupabaseWorkspace(workspaceId, { force });
+      if (refreshed) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["contracts"] }),
+          queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
+          queryClient.invalidateQueries({ queryKey: ["identification"] }),
+          queryClient.invalidateQueries({ queryKey: ["tags"] })
+        ]);
+      }
     } catch (error) {
       console.error("Synchronisation hors ligne impossible.", error);
     } finally {
@@ -70,13 +72,13 @@ export function AppLayout() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      void synchronize();
+      void synchronize(false);
     };
     const handleOffline = () => refreshSyncState();
     const handleSyncState = () => refreshSyncState();
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        void synchronize();
+        void synchronize(false);
       }
     };
 
@@ -86,9 +88,14 @@ export function AppLayout() {
     document.addEventListener("visibilitychange", handleVisibility);
 
     refreshSyncState();
-    if (navigator.onLine) void synchronize();
+    // Let the current page render and refresh its visible queries first. The
+    // heavier full offline download starts shortly afterwards in the background.
+    const initialSyncTimer = navigator.onLine
+      ? window.setTimeout(() => void synchronize(false), 750)
+      : null;
 
     return () => {
+      if (initialSyncTimer !== null) window.clearTimeout(initialSyncTimer);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("contribution-offline-sync", handleSyncState);
@@ -161,7 +168,7 @@ export function AppLayout() {
         isResizing={isResizing}
         isOnline={isOnline}
         syncState={syncState}
-        onSync={() => void synchronize()}
+        onSync={() => void synchronize(true)}
       />
       <div className="main" ref={mainRef}>
         <main className="app-content">

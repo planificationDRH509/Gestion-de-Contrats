@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth/auth";
 import { 
   useAddresses, usePositions, useInstitutions,
@@ -6,8 +6,14 @@ import {
   useUpdateAddress, useUpdatePosition, useUpdateInstitution
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
+import {
+  CONTRACT_DURATION_OPTIONS,
+  ContractStartDates,
+  getStoredContractStartDates,
+  setStoredContractStartDates
+} from "./settingsApi";
 
-type Tab = "addresses" | "positions" | "institutions";
+type Tab = "addresses" | "positions" | "institutions" | "contractDates";
 
 export function SuggestionsSettingsPage() {
   const [tab, setTab] = useState<Tab>("addresses");
@@ -19,7 +25,7 @@ export function SuggestionsSettingsPage() {
           <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Suggestions et autocomplétion</h1>
           <p className="section-subtitle">
-            Gérez les listes de suggestions partagées via Supabase.
+            Gérez les listes de suggestions et les dates utilisées dans les contrats.
           </p>
         </div>
       </div>
@@ -34,12 +40,93 @@ export function SuggestionsSettingsPage() {
         <button type="button" className={`suggestions-tab${tab === "institutions" ? " active" : ""}`} onClick={() => setTab("institutions")}>
           <span className="material-symbols-rounded">account_balance</span> Institutions
         </button>
+        <button type="button" className={`suggestions-tab${tab === "contractDates" ? " active" : ""}`} onClick={() => setTab("contractDates")}>
+          <span className="material-symbols-rounded">calendar_month</span> Dates des contrats
+        </button>
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
         {tab === "addresses" && <AddressesPanel />}
         {tab === "positions" && <PositionsPanel />}
         {tab === "institutions" && <InstitutionsPanel />}
+        {tab === "contractDates" && <ContractDatesPanel />}
+      </div>
+    </div>
+  );
+}
+
+function ContractDatesPanel() {
+  const { user } = useAuth();
+  const workspaceId = user?.workspaceId || "workspace_default";
+  const [dates, setDates] = useState<ContractStartDates>(() =>
+    getStoredContractStartDates(workspaceId)
+  );
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setDates(getStoredContractStartDates(workspaceId));
+    setSaved(false);
+  }, [workspaceId]);
+
+  function updateDate(durationMonths: number, value: string) {
+    setDates((current) => ({ ...current, [durationMonths]: value }));
+    setSaved(false);
+  }
+
+  function handleSave() {
+    setStoredContractStartDates(workspaceId, dates);
+    setDates(getStoredContractStartDates(workspaceId));
+    setSaved(true);
+  }
+
+  function handleReset() {
+    setDates({});
+    setSaved(false);
+  }
+
+  return (
+    <div>
+      <div className="sug-panel-header">
+        <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>calendar_month</span>
+        <div>
+          <strong>Dates de début par durée</strong>
+          <p className="helper-text">
+            La date choisie apparaît à la fois après « débutant le » et dans « Fait à Port-au-Prince… le ».
+            Laissez une date vide pour conserver le calcul automatique.
+          </p>
+        </div>
+      </div>
+
+      <div className="contract-date-settings-grid">
+        {CONTRACT_DURATION_OPTIONS.map((durationMonths) => (
+          <label className="contract-date-setting" key={durationMonths}>
+            <span>
+              <strong>{durationMonths.toString().padStart(2, "0")} mois</strong>
+              <small>Date de début et de signature</small>
+            </span>
+            <input
+              className="input"
+              type="date"
+              value={dates[durationMonths] ?? ""}
+              onChange={(event) => updateDate(durationMonths, event.target.value)}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="form-actions settings-form-actions contract-date-settings-actions">
+        <button type="button" className="button button-secondary" onClick={handleReset}>
+          Rétablir le calcul automatique
+        </button>
+        <button type="button" className="button button-primary" onClick={handleSave}>
+          Enregistrer les dates
+        </button>
+        {saved && (
+          <span className="contract-date-settings-saved">
+            <span className="material-symbols-rounded">check_circle</span>
+            Dates enregistrées
+          </span>
+        )}
       </div>
     </div>
   );

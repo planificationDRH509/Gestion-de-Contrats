@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
+  Contract,
   ContractListParams,
   ContractListResult,
   ContractStatus,
@@ -11,6 +12,12 @@ import {
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
 import type { ContractImportDraft } from "./contractImport";
+import {
+  readCachedContract,
+  readCachedContracts,
+  readCachedContractsByIds
+} from "../../data/local/localContractRepository";
+import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
 
@@ -97,12 +104,21 @@ export function useNifLookupQuery(rawNif: string | null, workspaceId: string) {
 }
 
 const provider = getDataProvider();
+const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
 export function useContractsList(params: ContractListParams) {
   return useQuery({
     queryKey: ["contracts", params],
     queryFn: () => provider.contracts.list(params),
     placeholderData: keepPreviousData,
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(params.workspaceId) ? readCachedContracts(params) : undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -110,7 +126,15 @@ export function useContract(contractId: string | undefined) {
   return useQuery({
     queryKey: ["contract", contractId],
     queryFn: () => (contractId ? provider.contracts.getById(contractId) : null),
-    enabled: Boolean(contractId)
+    enabled: Boolean(contractId),
+    initialData: usesSupabase && contractId
+      ? () => readCachedContract(contractId) ?? undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -118,7 +142,17 @@ export function useContractsByIds(ids: string[], workspaceId: string) {
   return useQuery({
     queryKey: ["contracts", "byIds", ids, workspaceId],
     queryFn: () => provider.contracts.getByIds(ids, workspaceId),
-    enabled: ids.length > 0
+    enabled: ids.length > 0,
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(workspaceId)
+        ? readCachedContractsByIds(ids, workspaceId)
+        : undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -320,6 +354,22 @@ export function useChangeContractsDuration() {
   });
 }
 
+export type ContractImportProgress = {
+  phase: "applicants" | "contracts";
+  completed: number;
+  total: number;
+};
+
+const IMPORT_BATCH_SIZE = 200;
+
+function batchesOf<T>(items: T[], size: number) {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
+}
+
 export function useImportContracts() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -327,20 +377,22 @@ export function useImportContracts() {
       workspaceId,
       dossierId,
       responsibleUserId,
-      rows
+      rows,
+      onProgress
     }: {
       workspaceId: string;
       dossierId: string | null;
       responsibleUserId: string;
       rows: ContractImportDraft[];
+      onProgress?: (progress: ContractImportProgress) => void;
     }) => {
       const applicantRows = new Map<string, ContractImportDraft>();
       for (const row of rows) {
         applicantRows.set(row.nif, row);
       }
 
-      for (const row of applicantRows.values()) {
-        await provider.applicants.upsert({
+      const applicantInputs: UpsertApplicantInput[] = Array.from(applicantRows.values()).map(
+        (row) => ({
           workspaceId,
           gender: row.gender,
           firstName: row.firstName,
@@ -349,32 +401,59 @@ export function useImportContracts() {
           ninu: row.ninu,
           address: row.address,
           createdBy: responsibleUserId
+        })
+      );
+      let preparedApplicants = 0;
+      onProgress?.({ phase: "applicants", completed: 0, total: applicantInputs.length });
+      for (const batch of batchesOf(applicantInputs, IMPORT_BATCH_SIZE)) {
+        await provider.applicants.upsertMany(batch);
+        preparedApplicants += batch.length;
+        onProgress?.({
+          phase: "applicants",
+          completed: preparedApplicants,
+          total: applicantInputs.length
         });
       }
-      const createdContracts = await provider.contracts.createMany(
-        rows.map((row) => ({
-          workspaceId,
-          applicantId: row.nif,
-          dossierId,
-          status: "saisie",
-          gender: row.gender,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          nif: row.nif,
-          ninu: row.ninu,
-          address: row.address,
-          position: row.position,
-          assignment: row.assignment,
-          salaryNumber: row.salaryNumber,
-          salaryText: row.salaryText,
-          durationMonths: row.durationMonths,
-          commentaire: row.commentaire,
-          createdBy: responsibleUserId
-        }))
-      );
+
+      const contractInputs: CreateContractInput[] = rows.map((row) => ({
+        workspaceId,
+        applicantId: row.nif,
+        dossierId,
+        status: "saisie",
+        gender: row.gender,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        nif: row.nif,
+        ninu: row.ninu,
+        address: row.address,
+        position: row.position,
+        assignment: row.assignment,
+        salaryNumber: row.salaryNumber,
+        salaryText: row.salaryText,
+        durationMonths: row.durationMonths,
+        commentaire: row.commentaire,
+        createdBy: responsibleUserId
+      }));
+      const createdContracts: Contract[] = [];
+      onProgress?.({ phase: "contracts", completed: 0, total: contractInputs.length });
+      for (const batch of batchesOf(contractInputs, IMPORT_BATCH_SIZE)) {
+        try {
+          createdContracts.push(...(await provider.contracts.createMany(batch)));
+        } catch (error) {
+          const detail = error instanceof Error ? ` ${error.message}` : "";
+          throw new Error(
+            `Import interrompu après ${createdContracts.length} contrat(s) enregistré(s).${detail}`
+          );
+        }
+        onProgress?.({
+          phase: "contracts",
+          completed: createdContracts.length,
+          total: contractInputs.length
+        });
+      }
       return createdContracts;
     },
-    onSuccess: (_contracts, variables) => {
+    onSettled: (_contracts, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]

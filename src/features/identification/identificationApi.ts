@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Applicant, Gender } from "../../data/types";
 import { getDataProvider } from "../../data/dataProvider";
+import { readCachedApplicants } from "../../data/local/localApplicantRepository";
+import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
 
 const provider = getDataProvider();
+const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
 function mapApplicant(applicant: Applicant): IdentificationRow {
   return {
@@ -65,6 +68,16 @@ export function useIdentificationList(workspaceId: string) {
     queryKey: ["identification", workspaceId],
     queryFn: async () => (await provider.applicants.list(workspaceId)).map(mapApplicant),
     enabled: !!workspaceId,
+    initialData: usesSupabase
+      ? () => hasWorkspaceOfflineCache(workspaceId)
+        ? readCachedApplicants(workspaceId).map(mapApplicant)
+        : undefined
+      : undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
   });
 }
 

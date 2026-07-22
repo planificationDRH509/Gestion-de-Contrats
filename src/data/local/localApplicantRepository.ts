@@ -1,7 +1,7 @@
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, selectDb } from "./localDb";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { queueOutbox } from "./localOutbox";
 
@@ -9,16 +9,27 @@ function now() {
   return new Date().toISOString();
 }
 
+export function readCachedApplicants(workspaceId: string): Applicant[] {
+  return selectDb((db) =>
+    db.applicants
+      .filter((applicant) => applicant.workspaceId === workspaceId && !applicant.deletedAt)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  );
+}
+
+export function readCachedApplicant(id: string): Applicant | null {
+  return selectDb(
+    (db) => db.applicants.find((applicant) => applicant.id === id && !applicant.deletedAt) ?? null
+  );
+}
+
 export class LocalApplicantRepository implements ApplicantRepository {
   async list(workspaceId: string): Promise<Applicant[]> {
-    return loadDb().applicants
-      .filter((applicant) => applicant.workspaceId === workspaceId && !applicant.deletedAt)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return readCachedApplicants(workspaceId);
   }
 
   async getById(id: string): Promise<Applicant | null> {
-    const db = loadDb();
-    return db.applicants.find((applicant) => applicant.id === id && !applicant.deletedAt) ?? null;
+    return readCachedApplicant(id);
   }
 
   async findByNifOrNinu(
@@ -106,6 +117,14 @@ export class LocalApplicantRepository implements ApplicantRepository {
     saveDb(db);
     queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
     return created;
+  }
+
+  async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {
+    const saved: Applicant[] = [];
+    for (const input of inputs) {
+      saved.push(await this.upsert(input));
+    }
+    return saved;
   }
 
   async softDelete(id: string, workspaceId: string): Promise<void> {

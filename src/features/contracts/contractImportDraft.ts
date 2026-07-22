@@ -34,13 +34,22 @@ export function loadContractImportDraft(workspaceId: string, userId: string): Co
 }
 
 export function saveContractImportDraft(workspaceId: string, userId: string, state: Omit<ContractImportDraftState, "updatedAt">) {
-  localStorage.setItem(
-    getKey(workspaceId, userId),
-    JSON.stringify({
-      ...state,
-      updatedAt: new Date().toISOString()
-    })
-  );
+  const key = getKey(workspaceId, userId);
+  const updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(key, JSON.stringify({ ...state, updatedAt }));
+  } catch {
+    // Large imports can exceed the browser storage quota. Preserve the pasted
+    // source and settings when possible; editable rows can be rebuilt.
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ ...state, editableRows: [], selectedRowIds: [], updatedAt })
+      );
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
 }
 
 export function clearContractImportDraft(workspaceId: string, userId: string) {

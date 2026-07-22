@@ -19,7 +19,7 @@ import {
   loadContractImportDraft,
   saveContractImportDraft
 } from "./contractImportDraft";
-import { useImportContracts } from "./contractsApi";
+import { useImportContracts, type ContractImportProgress } from "./contractsApi";
 
 type UserOption = {
   id: string;
@@ -36,6 +36,8 @@ const BULK_EDIT_FIELDS: { id: ContractImportEditableField; label: string }[] = [
   { id: "durationMonths", label: "Durée" },
   { id: "commentaire", label: "Commentaire" }
 ];
+
+const IMPORT_PREVIEW_PAGE_SIZE = 50;
 
 type ContractsImportModalProps = {
   isOpen: boolean;
@@ -69,8 +71,11 @@ export function ContractsImportModal({
   const [selectedDossierId, setSelectedDossierId] = useState("");
   const [responsibleUserId, setResponsibleUserId] = useState(currentUserId);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<ContractImportProgress | null>(null);
+  const [previewPage, setPreviewPage] = useState(1);
   const pasteRef = useRef<HTMLTextAreaElement>(null);
   const restoreTimerRef = useRef<number | null>(null);
+  const draftSaveTimerRef = useRef<number | null>(null);
   const restoringRef = useRef(false);
   const hydratedClipboardSignatureRef = useRef<string | null>(null);
   const importContracts = useImportContracts();
@@ -103,6 +108,8 @@ export function ContractsImportModal({
       setResponsibleUserId(currentUserId);
     }
     setImportError(null);
+    setImportProgress(null);
+    setPreviewPage(1);
     hydratedClipboardSignatureRef.current = draft?.clipboardText ?? "";
     restoreTimerRef.current = window.setTimeout(() => {
       pasteRef.current?.focus();
@@ -132,20 +139,27 @@ export function ContractsImportModal({
     const rows = buildImportEditableRows(table, mapping).slice(0, MAX_IMPORT_ROWS);
     setEditableRows(rows);
     setSelectedRowIds(rows.map((row) => row.id));
+    setPreviewPage(1);
   }, [isOpen, mapping, table]);
 
   useEffect(() => {
     if (!isOpen || restoringRef.current) return;
-    saveContractImportDraft(workspaceId, currentUserId, {
-      clipboardText,
-      mapping,
-      editableRows,
-      selectedRowIds,
-      bulkField,
-      bulkValue,
-      selectedDossierId,
-      responsibleUserId
-    });
+    if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      saveContractImportDraft(workspaceId, currentUserId, {
+        clipboardText,
+        mapping,
+        editableRows,
+        selectedRowIds,
+        bulkField,
+        bulkValue,
+        selectedDossierId,
+        responsibleUserId
+      });
+    }, 300);
+    return () => {
+      if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
+    };
   }, [
     clipboardText,
     currentUserId,
@@ -162,13 +176,12 @@ export function ContractsImportModal({
 
   const userOptions = useMemo<UserOption[]>(() => {
     const options = appUsers
-      .filter((appUser) => appUser.id === currentUserId || appUser.workspaces.includes(workspaceId))
       .map((appUser) => ({ id: appUser.id, label: appUser.fullName || appUser.username }));
     if (!options.some((option) => option.id === currentUserId)) {
       options.unshift({ id: currentUserId, label: currentUserName });
     }
     return options;
-  }, [appUsers, currentUserId, currentUserName, workspaceId]);
+  }, [appUsers, currentUserId, currentUserName]);
 
   const existingNifs = useMemo(
     () => existingContracts.map((contract) => contract.nif ?? "").filter(Boolean),
@@ -183,10 +196,11 @@ export function ContractsImportModal({
     () => new Map(validatedRows.map((row) => [row.id, row])),
     [validatedRows]
   );
+  const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const includedRows = validatedRows.filter((row) => !row.excluded);
   const validRows = includedRows.filter((row) => row.values && row.errors.length === 0);
   const selectedRows = validatedRows.filter(
-    (row) => selectedRowIds.includes(row.id) && !row.excluded
+    (row) => selectedRowIdSet.has(row.id) && !row.excluded
   );
   const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
   const selectedErrorRowCount = selectedRows.filter((row) => row.errors.length > 0).length;
@@ -203,8 +217,15 @@ export function ContractsImportModal({
     [validatedRows]
   );
   const allRowsSelected =
-    editableRows.length > 0 && editableRows.every((row) => selectedRowIds.includes(row.id));
+    editableRows.length > 0 && editableRows.every((row) => selectedRowIdSet.has(row.id));
   const isOverflow = table.rows.length > MAX_IMPORT_ROWS;
+  const totalPreviewPages = Math.max(1, Math.ceil(editableRows.length / IMPORT_PREVIEW_PAGE_SIZE));
+  const safePreviewPage = Math.min(previewPage, totalPreviewPages);
+  const previewStart = (safePreviewPage - 1) * IMPORT_PREVIEW_PAGE_SIZE;
+  const visibleEditableRows = editableRows.slice(
+    previewStart,
+    previewStart + IMPORT_PREVIEW_PAGE_SIZE
+  );
   const canImport =
     selectedValidRows.length > 0 &&
     Boolean(selectedDossierId) &&
@@ -212,7 +233,18 @@ export function ContractsImportModal({
     mappingIssues.missingFields.length === 0 &&
     mappingIssues.duplicateFields.length === 0 &&
     selectedErrorRowCount === 0 &&
+    !isOverflow &&
     !importContracts.isPending;
+
+  useEffect(() => {
+    if (previewPage > totalPreviewPages) setPreviewPage(totalPreviewPages);
+  }, [previewPage, totalPreviewPages]);
+
+  const importProgressLabel = importProgress
+    ? importProgress.phase === "applicants"
+      ? `Préparation ${importProgress.completed}/${importProgress.total}`
+      : `Importation ${importProgress.completed}/${importProgress.total}`
+    : null;
 
   if (!isOpen) return null;
 
@@ -270,21 +302,44 @@ export function ContractsImportModal({
       problemRowIds.forEach((rowId) => next.add(rowId));
       return Array.from(next);
     });
+    const firstProblemIndex = editableRows.findIndex((row) => problemRowIds.has(row.id));
+    if (firstProblemIndex >= 0) {
+      setPreviewPage(Math.floor(firstProblemIndex / IMPORT_PREVIEW_PAGE_SIZE) + 1);
+    }
   }
 
   function closeModal() {
     if (importContracts.isPending) return;
+    saveContractImportDraft(workspaceId, currentUserId, {
+      clipboardText,
+      mapping,
+      editableRows,
+      selectedRowIds,
+      bulkField,
+      bulkValue,
+      selectedDossierId,
+      responsibleUserId
+    });
     onClose();
   }
 
   async function handleImport() {
     setImportError(null);
+    setImportProgress(null);
     if (!selectedDossierId) {
       setImportError("Sélectionnez un dossier avant l'enregistrement.");
       return;
     }
-    if (mappingIssues.missingFields.length > 0 || mappingIssues.duplicateFields.length > 0 || errorRowCount > 0) {
-      setImportError("Corrigez le mapping ou les lignes invalides avant l'enregistrement.");
+    if (isOverflow) {
+      setImportError(`Cet import dépasse la limite de sécurité de ${MAX_IMPORT_ROWS} lignes. Divisez-le en plusieurs lots.`);
+      return;
+    }
+    if (
+      mappingIssues.missingFields.length > 0 ||
+      mappingIssues.duplicateFields.length > 0 ||
+      selectedErrorRowCount > 0
+    ) {
+      setImportError("Corrigez le mapping ou les lignes sélectionnées invalides avant l'enregistrement.");
       return;
     }
 
@@ -293,13 +348,15 @@ export function ContractsImportModal({
         workspaceId,
         dossierId: selectedDossierId,
         responsibleUserId,
-        rows: selectedValidRows.map((row) => row.values!)
+        rows: selectedValidRows.map((row) => row.values!),
+        onProgress: setImportProgress
       });
       onImported(createdContracts.length);
       clearContractImportDraft(workspaceId, currentUserId);
       onClose();
     } catch (error) {
       console.error(error);
+      setImportProgress(null);
       setImportError(error instanceof Error ? error.message : "Impossible d'importer les contrats.");
     }
   }
@@ -368,11 +425,20 @@ export function ContractsImportModal({
 
             <div className="contracts-import-status-row">
               <span>{validRows.length} prête(s)</span>
+              <span>{selectedValidRows.length} sélectionnée(s)</span>
               <span>{errorRowCount} erreur(s)</span>
               <span>{warningRowCount} alerte(s)</span>
               <span>{excludedRowCount} retirée(s)</span>
-              {isOverflow ? <span>Limité à {MAX_IMPORT_ROWS} ligne(s)</span> : null}
+              {isOverflow ? <span>Maximum {MAX_IMPORT_ROWS} lignes</span> : null}
+              {importProgressLabel ? <span>{importProgressLabel}</span> : null}
             </div>
+
+            {isOverflow ? (
+              <div className="form-error">
+                Le collage contient {table.rows.length} lignes. Pour éviter un import partiel, conservez au maximum{" "}
+                {MAX_IMPORT_ROWS} lignes par lot.
+              </div>
+            ) : null}
 
             {mappingIssues.missingFields.length > 0 ? (
               <div className="form-error">
@@ -515,7 +581,7 @@ export function ContractsImportModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {editableRows.map((row) => {
+                  {visibleEditableRows.map((row) => {
                     const validation = validationById.get(row.id);
                     const stateClass = row.excluded
                       ? "excluded"
@@ -530,7 +596,7 @@ export function ContractsImportModal({
                           <input
                             type="checkbox"
                             className="checkbox"
-                            checked={selectedRowIds.includes(row.id)}
+                            checked={selectedRowIdSet.has(row.id)}
                             onChange={() => toggleRowSelection(row.id)}
                             aria-label={`Sélectionner la ligne ${row.sourceRowNumber}`}
                           />
@@ -649,6 +715,33 @@ export function ContractsImportModal({
                 </tbody>
               </table>
             </div>
+            {editableRows.length > IMPORT_PREVIEW_PAGE_SIZE ? (
+              <div className="contracts-import-preview-pagination">
+                <span>
+                  Lignes {previewStart + 1}–{Math.min(previewStart + IMPORT_PREVIEW_PAGE_SIZE, editableRows.length)} sur{" "}
+                  {editableRows.length}
+                </span>
+                <div>
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => setPreviewPage((page) => Math.max(1, page - 1))}
+                    disabled={safePreviewPage <= 1}
+                  >
+                    Précédent
+                  </button>
+                  <span>Page {safePreviewPage} / {totalPreviewPages}</span>
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => setPreviewPage((page) => Math.min(totalPreviewPages, page + 1))}
+                    disabled={safePreviewPage >= totalPreviewPages}
+                  >
+                    Suivant
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
 
@@ -659,7 +752,7 @@ export function ContractsImportModal({
             Annuler
           </button>
           <button className="btn btn-primary" type="button" onClick={() => void handleImport()} disabled={!canImport}>
-            {importContracts.isPending ? "Importation..." : "Enregistrer l'import"}
+            {importContracts.isPending ? importProgressLabel ?? "Importation..." : `Importer ${selectedValidRows.length} contrat(s)`}
           </button>
         </div>
       </div>

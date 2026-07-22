@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth, AuthUser } from "../../features/auth/auth";
-import { listLocalWorkspaces } from "../../data/local/workspaces";
 import { syncSuggestionsFromServer } from "../../data/local/suggestionsDb";
 import type { SupabaseSyncState } from "../../data/supabase/supabaseProvider";
 
@@ -16,8 +15,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
-  const { user, logout, switchWorkspace } = useAuth();
-  const workspaces = listLocalWorkspaces().filter(w => user?.allowedWorkspaces?.includes(w.id));
+  const { user, logout } = useAuth();
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
   useEffect(() => {
@@ -53,14 +51,6 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
             </div>
           )}
         </div>
-
-        {!collapsed && (
-          <WorkspaceSwitcher 
-            user={user} 
-            workspaces={workspaces} 
-            onSwitch={switchWorkspace} 
-          />
-        )}
       </div>
 
       <nav className="sidebar-nav">
@@ -131,43 +121,6 @@ function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, 
       <span className="sidebar-label sidebar-label-full">{label}</span>
       <span className="sidebar-label sidebar-label-short">{shortLabel ?? label}</span>
     </NavLink>
-  );
-}
-
-function WorkspaceSwitcher({ user, workspaces, onSwitch }: { user: AuthUser, workspaces: any[], onSwitch: (id: string, name: string) => void }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="workspace-container">
-      <button 
-        className="workspace-chip" 
-        onClick={() => setOpen(!open)}
-        title="Changer de workspace"
-      >
-        Workspace · {workspaces.find(w => w.id === user.workspaceId)?.name || user.workspaceName}
-        <span className="material-symbols-rounded">expand_more</span>
-      </button>
-      
-      {open && (
-        <div className="workspace-dropdown">
-          {workspaces.map((w) => (
-            <button
-              key={w.id}
-              className={`workspace-item ${w.id === user.workspaceId ? "active" : ""}`}
-              onClick={() => {
-                onSwitch(w.id, w.name);
-                setOpen(false);
-              }}
-            >
-              {w.name}
-              {w.id === user.workspaceId && (
-                <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>check</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

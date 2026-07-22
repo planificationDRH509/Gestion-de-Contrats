@@ -45,7 +45,7 @@ export function SettingsPage() {
           to="/app/parametres/utilisateurs"
           icon="group"
           title="Utilisateurs"
-          description="Gérez les comptes utilisateurs et leurs permissions d'accès aux espaces de travail."
+          description="Créez et consultez les comptes des collaborateurs."
         />
       </div>
     </div>

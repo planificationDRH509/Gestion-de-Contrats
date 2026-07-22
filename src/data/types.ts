@@ -201,7 +201,6 @@ export type AppUser = {
   username: string;
   password?: string;
   fullName: string;
-  workspaces: string[];
   createdAt: string | null;
   updatedAt: string | null;
 };
