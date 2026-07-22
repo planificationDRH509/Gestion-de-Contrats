@@ -2860,6 +2860,18 @@ img {
   transform: translateX(-50%) translateY(0);
 }
 
+/* The contracts header is sticky, so upward tooltips can slide underneath it. */
+.contracts-page .has-tooltip::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.contracts-page .has-tooltip:hover::after,
+.contracts-page .has-tooltip:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Status Badges */
 .badge-saisie { border-color: var(--saisie); background: var(--saisie-soft); color: var(--saisie); }
 .badge-correction { border-color: var(--correction); background: var(--correction-soft); color: var(--correction); }
