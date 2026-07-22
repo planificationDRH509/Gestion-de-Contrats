@@ -4,6 +4,7 @@ import { Contract, Gender } from "../../data/types";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
+  getInstitutionAddressRankingBoost,
   getLastChoice,
   learnSuggestions,
   saveLastChoice
@@ -32,6 +33,10 @@ import { ContractCommentModal } from "./ContractCommentModal";
 import { TagBadge } from "./TagBadge";
 import { useDossiersList } from "../dossiers/dossiersApi";
 import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
+import {
+  buildPositionSalaryItems,
+  findFeaturedPositionSalaryItem,
+} from "./positionSalarySuggestions";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -519,20 +524,18 @@ export function ContractsSpreadsheetView({
     return last ? { id: `last_address_${last}`, label: last } : undefined;
   }, []);
 
+  const positionItems = useMemo(
+    () => buildPositionSalaryItems(allPositions),
+    [allPositions]
+  );
+
   const featuredPosition = useMemo(() => {
-    const last = getLastChoice("position");
-    const match = allPositions.find((position) => position.label === last);
-    return last
-      ? {
-          id: `last_position_${last}`,
-          label: last,
-          sublabel:
-            match && match.salaries && match.salaries.length > 0
-              ? `${match.salaries[0].toLocaleString("fr-HT")} HTG`
-              : undefined
-        }
-      : undefined;
-  }, [allPositions]);
+    return findFeaturedPositionSalaryItem(
+      positionItems,
+      getLastChoice("position"),
+      getLastChoice("positionSalary")
+    );
+  }, [positionItems]);
 
   const featuredAssignment = useMemo(() => {
     const last = getLastChoice("assignment");
@@ -543,20 +546,13 @@ export function ContractsSpreadsheetView({
     return allAddresses.map((address) => ({ id: address.id, label: address.label }));
   }, [allAddresses]);
 
-  const positionItems: AutocompleteItem[] = useMemo(() => {
-    return allPositions.map((position) => ({
-      id: position.id,
-      label: position.label,
-      sublabel:
-        position.salaries && position.salaries.length > 0
-          ? `${position.salaries[0].toLocaleString("fr-HT")} HTG`
-          : undefined
+  function assignmentItemsForAddress(address: string): AutocompleteItem[] {
+    return allInstitutions.map((institution) => ({
+      id: institution.id,
+      label: institution.label,
+      rankingBoost: getInstitutionAddressRankingBoost(institution, address)
     }));
-  }, [allPositions]);
-
-  const assignmentItems: AutocompleteItem[] = useMemo(() => {
-    return allInstitutions.map((institution) => ({ id: institution.id, label: institution.label }));
-  }, [allInstitutions]);
+  }
 
   const gridTemplateColumns = useMemo(
     () => COLUMNS.map((column) => `${columnWidths[column.key]}px`).join(" "),
@@ -800,20 +796,18 @@ export function ContractsSpreadsheetView({
   }
 
   function applyPositionSelection(contractId: string, item: AutocompleteItem) {
-    const match = allPositions.find((position: any) => position.id === item.id);
+    const selectedItem = positionItems.find((candidate) => candidate.id === item.id);
     setExistingField(contractId, "position", item.label);
-    if (match && match.salaries && match.salaries.length > 0) {
-      const middleIndex = Math.floor(match.salaries.length / 2);
-      setExistingField(contractId, "salaryNumber", String(match.salaries[middleIndex]));
+    if (selectedItem?.salaryNumber !== undefined) {
+      setExistingField(contractId, "salaryNumber", String(selectedItem.salaryNumber));
     }
   }
 
   function applyNewPositionSelection(rowId: string, item: AutocompleteItem) {
-    const match = allPositions.find((position: any) => position.id === item.id);
+    const selectedItem = positionItems.find((candidate) => candidate.id === item.id);
     setNewField(rowId, "position", item.label);
-    if (match && match.salaries && match.salaries.length > 0) {
-      const middleIndex = Math.floor(match.salaries.length / 2);
-      setNewField(rowId, "salaryNumber", String(match.salaries[middleIndex]));
+    if (selectedItem?.salaryNumber !== undefined) {
+      setNewField(rowId, "salaryNumber", String(selectedItem.salaryNumber));
     }
   }
 
@@ -967,6 +961,7 @@ export function ContractsSpreadsheetView({
 
       saveLastChoice("address", editedDraft.address);
       saveLastChoice("position", editedDraft.position);
+      saveLastChoice("positionSalary", editedDraft.salaryNumber);
       saveLastChoice("assignment", editedDraft.assignment);
       await learnSuggestions(
         editedDraft.address,
@@ -1085,6 +1080,7 @@ export function ContractsSpreadsheetView({
 
       saveLastChoice("address", candidate.address);
       saveLastChoice("position", candidate.position);
+      saveLastChoice("positionSalary", candidate.salaryNumber);
       saveLastChoice("assignment", candidate.assignment);
       await learnSuggestions(
         candidate.address,
@@ -1442,7 +1438,7 @@ export function ContractsSpreadsheetView({
                   className="defaults-autocomplete"
                   value={defaultAssignment}
                   onChange={setDefaultAssignment}
-                  items={assignmentItems}
+                  items={assignmentItemsForAddress(defaultAddress)}
                   placeholder="Affectation par défaut"
                   pinCategory="assignment"
                 />
@@ -1694,7 +1690,7 @@ export function ContractsSpreadsheetView({
                       onBlur={() => {
                         void maybeCreateFromNewRow(row.id);
                       }}
-                      items={assignmentItems}
+                      items={assignmentItemsForAddress(row.draft.address)}
                       placeholder="Affectation"
                       featuredItem={featuredAssignment}
                       pinCategory="assignment"
@@ -1895,7 +1891,7 @@ export function ContractsSpreadsheetView({
                       onChange={(value) => setExistingField(contract.id, "assignment", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
                       onBlur={() => queueExistingSave(contract.id)}
-                      items={assignmentItems}
+                      items={assignmentItemsForAddress(draft.address)}
                       featuredItem={featuredAssignment}
                       pinCategory="assignment"
                     />

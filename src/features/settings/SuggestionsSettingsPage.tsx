@@ -7,6 +7,10 @@ import {
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
 import {
+  getAutomaticSuggestionPrefix,
+  type SuggestionPrefixKind
+} from "../../lib/suggestionPrefixes";
+import {
   CONTRACT_DURATION_OPTIONS,
   ContractStartDates,
   getStoredContractStartDates,
@@ -14,6 +18,34 @@ import {
 } from "./settingsApi";
 
 type Tab = "addresses" | "positions" | "institutions" | "contractDates";
+
+function automaticPrefixPlaceholder(label: string, kind: SuggestionPrefixKind) {
+  const prefix = getAutomaticSuggestionPrefix(label, kind);
+  return prefix ? `Auto : ${prefix}` : "Préf.";
+}
+
+function SuggestionPrefix({
+  label,
+  prefix,
+  kind
+}: {
+  label: string;
+  prefix?: string | null;
+  kind: SuggestionPrefixKind;
+}) {
+  const automaticPrefix = getAutomaticSuggestionPrefix(label, kind);
+  const displayedPrefix = prefix?.trim() || automaticPrefix;
+  if (!displayedPrefix) return null;
+
+  return (
+    <span
+      style={{ opacity: 0.5, marginRight: /['’]$/.test(displayedPrefix) ? 0 : 4 }}
+      title={prefix?.trim() ? "Préfixe personnalisé" : "Préfixe automatique"}
+    >
+      {displayedPrefix}
+    </span>
+  );
+}
 
 export function SuggestionsSettingsPage() {
   const [tab, setTab] = useState<Tab>("addresses");
@@ -165,7 +197,7 @@ function AddressesPanel() {
         <strong>Adresses</strong>
       </div>
       <div className="sug-add-row sug-add-row-multi">
-        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} title="Préfixe (ex: à)" />
+        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "address")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
         <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nouvelle adresse..." style={{ flex: 1 }} />
         <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={addMutation.isPending}>Ajouter</button>
       </div>
@@ -176,7 +208,7 @@ function AddressesPanel() {
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
+                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(editLabel, "address")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
                   <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 1 }} placeholder="Label" />
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -198,7 +230,7 @@ function AddressesPanel() {
             ) : (
               <>
                 <div style={{ flex: 1 }}>
-                  {item.prefix && <span style={{ opacity: 0.5, marginRight: 4 }}>{item.prefix}</span>}
+                  <SuggestionPrefix label={item.label} prefix={item.prefix} kind="address" />
                   <span className="sug-item-label">{item.label}</span>
                   {item.labelFeminine && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>(f: {item.labelFeminine})</span>}
                 </div>
@@ -261,7 +293,7 @@ function PositionsPanel() {
         <strong>Postes</strong>
       </div>
       <div className="sug-add-row sug-add-row-multi" style={{ gap: 4 }}>
-        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
+        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "position")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
         <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Poste..." style={{ flex: 2 }} />
         <input className="input" value={newSalary} onChange={(e) => setNewSalary(e.target.value)} placeholder="Salaires (ex: 25000, 30000)" style={{ flex: 1.5 }} />
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
@@ -272,7 +304,7 @@ function PositionsPanel() {
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
+                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(editLabel, "position")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
                   <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 2 }} placeholder="Poste" />
                   <input className="input" value={editSalary} onChange={e => setEditSalary(e.target.value)} style={{ flex: 1.5 }} placeholder="Salaires (ex: 25000, 30000)" />
                 </div>
@@ -297,7 +329,7 @@ function PositionsPanel() {
             ) : (
               <>
                 <div style={{ flex: 1 }}>
-                  {item.prefix && <span style={{ opacity: 0.5, marginRight: 4 }}>{item.prefix}</span>}
+                  <SuggestionPrefix label={item.label} prefix={item.prefix} kind="position" />
                   <span className="sug-item-label">{item.label} ({item.salaries.join(", ")} HTG)</span>
                   {item.labelFeminine && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>(f: {item.labelFeminine})</span>}
                 </div>
@@ -364,7 +396,7 @@ function InstitutionsPanel() {
         <strong>Institutions</strong>
       </div>
       <div className="sug-add-row sug-add-row-multi" style={{ gap: 4 }}>
-        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
+        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
         <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom de l'institution..." style={{ flex: 2 }} />
         <input className="input" value={newKeywords} onChange={(e) => setNewKeywords(e.target.value)} placeholder="villes (ex: delmas, tabarre)" style={{ flex: 1.5 }} />
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
@@ -375,7 +407,7 @@ function InstitutionsPanel() {
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder="Préf." style={{ width: 60 }} />
+                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(editLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
                   <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 2 }} placeholder="Nom" />
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -401,7 +433,7 @@ function InstitutionsPanel() {
             ) : (
               <>
                 <div style={{ flex: 1 }}>
-                  {item.prefix && <span style={{ opacity: 0.5, marginRight: 4 }}>{item.prefix}</span>}
+                  <SuggestionPrefix label={item.label} prefix={item.prefix} kind="institution" />
                   <span className="sug-item-label">
                     {item.label} 
                     {item.addressKeywords && item.addressKeywords.length > 0 && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>({item.addressKeywords.join(", ")})</span>}

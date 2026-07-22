@@ -10,6 +10,8 @@ export type AutocompleteItem = {
   id: string;
   label: string;
   sublabel?: string;
+  /** Small context-specific adjustment applied after the standard ranking signals. */
+  rankingBoost?: number;
 };
 
 type AutocompleteDisplayItem = AutocompleteItem & {
@@ -135,6 +137,7 @@ export function AutocompleteField({
         else if (wordStartsWithQuery) score += 350;
         else if (q) score += 150 - Math.min(matchStart, 100);
         if (isRecent) score += 80 - recentIndex;
+        score += item.rankingBoost ?? 0;
         score -= item.label.length / 100;
 
         return {
@@ -153,17 +156,22 @@ export function AutocompleteField({
       ? scored.sort((a, b) => b.score - a.score).map((entry) => entry.item)
       : [];
 
-    const seenLabels = new Set<string>();
+    const seenItems = new Set<string>();
     filtered = filtered.filter((item) => {
-      const labelKey = normalize(item.label);
-      if (seenLabels.has(labelKey)) return false;
-      seenLabels.add(labelKey);
+      // Several business choices can intentionally share a label while their
+      // sublabels differ (for example one post offered at several salaries).
+      const itemKey = `${normalize(item.label)}\u0000${normalize(item.sublabel ?? "")}`;
+      if (seenItems.has(itemKey)) return false;
+      seenItems.add(itemKey);
       return true;
     });
 
     if (featuredItem) {
-      const featuredLabel = normalize(featuredItem.label);
-      filtered = filtered.filter(it => it.id !== featuredItem.id && normalize(it.label) !== featuredLabel);
+      const featuredKey = `${normalize(featuredItem.label)}\u0000${normalize(featuredItem.sublabel ?? "")}`;
+      filtered = filtered.filter((item) => {
+        const itemKey = `${normalize(item.label)}\u0000${normalize(item.sublabel ?? "")}`;
+        return item.id !== featuredItem.id && itemKey !== featuredKey;
+      });
     }
 
     const customItem: AutocompleteDisplayItem | null = q && !exactMatch

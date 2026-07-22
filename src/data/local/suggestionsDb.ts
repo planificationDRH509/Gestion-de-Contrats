@@ -274,12 +274,14 @@ export function deleteInstitution(id: string) {
 
 // ─── Last Choice Persistence ───────────────────────────────────
 
-export function saveLastChoice(category: "address" | "position" | "assignment" | "durationMonths", value: string) {
+type LastChoiceCategory = "address" | "position" | "positionSalary" | "assignment" | "durationMonths";
+
+export function saveLastChoice(category: LastChoiceCategory, value: string) {
   if (!value) return;
   localStorage.setItem(`contribution_last_${category}`, value);
 }
 
-export function getLastChoice(category: "address" | "position" | "assignment" | "durationMonths"): string | null {
+export function getLastChoice(category: LastChoiceCategory): string | null {
   return localStorage.getItem(`contribution_last_${category}`);
 }
 
@@ -327,6 +329,39 @@ function normalize(str: string): string {
     .trim();
 }
 
+function normalizeLocation(str: string): string {
+  return normalize(str)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Return a small autocomplete ranking bonus when an institution is linked to
+ * the applicant's address. Punctuation, accents and hyphenation are ignored so
+ * values such as "Pétion Ville" and "petion-ville" still match.
+ */
+export function getInstitutionAddressRankingBoost(
+  institution: Pick<InstitutionSuggestion, "addressKeywords">,
+  addressValue: string
+): number {
+  const address = normalizeLocation(addressValue);
+  if (!address) return 0;
+
+  const paddedAddress = ` ${address} `;
+  const matchesAddress = (institution.addressKeywords ?? []).some((rawKeyword) => {
+    const keyword = normalizeLocation(rawKeyword);
+    if (!keyword || Math.min(address.length, keyword.length) < 4) return false;
+
+    const paddedKeyword = ` ${keyword} `;
+    return paddedAddress.includes(paddedKeyword) || paddedKeyword.includes(paddedAddress);
+  });
+
+  // Deliberately lower than the bonuses for pinned, typed-prefix and recent
+  // choices in AutocompleteField: the address should guide, not dictate.
+  return matchesAddress ? 40 : 0;
+}
+
 // ─── Smart Queries ──────────────────────────────────────────────
 
 /** Filter addresses matching a partial input */
@@ -349,28 +384,20 @@ export function filterPositions(query: string): PositionSuggestion[] {
 
 /** Get institutions that match the current address (smart matching) */
 export function filterInstitutions(addressValue: string, query: string): InstitutionSuggestion[] {
-  const addr = normalize(addressValue);
   const q = normalize(query);
   const all = getInstitutions();
-  
-  // First, filter by address-relevance - show matching ones first, then all
-  let relevant: InstitutionSuggestion[];
-  if (addr) {
-    const matched = all.filter((inst) =>
-      inst.addressKeywords.length === 0 ||
-      inst.addressKeywords.some((kw) => addr.includes(normalize(kw)))
-    );
-    // Put address-matched ones first, then the rest
-    const matchedIds = new Set(matched.map((m) => m.id));
-    const rest = all.filter((inst) => !matchedIds.has(inst.id));
-    relevant = [...matched, ...rest];
-  } else {
-    relevant = all;
-  }
+  const relevant = all
+    .map((institution, index) => ({
+      institution,
+      index,
+      addressBoost: getInstitutionAddressRankingBoost(institution, addressValue)
+    }))
+    .sort((a, b) => b.addressBoost - a.addressBoost || a.index - b.index)
+    .map(({ institution }) => institution);
   
   // Then filter by search query
   if (q) {
-    relevant = relevant.filter((inst) =>
+    return relevant.filter((inst) =>
       normalize(inst.label).includes(q)
     );
   }

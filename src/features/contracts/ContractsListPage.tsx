@@ -37,6 +37,10 @@ import { createId } from "../../lib/uuid";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { ContractsImportModal } from "./ContractsImportModal";
 import { TagBadge } from "./TagBadge";
+import {
+  applySuggestionPrefix,
+  normalizeSuggestionGrammarValue
+} from "../../lib/suggestionPrefixes";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -64,78 +68,6 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "transfere", label: "Transféré" },
   { id: "classe", label: "Classé" }
 ];
-
-const FRENCH_ELISION_START = /^[aeiouyàâäéèêëîïôöùûüœh]/i;
-const EXPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
-const EXPORT_PREFIXED_LOCATION = /^(a|à)\s|^(a|à)\s+l['’]|^au\s|^aux\s|^chez\s|^en\s/i;
-const ASSIGNMENT_FEMININE_PREFIX_WORDS = [
-  "direction",
-  "maternite",
-  "maternité",
-  "clinique",
-  "faculte",
-  "faculté",
-  "mairie",
-  "section"
-];
-const ASSIGNMENT_MASCULINE_PREFIX_WORDS = [
-  "centre",
-  "sanatorium",
-  "bureau",
-  "service",
-  "departement",
-  "département",
-  "ministere",
-  "ministère",
-  "programme",
-  "lycee",
-  "lycée",
-  "college",
-  "collège",
-  "dispensaire",
-  "palais",
-  "tribunal"
-];
-
-function startsWithFrenchElision(value: string) {
-  return FRENCH_ELISION_START.test(value.trim());
-}
-
-function normalizeCsvGrammarValue(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function joinCsvPrefix(prefix: string, value: string) {
-  const trimmedPrefix = prefix.trim();
-  const trimmedValue = value.trim();
-  if (!trimmedPrefix) return trimmedValue;
-  if (/[\'’]$/.test(trimmedPrefix)) return `${trimmedPrefix}${trimmedValue}`;
-  return `${trimmedPrefix} ${trimmedValue}`;
-}
-
-function addCsvPositionPrefix(value: string, explicitPrefix?: string | null) {
-  const trimmed = value.trim();
-  if (!trimmed || EXPORT_PREFIXED_POSITION.test(trimmed)) return trimmed;
-  if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
-  return startsWithFrenchElision(trimmed) ? `d'${trimmed}` : `de ${trimmed}`;
-}
-
-function addCsvLocationPrefix(value: string, explicitPrefix?: string | null, kind: "assignment" | "address" = "address") {
-  const trimmed = value.trim();
-  if (!trimmed || EXPORT_PREFIXED_LOCATION.test(trimmed)) return trimmed;
-  if (explicitPrefix?.trim()) return joinCsvPrefix(explicitPrefix, trimmed);
-  if (kind === "assignment") {
-    const normalized = normalizeCsvGrammarValue(trimmed);
-    const firstWord = normalized.split(/[\s(-]+/)[0] ?? normalized;
-    if (ASSIGNMENT_FEMININE_PREFIX_WORDS.includes(firstWord)) return `à la ${trimmed}`;
-    if (ASSIGNMENT_MASCULINE_PREFIX_WORDS.includes(firstWord)) return `au ${trimmed}`;
-  }
-  return startsWithFrenchElision(trimmed) ? `à l'${trimmed}` : `à ${trimmed}`;
-}
 
 export function ContractsListPage() {
   const { user } = useAuth();
@@ -541,13 +473,13 @@ export function ContractsListPage() {
     addresses: typeof addressesData
   ) {
     const positionPrefixes = new Map(
-      positions.map((position) => [normalizeCsvGrammarValue(position.label), position.prefix ?? null])
+      positions.map((position) => [normalizeSuggestionGrammarValue(position.label), position.prefix ?? null])
     );
     const institutionPrefixes = new Map(
-      institutions.map((institution) => [normalizeCsvGrammarValue(institution.label), institution.prefix ?? null])
+      institutions.map((institution) => [normalizeSuggestionGrammarValue(institution.label), institution.prefix ?? null])
     );
     const addressPrefixes = new Map(
-      addresses.map((address) => [normalizeCsvGrammarValue(address.label), address.prefix ?? null])
+      addresses.map((address) => [normalizeSuggestionGrammarValue(address.label), address.prefix ?? null])
     );
     return [
       ["sexe", "Nom", "Prenom", "Nif", "Ninu", "Poste", "Affectation", "Salaire en chiffre", "Salaire en Lettre", "Durée", "Adresse"],
@@ -558,26 +490,27 @@ export function ContractsListPage() {
         contract.nif ?? "",
         contract.ninu ?? "",
         exportWithPrepositions
-          ? addCsvPositionPrefix(
+          ? applySuggestionPrefix(
               contract.position,
-              positionPrefixes.get(normalizeCsvGrammarValue(contract.position))
+              "position",
+              positionPrefixes.get(normalizeSuggestionGrammarValue(contract.position))
             )
           : contract.position,
         exportWithPrepositions
-          ? addCsvLocationPrefix(
+          ? applySuggestionPrefix(
               contract.assignment,
-              institutionPrefixes.get(normalizeCsvGrammarValue(contract.assignment)),
-              "assignment"
+              "institution",
+              institutionPrefixes.get(normalizeSuggestionGrammarValue(contract.assignment))
             )
           : contract.assignment,
         String(contract.salaryNumber.toLocaleString("en-US")),
         contract.salaryText,
         contract.durationMonths,
         exportWithPrepositions
-          ? addCsvLocationPrefix(
+          ? applySuggestionPrefix(
               contract.address,
-              addressPrefixes.get(normalizeCsvGrammarValue(contract.address)),
-              "address"
+              "address",
+              addressPrefixes.get(normalizeSuggestionGrammarValue(contract.address))
             )
           : contract.address
       ])

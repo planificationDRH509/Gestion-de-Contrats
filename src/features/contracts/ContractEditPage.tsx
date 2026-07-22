@@ -24,11 +24,16 @@ import {
 } from "../settings/suggestionsApi";
 import {
   getLastChoice,
+  getInstitutionAddressRankingBoost,
   saveLastChoice,
   learnSuggestions,
 } from "../../data/local/suggestionsDb";
 import { TagSelector } from "./TagSelector";
 import { useAssignTagToContract, useRemoveTagFromContract, Tag } from "./tagsApi";
+import {
+  buildPositionSalaryItems,
+  findFeaturedPositionSalaryItem,
+} from "./positionSalarySuggestions";
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -133,16 +138,15 @@ export function ContractEditPage() {
       .map((a) => ({ id: a.id, label: a.label }));
   }, [allAddresses, addressValue]);
 
-  const positionItems: AutocompleteItem[] = useMemo(() => {
+  const allPositionItems = useMemo(
+    () => buildPositionSalaryItems(allPositions),
+    [allPositions]
+  );
+
+  const positionItems = useMemo(() => {
     const q = normalize(positionValue || "");
-    return allPositions
-      .filter(p => normalize(p.label).includes(q))
-      .map((p) => ({
-        id: p.id,
-        label: p.label,
-        sublabel: p.salaries && p.salaries.length > 0 ? `${p.salaries[0].toLocaleString("fr-HT")} HTG` : undefined,
-      }));
-  }, [allPositions, positionValue]);
+    return allPositionItems.filter((item) => normalize(item.label).includes(q));
+  }, [allPositionItems, positionValue]);
 
   const assignmentItems: AutocompleteItem[] = useMemo(() => {
     const q = normalize(assignmentValue || "");
@@ -154,6 +158,7 @@ export function ContractEditPage() {
       .map((i) => ({
         id: i.id,
         label: i.label,
+        rankingBoost: getInstitutionAddressRankingBoost(i, addressValue || ""),
       }));
   }, [allInstitutions, assignmentValue, addressValue]);
 
@@ -164,15 +169,12 @@ export function ContractEditPage() {
   }, []);
 
   const featuredPosition = useMemo(() => {
-    const last = getLastChoice("position");
-    // Find matching suggestion to get its default salary if possible
-    const match = allPositions.find((p: any) => p.label === last);
-    return last ? { 
-      id: `last_${last}`, 
-      label: last,
-      sublabel: match && match.salaries && match.salaries.length > 0 ? `${match.salaries[0].toLocaleString("fr-HT")} HTG` : undefined
-    } : undefined;
-  }, [allPositions]);
+    return findFeaturedPositionSalaryItem(
+      allPositionItems,
+      getLastChoice("position"),
+      getLastChoice("positionSalary")
+    );
+  }, [allPositionItems]);
 
   const featuredAssignment = useMemo(() => {
     const last = getLastChoice("assignment");
@@ -252,17 +254,14 @@ export function ContractEditPage() {
   const [availableSalaries, setAvailableSalaries] = useState<number[]>([]);
 
   function handlePositionSelect(item: AutocompleteItem) {
-    const match = allPositions.find((p: any) => p.id === item.id);
+    const selectedItem = allPositionItems.find((candidate) => candidate.id === item.id);
+    const match = allPositions.find((position) => position.id === selectedItem?.positionId);
     if (match) {
       const salaries = match.salaries || [];
       setAvailableSalaries(salaries);
-      
-      if (salaries.length > 0) {
-        // Pick the middle salary by default
-        const middleIndex = Math.floor(salaries.length / 2);
-        const defaultSalary = salaries[middleIndex];
-        
-        setValue("salaryNumber", defaultSalary.toString(), {
+
+      if (selectedItem?.salaryNumber !== undefined) {
+        setValue("salaryNumber", selectedItem.salaryNumber.toString(), {
           shouldValidate: true,
           shouldDirty: true,
         });
@@ -326,6 +325,7 @@ export function ContractEditPage() {
     // Save choices for next time
     saveLastChoice("address", values.address);
     saveLastChoice("position", values.position);
+    saveLastChoice("positionSalary", values.salaryNumber);
     saveLastChoice("assignment", values.assignment);
 
     try {
