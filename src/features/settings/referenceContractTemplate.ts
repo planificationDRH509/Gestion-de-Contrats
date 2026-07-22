@@ -298,13 +298,13 @@ export const referenceContractTemplate: ContractTemplate = {
     max-width: none !important;
     outline: 0;
     box-shadow: none;
-    break-after: page;
-    page-break-after: always;
-  }
-
-  .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-sheet:last-child {
     break-after: auto;
     page-break-after: auto;
+  }
+
+  .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-sheet + .contract-sheet {
+    break-before: page;
+    page-break-before: always;
   }
 }
   `.trim()

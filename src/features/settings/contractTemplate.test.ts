@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Contract } from "../../data/types";
 import {
   buildTemplateVariables,
@@ -6,6 +8,11 @@ import {
   renderTemplate
 } from "./contractTemplate";
 import { setStoredContractStartDates } from "./settingsApi";
+
+const printCss = readFileSync(
+  resolve(process.cwd(), "src/styles/print.css"),
+  "utf8"
+);
 
 const contract: Contract = {
   id: "contract-reference",
@@ -45,10 +52,19 @@ describe("reference contract template", () => {
     expect(template.css).toContain("height: 11in");
     expect(template.css).toContain("height: 10.99in !important");
     expect(template.css).toContain("max-height: 10.99in !important");
+    expect(template.css).toContain("break-before: page");
+    expect(template.css).not.toContain("break-after: page");
     expect(template.css).toContain("padding: 53.4pt 72pt 49pt");
     expect(template.css).toContain("p.contract-title");
     expect(template.css).toContain('.contract-sheet[data-page="3"] p');
     expect(template.css).toContain("margin-bottom: 7.4pt");
+  });
+
+  it("flattens the application layout before paginating contract sheets", () => {
+    expect(printCss).toMatch(/\.app-shell[\s\S]*display: block !important/);
+    expect(printCss).toContain(".app-content,");
+    expect(printCss).toContain(".contract-document + .contract-document");
+    expect(printCss).toContain("break-before: page !important");
   });
 
   it("renders dates and duration in the same presentation as the reference", () => {

@@ -5,10 +5,14 @@
   }
 
   html,
-  body {
-    width: 100%;
+  body,
+  #root {
+    width: 8.5in;
+    min-height: 0 !important;
+    height: auto !important;
     margin: 0;
     padding: 0;
+    overflow: visible !important;
   }
 
   body {
@@ -24,24 +28,40 @@
 
   .app-shell,
   .app-shell.sidebar-collapsed {
-    grid-template-columns: 1fr !important;
-    height: auto;
-    overflow: visible;
+    display: block !important;
+    width: 8.5in !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
 
   .main {
-    width: 100%;
-    height: auto;
-    overflow: visible;
+    display: block !important;
+    width: 8.5in !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
 
+  .app-content,
   .content {
-    padding: 0;
+    display: block !important;
+    width: 8.5in !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
 
   .print-stack {
     display: block;
     width: 100%;
+    min-height: 0;
     margin: 0;
     padding: 0;
   }
@@ -60,6 +80,17 @@
     height: 10.99in !important;
     min-height: 10.99in !important;
     max-height: 10.99in !important;
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  .contract-document
+    .draft-doc[data-contract-layout^="morquette-reference-"]
+    .contract-sheet
+    + .contract-sheet,
+  .contract-document + .contract-document {
+    break-before: page !important;
+    page-break-before: always !important;
   }
 
   .page-break {
