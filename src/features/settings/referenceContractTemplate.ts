@@ -290,8 +290,11 @@ export const referenceContractTemplate: ContractTemplate = {
 
   .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-sheet {
     width: 8.5in !important;
-    height: 11in !important;
-    min-height: 11in !important;
+    /* Keep the printed box just below the physical sheet height. Chromium can
+       otherwise round an exact 11in box onto a second, empty page. */
+    height: 10.99in !important;
+    min-height: 10.99in !important;
+    max-height: 10.99in !important;
     max-width: none !important;
     outline: 0;
     box-shadow: none;

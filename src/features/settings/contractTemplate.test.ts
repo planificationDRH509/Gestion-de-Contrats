@@ -43,6 +43,8 @@ describe("reference contract template", () => {
     expect(template.html).toMatch(/data-page="4">\s*<p><strong>Article 17/);
     expect(template.css).toContain("width: 8.5in");
     expect(template.css).toContain("height: 11in");
+    expect(template.css).toContain("height: 10.99in !important");
+    expect(template.css).toContain("max-height: 10.99in !important");
     expect(template.css).toContain("padding: 53.4pt 72pt 49pt");
     expect(template.css).toContain("p.contract-title");
     expect(template.css).toContain('.contract-sheet[data-page="3"] p');

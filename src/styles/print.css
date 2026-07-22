@@ -52,6 +52,16 @@
     padding: 0;
   }
 
+  /* The extra specificity makes this safeguard apply to reference templates
+     already stored in localStorage, whose embedded CSS still uses 11in. */
+  .contract-document
+    .draft-doc[data-contract-layout^="morquette-reference-"]
+    .contract-sheet {
+    height: 10.99in !important;
+    min-height: 10.99in !important;
+    max-height: 10.99in !important;
+  }
+
   .page-break {
     break-before: page;
     page-break-before: always;
