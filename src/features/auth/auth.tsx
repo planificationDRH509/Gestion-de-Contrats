@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getDefaultWorkspace, listLocalWorkspaces } from "../../data/local/workspaces";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import {
@@ -71,6 +71,32 @@ function saveSession(user: AuthUser | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadSession());
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    const refreshRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("app_users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!active || error || !data) return;
+      const role = normalizeAppRole(data.role, user.username);
+      if (role === user.role) return;
+      setUser((current) => {
+        if (!current || current.id !== user.id) return current;
+        const next = { ...current, role };
+        saveSession(next);
+        return next;
+      });
+    };
+    void refreshRole();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.role, user?.username]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

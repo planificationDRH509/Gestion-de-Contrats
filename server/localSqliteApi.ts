@@ -81,6 +81,8 @@ type ContractRow = {
   updated_at: string;
   deleted_at: string | null;
   historique_saisie: string;
+  commentaire: string | null;
+  created_by: string | null;
   nom: string;
   prenom: string;
   sexe: "Homme" | "Femme";
@@ -620,6 +622,8 @@ function mapContract(row: ContractRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    createdBy: row.created_by,
+    commentaire: row.commentaire,
     auditHistory: parseHistory(row.historique_saisie),
     tags: getTagsForContract(row.id_contrat)
   };
@@ -762,6 +766,8 @@ function getDb(): DatabaseSync {
       titre TEXT NOT NULL,
       lieu_affectation TEXT NOT NULL,
       historique_saisie TEXT NOT NULL,
+      commentaire TEXT,
+      created_by TEXT,
       workspace_id TEXT NOT NULL,
       dossier_id TEXT,
       status TEXT NOT NULL DEFAULT 'draft'
@@ -839,30 +845,49 @@ function getDb(): DatabaseSync {
       FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
     );
 
-    -- Migration hack for consolidated salaries
-    try {
-      const info = db.pragma("table_info(autocompletion)") as any[];
-      if (!info.some(c => c.name === 'salaries')) {
-        db.exec("ALTER TABLE autocompletion ADD COLUMN salaries TEXT;");
-      }
-    } catch(e) {}
-
-    try {
-      const info = db.pragma("table_info(dossiers)") as any[];
-      if (!info.some(c => c.name === "status")) {
-        db.exec("ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
-      }
-      if (!info.some(c => c.name === "default_duration_months")) {
-        db.exec("ALTER TABLE dossiers ADD COLUMN default_duration_months INTEGER;");
-      }
-      if (!info.some(c => c.name === "created_by")) {
-        db.exec("ALTER TABLE dossiers ADD COLUMN created_by TEXT;");
-      }
-    } catch(e) {}
-
     CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx
       ON autocompletion (workspace_id, type);
   `);
+
+  const ensureColumns = (table: string, columns: Array<{ name: string; sql: string }>) => {
+    const info = db.pragma(`table_info(${table})`) as Array<{ name?: string }>;
+    for (const column of columns) {
+      if (!info.some((item) => item.name === column.name)) {
+        db.exec(column.sql);
+      }
+    }
+  };
+
+  ensureColumns("autocompletion", [
+    {
+      name: "salaries",
+      sql: "ALTER TABLE autocompletion ADD COLUMN salaries TEXT;"
+    }
+  ]);
+  ensureColumns("dossiers", [
+    {
+      name: "status",
+      sql: "ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';"
+    },
+    {
+      name: "default_duration_months",
+      sql: "ALTER TABLE dossiers ADD COLUMN default_duration_months INTEGER;"
+    },
+    {
+      name: "created_by",
+      sql: "ALTER TABLE dossiers ADD COLUMN created_by TEXT;"
+    }
+  ]);
+  ensureColumns("contrat", [
+    {
+      name: "commentaire",
+      sql: "ALTER TABLE contrat ADD COLUMN commentaire TEXT;"
+    },
+    {
+      name: "created_by",
+      sql: "ALTER TABLE contrat ADD COLUMN created_by TEXT;"
+    }
+  ]);
 
   const now = nowIso();
   const upsertWorkspace = db.prepare(`
@@ -1058,6 +1083,8 @@ function buildContractRows(workspaceId: string): ContractRow[] {
         c.updated_at,
         c.deleted_at,
         c.historique_saisie,
+        c.commentaire,
+        c.created_by,
         i.nom,
         i.prenom,
         i.sexe,
@@ -2067,6 +2094,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.updated_at,
           c.deleted_at,
           c.historique_saisie,
+          c.commentaire,
+          c.created_by,
           i.nom,
           i.prenom,
           i.sexe,
@@ -2343,6 +2372,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.updated_at,
           c.deleted_at,
           c.historique_saisie,
+          c.commentaire,
+          c.created_by,
           i.nom,
           i.prenom,
           i.sexe,
@@ -2516,6 +2547,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.updated_at,
           c.deleted_at,
           c.historique_saisie,
+          c.commentaire,
+          c.created_by,
           i.nom,
           i.prenom,
           i.sexe,

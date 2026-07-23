@@ -63,6 +63,16 @@ function describeChanges(changes: ContractAuditChange[]) {
   }).join(" · ");
 }
 
+function displayActorName(actor: AuditActor, usersById: Map<string, string>) {
+  const mappedName = actor.id ? usersById.get(actor.id) : null;
+  if (mappedName) return mappedName;
+  const rawName = actor.name.trim();
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(rawName)) {
+    return `Ancien utilisateur · ${rawName.slice(0, 8)}`;
+  }
+  return rawName || "Utilisateur inconnu";
+}
+
 export function AuditPage() {
   const { user } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
@@ -78,8 +88,12 @@ export function AuditPage() {
   const [actorId, setActorId] = useState("all");
 
   const usersById = useMemo(
-    () => new Map(users.map((item) => [item.id, item.fullName])),
-    [users]
+    () => {
+      const mapping = new Map(users.map((item) => [item.id, item.fullName]));
+      if (user) mapping.set(user.id, user.name);
+      return mapping;
+    },
+    [user, users]
   );
 
   const events = useMemo(() => {
@@ -194,9 +208,7 @@ export function AuditPage() {
       ) : (
         <div className="audit-timeline">
           {filteredEvents.map((event) => {
-            const actorName =
-              (event.actor.id ? usersById.get(event.actor.id) : null) ??
-              event.actor.name;
+            const actorName = displayActorName(event.actor, usersById);
             return (
               <article className="card audit-event" key={event.id}>
                 <div className={`audit-event-icon audit-action-${event.action}`}>
