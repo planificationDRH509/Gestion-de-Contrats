@@ -86,26 +86,6 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           />
         ) : null}
 
-        {can("quality.view") ? (
-          <NavItem
-            to="/app/controle-qualite"
-            icon="fact_check"
-            label="Contrôle qualité"
-            shortLabel="Qualité"
-            collapsed={collapsed}
-          />
-        ) : null}
-
-        {can("audit.view") ? (
-          <NavItem
-            to="/app/audit"
-            icon="history"
-            label="Journal d’audit"
-            shortLabel="Audit"
-            collapsed={collapsed}
-          />
-        ) : null}
-
         <div className="nav-divider" />
         
         {can("settings.manage") ? (

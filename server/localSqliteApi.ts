@@ -850,7 +850,7 @@ function getDb(): DatabaseSync {
   `);
 
   const ensureColumns = (table: string, columns: Array<{ name: string; sql: string }>) => {
-    const info = db.pragma(`table_info(${table})`) as Array<{ name?: string }>;
+    const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>;
     for (const column of columns) {
       if (!info.some((item) => item.name === column.name)) {
         db.exec(column.sql);
@@ -2036,6 +2036,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         titre,
         lieu_affectation,
         historique_saisie,
+        commentaire,
+        created_by,
         workspace_id,
         dossier_id,
         status,
@@ -2052,6 +2054,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         :titre,
         :lieu_affectation,
         :historique_saisie,
+        :commentaire,
+        :created_by,
         :workspace_id,
         :dossier_id,
         :status,
@@ -2069,6 +2073,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       titre: position,
       lieu_affectation: assignment,
       historique_saisie: JSON.stringify(history),
+      commentaire: asNullableString(body.commentaire),
+      created_by: asNullableString(body.createdBy) ?? operator.id ?? null,
       workspace_id: workspaceId,
       dossier_id: asNullableString(body.dossierId),
       status,
@@ -2467,6 +2473,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       body.dossierId !== undefined
         ? asNullableString(body.dossierId)
         : asNullableString(current.dossier_id);
+    const nextComment =
+      body.commentaire !== undefined
+        ? asNullableString(body.commentaire)
+        : asNullableString(current.commentaire);
 
     const timestamp = nowIso();
     const operator = operatorFromRequest(req);
@@ -2490,6 +2500,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       asNullableString(current.dossier_id),
       nextDossierId
     );
+    addChange(
+      "commentaire",
+      asNullableString(current.commentaire),
+      nextComment
+    );
     const action =
       changes.length === 1 && changes[0].field === "status"
         ? "status"
@@ -2511,6 +2526,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           titre = :titre,
           lieu_affectation = :lieu_affectation,
           historique_saisie = :historique_saisie,
+          commentaire = :commentaire,
           dossier_id = :dossier_id,
           status = :status,
           updated_at = :updated_at
@@ -2524,6 +2540,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       titre: nextTitle,
       lieu_affectation: nextAssignment,
       historique_saisie: JSON.stringify(history),
+      commentaire: nextComment,
       dossier_id: nextDossierId,
       status: nextStatus,
       updated_at: timestamp

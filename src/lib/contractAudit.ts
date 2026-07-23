@@ -30,7 +30,8 @@ export const CONTRACT_AUDIT_FIELD_LABELS: Record<string, string> = {
   dossierId: "Dossier",
   dossier_id: "Dossier",
   status: "Statut",
-  commentaire: "Commentaire"
+  commentaire: "Commentaire",
+  deletedAt: "Suppression"
 };
 
 const TRACKED_FIELDS = Object.keys(CONTRACT_AUDIT_FIELD_LABELS) as Array<

@@ -126,7 +126,9 @@ export type Database = {
       contrat: {
         Row: {
           annee_fiscale: string
+          commentaire: string | null
           created_at: string
+          created_by: string | null
           deleted_at: string | null
           dossier_id: string | null
           duree_contrat: number
@@ -143,7 +145,9 @@ export type Database = {
         }
         Insert: {
           annee_fiscale: string
+          commentaire?: string | null
           created_at?: string
+          created_by?: string | null
           deleted_at?: string | null
           dossier_id?: string | null
           duree_contrat?: number
@@ -160,7 +164,9 @@ export type Database = {
         }
         Update: {
           annee_fiscale?: string
+          commentaire?: string | null
           created_at?: string
+          created_by?: string | null
           deleted_at?: string | null
           dossier_id?: string | null
           duree_contrat?: number

@@ -47,6 +47,18 @@ export function SettingsPage() {
           title="Utilisateurs"
           description="Créez et consultez les comptes des collaborateurs."
         />
+        <SettingsCard
+          to="/app/controle-qualite"
+          icon="fact_check"
+          title="Contrôle qualité"
+          description="Vérifiez la qualité des données et corrigez les anomalies détectées."
+        />
+        <SettingsCard
+          to="/app/audit"
+          icon="history"
+          title="Journal d’audit"
+          description="Consultez l’historique des créations, modifications et suppressions."
+        />
       </div>
     </div>
   );

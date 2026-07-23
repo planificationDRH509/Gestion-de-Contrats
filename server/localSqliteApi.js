@@ -525,6 +525,8 @@ function mapContract(row) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at,
+        createdBy: row.created_by,
+        commentaire: row.commentaire,
         auditHistory: parseHistory(row.historique_saisie),
         tags: getTagsForContract(row.id_contrat)
     };
@@ -580,7 +582,49 @@ function getDb() {
     var db = new DatabaseSync(filePath);
     db.exec("PRAGMA foreign_keys = ON;");
     db.exec("PRAGMA journal_mode = WAL;");
-    db.exec("\n    CREATE TABLE IF NOT EXISTS workspaces (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT\n    );\n\n    CREATE TABLE IF NOT EXISTS identification (\n      nif TEXT PRIMARY KEY,\n      nom TEXT NOT NULL,\n      prenom TEXT NOT NULL,\n      sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),\n      ninu TEXT UNIQUE,\n      adresse TEXT NOT NULL,\n      workspace_id TEXT NOT NULL DEFAULT 'workspace_default',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS identification_workspace_idx\n      ON identification (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS identification_name_idx\n      ON identification (workspace_id, nom, prenom);\n\n    CREATE INDEX IF NOT EXISTS identification_ninu_idx\n      ON identification (workspace_id, ninu);\n\n    CREATE TABLE IF NOT EXISTS dossiers (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      id_contrat TEXT,\n      name TEXT NOT NULL,\n      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','classified')),\n      is_ephemeral INTEGER NOT NULL DEFAULT 0,\n      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),\n      contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),\n      comment TEXT,\n      deadline_date TEXT,\n      focal_point TEXT,\n      roadmap_sheet_number TEXT,\n      default_duration_months INTEGER,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS dossiers_workspace_name_unique_idx\n      ON dossiers (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS dossiers_workspace_idx\n      ON dossiers (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contrat (\n      id_contrat TEXT PRIMARY KEY,\n      nif TEXT NOT NULL,\n      duree_contrat INTEGER NOT NULL DEFAULT 12,\n      salaire TEXT NOT NULL,\n      annee_fiscale TEXT NOT NULL,\n      salaire_en_chiffre REAL NOT NULL,\n      titre TEXT NOT NULL,\n      lieu_affectation TEXT NOT NULL,\n      historique_saisie TEXT NOT NULL,\n      workspace_id TEXT NOT NULL,\n      dossier_id TEXT,\n      status TEXT NOT NULL DEFAULT 'draft'\n        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (nif) REFERENCES identification(nif) ON DELETE RESTRICT ON UPDATE CASCADE,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,\n      FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL\n    );\n\n    CREATE INDEX IF NOT EXISTS contrat_workspace_idx\n      ON contrat (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS contrat_nif_idx\n      ON contrat (workspace_id, nif);\n\n    CREATE INDEX IF NOT EXISTS contrat_dossier_idx\n      ON contrat (workspace_id, dossier_id);\n\n    CREATE TABLE IF NOT EXISTS tags (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      name TEXT NOT NULL,\n      color TEXT NOT NULL DEFAULT '#64748b',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS tags_workspace_name_unique_idx\n      ON tags (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS tags_workspace_idx\n      ON tags (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contract_tags (\n      contract_id TEXT NOT NULL,\n      tag_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      PRIMARY KEY (contract_id, tag_id),\n      FOREIGN KEY (contract_id) REFERENCES contrat(id_contrat) ON DELETE CASCADE,\n      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS contract_tags_contract_id_idx\n      ON contract_tags (contract_id);\n\n    CREATE INDEX IF NOT EXISTS contract_tags_tag_id_idx\n      ON contract_tags (tag_id);\n\n    CREATE TABLE IF NOT EXISTS contract_print_jobs (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      contract_ids_json TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      printed_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE TABLE IF NOT EXISTS autocompletion (\n      id TEXT PRIMARY KEY,\n      type TEXT NOT NULL CHECK (type IN ('address','position','institution')),\n      label TEXT NOT NULL,\n      salaries TEXT,\n      address_keywords TEXT,\n      order_index INTEGER NOT NULL DEFAULT 0,\n      workspace_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    -- Migration hack for consolidated salaries\n    try {\n      const info = db.pragma(\"table_info(autocompletion)\") as any[];\n      if (!info.some(c => c.name === 'salaries')) {\n        db.exec(\"ALTER TABLE autocompletion ADD COLUMN salaries TEXT;\");\n      }\n    } catch(e) {}\n\n    try {\n      const info = db.pragma(\"table_info(dossiers)\") as any[];\n      if (!info.some(c => c.name === \"status\")) {\n        db.exec(\"ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';\");\n      }\n      if (!info.some(c => c.name === \"default_duration_months\")) {\n        db.exec(\"ALTER TABLE dossiers ADD COLUMN default_duration_months INTEGER;\");\n      }\n      if (!info.some(c => c.name === \"created_by\")) {\n        db.exec(\"ALTER TABLE dossiers ADD COLUMN created_by TEXT;\");\n      }\n    } catch(e) {}\n\n    CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx\n      ON autocompletion (workspace_id, type);\n  ");
+    db.exec("\n    CREATE TABLE IF NOT EXISTS workspaces (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT\n    );\n\n    CREATE TABLE IF NOT EXISTS identification (\n      nif TEXT PRIMARY KEY,\n      nom TEXT NOT NULL,\n      prenom TEXT NOT NULL,\n      sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),\n      ninu TEXT UNIQUE,\n      adresse TEXT NOT NULL,\n      workspace_id TEXT NOT NULL DEFAULT 'workspace_default',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS identification_workspace_idx\n      ON identification (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS identification_name_idx\n      ON identification (workspace_id, nom, prenom);\n\n    CREATE INDEX IF NOT EXISTS identification_ninu_idx\n      ON identification (workspace_id, ninu);\n\n    CREATE TABLE IF NOT EXISTS dossiers (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      id_contrat TEXT,\n      name TEXT NOT NULL,\n      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','classified')),\n      is_ephemeral INTEGER NOT NULL DEFAULT 0,\n      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),\n      contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),\n      comment TEXT,\n      deadline_date TEXT,\n      focal_point TEXT,\n      roadmap_sheet_number TEXT,\n      default_duration_months INTEGER,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS dossiers_workspace_name_unique_idx\n      ON dossiers (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS dossiers_workspace_idx\n      ON dossiers (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contrat (\n      id_contrat TEXT PRIMARY KEY,\n      nif TEXT NOT NULL,\n      duree_contrat INTEGER NOT NULL DEFAULT 12,\n      salaire TEXT NOT NULL,\n      annee_fiscale TEXT NOT NULL,\n      salaire_en_chiffre REAL NOT NULL,\n      titre TEXT NOT NULL,\n      lieu_affectation TEXT NOT NULL,\n      historique_saisie TEXT NOT NULL,\n      commentaire TEXT,\n      created_by TEXT,\n      workspace_id TEXT NOT NULL,\n      dossier_id TEXT,\n      status TEXT NOT NULL DEFAULT 'draft'\n        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (nif) REFERENCES identification(nif) ON DELETE RESTRICT ON UPDATE CASCADE,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,\n      FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL\n    );\n\n    CREATE INDEX IF NOT EXISTS contrat_workspace_idx\n      ON contrat (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS contrat_nif_idx\n      ON contrat (workspace_id, nif);\n\n    CREATE INDEX IF NOT EXISTS contrat_dossier_idx\n      ON contrat (workspace_id, dossier_id);\n\n    CREATE TABLE IF NOT EXISTS tags (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      name TEXT NOT NULL,\n      color TEXT NOT NULL DEFAULT '#64748b',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS tags_workspace_name_unique_idx\n      ON tags (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS tags_workspace_idx\n      ON tags (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contract_tags (\n      contract_id TEXT NOT NULL,\n      tag_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      PRIMARY KEY (contract_id, tag_id),\n      FOREIGN KEY (contract_id) REFERENCES contrat(id_contrat) ON DELETE CASCADE,\n      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS contract_tags_contract_id_idx\n      ON contract_tags (contract_id);\n\n    CREATE INDEX IF NOT EXISTS contract_tags_tag_id_idx\n      ON contract_tags (tag_id);\n\n    CREATE TABLE IF NOT EXISTS contract_print_jobs (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      contract_ids_json TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      printed_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE TABLE IF NOT EXISTS autocompletion (\n      id TEXT PRIMARY KEY,\n      type TEXT NOT NULL CHECK (type IN ('address','position','institution')),\n      label TEXT NOT NULL,\n      salaries TEXT,\n      address_keywords TEXT,\n      order_index INTEGER NOT NULL DEFAULT 0,\n      workspace_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx\n      ON autocompletion (workspace_id, type);\n  ");
+    var ensureColumns = function (table, columns) {
+        var info = db.pragma("table_info(".concat(table, ")"));
+        var _loop_1 = function (column) {
+            if (!info.some(function (item) { return item.name === column.name; })) {
+                db.exec(column.sql);
+            }
+        };
+        for (var _i = 0, columns_1 = columns; _i < columns_1.length; _i++) {
+            var column = columns_1[_i];
+            _loop_1(column);
+        }
+    };
+    ensureColumns("autocompletion", [
+        {
+            name: "salaries",
+            sql: "ALTER TABLE autocompletion ADD COLUMN salaries TEXT;"
+        }
+    ]);
+    ensureColumns("dossiers", [
+        {
+            name: "status",
+            sql: "ALTER TABLE dossiers ADD COLUMN status TEXT NOT NULL DEFAULT 'active';"
+        },
+        {
+            name: "default_duration_months",
+            sql: "ALTER TABLE dossiers ADD COLUMN default_duration_months INTEGER;"
+        },
+        {
+            name: "created_by",
+            sql: "ALTER TABLE dossiers ADD COLUMN created_by TEXT;"
+        }
+    ]);
+    ensureColumns("contrat", [
+        {
+            name: "commentaire",
+            sql: "ALTER TABLE contrat ADD COLUMN commentaire TEXT;"
+        },
+        {
+            name: "created_by",
+            sql: "ALTER TABLE contrat ADD COLUMN created_by TEXT;"
+        }
+    ]);
     var now = nowIso();
     var upsertWorkspace = db.prepare("\n    INSERT INTO workspaces (id, name, created_at, updated_at)\n    VALUES (:id, :name, :created_at, :updated_at)\n    ON CONFLICT(id) DO UPDATE SET\n      name = excluded.name,\n      updated_at = excluded.updated_at\n  ");
     for (var _i = 0, WORKSPACES_1 = WORKSPACES; _i < WORKSPACES_1.length; _i++) {
@@ -695,7 +739,7 @@ function buildSqlBackupDump(db) {
         }
         var selectSql = "SELECT ".concat(columns.map(quoteIdentifier).join(", "), " FROM ").concat(quoteIdentifier(tableName));
         var rows = db.prepare(selectSql).all();
-        var _loop_1 = function (row) {
+        var _loop_2 = function (row) {
             var values = columns.map(function (columnName) { return toSqlLiteral(row[columnName]); });
             lines.push("INSERT INTO ".concat(quoteIdentifier(tableName), " (").concat(columns
                 .map(quoteIdentifier)
@@ -703,7 +747,7 @@ function buildSqlBackupDump(db) {
         };
         for (var _b = 0, rows_1 = rows; _b < rows_1.length; _b++) {
             var row = rows_1[_b];
-            _loop_1(row);
+            _loop_2(row);
         }
     }
     lines.push("COMMIT;");
@@ -714,7 +758,7 @@ function buildSqlBackupDump(db) {
 function buildContractRows(workspaceId) {
     var db = getDb();
     var rows = db
-        .prepare("\n      SELECT\n        c.id_contrat,\n        c.workspace_id,\n        c.dossier_id,\n        c.nif,\n        c.status,\n        c.duree_contrat,\n        c.salaire_en_chiffre,\n        c.salaire,\n        c.titre,\n        c.lieu_affectation,\n        c.annee_fiscale,\n        c.created_at,\n        c.updated_at,\n        c.deleted_at,\n        c.historique_saisie,\n        i.nom,\n        i.prenom,\n        i.sexe,\n        i.ninu,\n        i.adresse\n      FROM contrat c\n      INNER JOIN identification i ON i.nif = c.nif\n      WHERE c.workspace_id = :workspace_id\n        AND c.deleted_at IS NULL\n    ")
+        .prepare("\n      SELECT\n        c.id_contrat,\n        c.workspace_id,\n        c.dossier_id,\n        c.nif,\n        c.status,\n        c.duree_contrat,\n        c.salaire_en_chiffre,\n        c.salaire,\n        c.titre,\n        c.lieu_affectation,\n        c.annee_fiscale,\n        c.created_at,\n        c.updated_at,\n        c.deleted_at,\n        c.historique_saisie,\n        c.commentaire,\n        c.created_by,\n        i.nom,\n        i.prenom,\n        i.sexe,\n        i.ninu,\n        i.adresse\n      FROM contrat c\n      INNER JOIN identification i ON i.nif = c.nif\n      WHERE c.workspace_id = :workspace_id\n        AND c.deleted_at IS NULL\n    ")
         .all({ workspace_id: workspaceId });
     return rows;
 }
@@ -754,10 +798,10 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
-        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
-        return __generator(this, function (_s) {
-            switch (_s.label) {
+        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
+        return __generator(this, function (_u) {
+            switch (_u.label) {
                 case 0:
                     db = getDb();
                     method = ((_d = req.method) !== null && _d !== void 0 ? _d : "GET").toUpperCase();
@@ -809,7 +853,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 2];
                     return [4 /*yield*/, parseBody(req)];
                 case 1:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     name_2 = normalizeTagName(asString(body.name));
                     color = asString(body.color).trim() || tagColor(name_2);
@@ -841,7 +885,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 4];
                     return [4 /*yield*/, parseBody(req)];
                 case 3:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -868,7 +912,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 6];
                     return [4 /*yield*/, parseBody(req)];
                 case 5:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -897,7 +941,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 8];
                     return [4 /*yield*/, parseBody(req)];
                 case 7:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     existingId = asNullableString(body.id);
                     nif = asNullableString(body.nif);
@@ -977,7 +1021,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 10];
                     return [4 /*yield*/, parseBody(req)];
                 case 9:
-                    body = _s.sent();
+                    body = _u.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1032,7 +1076,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 12];
                     return [4 /*yield*/, parseBody(req)];
                 case 11:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     name_3 = asString(body.name).trim();
                     if (!name_3) {
@@ -1075,7 +1119,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 14];
                     return [4 /*yield*/, parseBody(req)];
                 case 13:
-                    body = _s.sent();
+                    body = _u.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1116,7 +1160,7 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(dossierByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 15:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     current = db
                         .prepare("\n        SELECT *\n        FROM dossiers\n        WHERE id = :id\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
@@ -1193,7 +1237,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 18];
                     return [4 /*yield*/, parseBody(req)];
                 case 17:
-                    body = _s.sent();
+                    body = _u.sent();
                     payload_1 = body;
                     workspaceId = asString(payload_1.workspaceId);
                     if (!workspaceId) {
@@ -1250,7 +1294,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 20];
                     return [4 /*yield*/, parseBody(req)];
                 case 19:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     ids = Array.isArray(body.ids) ? body.ids.map(function (item) { return asString(item); }).filter(Boolean) : [];
                     if (!workspaceId) {
@@ -1270,7 +1314,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 22];
                     return [4 /*yield*/, parseBody(req)];
                 case 21:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     nif = asNullableString(body.nif);
                     if (!nif) {
@@ -1303,7 +1347,7 @@ function handleApiRequest(req, res) {
                         createdBy: operator,
                         entries: []
                     };
-                    db.prepare("\n      INSERT INTO contrat (\n        id_contrat,\n        nif,\n        duree_contrat,\n        salaire,\n        annee_fiscale,\n        salaire_en_chiffre,\n        titre,\n        lieu_affectation,\n        historique_saisie,\n        workspace_id,\n        dossier_id,\n        status,\n        created_at,\n        updated_at,\n        deleted_at\n      ) VALUES (\n        :id_contrat,\n        :nif,\n        :duree_contrat,\n        :salaire,\n        :annee_fiscale,\n        :salaire_en_chiffre,\n        :titre,\n        :lieu_affectation,\n        :historique_saisie,\n        :workspace_id,\n        :dossier_id,\n        :status,\n        :created_at,\n        :updated_at,\n        NULL\n      )\n    ").run({
+                    db.prepare("\n      INSERT INTO contrat (\n        id_contrat,\n        nif,\n        duree_contrat,\n        salaire,\n        annee_fiscale,\n        salaire_en_chiffre,\n        titre,\n        lieu_affectation,\n        historique_saisie,\n        commentaire,\n        created_by,\n        workspace_id,\n        dossier_id,\n        status,\n        created_at,\n        updated_at,\n        deleted_at\n      ) VALUES (\n        :id_contrat,\n        :nif,\n        :duree_contrat,\n        :salaire,\n        :annee_fiscale,\n        :salaire_en_chiffre,\n        :titre,\n        :lieu_affectation,\n        :historique_saisie,\n        :commentaire,\n        :created_by,\n        :workspace_id,\n        :dossier_id,\n        :status,\n        :created_at,\n        :updated_at,\n        NULL\n      )\n    ").run({
                         id_contrat: id,
                         nif: nif,
                         duree_contrat: durationMonths,
@@ -1313,6 +1357,8 @@ function handleApiRequest(req, res) {
                         titre: position,
                         lieu_affectation: assignment,
                         historique_saisie: JSON.stringify(history_1),
+                        commentaire: asNullableString(body.commentaire),
+                        created_by: (_p = (_o = asNullableString(body.createdBy)) !== null && _o !== void 0 ? _o : operator.id) !== null && _p !== void 0 ? _p : null,
                         workspace_id: workspaceId,
                         dossier_id: asNullableString(body.dossierId),
                         status: status_1,
@@ -1320,7 +1366,7 @@ function handleApiRequest(req, res) {
                         updated_at: timestamp
                     });
                     createdRow = db
-                        .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n        LIMIT 1\n      ")
+                        .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          c.commentaire,\n          c.created_by,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n        LIMIT 1\n      ")
                         .get({ id: id });
                     sendJson(res, 200, mapContract(createdRow));
                     return [2 /*return*/];
@@ -1328,7 +1374,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 24];
                     return [4 /*yield*/, parseBody(req)];
                 case 23:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1369,7 +1415,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_o = result.changes) !== null && _o !== void 0 ? _o : 0);
+                        updatedCount += Number((_q = result.changes) !== null && _q !== void 0 ? _q : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1377,7 +1423,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 26];
                     return [4 /*yield*/, parseBody(req)];
                 case 25:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1421,7 +1467,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_p = result.changes) !== null && _p !== void 0 ? _p : 0);
+                        updatedCount += Number((_r = result.changes) !== null && _r !== void 0 ? _r : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1429,7 +1475,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 28];
                     return [4 /*yield*/, parseBody(req)];
                 case 27:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1470,7 +1516,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_q = result.changes) !== null && _q !== void 0 ? _q : 0);
+                        updatedCount += Number((_s = result.changes) !== null && _s !== void 0 ? _s : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1478,7 +1524,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 30];
                     return [4 /*yield*/, parseBody(req)];
                 case 29:
-                    body = _s.sent();
+                    body = _u.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1505,7 +1551,7 @@ function handleApiRequest(req, res) {
                     if (contractByIdMatch && method === "GET") {
                         id = decodeURIComponent(contractByIdMatch[1]);
                         row = db
-                            .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n          AND c.deleted_at IS NULL\n        LIMIT 1\n      ")
+                            .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          c.commentaire,\n          c.created_by,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n          AND c.deleted_at IS NULL\n        LIMIT 1\n      ")
                             .get({ id: id });
                         sendJson(res, 200, row ? mapContract(row) : null);
                         return [2 /*return*/];
@@ -1514,14 +1560,14 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(contractByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 31:
-                    body = _s.sent();
+                    body = _u.sent();
                     current = db
                         .prepare("\n        SELECT *\n        FROM contrat\n        WHERE id_contrat = :id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ id: id });
                     if (!current) {
                         throw new HttpError(404, "Contrat introuvable.");
                     }
-                    nextNif = (_r = asNullableString(body.nif)) !== null && _r !== void 0 ? _r : asString(current.nif);
+                    nextNif = (_t = asNullableString(body.nif)) !== null && _t !== void 0 ? _t : asString(current.nif);
                     if (!nextNif) {
                         throw new HttpError(400, "Le NIF est obligatoire.");
                     }
@@ -1556,6 +1602,9 @@ function handleApiRequest(req, res) {
                     nextDossierId = body.dossierId !== undefined
                         ? asNullableString(body.dossierId)
                         : asNullableString(current.dossier_id);
+                    nextComment = body.commentaire !== undefined
+                        ? asNullableString(body.commentaire)
+                        : asNullableString(current.commentaire);
                     timestamp = nowIso();
                     operator = operatorFromRequest(req);
                     history_6 = parseHistory(asNullableString(current.historique_saisie));
@@ -1573,6 +1622,7 @@ function handleApiRequest(req, res) {
                     addChange("position", asString(current.titre), nextTitle);
                     addChange("assignment", asString(current.lieu_affectation), nextAssignment);
                     addChange("dossierId", asNullableString(current.dossier_id), nextDossierId);
+                    addChange("commentaire", asNullableString(current.commentaire), nextComment);
                     action = changes_1.length === 1 && changes_1[0].field === "status"
                         ? "status"
                         : changes_1.length === 1 && changes_1[0].field === "dossierId"
@@ -1583,7 +1633,7 @@ function handleApiRequest(req, res) {
                                     ? "comment"
                                     : "modification";
                     appendHistoryEntry(history_6, operator, action, changes_1, timestamp);
-                    db.prepare("\n      UPDATE contrat\n      SET nif = :nif,\n          duree_contrat = :duree_contrat,\n          salaire = :salaire,\n          salaire_en_chiffre = :salaire_en_chiffre,\n          titre = :titre,\n          lieu_affectation = :lieu_affectation,\n          historique_saisie = :historique_saisie,\n          dossier_id = :dossier_id,\n          status = :status,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n    ").run({
+                    db.prepare("\n      UPDATE contrat\n      SET nif = :nif,\n          duree_contrat = :duree_contrat,\n          salaire = :salaire,\n          salaire_en_chiffre = :salaire_en_chiffre,\n          titre = :titre,\n          lieu_affectation = :lieu_affectation,\n          historique_saisie = :historique_saisie,\n          commentaire = :commentaire,\n          dossier_id = :dossier_id,\n          status = :status,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n    ").run({
                         id_contrat: id,
                         nif: nextNif,
                         duree_contrat: nextDuration,
@@ -1592,12 +1642,13 @@ function handleApiRequest(req, res) {
                         titre: nextTitle,
                         lieu_affectation: nextAssignment,
                         historique_saisie: JSON.stringify(history_6),
+                        commentaire: nextComment,
                         dossier_id: nextDossierId,
                         status: nextStatus,
                         updated_at: timestamp
                     });
                     updatedRow = db
-                        .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n        LIMIT 1\n      ")
+                        .prepare("\n        SELECT\n          c.id_contrat,\n          c.workspace_id,\n          c.dossier_id,\n          c.nif,\n          c.status,\n          c.duree_contrat,\n          c.salaire_en_chiffre,\n          c.salaire,\n          c.titre,\n          c.lieu_affectation,\n          c.annee_fiscale,\n          c.created_at,\n          c.updated_at,\n          c.deleted_at,\n          c.historique_saisie,\n          c.commentaire,\n          c.created_by,\n          i.nom,\n          i.prenom,\n          i.sexe,\n          i.ninu,\n          i.adresse\n        FROM contrat c\n        INNER JOIN identification i ON i.nif = c.nif\n        WHERE c.id_contrat = :id\n        LIMIT 1\n      ")
                         .get({ id: id });
                     sendJson(res, 200, mapContract(updatedRow));
                     return [2 /*return*/];
@@ -1605,7 +1656,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 34];
                     return [4 /*yield*/, parseBody(req)];
                 case 33:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1681,7 +1732,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 36];
                     return [4 /*yield*/, parseBody(req)];
                 case 35:
-                    body = _s.sent();
+                    body = _u.sent();
                     workspaceId_1 = asString(body.workspaceId) || "workspace_default";
                     data = body.data;
                     if (!data || !workspaceId_1)
@@ -1735,9 +1786,9 @@ function handleApiRequest(req, res) {
                         res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
                         return [2 /*return*/];
                     }
-                    _s.label = 37;
+                    _u.label = 37;
                 case 37:
-                    _s.trys.push([37, 40, , 41]);
+                    _u.trys.push([37, 40, , 41]);
                     rawNif = nifParam.replace(/\D/g, "");
                     nifFormatted = rawNif;
                     if (rawNif.length === 10) {
@@ -1755,10 +1806,10 @@ function handleApiRequest(req, res) {
                             }
                         })];
                 case 38:
-                    msppRes = _s.sent();
+                    msppRes = _u.sent();
                     return [4 /*yield*/, msppRes.text()];
                 case 39:
-                    html = _s.sent();
+                    html = _u.sent();
                     // Convert relative URLs to absolute URLs so CSS and images load correctly
                     html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
                     html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
@@ -1777,7 +1828,7 @@ function handleApiRequest(req, res) {
                     res.end(html);
                     return [3 /*break*/, 41];
                 case 40:
-                    err_1 = _s.sent();
+                    err_1 = _u.sent();
                     res.statusCode = 500;
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));

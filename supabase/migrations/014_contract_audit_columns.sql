@@ -106,6 +106,13 @@ begin
       'newValue', new.commentaire
     );
   end if;
+  if new.deleted_at is distinct from old.deleted_at then
+    changed_fields := changed_fields || jsonb_build_object(
+      'field', 'deletedAt',
+      'previousValue', old.deleted_at,
+      'newValue', new.deleted_at
+    );
+  end if;
 
   if jsonb_array_length(changed_fields) = 0 then
     return new;
@@ -114,7 +121,14 @@ begin
   current_entries := coalesce(base_history->'entries', '[]'::jsonb);
   audit_event := jsonb_build_object(
     'id', gen_random_uuid()::text,
-    'action', 'modification',
+    'action', case
+      when new.deleted_at is not null and old.deleted_at is null then 'deletion'
+      when new.status is distinct from old.status then 'status'
+      when new.dossier_id is distinct from old.dossier_id then 'dossier'
+      when new.duree_contrat is distinct from old.duree_contrat then 'duration'
+      when new.commentaire is distinct from old.commentaire then 'comment'
+      else 'modification'
+    end,
     'at', now()::text,
     'actor', jsonb_build_object('name', 'Système / modification externe'),
     'changes', changed_fields
