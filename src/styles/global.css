@@ -5632,6 +5632,7 @@ button {
 }
 
 .icon-btn.contracts-sheet-action-btn,
+.icon-btn.contracts-sheet-add-row-btn,
 .icon-btn.contracts-sheet-delete-btn,
 .icon-btn.contracts-sheet-comment-btn {
   width: 24px;
@@ -5643,8 +5644,19 @@ button {
 }
 
 .icon-btn.contracts-sheet-action-btn span,
+.icon-btn.contracts-sheet-add-row-btn span,
 .icon-btn.contracts-sheet-delete-btn span {
   font-size: 14px;
+}
+
+.icon-btn.contracts-sheet-add-row-btn {
+  color: var(--success);
+}
+
+.icon-btn.contracts-sheet-add-row-btn:hover {
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+  color: var(--success);
+  background: var(--success-soft);
 }
 
 .contracts-sheet-state-actions.has-visible-action {

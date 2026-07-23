@@ -649,6 +649,19 @@ export function ContractsSpreadsheetView({
     });
   }
 
+  function insertNewRowAfter(rowId: string) {
+    const insertedRow = createNewRow();
+    insertedRow.draft = buildResetDraft();
+    setNewRows((prev) => {
+      const index = prev.findIndex((row) => row.id === rowId);
+      if (index < 0) return [...prev, insertedRow];
+      return [...prev.slice(0, index + 1), insertedRow, ...prev.slice(index + 1)];
+    });
+    window.requestAnimationFrame(() => {
+      focusNewRowCell(insertedRow.id, 0);
+    });
+  }
+
   function handleGridArrowNavigation(
     event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     rowKey: string,
@@ -1273,6 +1286,8 @@ export function ContractsSpreadsheetView({
       showCommentButton?: boolean;
       hasComment?: boolean;
       onCommentClick?: () => void;
+      onAddClick?: () => void;
+      addLabel?: string;
       onDeleteClick?: () => void;
       deleteLabel?: string;
     }
@@ -1306,8 +1321,23 @@ export function ContractsSpreadsheetView({
         <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
           {icon}
         </span>
-        {showCommentButton || options?.onDeleteClick ? (
+        {showCommentButton || options?.onAddClick || options?.onDeleteClick ? (
           <div className={`contracts-sheet-state-actions ${hasComment ? "has-visible-action" : ""}`}>
+            {options?.onAddClick ? (
+              <button
+                type="button"
+                className="icon-btn contracts-sheet-add-row-btn"
+                title={options.addLabel ?? "Ajouter une ligne en dessous"}
+                aria-label={options.addLabel ?? "Ajouter une ligne en dessous"}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  options.onAddClick?.();
+                }}
+              >
+                <span className="material-symbols-rounded">add</span>
+              </button>
+            ) : null}
             {showCommentButton ? (
               <button
                 type="button"
@@ -1551,10 +1581,12 @@ export function ContractsSpreadsheetView({
             return (
               <div key={row.id} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${creating ? "is-saving" : ""}`}>
-                  {renderRowStatusIcon(syncState, label, hasValues && !creating ? {
-                    onDeleteClick: () => clearNewRow(row.id),
+                  {renderRowStatusIcon(syncState, label, {
+                    onAddClick: creating ? undefined : () => insertNewRowAfter(row.id),
+                    addLabel: "Ajouter une ligne en dessous",
+                    onDeleteClick: hasValues && !creating ? () => clearNewRow(row.id) : undefined,
                     deleteLabel: "Effacer cette ligne"
-                  } : undefined)}
+                  })}
                   <div
                     className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
                     style={{ gridTemplateColumns, opacity: isBlocked ? 0.5 : 1, pointerEvents: isBlocked ? "none" : undefined }}

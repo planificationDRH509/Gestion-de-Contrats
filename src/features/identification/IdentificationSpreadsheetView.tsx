@@ -271,10 +271,24 @@ export function IdentificationSpreadsheetView({
     });
   }
 
+  function insertNewRowAfter(rowId: string) {
+    const insertedRow = createNewRow();
+    setNewRows((prev) => {
+      const index = prev.findIndex((row) => row.id === rowId);
+      if (index < 0) return [...prev, insertedRow];
+      return [...prev.slice(0, index + 1), insertedRow, ...prev.slice(index + 1)];
+    });
+    window.requestAnimationFrame(() => {
+      focusGridCell(insertedRow.id, 0);
+    });
+  }
+
   function renderRowStatusIcon(
     syncState: SyncState,
     label: string,
     options?: {
+      onAddClick?: () => void;
+      addLabel?: string;
       onDeleteClick?: () => void;
       deleteLabel?: string;
     }
@@ -305,8 +319,24 @@ export function IdentificationSpreadsheetView({
         <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
           {icon}
         </span>
-        {options?.onDeleteClick ? (
+        {options?.onAddClick || options?.onDeleteClick ? (
           <div className="contracts-sheet-state-actions">
+            {options?.onAddClick ? (
+              <button
+                type="button"
+                className="icon-btn contracts-sheet-add-row-btn"
+                title={options.addLabel ?? "Ajouter une ligne en dessous"}
+                aria-label={options.addLabel ?? "Ajouter une ligne en dessous"}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  options.onAddClick?.();
+                }}
+              >
+                <span className="material-symbols-rounded">add</span>
+              </button>
+            ) : null}
+            {options?.onDeleteClick ? (
             <button
               type="button"
               className="icon-btn contracts-sheet-delete-btn"
@@ -322,6 +352,7 @@ export function IdentificationSpreadsheetView({
             >
               <span className="material-symbols-rounded">delete</span>
             </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -599,10 +630,12 @@ export function IdentificationSpreadsheetView({
 
                 return (
               <div className="contracts-sheet-row-shell">
-                {renderRowStatusIcon(syncState, label, hasValues && !savingRows[row.id] ? {
-                  onDeleteClick: () => clearNewRow(row.id),
+                {renderRowStatusIcon(syncState, label, {
+                  onAddClick: savingRows[row.id] ? undefined : () => insertNewRowAfter(row.id),
+                  addLabel: "Ajouter une ligne en dessous",
+                  onDeleteClick: hasValues && !savingRows[row.id] ? () => clearNewRow(row.id) : undefined,
                   deleteLabel: "Effacer cette ligne"
-                } : undefined)}
+                })}
                 <div className="contracts-sheet-row" style={{ gridTemplateColumns }}>
                   <input
                     data-sheet-row={row.id}
