@@ -17,7 +17,7 @@ const SEVERITY_LABELS: Record<QualitySeverity, string> = {
 };
 
 export function QualityPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
   const { data: contractData, isLoading: contractsLoading } = useContractsList({
     workspaceId,
@@ -201,17 +201,17 @@ export function QualityPage() {
                     Corriger
                   </button>
                 ) : null}
-                {issue.contractId ? (
+                {issue.contractId && can("contracts.edit") ? (
                   <Link className="btn btn-outline" to={`/app/contrats/${issue.contractId}/modifier`}>
                     <span className="material-symbols-rounded">edit</span>
                     Vérifier
                   </Link>
-                ) : (
+                ) : !issue.contractId && can("identification.manage") ? (
                   <Link className="btn btn-outline" to={`/app/identification?q=${encodeURIComponent(issue.entityId)}`}>
                     <span className="material-symbols-rounded">badge</span>
                     Identification
                   </Link>
-                )}
+                ) : null}
               </div>
             </article>
           ))}

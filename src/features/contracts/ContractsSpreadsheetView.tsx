@@ -144,6 +144,7 @@ type ContractsSpreadsheetViewProps = {
   userId: string;
   contracts: Contract[];
   isLoading: boolean;
+  canDelete: boolean;
   showToolbar?: boolean;
   zoomMode?: SpreadsheetZoomMode;
   zoomPercent?: number;
@@ -270,6 +271,7 @@ export function ContractsSpreadsheetView({
   userId,
   contracts,
   isLoading,
+  canDelete,
   showToolbar = true,
   zoomMode = "custom",
   zoomPercent = 100
@@ -1845,11 +1847,13 @@ export function ContractsSpreadsheetView({
                       showCommentButton: true,
                       hasComment: Boolean(contract.commentaire?.trim()),
                       onCommentClick: () => openCommentDialog(contract),
-                      onDeleteClick: () => {
-                        if (window.confirm("Supprimer ce contrat ?")) {
-                          deleteContract.mutate({ id: contract.id, workspaceId });
-                        }
-                      }
+                      onDeleteClick: canDelete
+                        ? () => {
+                            if (window.confirm("Supprimer ce contrat ?")) {
+                              deleteContract.mutate({ id: contract.id, workspaceId });
+                            }
+                          }
+                        : undefined
                     }
                   )}
                   <div

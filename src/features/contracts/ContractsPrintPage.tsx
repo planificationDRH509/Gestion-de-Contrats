@@ -8,7 +8,7 @@ import { appendPrintHistory } from "../../lib/printHistory";
 export function ContractsPrintPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
@@ -49,17 +49,19 @@ export function ContractsPrintPage() {
         return;
       }
       lastAfterPrintAtRef.current = now;
-      const shouldMarkAsPrinted = window.confirm(
-        ids.length === 1
-          ? 'Voulez-vous changer l’état de ce contrat en « Imprimé » ?'
-          : `Voulez-vous changer l’état de ces ${ids.length} contrats en « Imprimé » ?`
-      );
-      if (shouldMarkAsPrinted) {
-        changeContractsStatus.mutate({
-          workspaceId,
-          contractIds: ids,
-          status: "imprime"
-        });
+      if (can("contracts.change_status")) {
+        const shouldMarkAsPrinted = window.confirm(
+          ids.length === 1
+            ? 'Voulez-vous changer l’état de ce contrat en « Imprimé » ?'
+            : `Voulez-vous changer l’état de ces ${ids.length} contrats en « Imprimé » ?`
+        );
+        if (shouldMarkAsPrinted) {
+          changeContractsStatus.mutate({
+            workspaceId,
+            contractIds: ids,
+            status: "imprime"
+          });
+        }
       }
       if (user && data && data.length > 0) {
         appendPrintHistory(user.id, workspaceId, data);
@@ -67,7 +69,7 @@ export function ContractsPrintPage() {
     };
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [ids, workspaceId, changeContractsStatus, user, data]);
+  }, [ids, workspaceId, changeContractsStatus, user, data, can]);
 
   if (isLoading) {
     return <div className="card">Chargement des contrats…</div>;

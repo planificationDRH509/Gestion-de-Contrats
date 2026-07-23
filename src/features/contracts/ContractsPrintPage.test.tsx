@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
       status: "saisie"
     }
   ],
+  canChangeStatus: true,
   mutate: vi.fn(),
   navigate: vi.fn()
 }));
@@ -22,7 +23,8 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../auth/auth", () => ({
   useAuth: () => ({
-    user: { id: "user-1", workspaceId: "workspace-1" }
+    user: { id: "user-1", workspaceId: "workspace-1" },
+    can: () => mocks.canChangeStatus
   })
 }));
 
@@ -54,6 +56,7 @@ describe("ContractsPrintPage", () => {
     mocks.appendPrintHistory.mockReset();
     mocks.mutate.mockReset();
     mocks.navigate.mockReset();
+    mocks.canChangeStatus = true;
     vi.spyOn(window, "print").mockImplementation(() => undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
@@ -119,6 +122,17 @@ describe("ContractsPrintPage", () => {
 
     act(() => window.dispatchEvent(new Event("afterprint")));
 
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.appendPrintHistory).toHaveBeenCalledOnce();
+  });
+
+  it("does not offer a status change to a read-only account", () => {
+    mocks.canChangeStatus = false;
+    render(<ContractsPrintPage />);
+
+    act(() => window.dispatchEvent(new Event("afterprint")));
+
+    expect(window.confirm).not.toHaveBeenCalled();
     expect(mocks.mutate).not.toHaveBeenCalled();
     expect(mocks.appendPrintHistory).toHaveBeenCalledOnce();
   });

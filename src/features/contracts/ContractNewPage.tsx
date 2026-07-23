@@ -57,7 +57,7 @@ function normalize(str: string): string {
 }
 
 export function ContractNewPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const createContract = useCreateContract();
@@ -1113,6 +1113,7 @@ export function ContractNewPage() {
                 userId={userId}
                 contracts={spreadsheetData?.items ?? []}
                 isLoading={spreadsheetLoading}
+                canDelete={can("contracts.delete")}
                 showToolbar={false}
                 zoomMode={sheetZoomMode}
                 zoomPercent={sheetZoomPercent}
@@ -1126,6 +1127,7 @@ export function ContractNewPage() {
               userId={userId}
               contracts={spreadsheetData?.items ?? []}
               isLoading={spreadsheetLoading}
+              canDelete={can("contracts.delete")}
               zoomMode={sheetZoomMode}
               zoomPercent={sheetZoomPercent}
             />

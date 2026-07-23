@@ -10,7 +10,7 @@ export function useAppUsers() {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from("app_users")
-        .select("*")
+        .select("id, username, full_name, role, created_at, updated_at")
         .order("full_name", { ascending: true });
 
       if (error) throw error;

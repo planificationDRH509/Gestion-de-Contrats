@@ -34,7 +34,7 @@ export function UserManagementPage() {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("app_users")
-      .select("*")
+      .select("id, username, full_name, role, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
