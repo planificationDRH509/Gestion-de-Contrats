@@ -67,6 +67,7 @@ import {
 } from "../../lib/dossier";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
+import { matchesContractSearch } from "../../lib/personSearch";
 
 function repositoryError(message: string, cause?: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -545,6 +546,7 @@ class SupabaseContractRepository implements ContractRepository {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     const hasDateFilter = Boolean(params.dateFilterMode && params.dateFilterMode !== "all");
+    const requiresClientFiltering = hasDateFilter || Boolean(params.query?.trim());
 
     let query;
     if (params.tagId) {
@@ -564,11 +566,6 @@ class SupabaseContractRepository implements ContractRepository {
 
     if (params.onlyMine && params.userId) {
       query = query.eq("created_by", params.userId);
-    }
-
-    if (params.query) {
-      const escaped = params.query.replace(/,/g, " ");
-      query = query.or(`titre.ilike.%${escaped}%,lieu_affectation.ilike.%${escaped}%,nif.ilike.%${escaped}%`);
     }
 
     if (params.status) {
@@ -600,7 +597,7 @@ class SupabaseContractRepository implements ContractRepository {
         query = query.order("created_at", { ascending: false });
     }
 
-    if (hasDateFilter) {
+    if (requiresClientFiltering) {
       const { data, error } = await query;
       if (error || !data) {
         throw repositoryError("Impossible de charger les contrats.", error);
@@ -608,8 +605,9 @@ class SupabaseContractRepository implements ContractRepository {
 
       const filteredItems = data
         .map(mapContract)
+        .filter((contract) => !params.query?.trim() || matchesContractSearch(contract, params.query))
         .filter((contract) =>
-          matchesContractDateFilter(
+          !hasDateFilter || matchesContractDateFilter(
             contract,
             params.dateFilterMode,
             {

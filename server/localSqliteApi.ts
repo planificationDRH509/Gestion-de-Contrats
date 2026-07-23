@@ -347,15 +347,34 @@ function contractMatchesQuery(
   contract: ReturnType<typeof mapContract>,
   query: string
 ): boolean {
-  const normalized = query.toLowerCase();
-  return [
+  const normalizedQuery = query
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("fr")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!normalizedQuery) return true;
+
+  const values = [
     contract.firstName,
     contract.lastName,
     contract.nif ?? "",
     contract.ninu ?? "",
     contract.position,
     contract.assignment
-  ].some((value) => value.toLowerCase().includes(normalized));
+  ];
+  const queryDigits = query.replace(/\D/g, "");
+  if (queryDigits && !normalizedQuery.replace(/\d/g, "").trim()) {
+    return values.some((value) => value.replace(/\D/g, "").includes(queryDigits));
+  }
+
+  const searchableText = values
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("fr")
+    .replace(/[^a-z0-9]+/g, " ");
+  return normalizedQuery.split(/\s+/).every((token) => searchableText.includes(token));
 }
 
 function sortContracts(

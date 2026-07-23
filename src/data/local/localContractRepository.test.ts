@@ -93,6 +93,32 @@ describe("LocalContractRepository", () => {
     expect(onlyPrinted.items[0].status).toBe("imprime");
   });
 
+  it("searches contracts by name, NIF and NINU", async () => {
+    const workspaceId = "workspace_contract_search";
+    const contracts = new LocalContractRepository();
+
+    await contracts.create({
+      workspaceId,
+      applicantId: null,
+      status: "saisie",
+      gender: "Femme",
+      firstName: "Élodie",
+      lastName: "Saint-Fleur",
+      nif: "123-456-789-0",
+      ninu: "9876543210",
+      address: "Rue 1",
+      position: "Analyste",
+      assignment: "RH",
+      salaryNumber: 30000,
+      salaryText: "trente mille",
+      durationMonths: 12
+    });
+
+    expect((await contracts.list({ workspaceId, query: "elodie" })).total).toBe(1);
+    expect((await contracts.list({ workspaceId, query: "1234567890" })).total).toBe(1);
+    expect((await contracts.list({ workspaceId, query: "987 654" })).total).toBe(1);
+  });
+
   it("preserves pending local edits when a remote snapshot is downloaded", async () => {
     const workspaceId = "workspace_snapshot_test";
     const contracts = new LocalContractRepository();

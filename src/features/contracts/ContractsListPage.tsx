@@ -1207,7 +1207,7 @@ export function ContractsListPage() {
                 <span className="material-symbols-rounded icon">search</span>
                 <input
                   className="input"
-                  placeholder="Rechercher par nom, NIF, poste..."
+                  placeholder="Rechercher par nom, NIF ou NINU..."
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 />

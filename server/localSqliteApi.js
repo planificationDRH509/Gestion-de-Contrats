@@ -290,15 +290,33 @@ function matchesContractDateFilter(contract, mode, options) {
 }
 function contractMatchesQuery(contract, query) {
     var _a, _b;
-    var normalized = query.toLowerCase();
-    return [
+    var normalizedQuery = query
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("fr")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    if (!normalizedQuery)
+        return true;
+    var values = [
         contract.firstName,
         contract.lastName,
         (_a = contract.nif) !== null && _a !== void 0 ? _a : "",
         (_b = contract.ninu) !== null && _b !== void 0 ? _b : "",
         contract.position,
         contract.assignment
-    ].some(function (value) { return value.toLowerCase().includes(normalized); });
+    ];
+    var queryDigits = query.replace(/\D/g, "");
+    if (queryDigits && !normalizedQuery.replace(/\d/g, "").trim()) {
+        return values.some(function (value) { return value.replace(/\D/g, "").includes(queryDigits); });
+    }
+    var searchableText = values
+        .join(" ")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("fr")
+        .replace(/[^a-z0-9]+/g, " ");
+    return normalizedQuery.split(/\s+/).every(function (token) { return searchableText.includes(token); });
 }
 function sortContracts(contracts, sort) {
     var sorted = __spreadArray([], contracts, true);

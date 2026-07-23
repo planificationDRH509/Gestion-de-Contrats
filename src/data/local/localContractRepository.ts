@@ -12,21 +12,14 @@ import { loadDb, saveDb, selectDb, type LocalDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
+import { matchesContractSearch } from "../../lib/personSearch";
 
 function now() {
   return new Date().toISOString();
 }
 
 function matchesQuery(contract: Contract, query: string) {
-  const normalized = query.toLowerCase();
-  return [
-    contract.firstName,
-    contract.lastName,
-    contract.nif ?? "",
-    contract.ninu ?? "",
-    contract.position,
-    contract.assignment
-  ].some((value) => value.toLowerCase().includes(normalized));
+  return matchesContractSearch(contract, query);
 }
 
 function sortContracts(contracts: Contract[], sort?: ContractListParams["sort"]) {

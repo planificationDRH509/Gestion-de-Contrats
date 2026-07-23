@@ -1354,9 +1354,32 @@ export function ContractsSpreadsheetView({
     : null;
 
   return (
-    <div className="contracts-sheet-wrapper" ref={sheetRootRef}>
+    <div className="contracts-sheet-wrapper contracts-data-sheet" ref={sheetRootRef}>
+      <div className="contracts-sheet-overview">
+        <div className="contracts-sheet-overview-main">
+          <span className="material-symbols-rounded contracts-sheet-overview-icon">table_view</span>
+          <div>
+            <strong>Tableur des contrats</strong>
+            <span>La saisie et les modifications sont enregistrées automatiquement</span>
+          </div>
+        </div>
+        <div className="contracts-sheet-overview-stats">
+          <span className="contracts-sheet-stat is-accent">
+            <span className="material-symbols-rounded">add_circle</span>
+            {newRows.length} lignes de saisie
+          </span>
+          <span className="contracts-sheet-stat">
+            <span className="material-symbols-rounded">description</span>
+            {visibleContracts.length} contrat{visibleContracts.length > 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
       {showToolbar ? (
-        <div className="contracts-sheet-toolbar">
+        <div className="contracts-sheet-toolbar contracts-sheet-toolbar-defaults">
+          <div className="contracts-sheet-toolbar-label">
+            <span className="material-symbols-rounded">auto_fix_high</span>
+            Valeurs par défaut
+          </div>
           <div className="contracts-sheet-defaults-bar">
             <div className="defaults-bar-item">
               <label className={`defaults-checkbox ${useDefaultDossier ? "is-active" : ""}`}>
@@ -1477,7 +1500,9 @@ export function ContractsSpreadsheetView({
           } as React.CSSProperties}
         >
           <div className="contracts-sheet-header-shell">
-            <div className="contracts-sheet-state-head" aria-hidden="true" />
+            <div className="contracts-sheet-state-head" title="État de synchronisation">
+              <span className="material-symbols-rounded">sync</span>
+            </div>
             <div className="contracts-sheet-header" style={{ gridTemplateColumns }}>
               {COLUMNS.map((column) => (
                 <div key={column.key} className="contracts-sheet-head-cell">
@@ -1751,6 +1776,12 @@ export function ContractsSpreadsheetView({
             );
           })}
 
+          <div className="contracts-sheet-divider" role="separator">
+            <span className="material-symbols-rounded">database</span>
+            <strong>Contrats enregistrés</strong>
+            <span>{visibleContracts.length}</span>
+          </div>
+
           {visibleContracts.map((contract) => {
             const rowKey = getExistingRowKey(contract.id);
             const draft = getRowDraft(contract);
@@ -1945,6 +1976,16 @@ export function ContractsSpreadsheetView({
               Aucun contrat existant. Utilisez les lignes vierges ci-dessus pour en créer.
             </div>
           ) : null}
+        </div>
+      </div>
+      <div className="contracts-sheet-footer">
+        <div className="contracts-sheet-footer-count">
+          <span className="contracts-sheet-footer-dot" />
+          <strong>{visibleContracts.length}</strong> contrat{visibleContracts.length > 1 ? "s" : ""} affiché{visibleContracts.length > 1 ? "s" : ""}
+        </div>
+        <div className="contracts-sheet-keyboard-hint">
+          <span className="material-symbols-rounded">keyboard</span>
+          Flèches pour naviguer · Tab pour avancer
         </div>
       </div>
       <ContractCommentModal

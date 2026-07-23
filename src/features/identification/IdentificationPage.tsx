@@ -73,7 +73,7 @@ export function IdentificationPage() {
             <input 
               type="text" 
               className="input" 
-              placeholder="Chercher NIF ou NINU..." 
+              placeholder="Rechercher par nom, NIF ou NINU..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

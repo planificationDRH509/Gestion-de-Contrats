@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Gender } from "../../data/types";
 import { formatFirstName, formatLastName } from "../../lib/format";
+import { matchesPersonSearch } from "../../lib/personSearch";
 import {
   useAddresses
 } from "../settings/suggestionsApi";
@@ -162,12 +163,12 @@ export function IdentificationSpreadsheetView({
 
   const filteredIdentities = useMemo(() => {
     if (!searchQuery.trim()) return identities;
-    const q = searchQuery.toLowerCase().replace(/\D/g, "");
-    return identities.filter(i => {
-      const nifDigits = i.nif.replace(/\D/g, "");
-      const ninuDigits = (i.ninu || "").replace(/\D/g, "");
-      return nifDigits.includes(q) || ninuDigits.includes(q);
-    });
+    return identities.filter((identity) => matchesPersonSearch({
+      firstName: identity.prenom,
+      lastName: identity.nom,
+      nif: identity.nif,
+      ninu: identity.ninu
+    }, searchQuery));
   }, [identities, searchQuery]);
 
   // Reset page when search changes
@@ -181,10 +182,17 @@ export function IdentificationSpreadsheetView({
     return filteredIdentities.slice(start, start + pageSize);
   }, [filteredIdentities, currentPage, pageSize]);
 
-  const columnWidths = useMemo<Record<SpreadsheetFieldKey, number>>(() =>
-    COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: col.width }), {} as any),
-    []
+  const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
+    () => COLUMNS.reduce((acc, column) => {
+      acc[column.key] = column.width;
+      return acc;
+    }, {} as Record<SpreadsheetFieldKey, number>)
   );
+  const [resizing, setResizing] = useState<{
+    key: SpreadsheetFieldKey;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const sheetRootRef = useRef<HTMLDivElement>(null);
   const sheetScrollRef = useRef<HTMLDivElement>(null);
@@ -218,6 +226,35 @@ export function IdentificationSpreadsheetView({
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
   }, []);
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const onMouseMove = (event: MouseEvent) => {
+      const column = COLUMNS.find((item) => item.key === resizing.key);
+      if (!column) return;
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizing.key]: Math.max(
+          column.min,
+          resizing.startWidth + (event.clientX - resizing.startX)
+        )
+      }));
+    };
+    const onMouseUp = () => {
+      setResizing(null);
+      document.body.classList.remove("sheet-is-resizing");
+    };
+
+    document.body.classList.add("sheet-is-resizing");
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.body.classList.remove("sheet-is-resizing");
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [resizing]);
 
   function clearNewRow(rowId: string) {
     setNewRows((prev) =>
@@ -484,8 +521,30 @@ export function IdentificationSpreadsheetView({
       : Math.max(0.5, Math.min(2, zoomPercent / 100));
 
   return (
-    <div className="contracts-sheet-wrapper" ref={sheetRootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="contracts-sheet-scroll" ref={sheetScrollRef} style={{ flex: 1, overflowY: 'auto' }}>
+    <div className="contracts-sheet-wrapper identification-sheet-wrapper" ref={sheetRootRef}>
+      <div className="contracts-sheet-overview">
+        <div className="contracts-sheet-overview-main">
+          <span className="material-symbols-rounded contracts-sheet-overview-icon">table_view</span>
+          <div>
+            <strong>Tableur d’identification</strong>
+            <span>Ajoutez ou mettez à jour plusieurs personnes rapidement</span>
+          </div>
+        </div>
+        <div className="contracts-sheet-overview-stats">
+          {searchQuery.trim() ? (
+            <span className="contracts-sheet-stat is-accent">
+              <span className="material-symbols-rounded">filter_alt</span>
+              {filteredIdentities.length} résultat{filteredIdentities.length > 1 ? "s" : ""}
+            </span>
+          ) : null}
+          <span className="contracts-sheet-stat">
+            <span className="material-symbols-rounded">group</span>
+            {identities.length} fiche{identities.length > 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+
+      <div className="contracts-sheet-scroll" ref={sheetScrollRef}>
         <div
           className="contracts-sheet-grid"
           style={{
@@ -494,11 +553,26 @@ export function IdentificationSpreadsheetView({
           } as React.CSSProperties}
         >
           <div className="contracts-sheet-header-shell">
-            <div className="contracts-sheet-state-head" />
+            <div className="contracts-sheet-state-head" title="État de synchronisation">
+              <span className="material-symbols-rounded">sync</span>
+            </div>
             <div className="contracts-sheet-header" style={{ gridTemplateColumns }}>
               {COLUMNS.map(c => (
                 <div key={c.key} className="contracts-sheet-head-cell">
                   <span>{c.label}</span>
+                  <button
+                    type="button"
+                    className="contracts-sheet-resizer"
+                    aria-label={`Redimensionner ${c.label}`}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      setResizing({
+                        key: c.key,
+                        startX: event.clientX,
+                        startWidth: columnWidths[c.key]
+                      });
+                    }}
+                  />
                 </div>
               ))}
             </div>
@@ -625,6 +699,12 @@ export function IdentificationSpreadsheetView({
             </div>
           ))}
 
+          <div className="contracts-sheet-divider" role="separator">
+            <span className="material-symbols-rounded">database</span>
+            <strong>Fiches enregistrées</strong>
+            <span>{filteredIdentities.length}</span>
+          </div>
+
           {/* Existing Rows (Paginated) */}
           {paginatedIdentities.map(identity => {
             const isEditing = editingRowId === identity.nif;
@@ -649,28 +729,32 @@ export function IdentificationSpreadsheetView({
                <div key={identity.nif} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${isEditing ? 'is-editing' : ''}`}>
                   <div className={`contracts-sheet-state-cell ${syncState === "saved" ? "saved" : syncState === "saving" ? "pending" : syncState === "error" ? "error" : "unsaved"}`} title={label} aria-label={label}>
-                    {savingRows[identity.nif] ? (
-                      <span className="material-symbols-rounded contracts-sheet-state-status-icon is-spinning">sync</span>
-                    ) : isEditing ? (
-                      <div className="contracts-sheet-inline-actions">
-                        <button className="icon-btn contracts-sheet-action-btn save" onClick={() => handleSaveExisting(identity.nif)} title="Enregistrer" aria-label="Enregistrer">
-                          <span className="material-symbols-rounded">check_circle</span>
-                        </button>
-                        <button className="icon-btn contracts-sheet-action-btn cancel" onClick={() => cancelEditing(identity.nif)} title="Annuler" aria-label="Annuler">
-                          <span className="material-symbols-rounded">cancel</span>
-                        </button>
+                    <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${savingRows[identity.nif] ? "is-spinning" : ""}`}>
+                      {savingRows[identity.nif] ? "sync" : syncState === "error" ? "error" : isEditing ? "edit" : "check_circle"}
+                    </span>
+                    {!savingRows[identity.nif] ? (
+                      <div className={`contracts-sheet-state-actions ${isEditing ? "has-visible-action" : ""}`}>
+                        {isEditing ? (
+                          <>
+                            <button className="icon-btn contracts-sheet-action-btn save" onClick={() => handleSaveExisting(identity.nif)} title="Enregistrer" aria-label="Enregistrer">
+                              <span className="material-symbols-rounded">check</span>
+                            </button>
+                            <button className="icon-btn contracts-sheet-action-btn cancel" onClick={() => cancelEditing(identity.nif)} title="Annuler" aria-label="Annuler">
+                              <span className="material-symbols-rounded">close</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
+                              <span className="material-symbols-rounded">edit</span>
+                            </button>
+                            <button className="icon-btn contracts-sheet-action-btn delete" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate({ nif: identity.nif, workspaceId }); }} title="Supprimer cette entrée" aria-label="Supprimer cette entrée">
+                              <span className="material-symbols-rounded">delete</span>
+                            </button>
+                          </>
+                        )}
                       </div>
-                    ) : (
-                      <div className="contracts-sheet-inline-actions">
-                        <span className="material-symbols-rounded contracts-sheet-state-status-icon" title="Enregistré">check_circle</span>
-                        <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
-                          <span className="material-symbols-rounded">edit</span>
-                        </button>
-                        <button className="icon-btn contracts-sheet-action-btn delete" onClick={() => { if(confirm("Supprimer cette entrée ?")) deleteIdentity.mutate({ nif: identity.nif, workspaceId }); }} title="Supprimer cette entrée" aria-label="Supprimer cette entrée">
-                          <span className="material-symbols-rounded">delete</span>
-                        </button>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
 
                   <div className="contracts-sheet-row" style={{ gridTemplateColumns }}>
@@ -760,7 +844,7 @@ export function IdentificationSpreadsheetView({
                         <div className="contracts-sheet-cell-text">{identity.nom}</div>
                         <div className="contracts-sheet-cell-text">{identity.sexe}</div>
                         <div className="contracts-sheet-cell-text">{identity.ninu || "-"}</div>
-                        <div className="contracts-sheet-cell-text" style={{ fontSize: '12px' }}>{identity.adresse}</div>
+                        <div className="contracts-sheet-cell-text is-secondary">{identity.adresse}</div>
                       </>
                     )}
                   </div>
@@ -771,45 +855,38 @@ export function IdentificationSpreadsheetView({
           })}
 
           {filteredIdentities.length === 0 && searchQuery.trim() !== "" && (
-            <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+            <div className="empty-state contracts-sheet-empty-state">
               Aucun résultat pour "{searchQuery}"
             </div>
           )}
         </div>
       </div>
 
-      <div className="contracts-sheet-footer" style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        padding: '8px 16px', 
-        borderTop: '1px solid var(--border-subtle)',
-        background: 'var(--surface-sunken)',
-        fontSize: '13px'
-      }}>
-        <div style={{ color: 'var(--ink-muted)' }}>
-          Total: <strong>{filteredIdentities.length}</strong> entrées 
-          {searchQuery && ` (filtrées)`}
+      <div className="contracts-sheet-footer">
+        <div className="contracts-sheet-footer-count">
+          <span className="contracts-sheet-footer-dot" />
+          <strong>{filteredIdentities.length}</strong> fiche{filteredIdentities.length > 1 ? "s" : ""}
+          {searchQuery && <span>filtrée{filteredIdentities.length > 1 ? "s" : ""}</span>}
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ color: 'var(--ink-muted)' }}>
+        <div className="contracts-sheet-pagination">
+          <div>
             Page <strong>{currentPage}</strong> sur {totalPages}
           </div>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div className="contracts-sheet-pagination-actions">
             <button 
-              className="icon-btn" 
+              className="icon-btn contracts-sheet-page-btn"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => prev - 1)}
-              style={{ padding: '4px' }}
+              aria-label="Page précédente"
             >
               <span className="material-symbols-rounded">chevron_left</span>
             </button>
             <button 
-              className="icon-btn" 
+              className="icon-btn contracts-sheet-page-btn"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => prev + 1)}
-              style={{ padding: '4px' }}
+              aria-label="Page suivante"
             >
               <span className="material-symbols-rounded">chevron_right</span>
             </button>
