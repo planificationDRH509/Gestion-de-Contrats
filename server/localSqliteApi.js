@@ -340,36 +340,134 @@ function fiscalYearFor(date) {
     return { code: code, label: label };
 }
 function parseHistory(value) {
+    var fallbackActor = { name: "Administrateur" };
     if (!value) {
         return {
+            version: 2,
             createdAt: nowIso(),
-            createdBy: "Administrateur",
-            updates: []
+            createdBy: fallbackActor,
+            entries: []
         };
     }
     try {
         var parsed = JSON.parse(value);
+        if ((parsed === null || parsed === void 0 ? void 0 : parsed.version) === 2 && Array.isArray(parsed.entries)) {
+            return {
+                version: 2,
+                createdAt: asString(parsed.createdAt) || nowIso(),
+                createdBy: normalizeAuditActor(parsed.createdBy, fallbackActor),
+                entries: parsed.entries
+                    .filter(function (entry) { return entry && typeof entry === "object"; })
+                    .map(function (entry) {
+                    var item = entry;
+                    return {
+                        id: asString(item.id) || randomUUID(),
+                        action: normalizeAuditAction(item.action),
+                        at: asString(item.at) || nowIso(),
+                        actor: normalizeAuditActor(item.actor, fallbackActor),
+                        changes: Array.isArray(item.changes)
+                            ? item.changes
+                                .filter(function (change) { return change && typeof change === "object"; })
+                                .map(function (change) {
+                                var auditChange = change;
+                                return {
+                                    field: asString(auditChange.field),
+                                    previousValue: asAuditValue(auditChange.previousValue),
+                                    newValue: asAuditValue(auditChange.newValue)
+                                };
+                            })
+                                .filter(function (change) { return change.field; })
+                            : []
+                    };
+                })
+            };
+        }
+        var createdAt_1 = asString(parsed === null || parsed === void 0 ? void 0 : parsed.createdAt) || nowIso();
+        var createdBy_1 = normalizeAuditActor(parsed === null || parsed === void 0 ? void 0 : parsed.createdBy, fallbackActor);
+        var legacyUpdates = Array.isArray(parsed === null || parsed === void 0 ? void 0 : parsed.updates) ? parsed.updates : [];
         return {
-            createdAt: asString(parsed.createdAt) || nowIso(),
-            createdBy: asString(parsed.createdBy) || "Administrateur",
-            updates: Array.isArray(parsed.updates)
-                ? parsed.updates.map(function (update) { return ({
-                    updatedAt: asString(update === null || update === void 0 ? void 0 : update.updatedAt),
-                    updatedBy: asString(update === null || update === void 0 ? void 0 : update.updatedBy),
-                    changes: Array.isArray(update === null || update === void 0 ? void 0 : update.changes)
-                        ? update.changes.map(function (item) { return asString(item); }).filter(Boolean)
+            version: 2,
+            createdAt: createdAt_1,
+            createdBy: createdBy_1,
+            entries: legacyUpdates
+                .filter(function (update) { return update && typeof update === "object"; })
+                .map(function (update) {
+                var item = update;
+                return {
+                    id: randomUUID(),
+                    action: "modification",
+                    at: asString(item.updatedAt) || createdAt_1,
+                    actor: normalizeAuditActor(item.updatedBy, createdBy_1),
+                    changes: Array.isArray(item.changes)
+                        ? item.changes
+                            .map(function (field) { return asString(field); })
+                            .filter(Boolean)
+                            .map(function (field) { return ({
+                            field: field,
+                            previousValue: null,
+                            newValue: null
+                        }); })
                         : []
-                }); })
-                : []
+                };
+            })
         };
     }
     catch (_a) {
         return {
+            version: 2,
             createdAt: nowIso(),
-            createdBy: "Administrateur",
-            updates: []
+            createdBy: fallbackActor,
+            entries: []
         };
     }
+}
+function asAuditValue(value) {
+    if (value === undefined || value === null)
+        return null;
+    if (typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean") {
+        return value;
+    }
+    return String(value);
+}
+function normalizeAuditActor(value, fallback) {
+    if (typeof value === "string") {
+        return { name: value.trim() || fallback.name };
+    }
+    if (!value || typeof value !== "object")
+        return fallback;
+    var actor = value;
+    return {
+        id: asNullableString(actor.id),
+        name: asString(actor.name).trim() || fallback.name,
+        role: asNullableString(actor.role)
+    };
+}
+function normalizeAuditAction(value) {
+    var action = asString(value);
+    if (action === "creation" ||
+        action === "modification" ||
+        action === "status" ||
+        action === "dossier" ||
+        action === "duration" ||
+        action === "comment" ||
+        action === "deletion") {
+        return action;
+    }
+    return "modification";
+}
+function appendHistoryEntry(history, actor, action, changes, at) {
+    if (at === void 0) { at = nowIso(); }
+    if (changes.length === 0 && action !== "deletion")
+        return;
+    history.entries.push({
+        id: randomUUID(),
+        action: action,
+        at: at,
+        actor: actor,
+        changes: changes
+    });
 }
 function mapApplicant(row) {
     return {
@@ -427,6 +525,7 @@ function mapContract(row) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at,
+        auditHistory: parseHistory(row.historique_saisie),
         tags: getTagsForContract(row.id_contrat)
     };
 }
@@ -635,23 +734,30 @@ function buildContractId(db, date) {
 }
 function operatorFromRequest(req) {
     var raw = req.headers["x-operator-name"];
+    var name = "Administrateur";
     if (typeof raw === "string" && raw.trim()) {
-        return raw.trim();
+        name = raw.trim();
     }
-    if (Array.isArray(raw)) {
+    else if (Array.isArray(raw)) {
         var first = raw.find(function (item) { return item.trim(); });
         if (first) {
-            return first.trim();
+            name = first.trim();
         }
     }
-    return "Administrateur";
+    var idHeader = req.headers["x-operator-id"];
+    var roleHeader = req.headers["x-operator-role"];
+    return {
+        id: typeof idHeader === "string" ? idHeader : null,
+        name: name,
+        role: typeof roleHeader === "string" ? roleHeader : null
+    };
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, statement, updatedCount, _i, contractIds_1, contractId, result, body, workspaceId, contractIds, status_2, timestamp, statement, updatedCount, _b, contractIds_2, contractId, result, body, workspaceId, contractIds, durationMonths, timestamp, statement, updatedCount, _c, contractIds_3, contractId, result, body, id, workspaceId, timestamp, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, timestamp, operator, history_2, changes, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
-        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
-        return __generator(this, function (_t) {
-            switch (_t.label) {
+        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
+        return __generator(this, function (_s) {
+            switch (_s.label) {
                 case 0:
                     db = getDb();
                     method = ((_d = req.method) !== null && _d !== void 0 ? _d : "GET").toUpperCase();
@@ -703,7 +809,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 2];
                     return [4 /*yield*/, parseBody(req)];
                 case 1:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     name_2 = normalizeTagName(asString(body.name));
                     color = asString(body.color).trim() || tagColor(name_2);
@@ -735,7 +841,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 4];
                     return [4 /*yield*/, parseBody(req)];
                 case 3:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -762,7 +868,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 6];
                     return [4 /*yield*/, parseBody(req)];
                 case 5:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -791,7 +897,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 8];
                     return [4 /*yield*/, parseBody(req)];
                 case 7:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     existingId = asNullableString(body.id);
                     nif = asNullableString(body.nif);
@@ -871,7 +977,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 10];
                     return [4 /*yield*/, parseBody(req)];
                 case 9:
-                    body = _t.sent();
+                    body = _s.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -926,7 +1032,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 12];
                     return [4 /*yield*/, parseBody(req)];
                 case 11:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     name_3 = asString(body.name).trim();
                     if (!name_3) {
@@ -969,7 +1075,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 14];
                     return [4 /*yield*/, parseBody(req)];
                 case 13:
-                    body = _t.sent();
+                    body = _s.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1010,7 +1116,7 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(dossierByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 15:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     current = db
                         .prepare("\n        SELECT *\n        FROM dossiers\n        WHERE id = :id\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
@@ -1087,7 +1193,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 18];
                     return [4 /*yield*/, parseBody(req)];
                 case 17:
-                    body = _t.sent();
+                    body = _s.sent();
                     payload_1 = body;
                     workspaceId = asString(payload_1.workspaceId);
                     if (!workspaceId) {
@@ -1144,7 +1250,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 20];
                     return [4 /*yield*/, parseBody(req)];
                 case 19:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     ids = Array.isArray(body.ids) ? body.ids.map(function (item) { return asString(item); }).filter(Boolean) : [];
                     if (!workspaceId) {
@@ -1164,7 +1270,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 22];
                     return [4 /*yield*/, parseBody(req)];
                 case 21:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     nif = asNullableString(body.nif);
                     if (!nif) {
@@ -1192,9 +1298,10 @@ function handleApiRequest(req, res) {
                     _a = buildContractId(db), id = _a.id, fiscalYearLabel = _a.fiscalYearLabel;
                     operator = operatorFromRequest(req);
                     history_1 = {
+                        version: 2,
                         createdAt: timestamp,
                         createdBy: operator,
-                        updates: []
+                        entries: []
                     };
                     db.prepare("\n      INSERT INTO contrat (\n        id_contrat,\n        nif,\n        duree_contrat,\n        salaire,\n        annee_fiscale,\n        salaire_en_chiffre,\n        titre,\n        lieu_affectation,\n        historique_saisie,\n        workspace_id,\n        dossier_id,\n        status,\n        created_at,\n        updated_at,\n        deleted_at\n      ) VALUES (\n        :id_contrat,\n        :nif,\n        :duree_contrat,\n        :salaire,\n        :annee_fiscale,\n        :salaire_en_chiffre,\n        :titre,\n        :lieu_affectation,\n        :historique_saisie,\n        :workspace_id,\n        :dossier_id,\n        :status,\n        :created_at,\n        :updated_at,\n        NULL\n      )\n    ").run({
                         id_contrat: id,
@@ -1221,7 +1328,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 24];
                     return [4 /*yield*/, parseBody(req)];
                 case 23:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1235,12 +1342,29 @@ function handleApiRequest(req, res) {
                     }
                     timestamp = nowIso();
                     dossierId = asNullableString(body.dossierId);
-                    statement = db.prepare("\n      UPDATE contrat\n      SET dossier_id = :dossier_id,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
+                    operator = operatorFromRequest(req);
+                    statement = db.prepare("\n      UPDATE contrat\n      SET dossier_id = :dossier_id,\n          historique_saisie = :historique_saisie,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
                     updatedCount = 0;
                     for (_i = 0, contractIds_1 = contractIds; _i < contractIds_1.length; _i++) {
                         contractId = contractIds_1[_i];
+                        current = db.prepare("\n        SELECT dossier_id, historique_saisie\n        FROM contrat\n        WHERE id_contrat = :id_contrat\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n      ").get({
+                            id_contrat: contractId,
+                            workspace_id: workspaceId
+                        });
+                        if (!current)
+                            continue;
+                        previousDossierId = asNullableString(current.dossier_id);
+                        if (previousDossierId === dossierId)
+                            continue;
+                        history_2 = parseHistory(asNullableString(current.historique_saisie));
+                        appendHistoryEntry(history_2, operator, "dossier", [{
+                                field: "dossierId",
+                                previousValue: previousDossierId,
+                                newValue: dossierId
+                            }], timestamp);
                         result = statement.run({
                             dossier_id: dossierId,
+                            historique_saisie: JSON.stringify(history_2),
                             updated_at: timestamp,
                             id_contrat: contractId,
                             workspace_id: workspaceId
@@ -1253,7 +1377,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 26];
                     return [4 /*yield*/, parseBody(req)];
                 case 25:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1270,12 +1394,29 @@ function handleApiRequest(req, res) {
                         throw new HttpError(400, "Statut invalide.");
                     }
                     timestamp = nowIso();
-                    statement = db.prepare("\n      UPDATE contrat\n      SET status = :status,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
+                    operator = operatorFromRequest(req);
+                    statement = db.prepare("\n      UPDATE contrat\n      SET status = :status,\n          historique_saisie = :historique_saisie,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
                     updatedCount = 0;
                     for (_b = 0, contractIds_2 = contractIds; _b < contractIds_2.length; _b++) {
                         contractId = contractIds_2[_b];
+                        current = db.prepare("\n        SELECT status, historique_saisie\n        FROM contrat\n        WHERE id_contrat = :id_contrat\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n      ").get({
+                            id_contrat: contractId,
+                            workspace_id: workspaceId
+                        });
+                        if (!current)
+                            continue;
+                        previousStatus = asString(current.status);
+                        if (previousStatus === status_2)
+                            continue;
+                        history_3 = parseHistory(asNullableString(current.historique_saisie));
+                        appendHistoryEntry(history_3, operator, "status", [{
+                                field: "status",
+                                previousValue: previousStatus,
+                                newValue: status_2
+                            }], timestamp);
                         result = statement.run({
                             status: status_2,
+                            historique_saisie: JSON.stringify(history_3),
                             updated_at: timestamp,
                             id_contrat: contractId,
                             workspace_id: workspaceId
@@ -1288,7 +1429,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 28];
                     return [4 /*yield*/, parseBody(req)];
                 case 27:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1302,12 +1443,29 @@ function handleApiRequest(req, res) {
                         return [2 /*return*/];
                     }
                     timestamp = nowIso();
-                    statement = db.prepare("\n      UPDATE contrat\n      SET duree_contrat = :duree_contrat,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
+                    operator = operatorFromRequest(req);
+                    statement = db.prepare("\n      UPDATE contrat\n      SET duree_contrat = :duree_contrat,\n          historique_saisie = :historique_saisie,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ");
                     updatedCount = 0;
                     for (_c = 0, contractIds_3 = contractIds; _c < contractIds_3.length; _c++) {
                         contractId = contractIds_3[_c];
+                        current = db.prepare("\n        SELECT duree_contrat, historique_saisie\n        FROM contrat\n        WHERE id_contrat = :id_contrat\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n      ").get({
+                            id_contrat: contractId,
+                            workspace_id: workspaceId
+                        });
+                        if (!current)
+                            continue;
+                        previousDuration = asInteger(current.duree_contrat, 12);
+                        if (previousDuration === durationMonths)
+                            continue;
+                        history_4 = parseHistory(asNullableString(current.historique_saisie));
+                        appendHistoryEntry(history_4, operator, "duration", [{
+                                field: "durationMonths",
+                                previousValue: previousDuration,
+                                newValue: durationMonths
+                            }], timestamp);
                         result = statement.run({
                             duree_contrat: durationMonths,
+                            historique_saisie: JSON.stringify(history_4),
                             updated_at: timestamp,
                             id_contrat: contractId,
                             workspace_id: workspaceId
@@ -1320,15 +1478,22 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 30];
                     return [4 /*yield*/, parseBody(req)];
                 case 29:
-                    body = _t.sent();
+                    body = _s.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
                         throw new HttpError(400, "id et workspaceId sont obligatoires.");
                     }
                     timestamp = nowIso();
-                    db.prepare("\n      UPDATE contrat\n      SET deleted_at = :deleted_at,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").run({
+                    current = db.prepare("\n      SELECT historique_saisie\n      FROM contrat\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").get({
+                        id_contrat: id,
+                        workspace_id: workspaceId
+                    });
+                    history_5 = parseHistory(asNullableString(current === null || current === void 0 ? void 0 : current.historique_saisie));
+                    appendHistoryEntry(history_5, operatorFromRequest(req), "deletion", [], timestamp);
+                    db.prepare("\n      UPDATE contrat\n      SET deleted_at = :deleted_at,\n          historique_saisie = :historique_saisie,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").run({
                         deleted_at: timestamp,
+                        historique_saisie: JSON.stringify(history_5),
                         updated_at: timestamp,
                         id_contrat: id,
                         workspace_id: workspaceId
@@ -1349,7 +1514,7 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(contractByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 31:
-                    body = _t.sent();
+                    body = _s.sent();
                     current = db
                         .prepare("\n        SELECT *\n        FROM contrat\n        WHERE id_contrat = :id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ id: id });
@@ -1393,31 +1558,31 @@ function handleApiRequest(req, res) {
                         : asNullableString(current.dossier_id);
                     timestamp = nowIso();
                     operator = operatorFromRequest(req);
-                    history_2 = parseHistory(asNullableString(current.historique_saisie));
-                    changes = [];
-                    if (asString(current.nif) !== nextNif)
-                        changes.push("nif");
-                    if (asString(current.status) !== nextStatus)
-                        changes.push("status");
-                    if (asInteger(current.duree_contrat, 12) !== nextDuration)
-                        changes.push("duree_contrat");
-                    if (asNumber(current.salaire_en_chiffre, 0) !== nextSalaryNumber)
-                        changes.push("salaire_en_chiffre");
-                    if (asString(current.salaire) !== nextSalaryText)
-                        changes.push("salaire");
-                    if (asString(current.titre) !== nextTitle)
-                        changes.push("titre");
-                    if (asString(current.lieu_affectation) !== nextAssignment)
-                        changes.push("lieu_affectation");
-                    if (((_s = asNullableString(current.dossier_id)) !== null && _s !== void 0 ? _s : null) !== (nextDossierId !== null && nextDossierId !== void 0 ? nextDossierId : null))
-                        changes.push("dossier_id");
-                    if (changes.length > 0) {
-                        history_2.updates.push({
-                            updatedAt: timestamp,
-                            updatedBy: operator,
-                            changes: changes
-                        });
-                    }
+                    history_6 = parseHistory(asNullableString(current.historique_saisie));
+                    changes_1 = [];
+                    addChange = function (field, previousValue, newValue) {
+                        if (previousValue !== newValue) {
+                            changes_1.push({ field: field, previousValue: previousValue, newValue: newValue });
+                        }
+                    };
+                    addChange("nif", asString(current.nif), nextNif);
+                    addChange("status", asString(current.status), nextStatus);
+                    addChange("durationMonths", asInteger(current.duree_contrat, 12), nextDuration);
+                    addChange("salaryNumber", asNumber(current.salaire_en_chiffre, 0), nextSalaryNumber);
+                    addChange("salaryText", asString(current.salaire), nextSalaryText);
+                    addChange("position", asString(current.titre), nextTitle);
+                    addChange("assignment", asString(current.lieu_affectation), nextAssignment);
+                    addChange("dossierId", asNullableString(current.dossier_id), nextDossierId);
+                    action = changes_1.length === 1 && changes_1[0].field === "status"
+                        ? "status"
+                        : changes_1.length === 1 && changes_1[0].field === "dossierId"
+                            ? "dossier"
+                            : changes_1.length === 1 && changes_1[0].field === "durationMonths"
+                                ? "duration"
+                                : changes_1.length === 1 && changes_1[0].field === "commentaire"
+                                    ? "comment"
+                                    : "modification";
+                    appendHistoryEntry(history_6, operator, action, changes_1, timestamp);
                     db.prepare("\n      UPDATE contrat\n      SET nif = :nif,\n          duree_contrat = :duree_contrat,\n          salaire = :salaire,\n          salaire_en_chiffre = :salaire_en_chiffre,\n          titre = :titre,\n          lieu_affectation = :lieu_affectation,\n          historique_saisie = :historique_saisie,\n          dossier_id = :dossier_id,\n          status = :status,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n    ").run({
                         id_contrat: id,
                         nif: nextNif,
@@ -1426,7 +1591,7 @@ function handleApiRequest(req, res) {
                         salaire_en_chiffre: nextSalaryNumber,
                         titre: nextTitle,
                         lieu_affectation: nextAssignment,
-                        historique_saisie: JSON.stringify(history_2),
+                        historique_saisie: JSON.stringify(history_6),
                         dossier_id: nextDossierId,
                         status: nextStatus,
                         updated_at: timestamp
@@ -1440,7 +1605,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 34];
                     return [4 /*yield*/, parseBody(req)];
                 case 33:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1516,7 +1681,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 36];
                     return [4 /*yield*/, parseBody(req)];
                 case 35:
-                    body = _t.sent();
+                    body = _s.sent();
                     workspaceId_1 = asString(body.workspaceId) || "workspace_default";
                     data = body.data;
                     if (!data || !workspaceId_1)
@@ -1570,9 +1735,9 @@ function handleApiRequest(req, res) {
                         res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
                         return [2 /*return*/];
                     }
-                    _t.label = 37;
+                    _s.label = 37;
                 case 37:
-                    _t.trys.push([37, 40, , 41]);
+                    _s.trys.push([37, 40, , 41]);
                     rawNif = nifParam.replace(/\D/g, "");
                     nifFormatted = rawNif;
                     if (rawNif.length === 10) {
@@ -1590,10 +1755,10 @@ function handleApiRequest(req, res) {
                             }
                         })];
                 case 38:
-                    msppRes = _t.sent();
+                    msppRes = _s.sent();
                     return [4 /*yield*/, msppRes.text()];
                 case 39:
-                    html = _t.sent();
+                    html = _s.sent();
                     // Convert relative URLs to absolute URLs so CSS and images load correctly
                     html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
                     html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
@@ -1612,7 +1777,7 @@ function handleApiRequest(req, res) {
                     res.end(html);
                     return [3 /*break*/, 41];
                 case 40:
-                    err_1 = _t.sent();
+                    err_1 = _s.sent();
                     res.statusCode = 500;
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));

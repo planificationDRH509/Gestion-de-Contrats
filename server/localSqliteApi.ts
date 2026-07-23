@@ -7,13 +7,30 @@ import type { Plugin } from "vite";
 
 type RawRecord = Record<string, unknown>;
 
+type AuditValue = string | number | boolean | null;
+
+type AuditActor = {
+  id?: string | null;
+  name: string;
+  role?: string | null;
+};
+
+type AuditChange = {
+  field: string;
+  previousValue: AuditValue;
+  newValue: AuditValue;
+};
+
 type HistoryPayload = {
+  version: 2;
   createdAt: string;
-  createdBy: string;
-  updates: Array<{
-    updatedAt: string;
-    updatedBy: string;
-    changes: string[];
+  createdBy: AuditActor;
+  entries: Array<{
+    id: string;
+    action: "creation" | "modification" | "status" | "dossier" | "duration" | "comment" | "deletion";
+    at: string;
+    actor: AuditActor;
+    changes: AuditChange[];
   }>;
 };
 
@@ -404,36 +421,145 @@ function fiscalYearFor(date: Date) {
 }
 
 function parseHistory(value: string | null): HistoryPayload {
+  const fallbackActor = { name: "Administrateur" };
   if (!value) {
     return {
+      version: 2,
       createdAt: nowIso(),
-      createdBy: "Administrateur",
-      updates: []
+      createdBy: fallbackActor,
+      entries: []
     };
   }
 
   try {
-    const parsed = JSON.parse(value) as Partial<HistoryPayload>;
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (parsed?.version === 2 && Array.isArray(parsed.entries)) {
+      return {
+        version: 2,
+        createdAt: asString(parsed.createdAt) || nowIso(),
+        createdBy: normalizeAuditActor(parsed.createdBy, fallbackActor),
+        entries: parsed.entries
+          .filter((entry) => entry && typeof entry === "object")
+          .map((entry) => {
+            const item = entry as Record<string, unknown>;
+            return {
+              id: asString(item.id) || randomUUID(),
+              action: normalizeAuditAction(item.action),
+              at: asString(item.at) || nowIso(),
+              actor: normalizeAuditActor(item.actor, fallbackActor),
+              changes: Array.isArray(item.changes)
+                ? item.changes
+                    .filter((change) => change && typeof change === "object")
+                    .map((change) => {
+                      const auditChange = change as Record<string, unknown>;
+                      return {
+                        field: asString(auditChange.field),
+                        previousValue: asAuditValue(auditChange.previousValue),
+                        newValue: asAuditValue(auditChange.newValue)
+                      };
+                    })
+                    .filter((change) => change.field)
+                : []
+            };
+          })
+      };
+    }
+
+    const createdAt = asString(parsed?.createdAt) || nowIso();
+    const createdBy = normalizeAuditActor(parsed?.createdBy, fallbackActor);
+    const legacyUpdates = Array.isArray(parsed?.updates) ? parsed.updates : [];
     return {
-      createdAt: asString(parsed.createdAt) || nowIso(),
-      createdBy: asString(parsed.createdBy) || "Administrateur",
-      updates: Array.isArray(parsed.updates)
-        ? parsed.updates.map((update) => ({
-            updatedAt: asString(update?.updatedAt),
-            updatedBy: asString(update?.updatedBy),
-            changes: Array.isArray(update?.changes)
-              ? update.changes.map((item) => asString(item)).filter(Boolean)
+      version: 2,
+      createdAt,
+      createdBy,
+      entries: legacyUpdates
+        .filter((update) => update && typeof update === "object")
+        .map((update) => {
+          const item = update as Record<string, unknown>;
+          return {
+            id: randomUUID(),
+            action: "modification" as const,
+            at: asString(item.updatedAt) || createdAt,
+            actor: normalizeAuditActor(item.updatedBy, createdBy),
+            changes: Array.isArray(item.changes)
+              ? item.changes
+                  .map((field) => asString(field))
+                  .filter(Boolean)
+                  .map((field) => ({
+                    field,
+                    previousValue: null,
+                    newValue: null
+                  }))
               : []
-          }))
-        : []
+          };
+        })
     };
   } catch {
     return {
+      version: 2,
       createdAt: nowIso(),
-      createdBy: "Administrateur",
-      updates: []
+      createdBy: fallbackActor,
+      entries: []
     };
   }
+}
+
+function asAuditValue(value: unknown): AuditValue {
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  return String(value);
+}
+
+function normalizeAuditActor(value: unknown, fallback: AuditActor): AuditActor {
+  if (typeof value === "string") {
+    return { name: value.trim() || fallback.name };
+  }
+  if (!value || typeof value !== "object") return fallback;
+  const actor = value as Record<string, unknown>;
+  return {
+    id: asNullableString(actor.id),
+    name: asString(actor.name).trim() || fallback.name,
+    role: asNullableString(actor.role)
+  };
+}
+
+function normalizeAuditAction(value: unknown): HistoryPayload["entries"][number]["action"] {
+  const action = asString(value);
+  if (
+    action === "creation" ||
+    action === "modification" ||
+    action === "status" ||
+    action === "dossier" ||
+    action === "duration" ||
+    action === "comment" ||
+    action === "deletion"
+  ) {
+    return action;
+  }
+  return "modification";
+}
+
+function appendHistoryEntry(
+  history: HistoryPayload,
+  actor: AuditActor,
+  action: HistoryPayload["entries"][number]["action"],
+  changes: AuditChange[],
+  at = nowIso()
+) {
+  if (changes.length === 0 && action !== "deletion") return;
+  history.entries.push({
+    id: randomUUID(),
+    action,
+    at,
+    actor,
+    changes
+  });
 }
 
 function mapApplicant(row: RawRecord) {
@@ -494,6 +620,7 @@ function mapContract(row: ContractRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    auditHistory: parseHistory(row.historique_saisie),
     tags: getTagsForContract(row.id_contrat)
   };
 }
@@ -962,18 +1089,24 @@ function buildContractId(db: DatabaseSync, date = new Date()): { id: string; fis
   throw new HttpError(500, "Impossible de générer un ID_Contrat unique.");
 }
 
-function operatorFromRequest(req: IncomingMessage): string {
+function operatorFromRequest(req: IncomingMessage): AuditActor {
   const raw = req.headers["x-operator-name"];
+  let name = "Administrateur";
   if (typeof raw === "string" && raw.trim()) {
-    return raw.trim();
-  }
-  if (Array.isArray(raw)) {
+    name = raw.trim();
+  } else if (Array.isArray(raw)) {
     const first = raw.find((item) => item.trim());
     if (first) {
-      return first.trim();
+      name = first.trim();
     }
   }
-  return "Administrateur";
+  const idHeader = req.headers["x-operator-id"];
+  const roleHeader = req.headers["x-operator-role"];
+  return {
+    id: typeof idHeader === "string" ? idHeader : null,
+    name,
+    role: typeof roleHeader === "string" ? roleHeader : null
+  };
 }
 
 async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
@@ -1859,9 +1992,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const operator = operatorFromRequest(req);
 
     const history: HistoryPayload = {
+      version: 2,
       createdAt: timestamp,
       createdBy: operator,
-      updates: []
+      entries: []
     };
 
     db.prepare(`
@@ -1967,9 +2101,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     const timestamp = nowIso();
     const dossierId = asNullableString(body.dossierId);
+    const operator = operatorFromRequest(req);
     const statement = db.prepare(`
       UPDATE contrat
       SET dossier_id = :dossier_id,
+          historique_saisie = :historique_saisie,
           updated_at = :updated_at
       WHERE id_contrat = :id_contrat
         AND workspace_id = :workspace_id
@@ -1978,8 +2114,28 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     let updatedCount = 0;
     for (const contractId of contractIds) {
+      const current = db.prepare(`
+        SELECT dossier_id, historique_saisie
+        FROM contrat
+        WHERE id_contrat = :id_contrat
+          AND workspace_id = :workspace_id
+          AND deleted_at IS NULL
+      `).get({
+        id_contrat: contractId,
+        workspace_id: workspaceId
+      }) as RawRecord | undefined;
+      if (!current) continue;
+      const previousDossierId = asNullableString(current.dossier_id);
+      if (previousDossierId === dossierId) continue;
+      const history = parseHistory(asNullableString(current.historique_saisie));
+      appendHistoryEntry(history, operator, "dossier", [{
+        field: "dossierId",
+        previousValue: previousDossierId,
+        newValue: dossierId
+      }], timestamp);
       const result = statement.run({
         dossier_id: dossierId,
+        historique_saisie: JSON.stringify(history),
         updated_at: timestamp,
         id_contrat: contractId,
         workspace_id: workspaceId
@@ -2013,9 +2169,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const timestamp = nowIso();
+    const operator = operatorFromRequest(req);
     const statement = db.prepare(`
       UPDATE contrat
       SET status = :status,
+          historique_saisie = :historique_saisie,
           updated_at = :updated_at
       WHERE id_contrat = :id_contrat
         AND workspace_id = :workspace_id
@@ -2024,8 +2182,28 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     let updatedCount = 0;
     for (const contractId of contractIds) {
+      const current = db.prepare(`
+        SELECT status, historique_saisie
+        FROM contrat
+        WHERE id_contrat = :id_contrat
+          AND workspace_id = :workspace_id
+          AND deleted_at IS NULL
+      `).get({
+        id_contrat: contractId,
+        workspace_id: workspaceId
+      }) as RawRecord | undefined;
+      if (!current) continue;
+      const previousStatus = asString(current.status);
+      if (previousStatus === status) continue;
+      const history = parseHistory(asNullableString(current.historique_saisie));
+      appendHistoryEntry(history, operator, "status", [{
+        field: "status",
+        previousValue: previousStatus,
+        newValue: status
+      }], timestamp);
       const result = statement.run({
         status,
+        historique_saisie: JSON.stringify(history),
         updated_at: timestamp,
         id_contrat: contractId,
         workspace_id: workspaceId
@@ -2055,9 +2233,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const timestamp = nowIso();
+    const operator = operatorFromRequest(req);
     const statement = db.prepare(`
       UPDATE contrat
       SET duree_contrat = :duree_contrat,
+          historique_saisie = :historique_saisie,
           updated_at = :updated_at
       WHERE id_contrat = :id_contrat
         AND workspace_id = :workspace_id
@@ -2066,8 +2246,28 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     let updatedCount = 0;
     for (const contractId of contractIds) {
+      const current = db.prepare(`
+        SELECT duree_contrat, historique_saisie
+        FROM contrat
+        WHERE id_contrat = :id_contrat
+          AND workspace_id = :workspace_id
+          AND deleted_at IS NULL
+      `).get({
+        id_contrat: contractId,
+        workspace_id: workspaceId
+      }) as RawRecord | undefined;
+      if (!current) continue;
+      const previousDuration = asInteger(current.duree_contrat, 12);
+      if (previousDuration === durationMonths) continue;
+      const history = parseHistory(asNullableString(current.historique_saisie));
+      appendHistoryEntry(history, operator, "duration", [{
+        field: "durationMonths",
+        previousValue: previousDuration,
+        newValue: durationMonths
+      }], timestamp);
       const result = statement.run({
         duree_contrat: durationMonths,
+        historique_saisie: JSON.stringify(history),
         updated_at: timestamp,
         id_contrat: contractId,
         workspace_id: workspaceId
@@ -2089,15 +2289,29 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const timestamp = nowIso();
+    const current = db.prepare(`
+      SELECT historique_saisie
+      FROM contrat
+      WHERE id_contrat = :id_contrat
+        AND workspace_id = :workspace_id
+        AND deleted_at IS NULL
+    `).get({
+      id_contrat: id,
+      workspace_id: workspaceId
+    }) as RawRecord | undefined;
+    const history = parseHistory(asNullableString(current?.historique_saisie));
+    appendHistoryEntry(history, operatorFromRequest(req), "deletion", [], timestamp);
     db.prepare(`
       UPDATE contrat
       SET deleted_at = :deleted_at,
+          historique_saisie = :historique_saisie,
           updated_at = :updated_at
       WHERE id_contrat = :id_contrat
         AND workspace_id = :workspace_id
         AND deleted_at IS NULL
     `).run({
       deleted_at: timestamp,
+      historique_saisie: JSON.stringify(history),
       updated_at: timestamp,
       id_contrat: id,
       workspace_id: workspaceId
@@ -2227,23 +2441,35 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const operator = operatorFromRequest(req);
     const history = parseHistory(asNullableString(current.historique_saisie));
 
-    const changes: string[] = [];
-    if (asString(current.nif) !== nextNif) changes.push("nif");
-    if (asString(current.status) !== nextStatus) changes.push("status");
-    if (asInteger(current.duree_contrat, 12) !== nextDuration) changes.push("duree_contrat");
-    if (asNumber(current.salaire_en_chiffre, 0) !== nextSalaryNumber) changes.push("salaire_en_chiffre");
-    if (asString(current.salaire) !== nextSalaryText) changes.push("salaire");
-    if (asString(current.titre) !== nextTitle) changes.push("titre");
-    if (asString(current.lieu_affectation) !== nextAssignment) changes.push("lieu_affectation");
-    if ((asNullableString(current.dossier_id) ?? null) !== (nextDossierId ?? null)) changes.push("dossier_id");
-
-    if (changes.length > 0) {
-      history.updates.push({
-        updatedAt: timestamp,
-        updatedBy: operator,
-        changes
-      });
-    }
+    const changes: AuditChange[] = [];
+    const addChange = (field: string, previousValue: AuditValue, newValue: AuditValue) => {
+      if (previousValue !== newValue) {
+        changes.push({ field, previousValue, newValue });
+      }
+    };
+    addChange("nif", asString(current.nif), nextNif);
+    addChange("status", asString(current.status), nextStatus);
+    addChange("durationMonths", asInteger(current.duree_contrat, 12), nextDuration);
+    addChange("salaryNumber", asNumber(current.salaire_en_chiffre, 0), nextSalaryNumber);
+    addChange("salaryText", asString(current.salaire), nextSalaryText);
+    addChange("position", asString(current.titre), nextTitle);
+    addChange("assignment", asString(current.lieu_affectation), nextAssignment);
+    addChange(
+      "dossierId",
+      asNullableString(current.dossier_id),
+      nextDossierId
+    );
+    const action =
+      changes.length === 1 && changes[0].field === "status"
+        ? "status"
+        : changes.length === 1 && changes[0].field === "dossierId"
+          ? "dossier"
+          : changes.length === 1 && changes[0].field === "durationMonths"
+            ? "duration"
+            : changes.length === 1 && changes[0].field === "commentaire"
+              ? "comment"
+              : "modification";
+    appendHistoryEntry(history, operator, action, changes, timestamp);
 
     db.prepare(`
       UPDATE contrat

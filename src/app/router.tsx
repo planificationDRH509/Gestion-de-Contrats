@@ -17,6 +17,9 @@ import { UserManagementPage } from "../features/settings/UserManagementPage";
 import { DisplaySettingsPage } from "../features/settings/DisplaySettingsPage";
 import { GeneralSettingsPage } from "../features/settings/GeneralSettingsPage";
 import { IdentificationPage } from "../features/identification/IdentificationPage";
+import { RequirePermission } from "../features/auth/RequirePermission";
+import { AuditPage } from "../features/audit/AuditPage";
+import { QualityPage } from "../features/quality/QualityPage";
 
 export function AppRoutes() {
   return (
@@ -33,20 +36,22 @@ export function AppRoutes() {
       >
         <Route path="contrats" element={<ContractsListPage />} />
         <Route path="dossiers" element={<Navigate to="/app/contrats" replace />} />
-        <Route path="contrats/nouveau" element={<ContractNewPage />} />
-        <Route path="contrats/preview" element={<ContractPreviewPage />} />
-        <Route path="contrats/:contractId/modifier" element={<ContractEditPage />} />
+        <Route path="contrats/nouveau" element={<RequirePermission permission="contracts.create"><ContractNewPage /></RequirePermission>} />
+        <Route path="contrats/preview" element={<RequirePermission permission="contracts.create"><ContractPreviewPage /></RequirePermission>} />
+        <Route path="contrats/:contractId/modifier" element={<RequirePermission permission="contracts.edit"><ContractEditPage /></RequirePermission>} />
         <Route path="contrats/:contractId" element={<ContractDetailPage />} />
-        <Route path="contrats/print" element={<ContractsPrintPage />} />
-        <Route path="statistiques" element={<StatisticsPage />} />
-        <Route path="identification" element={<IdentificationPage />} />
-        <Route path="parametres" element={<SettingsPage />} />
-        <Route path="parametres/draft-html" element={<DraftHtmlPage />} />
-        <Route path="parametres/suggestions" element={<SuggestionsSettingsPage />} />
-        <Route path="parametres/backup-sql" element={<BackupSqlPage />} />
-        <Route path="parametres/utilisateurs" element={<UserManagementPage />} />
-        <Route path="parametres/affichage" element={<DisplaySettingsPage />} />
-        <Route path="parametres/general" element={<GeneralSettingsPage />} />
+        <Route path="contrats/print" element={<RequirePermission permission="contracts.print"><ContractsPrintPage /></RequirePermission>} />
+        <Route path="statistiques" element={<RequirePermission permission="statistics.view"><StatisticsPage /></RequirePermission>} />
+        <Route path="audit" element={<RequirePermission permission="audit.view"><AuditPage /></RequirePermission>} />
+        <Route path="controle-qualite" element={<RequirePermission permission="quality.view"><QualityPage /></RequirePermission>} />
+        <Route path="identification" element={<RequirePermission permission="identification.manage"><IdentificationPage /></RequirePermission>} />
+        <Route path="parametres" element={<RequirePermission permission="settings.manage"><SettingsPage /></RequirePermission>} />
+        <Route path="parametres/draft-html" element={<RequirePermission permission="settings.manage"><DraftHtmlPage /></RequirePermission>} />
+        <Route path="parametres/suggestions" element={<RequirePermission permission="settings.manage"><SuggestionsSettingsPage /></RequirePermission>} />
+        <Route path="parametres/backup-sql" element={<RequirePermission permission="settings.manage"><BackupSqlPage /></RequirePermission>} />
+        <Route path="parametres/utilisateurs" element={<RequirePermission permission="users.manage"><UserManagementPage /></RequirePermission>} />
+        <Route path="parametres/affichage" element={<RequirePermission permission="settings.manage"><DisplaySettingsPage /></RequirePermission>} />
+        <Route path="parametres/general" element={<RequirePermission permission="settings.manage"><GeneralSettingsPage /></RequirePermission>} />
       </Route>
       <Route path="*" element={<Navigate to="/app/contrats" replace />} />
     </Routes>

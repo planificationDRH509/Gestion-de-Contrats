@@ -49,11 +49,18 @@ export function ContractsPrintPage() {
         return;
       }
       lastAfterPrintAtRef.current = now;
-      changeContractsStatus.mutate({
-        workspaceId,
-        contractIds: ids,
-        status: "imprime"
-      });
+      const shouldMarkAsPrinted = window.confirm(
+        ids.length === 1
+          ? 'Voulez-vous changer l’état de ce contrat en « Imprimé » ?'
+          : `Voulez-vous changer l’état de ces ${ids.length} contrats en « Imprimé » ?`
+      );
+      if (shouldMarkAsPrinted) {
+        changeContractsStatus.mutate({
+          workspaceId,
+          contractIds: ids,
+          status: "imprime"
+        });
+      }
       if (user && data && data.length > 0) {
         appendPrintHistory(user.id, workspaceId, data);
       }

@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useAuth } from "../auth/auth";
 import { IdentificationSpreadsheetView, type IdentificationSpreadsheetZoomMode } from "./IdentificationSpreadsheetView";
+import { useSearchParams } from "react-router-dom";
 
 const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
 
 export function IdentificationPage() {
   const { user } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [sheetZoomMode, setSheetZoomMode] = useState<IdentificationSpreadsheetZoomMode>(
     () => (localStorage.getItem("identification_sheet_zoom_mode") === "fit" ? "fit" : "custom")
   );

@@ -13,6 +13,12 @@ import { queueOutbox } from "./localOutbox";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { matchesContractSearch } from "../../lib/personSearch";
+import {
+  appendContractAuditEntry,
+  buildContractAuditChanges,
+  createContractAuditHistory,
+  inferAuditAction
+} from "../../lib/contractAudit";
 
 function now() {
   return new Date().toISOString();
@@ -160,7 +166,9 @@ export class LocalContractRepository implements ContractRepository {
       dossierId: input.dossierId ?? null,
       id: createId(),
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      auditHistory:
+        input.auditHistory ?? createContractAuditHistory(undefined, timestamp)
     };
     db.contracts.push(contract);
     saveDb(db);
@@ -182,16 +190,28 @@ export class LocalContractRepository implements ContractRepository {
     if (contractIndex === -1) {
       throw new Error("Contrat introuvable");
     }
-    const updated: Contract = {
-      ...db.contracts[contractIndex],
+    const previous = db.contracts[contractIndex];
+    const timestamp = now();
+    const nextValues: Partial<Contract> = {
       ...input,
-      firstName: input.firstName ? formatFirstName(input.firstName) : db.contracts[contractIndex].firstName,
-      lastName: input.lastName ? formatLastName(input.lastName) : db.contracts[contractIndex].lastName,
+      firstName: input.firstName ? formatFirstName(input.firstName) : previous.firstName,
+      lastName: input.lastName ? formatLastName(input.lastName) : previous.lastName,
       dossierId:
         input.dossierId !== undefined
           ? input.dossierId
-          : db.contracts[contractIndex].dossierId ?? null,
-      updatedAt: now()
+          : previous.dossierId ?? null
+    };
+    const changes = buildContractAuditChanges(previous, nextValues);
+    const updated: Contract = {
+      ...previous,
+      ...input,
+      ...nextValues,
+      updatedAt: timestamp,
+      auditHistory: appendContractAuditEntry(previous.auditHistory, {
+        action: inferAuditAction(changes),
+        changes,
+        at: timestamp
+      })
     };
     db.contracts[contractIndex] = updated;
     saveDb(db);
@@ -221,6 +241,7 @@ export class LocalContractRepository implements ContractRepository {
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 
+    const timestamp = now();
     db.contracts = db.contracts.map((contract) => {
       const shouldUpdate =
         contract.workspaceId === workspaceId &&
@@ -231,10 +252,16 @@ export class LocalContractRepository implements ContractRepository {
       }
 
       updatedCount += 1;
+      const changes = buildContractAuditChanges(contract, { dossierId });
       return {
         ...contract,
         dossierId,
-        updatedAt: now()
+        updatedAt: timestamp,
+        auditHistory: appendContractAuditEntry(contract.auditHistory, {
+          action: "dossier",
+          changes,
+          at: timestamp
+        })
       };
     });
 
@@ -271,6 +298,7 @@ export class LocalContractRepository implements ContractRepository {
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 
+    const timestamp = now();
     db.contracts = db.contracts.map((contract) => {
       const shouldUpdate =
         contract.workspaceId === workspaceId &&
@@ -281,10 +309,16 @@ export class LocalContractRepository implements ContractRepository {
       }
 
       updatedCount += 1;
+      const changes = buildContractAuditChanges(contract, { status });
       return {
         ...contract,
         status,
-        updatedAt: now()
+        updatedAt: timestamp,
+        auditHistory: appendContractAuditEntry(contract.auditHistory, {
+          action: "status",
+          changes,
+          at: timestamp
+        })
       };
     });
 
@@ -321,6 +355,7 @@ export class LocalContractRepository implements ContractRepository {
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 
+    const timestamp = now();
     db.contracts = db.contracts.map((contract) => {
       const shouldUpdate =
         contract.workspaceId === workspaceId &&
@@ -331,10 +366,16 @@ export class LocalContractRepository implements ContractRepository {
       }
 
       updatedCount += 1;
+      const changes = buildContractAuditChanges(contract, { durationMonths });
       return {
         ...contract,
         durationMonths,
-        updatedAt: now()
+        updatedAt: timestamp,
+        auditHistory: appendContractAuditEntry(contract.auditHistory, {
+          action: "duration",
+          changes,
+          at: timestamp
+        })
       };
     });
 
@@ -361,10 +402,17 @@ export class LocalContractRepository implements ContractRepository {
     if (contractIndex === -1) {
       return;
     }
+    const timestamp = now();
+    const previous = db.contracts[contractIndex];
     db.contracts[contractIndex] = {
-      ...db.contracts[contractIndex],
-      deletedAt: now(),
-      updatedAt: now()
+      ...previous,
+      deletedAt: timestamp,
+      updatedAt: timestamp,
+      auditHistory: appendContractAuditEntry(previous.auditHistory, {
+        action: "deletion",
+        changes: [],
+        at: timestamp
+      })
     };
     saveDb(db);
     if (shouldQueue) queueOutbox(workspaceId, "contract.delete", { id });

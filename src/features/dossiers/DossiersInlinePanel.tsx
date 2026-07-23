@@ -18,12 +18,14 @@ import {
 
 type DossiersInlinePanelProps = {
   workspaceId: string;
+  canManage: boolean;
   onDossierCreated?: (dossierId: string) => void;
   onViewDossier?: (dossierId: string) => void;
 };
 
 export function DossiersInlinePanel({
   workspaceId,
+  canManage,
   onDossierCreated,
   onViewDossier
 }: DossiersInlinePanelProps) {
@@ -82,6 +84,7 @@ export function DossiersInlinePanel({
   }
 
   function startEditing(dossier: Dossier) {
+    if (!canManage) return;
     setEditingDossierId(dossier.id);
     setEditName(dossier.name);
     setEditIsEphemeral(dossier.isEphemeral);
@@ -145,6 +148,7 @@ export function DossiersInlinePanel({
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManage) return;
     if (!workspaceId) return;
 
     const trimmedName = name.trim();
@@ -183,6 +187,7 @@ export function DossiersInlinePanel({
 
   async function handleEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManage) return;
     if (!workspaceId || !editingDossierId) return;
 
     const trimmedName = editName.trim();
@@ -218,6 +223,7 @@ export function DossiersInlinePanel({
   }
 
   async function handleSetDossierStatus(dossier: Dossier, status: "active" | "classified") {
+    if (!canManage) return;
     if (!workspaceId) return;
 
     try {
@@ -243,6 +249,7 @@ export function DossiersInlinePanel({
   }
 
   async function handleDeleteDossier(dossier: Dossier) {
+    if (!canManage) return;
     if (!workspaceId) return;
     const confirmed = window.confirm(
       `Supprimer le dossier "${dossier.name}" ? Les contrats resteront enregistrés.`
@@ -298,6 +305,7 @@ export function DossiersInlinePanel({
             <h2 id="dossiers-overview-title">Vos dossiers</h2>
             <p>Regroupez les contrats par campagne, échéance ou équipe responsable.</p>
           </div>
+          {canManage ? (
           <button
             type="button"
             className="btn btn-primary"
@@ -311,6 +319,7 @@ export function DossiersInlinePanel({
             <span className="material-symbols-rounded icon">{createFormOpen ? "close" : "create_new_folder"}</span>
             {createFormOpen ? "Fermer" : "Nouveau dossier"}
           </button>
+          ) : null}
         </div>
 
         <div className="dossier-overview-stats" aria-label="Résumé des dossiers">
@@ -359,7 +368,7 @@ export function DossiersInlinePanel({
         </div>
       ) : null}
 
-      {createFormOpen ? (
+      {canManage && createFormOpen ? (
       <form className="card dossier-modern-form-card" onSubmit={handleCreate}>
         <div className="dossier-modern-form-head">
           <div>
@@ -489,7 +498,7 @@ export function DossiersInlinePanel({
       </form>
       ) : null}
 
-      {editingDossierId ? (
+      {canManage && editingDossierId ? (
         <form className="card dossier-modern-form-card" onSubmit={handleEdit}>
           <div className="dossier-modern-form-head">
             <div className="section-title">Modifier le dossier</div>
@@ -637,11 +646,11 @@ export function DossiersInlinePanel({
               <button type="button" className="btn btn-outline" onClick={() => setDossierQuery("")}>Effacer la recherche</button>
             ) : dossierView === "classified" || dossierView === "archived" ? (
               <button type="button" className="btn btn-outline" onClick={() => setDossierView("active")}>Voir les dossiers en traitement</button>
-            ) : (
+            ) : canManage ? (
               <button type="button" className="btn btn-primary" onClick={() => setCreateFormOpen(true)}>
                 <span className="material-symbols-rounded icon">create_new_folder</span>Créer un dossier
               </button>
-            )}
+            ) : null}
           </div>
         ) : (
           displayedDossiers.map((dossier) => {
@@ -672,6 +681,7 @@ export function DossiersInlinePanel({
                     </div>
                   </div>
 
+                  {canManage ? (
                   <div className="icon-actions table-actions-icons">
                     <button
                       type="button"
@@ -714,6 +724,7 @@ export function DossiersInlinePanel({
                       <span className="material-symbols-rounded">delete</span>
                     </button>
                   </div>
+                  ) : null}
                 </header>
 
                 <div className="dossier-modern-chips">
@@ -764,10 +775,12 @@ export function DossiersInlinePanel({
                     Voir les contrats
                     <span className="dossier-action-count">{metrics.assignedCount}</span>
                   </button>
-                  <button type="button" className="btn btn-outline" onClick={() => navigate(`/app/contrats/nouveau?dossierId=${dossier.id}`)}>
-                    <span className="material-symbols-rounded icon">note_add</span>
-                    Ajouter un contrat
-                  </button>
+                  {canManage ? (
+                    <button type="button" className="btn btn-outline" onClick={() => navigate(`/app/contrats/nouveau?dossierId=${dossier.id}`)}>
+                      <span className="material-symbols-rounded icon">note_add</span>
+                      Ajouter un contrat
+                    </button>
+                  ) : null}
                 </footer>
               </article>
             );

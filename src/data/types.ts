@@ -1,4 +1,44 @@
+import type { AppRole } from "../features/auth/permissions";
+
 export type Gender = "Homme" | "Femme";
+
+export type AuditValue = string | number | boolean | null;
+
+export type AuditActor = {
+  id?: string | null;
+  name: string;
+  role?: AppRole | null;
+};
+
+export type ContractAuditChange = {
+  field: string;
+  previousValue: AuditValue;
+  newValue: AuditValue;
+};
+
+export type ContractAuditAction =
+  | "creation"
+  | "modification"
+  | "status"
+  | "dossier"
+  | "duration"
+  | "comment"
+  | "deletion";
+
+export type ContractAuditEntry = {
+  id: string;
+  action: ContractAuditAction;
+  at: string;
+  actor: AuditActor;
+  changes: ContractAuditChange[];
+};
+
+export type ContractAuditHistory = {
+  version: 2;
+  createdAt: string;
+  createdBy: AuditActor;
+  entries: ContractAuditEntry[];
+};
 
 export type Workspace = {
   id: string;
@@ -90,6 +130,7 @@ export type Contract = {
   createdBy?: string | null;
   commentaire?: string | null;
   tags?: Tag[];
+  auditHistory?: ContractAuditHistory;
 };
 
 export type ContractPrintJob = {
@@ -201,6 +242,7 @@ export type AppUser = {
   username: string;
   password?: string;
   fullName: string;
+  role: AppRole;
   createdAt: string | null;
   updatedAt: string | null;
 };

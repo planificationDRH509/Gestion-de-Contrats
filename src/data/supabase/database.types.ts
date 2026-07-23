@@ -20,6 +20,7 @@ export type Database = {
           full_name: string
           id: string
           password: string
+          role: string
           updated_at: string | null
           username: string
           workspaces: string[]
@@ -29,6 +30,7 @@ export type Database = {
           full_name: string
           id?: string
           password: string
+          role?: string
           updated_at?: string | null
           username: string
           workspaces?: string[]
@@ -38,6 +40,7 @@ export type Database = {
           full_name?: string
           id?: string
           password?: string
+          role?: string
           updated_at?: string | null
           username?: string
           workspaces?: string[]

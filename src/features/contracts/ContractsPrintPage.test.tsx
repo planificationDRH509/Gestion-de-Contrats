@@ -55,6 +55,7 @@ describe("ContractsPrintPage", () => {
     mocks.mutate.mockReset();
     mocks.navigate.mockReset();
     vi.spyOn(window, "print").mockImplementation(() => undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -94,5 +95,31 @@ describe("ContractsPrintPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
 
     expect(window.print).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks before changing the contract status after printing", () => {
+    render(<ContractsPrintPage />);
+
+    act(() => window.dispatchEvent(new Event("afterprint")));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Voulez-vous changer l’état de ce contrat en « Imprimé » ?'
+    );
+    expect(mocks.mutate).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contractIds: ["contract-1"],
+      status: "imprime"
+    });
+    expect(mocks.appendPrintHistory).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the current status when the confirmation is refused", () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    render(<ContractsPrintPage />);
+
+    act(() => window.dispatchEvent(new Event("afterprint")));
+
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.appendPrintHistory).toHaveBeenCalledOnce();
   });
 });

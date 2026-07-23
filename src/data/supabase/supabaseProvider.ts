@@ -68,6 +68,15 @@ import {
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
 import { matchesContractSearch } from "../../lib/personSearch";
+import {
+  appendContractAuditEntry,
+  buildContractAuditChanges,
+  createContractAuditHistory,
+  getStoredAuditActor,
+  inferAuditAction,
+  parseContractAudit,
+  serializeContractAudit
+} from "../../lib/contractAudit";
 
 function repositoryError(message: string, cause?: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -116,6 +125,13 @@ function mapContract(row: any): Contract {
     deletedAt: row.deleted_at || null,
     createdBy: row.created_by,
     commentaire: row.commentaire || null,
+    auditHistory: parseContractAudit(row.historique_saisie, {
+      createdAt: row.created_at,
+      createdBy: {
+        id: row.created_by || null,
+        name: row.created_by || "Utilisateur inconnu"
+      }
+    }),
     tags: Array.isArray(row.contract_tags)
       ? row.contract_tags.map((ct: any) => ct.tags).filter(Boolean).map(mapTag)
       : undefined
@@ -521,6 +537,10 @@ class SupabaseDossierRepository implements DossierRepository {
 
 class SupabaseContractRepository implements ContractRepository {
   private buildInsertPayload(input: CreateContractInput) {
+    const timestamp = new Date().toISOString();
+    const auditHistory =
+      input.auditHistory ??
+      createContractAuditHistory(getStoredAuditActor(), timestamp);
     return {
       id_contrat: (input as CreateContractInput & { id?: string }).id || crypto.randomUUID(),
       workspace_id: input.workspaceId,
@@ -534,7 +554,7 @@ class SupabaseContractRepository implements ContractRepository {
       duree_contrat: input.durationMonths || 12,
       commentaire: input.commentaire || null,
       annee_fiscale: getStoredFiscalYear(),
-      historique_saisie: "[]",
+      historique_saisie: serializeContractAudit(auditHistory),
       created_by: input.createdBy
     };
   }
@@ -712,6 +732,10 @@ class SupabaseContractRepository implements ContractRepository {
 
   async update(input: UpdateContractInput): Promise<Contract> {
     const client = getSupabaseClient();
+    const existing = await this.getById(input.id);
+    if (!existing) {
+      throw new Error("Contrat introuvable.");
+    }
     const payload: Record<string, any> = {};
     if (input.status !== undefined) payload.status = input.status;
     if (input.position !== undefined) payload.titre = input.position;
@@ -724,6 +748,26 @@ class SupabaseContractRepository implements ContractRepository {
       payload.nif = input.applicantId || input.nif || "";
     }
     if (input.commentaire !== undefined) payload.commentaire = input.commentaire;
+
+    const nextValues: Partial<Contract> = {
+      ...input,
+      dossierId:
+        input.dossierId !== undefined ? input.dossierId : existing.dossierId,
+      commentaire:
+        input.commentaire !== undefined ? input.commentaire : existing.commentaire
+    };
+    const changes = buildContractAuditChanges(existing, nextValues);
+    const suppliedHistory = input.auditHistory;
+    const shouldUseSuppliedHistory =
+      suppliedHistory &&
+      suppliedHistory.entries.length >= (existing.auditHistory?.entries.length ?? 0);
+    const auditHistory = shouldUseSuppliedHistory
+      ? suppliedHistory
+      : appendContractAuditEntry(existing.auditHistory, {
+          action: inferAuditAction(changes),
+          changes
+        });
+    payload.historique_saisie = serializeContractAudit(auditHistory);
 
     const { data, error } = await (client
       .from("contrat")
@@ -747,20 +791,14 @@ class SupabaseContractRepository implements ContractRepository {
       return 0;
     }
 
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("contrat")
-      .update({ dossier_id: dossierId } as any)
-      .eq("workspace_id", workspaceId)
-      .in("id_contrat", contractIds)
-      .is("deleted_at", null)
-      .select("id_contrat");
-
-    if (error) {
-      throw repositoryError("Impossible d'affecter les contrats au dossier.", error);
-    }
-
-    return data?.length ?? 0;
+    return this.updateManyWithAudit(
+      workspaceId,
+      contractIds,
+      "dossier",
+      () => ({ dossierId }),
+      () => ({ dossier_id: dossierId }),
+      "Impossible d'affecter les contrats au dossier."
+    );
   }
 
   async updateStatus(
@@ -772,20 +810,14 @@ class SupabaseContractRepository implements ContractRepository {
       return 0;
     }
 
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("contrat")
-      .update({ status } as any)
-      .eq("workspace_id", workspaceId)
-      .in("id_contrat", contractIds)
-      .is("deleted_at", null)
-      .select("id_contrat");
-
-    if (error) {
-      throw repositoryError("Impossible de modifier l'état des contrats.", error);
-    }
-
-    return data?.length ?? 0;
+    return this.updateManyWithAudit(
+      workspaceId,
+      contractIds,
+      "status",
+      () => ({ status }),
+      () => ({ status }),
+      "Impossible de modifier l'état des contrats."
+    );
   }
 
   async updateDuration(
@@ -797,32 +829,77 @@ class SupabaseContractRepository implements ContractRepository {
       return 0;
     }
 
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("contrat")
-      .update({ duree_contrat: durationMonths } as any)
-      .eq("workspace_id", workspaceId)
-      .in("id_contrat", contractIds)
-      .is("deleted_at", null)
-      .select("id_contrat");
-
-    if (error) {
-      throw repositoryError("Impossible de modifier la durée des contrats.", error);
-    }
-
-    return data?.length ?? 0;
+    return this.updateManyWithAudit(
+      workspaceId,
+      contractIds,
+      "duration",
+      () => ({ durationMonths }),
+      () => ({ duree_contrat: durationMonths }),
+      "Impossible de modifier la durée des contrats."
+    );
   }
 
   async softDelete(id: string, workspaceId: string): Promise<void> {
     const client = getSupabaseClient();
+    const existing = await this.getById(id);
+    const auditHistory = appendContractAuditEntry(existing?.auditHistory, {
+      action: "deletion",
+      changes: []
+    });
     const { error } = await client
       .from("contrat")
-      .update({ deleted_at: new Date().toISOString() } as any)
+      .update({
+        deleted_at: new Date().toISOString(),
+        historique_saisie: serializeContractAudit(auditHistory)
+      } as any)
       .eq("id_contrat", id)
       .eq("workspace_id", workspaceId);
     if (error) {
       throw repositoryError("Impossible de supprimer le contrat.", error);
     }
+  }
+
+  private async updateManyWithAudit(
+    workspaceId: string,
+    contractIds: string[],
+    action: "status" | "dossier" | "duration",
+    nextValues: (contract: Contract) => Partial<Contract>,
+    databasePatch: (contract: Contract) => Record<string, unknown>,
+    errorMessage: string
+  ): Promise<number> {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("contrat")
+      .select("*, identification(*), contract_tags(tags(*))")
+      .eq("workspace_id", workspaceId)
+      .in("id_contrat", contractIds)
+      .is("deleted_at", null);
+    if (error || !data) {
+      throw repositoryError(errorMessage, error);
+    }
+
+    const contracts = data.map(mapContract);
+    await Promise.all(contracts.map(async (contract) => {
+      const changes = buildContractAuditChanges(contract, nextValues(contract));
+      if (changes.length === 0) return;
+      const auditHistory = appendContractAuditEntry(contract.auditHistory, {
+        action,
+        changes
+      });
+      const { error: updateError } = await client
+        .from("contrat")
+        .update({
+          ...databasePatch(contract),
+          historique_saisie: serializeContractAudit(auditHistory)
+        } as any)
+        .eq("id_contrat", contract.id)
+        .eq("workspace_id", workspaceId);
+      if (updateError) {
+        throw repositoryError(errorMessage, updateError);
+      }
+    }));
+
+    return contracts.length;
   }
 }
 

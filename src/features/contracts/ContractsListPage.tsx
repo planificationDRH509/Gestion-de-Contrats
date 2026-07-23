@@ -70,7 +70,7 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 ];
 
 export function ContractsListPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const navigate = useNavigate();
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
@@ -557,6 +557,7 @@ export function ContractsListPage() {
   }
 
   async function handleExportExcel() {
+    if (!can("contracts.export")) return;
     if (selected.length === 0) return;
     setActionMessage(null);
     setActionError(null);
@@ -578,6 +579,7 @@ export function ContractsListPage() {
   }
 
   async function handleCopyExcelData() {
+    if (!can("contracts.export")) return;
     if (selected.length === 0) return;
     setActionMessage(null);
     setActionError(null);
@@ -599,6 +601,7 @@ export function ContractsListPage() {
   }
 
   async function assignContracts(ids: string[], dossierId: string | null) {
+    if (!can("dossiers.manage")) return;
     if (ids.length === 0) return;
 
     setActionMessage(null);
@@ -653,6 +656,7 @@ export function ContractsListPage() {
   }
 
   async function handleChangeStatus(ids: string[], newStatus: ContractStatus) {
+    if (!can("contracts.change_status")) return;
     if (ids.length === 0) return;
     setActionMessage(null);
     setActionError(null);
@@ -678,6 +682,7 @@ export function ContractsListPage() {
   }
 
   async function handleApplyBulkDuration() {
+    if (!can("contracts.edit")) return;
     if (selected.length === 0 || !bulkDuration) return;
     setActionMessage(null);
     setActionError(null);
@@ -1147,6 +1152,7 @@ export function ContractsListPage() {
   }
 
   async function handleDeleteContract(contractId: string) {
+    if (!can("contracts.delete")) return;
     if (!contractId) return;
     const confirmed = window.confirm("Supprimer ce contrat ? Cette action est irréversible.");
     if (!confirmed) return;
@@ -1178,10 +1184,12 @@ export function ContractsListPage() {
               ) : null}
             </div>
           </div>
-          <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
-            <span className="material-symbols-rounded icon">add</span>
-            Nouveau contrat
-          </button>
+          {can("contracts.create") ? (
+            <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
+              <span className="material-symbols-rounded icon">add</span>
+              Nouveau contrat
+            </button>
+          ) : null}
         </div>
         <div className="toolbar-unified">
           <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
@@ -1318,6 +1326,7 @@ export function ContractsListPage() {
       {activeView === "dossiers" ? (
         <DossiersInlinePanel
           workspaceId={workspaceId}
+          canManage={can("dossiers.manage")}
           onDossierCreated={(dossierId) => void handleDossierCreated(dossierId)}
           onViewDossier={(dossierId) => {
             setDossierFilterId(dossierId);
@@ -1378,16 +1387,18 @@ export function ContractsListPage() {
                       />
                       <span>Sélectionner tout</span>
                     </label>
-                    <button
-                      type="button"
-                      className="contracts-import"
-                      aria-label="Importer"
-                      title="Importer"
-                      onClick={() => setImportOpen(true)}
-                    >
-                      <span className="material-symbols-rounded icon">file_upload</span>
-                      <span>Importer</span>
-                    </button>
+                    {can("contracts.import") ? (
+                      <button
+                        type="button"
+                        className="contracts-import"
+                        aria-label="Importer"
+                        title="Importer"
+                        onClick={() => setImportOpen(true)}
+                      >
+                        <span className="material-symbols-rounded icon">file_upload</span>
+                        <span>Importer</span>
+                      </button>
+                    ) : null}
                     <button type="button" className="contracts-import" aria-label="Collaboration" title="Collaboration">
                       <span className="material-symbols-rounded icon">group</span>
                       <span>Collaboration</span>
@@ -1482,8 +1493,13 @@ export function ContractsListPage() {
                               type="button"
                               className="badge dossier-badge"
                               style={{ fontSize: "11px", padding: "2px 8px" }}
-                              aria-label="Ajouter au dossier"
-                              onClick={(event) => openDossierMenu(event, contract.id)}
+                              aria-label={can("dossiers.manage") ? "Ajouter au dossier" : "Sans dossier"}
+                              onClick={(event) => {
+                                if (can("dossiers.manage")) {
+                                  openDossierMenu(event, contract.id);
+                                }
+                              }}
+                              disabled={!can("dossiers.manage")}
                             >
                               <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>folder</span>
                               <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>add</span>
@@ -1494,7 +1510,12 @@ export function ContractsListPage() {
                             type="button"
                             className={`badge has-tooltip ${getContractStatusBadgeClass(contract.status)}`}
                             style={{ fontSize: "11px", padding: "2px 8px" }}
-                            onClick={(e) => handleContextFromButton(e, contract.id, "status")}
+                            onClick={(event) => {
+                              if (can("contracts.change_status")) {
+                                handleContextFromButton(event, contract.id, "status");
+                              }
+                            }}
+                            disabled={!can("contracts.change_status")}
                             data-tooltip={getStatusTooltip(contract)}
                             tabIndex={0}
                           >
@@ -1554,14 +1575,16 @@ export function ContractsListPage() {
                           >
                             <span className="material-symbols-rounded">visibility</span>
                           </button>
-                          <button
-                            className="icon-btn"
-                            onClick={() => navigate(`/app/contrats/${contract.id}/modifier`)}
-                            aria-label="Modifier le contrat"
-                            title="Modifier"
-                          >
-                            <span className="material-symbols-rounded">edit</span>
-                          </button>
+                          {can("contracts.edit") ? (
+                            <button
+                              className="icon-btn"
+                              onClick={() => navigate(`/app/contrats/${contract.id}/modifier`)}
+                              aria-label="Modifier le contrat"
+                              title="Modifier"
+                            >
+                              <span className="material-symbols-rounded">edit</span>
+                            </button>
+                          ) : null}
                           <button
                             className="icon-btn primary"
                             onClick={() => handlePrint([contract.id])}
@@ -1570,22 +1593,26 @@ export function ContractsListPage() {
                           >
                             <span className="material-symbols-rounded">print</span>
                           </button>
-                          <button
-                            className={`icon-btn comment-trigger ${hasComment ? "has-comment" : ""}`}
-                            onClick={() => openComment(contract.id, contract.commentaire ?? null)}
-                            aria-label={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
-                            title={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
-                          >
-                            <span className="material-symbols-rounded">chat_bubble</span>
-                          </button>
-                          <button
-                            className="icon-btn"
-                            onClick={(e) => handleContextFromButton(e, contract.id)}
-                            aria-label="Changer l'état ou le dossier"
-                            title="Plus d'actions"
-                          >
-                            <span className="material-symbols-rounded">more_vert</span>
-                          </button>
+                          {can("contracts.edit") ? (
+                            <button
+                              className={`icon-btn comment-trigger ${hasComment ? "has-comment" : ""}`}
+                              onClick={() => openComment(contract.id, contract.commentaire ?? null)}
+                              aria-label={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                              title={hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire"}
+                            >
+                              <span className="material-symbols-rounded">chat_bubble</span>
+                            </button>
+                          ) : null}
+                          {can("contracts.change_status") || can("dossiers.manage") || can("contracts.delete") ? (
+                            <button
+                              className="icon-btn"
+                              onClick={(event) => handleContextFromButton(event, contract.id)}
+                              aria-label="Actions autorisées"
+                              title="Plus d'actions"
+                            >
+                              <span className="material-symbols-rounded">more_vert</span>
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       </div>
@@ -1896,28 +1923,33 @@ export function ContractsListPage() {
                           : "Afficher toutes les informations"}
                       </button>
 
-                      <button
-                        type="button"
-                        className="context-menu-item"
-                        style={{ padding: "10px 12px", fontSize: "13px" }}
-                        onClick={() => setMenuView("status")}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>rule</span>
-                        Changer l'état
-                        <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
-                      </button>
+                      {can("contracts.change_status") ? (
+                        <button
+                          type="button"
+                          className="context-menu-item"
+                          style={{ padding: "10px 12px", fontSize: "13px" }}
+                          onClick={() => setMenuView("status")}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>rule</span>
+                          Changer l'état
+                          <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
+                        </button>
+                      ) : null}
 
-                      <button
-                        type="button"
-                        className="context-menu-item"
-                        style={{ padding: "10px 12px", fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}
-                        onClick={() => setMenuView("dossiers")}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder_shared</span>
-                        Dossiers
-                        <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
-                      </button>
+                      {can("dossiers.manage") ? (
+                        <button
+                          type="button"
+                          className="context-menu-item"
+                          style={{ padding: "10px 12px", fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}
+                          onClick={() => setMenuView("dossiers")}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder_shared</span>
+                          Dossiers
+                          <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
+                        </button>
+                      ) : null}
 
+                      {can("dossiers.manage") ? (
                       <div style={{ display: "flex", gap: "1px", background: "var(--border)", marginTop: "4px" }}>
                         <button
                           type="button"
@@ -1942,6 +1974,7 @@ export function ContractsListPage() {
                           Nouveau
                         </button>
                       </div>
+                      ) : null}
 
                       <div className="context-menu-divider" style={{ height: "1px", background: "var(--border)", margin: "6px 0" }}></div>
 
@@ -1959,19 +1992,21 @@ export function ContractsListPage() {
                         Lettre d'affectation
                       </button>
 
-                      <button
-                        type="button"
-                        className="context-menu-item"
-                        style={{ padding: "10px 12px", fontSize: "13px", color: "#b91c1c", fontWeight: 600 }}
-                        onClick={() => {
-                          const id = contextMenu.id;
-                          setContextMenu(null);
-                          void handleDeleteContract(id);
-                        }}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>delete</span>
-                        Supprimer
-                      </button>
+                      {can("contracts.delete") ? (
+                        <button
+                          type="button"
+                          className="context-menu-item"
+                          style={{ padding: "10px 12px", fontSize: "13px", color: "#b91c1c", fontWeight: 600 }}
+                          onClick={() => {
+                            const id = contextMenu.id;
+                            setContextMenu(null);
+                            void handleDeleteContract(id);
+                          }}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>delete</span>
+                          Supprimer
+                        </button>
+                      ) : null}
                     </>
                   ) : menuView === "status" ? (
                     <>
@@ -2186,6 +2221,8 @@ export function ContractsListPage() {
               </button>
             </div>
             <div className="selection-actions-row" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {can("dossiers.manage") ? (
+              <>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
                 <button
                    className="icon-btn"
@@ -2222,7 +2259,11 @@ export function ContractsListPage() {
               </div>
 
               <div className="toolbar-divider" />
+              </>
+              ) : null}
 
+              {can("contracts.change_status") ? (
+              <>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
                 <button
                    className="icon-btn"
@@ -2249,7 +2290,11 @@ export function ContractsListPage() {
               </button>
 
               <div className="toolbar-divider" />
+              </>
+              ) : null}
 
+              {can("contracts.edit") ? (
+              <>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <input
                    className="input"
@@ -2272,6 +2317,8 @@ export function ContractsListPage() {
               </div>
 
               <div className="toolbar-divider" />
+              </>
+              ) : null}
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
                 <button
@@ -2282,14 +2329,16 @@ export function ContractsListPage() {
                 >
                   <span className="material-symbols-rounded">print</span>
                 </button>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={(event) => handleContextFromButton(event, "export-trigger")}
-                  title="Exporter Excel"
-                >
-                  <span className="material-symbols-rounded">download_for_offline</span>
-                </button>
+                {can("contracts.export") ? (
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    onClick={(event) => handleContextFromButton(event, "export-trigger")}
+                    title="Exporter Excel"
+                  >
+                    <span className="material-symbols-rounded">download_for_offline</span>
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

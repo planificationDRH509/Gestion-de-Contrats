@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth, AuthUser } from "../../features/auth/auth";
 import { syncSuggestionsFromServer } from "../../data/local/suggestionsDb";
 import type { SupabaseSyncState } from "../../data/supabase/supabaseProvider";
+import { APP_ROLE_LABELS } from "../../features/auth/permissions";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -15,7 +16,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
   useEffect(() => {
@@ -61,34 +62,60 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           collapsed={collapsed} 
           end 
         />
-        <NavItem 
-          to="/app/contrats/nouveau" 
-          icon="add_circle" 
-          label="Nouveau contrat" 
-          shortLabel="Nouveau"
-          collapsed={collapsed} 
-        />
+        {can("contracts.create") ? (
+          <NavItem
+            to="/app/contrats/nouveau"
+            icon="add_circle"
+            label="Nouveau contrat"
+            shortLabel="Nouveau"
+            collapsed={collapsed}
+          />
+        ) : null}
         <NavItem 
           to="/app/statistiques" 
           icon="analytics" 
           label="Statistiques" 
           collapsed={collapsed} 
         />
-        <NavItem 
-          to="/app/identification" 
-          icon="badge" 
-          label="Identification" 
-          collapsed={collapsed} 
-        />
+        {can("identification.manage") ? (
+          <NavItem
+            to="/app/identification"
+            icon="badge"
+            label="Identification"
+            collapsed={collapsed}
+          />
+        ) : null}
+
+        {can("quality.view") ? (
+          <NavItem
+            to="/app/controle-qualite"
+            icon="fact_check"
+            label="Contrôle qualité"
+            shortLabel="Qualité"
+            collapsed={collapsed}
+          />
+        ) : null}
+
+        {can("audit.view") ? (
+          <NavItem
+            to="/app/audit"
+            icon="history"
+            label="Journal d’audit"
+            shortLabel="Audit"
+            collapsed={collapsed}
+          />
+        ) : null}
 
         <div className="nav-divider" />
         
-        <NavItem 
-          to="/app/parametres" 
-          icon="settings" 
-          label="Paramètres" 
-          collapsed={collapsed} 
-        />
+        {can("settings.manage") ? (
+          <NavItem
+            to="/app/parametres"
+            icon="settings"
+            label="Paramètres"
+            collapsed={collapsed}
+          />
+        ) : null}
       </nav>
 
       <SidebarFooter 
@@ -180,7 +207,9 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
               </span>
               <div className="user-copy">
                 <div className="user-name">{user.name}</div>
-                <div className="user-meta">@{user.username}</div>
+                <div className="user-meta">
+                  @{user.username} · {APP_ROLE_LABELS[user.role]}
+                </div>
               </div>
               <span className="material-symbols-rounded user-chevron">
                 {menuOpen ? 'expand_less' : 'expand_more'}

@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 import { getDefaultWorkspace, listLocalWorkspaces } from "../../data/local/workspaces";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
+import {
+  hasPermission,
+  normalizeAppRole,
+  type AppPermission,
+  type AppRole
+} from "./permissions";
 
 export type AuthUser = {
   id: string;
@@ -8,12 +14,14 @@ export type AuthUser = {
   name: string;
   // Kept as an internal data partition key for backward compatibility.
   workspaceId: string;
+  role: AppRole;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  can: (permission: AppPermission) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -40,7 +48,8 @@ function loadSession(): AuthUser | null {
       id: parsed.id,
       username: parsed.username,
       name: parsed.name,
-      workspaceId: parsed.workspaceId
+      workspaceId: parsed.workspaceId,
+      role: normalizeAppRole(parsed.role, parsed.username)
     };
   } catch {
     localStorage.removeItem(AUTH_KEY);
@@ -91,7 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: data.id,
           username: data.username,
           name: data.full_name,
-          workspaceId: dataPartition.id
+          workspaceId: dataPartition.id,
+          role: normalizeAppRole((data as { role?: unknown }).role, data.username)
         };
         setUser(sessionUser);
         saveSession(sessionUser);
@@ -100,7 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: () => {
         setUser(null);
         saveSession(null);
-      }
+      },
+      can: (permission: AppPermission) =>
+        Boolean(user && hasPermission(user.role, permission))
     }),
     [user]
   );

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import { AppUser } from "../../data/types";
+import { normalizeAppRole } from "./permissions";
 
 export function useAppUsers() {
   return useQuery({
@@ -18,6 +19,7 @@ export function useAppUsers() {
         id: u.id,
         username: u.username,
         fullName: u.full_name,
+        role: normalizeAppRole(u.role, u.username),
         createdAt: u.created_at,
         updatedAt: u.updated_at
       })) as AppUser[];

@@ -6,28 +6,35 @@ type RequestOptions = {
   body?: unknown;
 };
 
-function getOperatorName() {
+function getOperator() {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
     if (!raw) {
-      return "Administrateur";
+      return { id: "", name: "Administrateur", role: "admin" };
     }
-    const parsed = JSON.parse(raw) as { name?: string };
-    return parsed?.name?.trim() || "Administrateur";
+    const parsed = JSON.parse(raw) as { id?: string; name?: string; role?: string };
+    return {
+      id: parsed?.id?.trim() || "",
+      name: parsed?.name?.trim() || "Administrateur",
+      role: parsed?.role?.trim() || ""
+    };
   } catch {
-    return "Administrateur";
+    return { id: "", name: "Administrateur", role: "admin" };
   }
 }
 
 export async function sqliteApiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
   const hasBody = options.body !== undefined;
+  const operator = getOperator();
 
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      "x-operator-name": getOperatorName()
+      "x-operator-id": operator.id,
+      "x-operator-name": operator.name,
+      "x-operator-role": operator.role
     },
     body: hasBody ? JSON.stringify(options.body) : undefined
   });
