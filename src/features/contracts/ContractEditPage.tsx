@@ -45,7 +45,7 @@ function normalize(str: string): string {
 }
 
 export function ContractEditPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { contractId } = useParams();
   const navigate = useNavigate();
   const { data, isLoading } = useContract(contractId);
@@ -298,7 +298,7 @@ export function ContractEditPage() {
   }
 
   async function handleCreateDossier() {
-    if (!user) return;
+    if (!user || !can("dossiers.manage")) return;
     const name = window.prompt("Nom du nouveau dossier");
     if (!name?.trim()) {
       return;
@@ -631,15 +631,17 @@ export function ContractEditPage() {
               <select className="select" {...register("dossierId")}>
                 <DossierSelectOptions dossiers={dossiers} />
               </select>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={handleCreateDossier}
-                disabled={createDossier.isPending}
-              >
-                <span className="material-symbols-rounded icon">create_new_folder</span>
-                Dossier
-              </button>
+              {can("dossiers.manage") ? (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleCreateDossier}
+                  disabled={createDossier.isPending}
+                >
+                  <span className="material-symbols-rounded icon">create_new_folder</span>
+                  Dossier
+                </button>
+              ) : null}
             </div>
           </div>
 
