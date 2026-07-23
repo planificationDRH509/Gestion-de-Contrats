@@ -54,12 +54,9 @@ Notes :
 ## Basculer Local -> Supabase
 
 1. Executer les migrations SQL dans Supabase :
-   - `supabase/migrations/001_init.sql`
-   - `supabase/migrations/002_rls.sql`
-   - `supabase/migrations/003_dossiers.sql`
-   - `supabase/migrations/004_dossier_customization.sql`
-   - `supabase/migrations/005_dossier_ephemeral.sql`
-   - `supabase/migrations/006_dossier_priority.sql`
+   - appliquer tous les fichiers de `supabase/migrations/` dans l'ordre de leur nom ;
+   - `013_app_user_roles.sql` ajoute les rôles et promeut le compte `admin` existant ;
+   - `014_contract_audit_columns.sql` finalise `historique_saisie` et ajoute le filet de sécurité d'audit.
 2. Ajouter les variables d'environnement.
 3. Passer `VITE_DATA_PROVIDER=supabase`.
 
