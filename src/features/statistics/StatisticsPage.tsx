@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "../auth/auth";
 import { useAppUsers } from "../auth/usersApi";
 import { useContractsList } from "../contracts/contractsApi";
-import { 
+import {
   BarChart, 
   Bar, 
   XAxis, 
@@ -18,8 +18,18 @@ import {
   Area
 } from "recharts";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
+import { calculateFinancialStatistics } from "./financialStatistics";
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f43f5e'];
+const HTG_FORMATTER = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0
+});
+const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat("fr-FR", {
+  notation: "compact",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1
+});
 
 type FilterType = 'all' | 'today' | 'week' | 'month' | 'quarter' | 'custom';
 
@@ -42,6 +52,51 @@ function PremiumCard({ staggerClass = "", glowColor, style, children }: PremiumC
     <div className={`premium-card ${staggerClass}`} style={cardStyle}>
       {children}
     </div>
+  );
+}
+
+function formatHtg(value: number) {
+  return `${HTG_FORMATTER.format(Math.round(value))} HTG`;
+}
+
+function formatCompactHtg(value: number) {
+  return `${COMPACT_NUMBER_FORMATTER.format(value)} HTG`;
+}
+
+interface FinancialMetricCardProps {
+  icon: string;
+  label: string;
+  value: string;
+  exactValue: string;
+  detail: string;
+  tone: "gold" | "green" | "blue" | "purple";
+}
+
+function FinancialMetricCard({
+  icon,
+  label,
+  value,
+  exactValue,
+  detail,
+  tone
+}: FinancialMetricCardProps) {
+  return (
+    <PremiumCard
+      staggerClass="stagger-2"
+      glowColor="rgba(180, 132, 27, 0.1)"
+      style={{ padding: "20px" }}
+    >
+      <div className="financial-metric-card">
+        <div className={`financial-metric-icon ${tone}`}>
+          <span className="material-symbols-rounded">{icon}</span>
+        </div>
+        <div className="financial-metric-copy">
+          <span>{label}</span>
+          <strong title={exactValue}>{value}</strong>
+          <small>{detail}</small>
+        </div>
+      </div>
+    </PremiumCard>
   );
 }
 
@@ -162,6 +217,10 @@ export function StatisticsPage() {
   }, [rawContracts, filterType, startDate, endDate, statusFilter, selectedAssignments, selectedPositions, fiscalYear]);
 
   const contracts = filteredContracts;
+  const financialStats = useMemo(
+    () => calculateFinancialStatistics(contracts, fiscalYear),
+    [contracts, fiscalYear]
+  );
 
   // 3. STATS DATA & CALCULATIONS
   const genderData = useMemo(() => {
@@ -407,7 +466,38 @@ export function StatisticsPage() {
     return null;
   };
 
+  const BudgetTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+
+    const month = payload[0].payload;
+    return (
+      <div className="statistics-chart-tooltip">
+        <span>{month.label}</span>
+        <strong>{formatHtg(month.monthlyBudget)}</strong>
+        <small>
+          {month.activeContracts} contrat{month.activeContracts > 1 ? "s" : ""} actif
+          {month.activeContracts > 1 ? "s" : ""}
+        </small>
+      </div>
+    );
+  };
+
   const isAdvancedFilterActive = statusFilter !== 'all' || selectedAssignments.length > 0 || selectedPositions.length > 0;
+  const financialCoverage = totalContracts > 0
+    ? Math.round((financialStats.validContracts / totalContracts) * 100)
+    : 0;
+  const budgetTrendLabel =
+    financialStats.trendDirection === "up"
+      ? "En hausse"
+      : financialStats.trendDirection === "down"
+        ? "En baisse"
+        : "Stable";
+  const budgetTrendIcon =
+    financialStats.trendDirection === "up"
+      ? "trending_up"
+      : financialStats.trendDirection === "down"
+        ? "trending_down"
+        : "trending_flat";
 
   return (
     <div className="page-container statistics-page">
@@ -906,6 +996,169 @@ export function StatisticsPage() {
             </PremiumCard>
 
           </div>
+
+          {/* 4. FINANCIAL OUTLOOK */}
+          <section className="financial-section" aria-labelledby="financial-section-title">
+            <div className="financial-section-heading">
+              <div>
+                <span className="page-eyebrow">Pilotage financier</span>
+                <h2 id="financial-section-title">Projection budgétaire</h2>
+                <p>
+                  Engagements calculés à partir du salaire mensuel et de la durée de chaque contrat.
+                </p>
+              </div>
+              <div className="financial-data-coverage">
+                <span className="material-symbols-rounded">verified</span>
+                {financialCoverage}% des contrats exploitables
+              </div>
+            </div>
+
+            <div className="financial-kpi-grid">
+              <FinancialMetricCard
+                icon="account_balance_wallet"
+                label="Budget total engagé"
+                value={formatCompactHtg(financialStats.totalCommittedBudget)}
+                exactValue={formatHtg(financialStats.totalCommittedBudget)}
+                detail={`${formatCompactHtg(financialStats.monthlySalaryBase)} de salaires mensuels cumulés`}
+                tone="gold"
+              />
+              <FinancialMetricCard
+                icon="calendar_month"
+                label="Projection de l'exercice"
+                value={formatCompactHtg(financialStats.fiscalYearProjectedBudget)}
+                exactValue={formatHtg(financialStats.fiscalYearProjectedBudget)}
+                detail={`Charge estimée pour l'exercice ${fiscalYear}`}
+                tone="green"
+              />
+              <FinancialMetricCard
+                icon="monitoring"
+                label="Pic mensuel projeté"
+                value={formatCompactHtg(financialStats.peakMonthlyBudget)}
+                exactValue={formatHtg(financialStats.peakMonthlyBudget)}
+                detail={financialStats.peakMonthLabel || "Aucun mois actif"}
+                tone="blue"
+              />
+              <FinancialMetricCard
+                icon="request_quote"
+                label="Coût moyen par contrat"
+                value={formatCompactHtg(financialStats.averageContractBudget)}
+                exactValue={formatHtg(financialStats.averageContractBudget)}
+                detail={`${financialStats.validContracts} contrat${financialStats.validContracts > 1 ? "s" : ""} valorisé${financialStats.validContracts > 1 ? "s" : ""}`}
+                tone="purple"
+              />
+            </div>
+
+            <div className="financial-detail-grid">
+              <PremiumCard
+                staggerClass="stagger-3"
+                glowColor="rgba(180, 132, 27, 0.08)"
+                style={{ gridColumn: "span 8" }}
+              >
+                <div className="financial-chart-header">
+                  <div>
+                    <h3>Tendance du budget mensuel</h3>
+                    <span>Charge salariale estimée sur les mois couverts par les contrats</span>
+                  </div>
+                  <div className={`financial-trend-badge ${financialStats.trendDirection}`}>
+                    <span className="material-symbols-rounded">{budgetTrendIcon}</span>
+                    {budgetTrendLabel}
+                    {financialStats.trendPercent !== 0
+                      ? ` · ${financialStats.trendPercent > 0 ? "+" : ""}${financialStats.trendPercent}%`
+                      : ""}
+                  </div>
+                </div>
+
+                <div className="financial-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={financialStats.monthlyTrend}
+                      margin={{ top: 12, right: 10, left: 6, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="budgetGold" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#b4841b" stopOpacity={0.42} />
+                          <stop offset="100%" stopColor="#b4841b" stopOpacity={0.03} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="4 4"
+                        vertical={false}
+                        stroke="var(--border)"
+                        opacity={0.45}
+                      />
+                      <XAxis
+                        dataKey="shortLabel"
+                        stroke="var(--ink-muted)"
+                        fontSize={11}
+                        fontWeight={600}
+                        tickLine={false}
+                        axisLine={false}
+                        dy={8}
+                      />
+                      <YAxis
+                        stroke="var(--ink-muted)"
+                        fontSize={11}
+                        fontWeight={600}
+                        tickLine={false}
+                        axisLine={false}
+                        width={74}
+                        tickFormatter={(value) => COMPACT_NUMBER_FORMATTER.format(value)}
+                      />
+                      <Tooltip content={<BudgetTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="monthlyBudget"
+                        name="Budget mensuel"
+                        stroke="#b4841b"
+                        fill="url(#budgetGold)"
+                        fillOpacity={1}
+                        strokeWidth={3}
+                        activeDot={{ r: 6, strokeWidth: 2, stroke: "var(--panel)", fill: "#b4841b" }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </PremiumCard>
+
+              <PremiumCard
+                staggerClass="stagger-4"
+                glowColor="rgba(16, 185, 129, 0.08)"
+                style={{ gridColumn: "span 4" }}
+              >
+                <div className="financial-breakdown-header">
+                  <h3>Poids budgétaire</h3>
+                  <span>Affectations les plus engagées</span>
+                </div>
+
+                <div className="financial-assignment-list">
+                  {financialStats.topAssignments.map((assignment, index) => (
+                    <div className="financial-assignment-row" key={assignment.name}>
+                      <div className="financial-assignment-label">
+                        <span>{index + 1}</span>
+                        <strong title={assignment.name}>{assignment.name}</strong>
+                        <small>{formatCompactHtg(assignment.budget)}</small>
+                      </div>
+                      <div className="financial-assignment-track">
+                        <span style={{ width: `${assignment.share}%` }} />
+                      </div>
+                      <div className="financial-assignment-share">
+                        {Math.round(assignment.share)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="financial-method-note">
+                  <span className="material-symbols-rounded">info</span>
+                  <p>
+                    Projection estimative&nbsp;: les contrats sont répartis jusqu'à la fin de
+                    l'exercice selon leur durée. Les montants représentent les salaires bruts,
+                    hors taxes et avantages.
+                  </p>
+                </div>
+              </PremiumCard>
+            </div>
+          </section>
 
           {/* 4. MAIN CHARTS AREA & SMART INSIGHTS PANEL */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "32px" }}>
