@@ -5,6 +5,7 @@ import { Contract } from "../../data/types";
 import {
   buildTemplateVariables,
   getDefaultTemplate,
+  loadTemplate,
   renderTemplate
 } from "./contractTemplate";
 import { setStoredContractStartDates } from "./settingsApi";
@@ -74,9 +75,71 @@ describe("reference contract template", () => {
 
     expect(variables.duration_months_padded).toBe("09");
     expect(variables.created_date_long).toBe("05 Janvier 2026");
+    expect(variables.position).toBe("Auxiliaire-Infirmière");
+    expect(variables.position_prefixed).toBe("d'Auxiliaire-Infirmière");
+    expect(variables.assignment).toBe("l’Hôpital Saint-Antoine de Jeremie");
+    expect(variables.assignment_prefixed).toBe("à l’Hôpital Saint-Antoine de Jeremie");
+    expect(variables.address_prefixed).toBe("à Jeremie");
     expect(html).toContain("Sainte-Mise MORQUETTE");
+    expect(html).toContain(
+      "à titre <strong>d'Auxiliaire-Infirmière à l’Hôpital Saint-Antoine de Jeremie</strong>"
+    );
+    expect(html).toContain("demeurant et domicilié à Jeremie");
+    expect(html).not.toMatch(/\bà\s+à\b/i);
+    expect(html).not.toMatch(/\bde\s+d['’]/i);
     expect(html).toContain("(09) mois");
     expect(html).not.toMatch(/\{\{[^}]+\}\}/);
+  });
+
+  it("removes prefixes already stored in contract values before applying them once", () => {
+    localStorage.setItem(
+      "contribution_suggestions_db",
+      JSON.stringify({
+        positions: [
+          { id: "p1", label: "Infirmière", prefix: "d’", salaries: [45_000], order: 0 }
+        ],
+        institutions: [
+          { id: "i1", label: "Hôpital Saint-Antoine", prefix: "à l’", addressKeywords: [], order: 0 }
+        ],
+        addresses: [
+          { id: "a1", label: "Jeremie", prefix: "à", order: 0 }
+        ]
+      })
+    );
+
+    const variables = buildTemplateVariables({
+      ...contract,
+      position: "d'Infirmière",
+      assignment: "à l’Hôpital Saint-Antoine",
+      address: "à Jérémie"
+    });
+    const html = renderTemplate(getDefaultTemplate("contract").html, variables);
+
+    expect(variables.position).toBe("Infirmière");
+    expect(variables.position_prefixed).toBe("d’Infirmière");
+    expect(variables.assignment).toBe("Hôpital Saint-Antoine");
+    expect(variables.assignment_prefixed).toBe("à l’Hôpital Saint-Antoine");
+    expect(variables.address).toBe("Jérémie");
+    expect(variables.address_prefixed).toBe("à Jérémie");
+    expect(html).not.toMatch(/\bà\s+à\b/i);
+    expect(html).not.toMatch(/\bde\s+d['’]/i);
+  });
+
+  it("migrates the old saved contract sentence to contextual grammar variables", () => {
+    localStorage.setItem(
+      "contribution_contract_template",
+      JSON.stringify({
+        html: "<p>demeurant et domicilié à {{address}}</p><p>à titre de <strong>{{position}} à {{assignment}}</strong></p>",
+        css: ""
+      })
+    );
+
+    const template = loadTemplate();
+
+    expect(template.html).toContain("domicilié {{address_prefixed}}");
+    expect(template.html).toContain(
+      "à titre <strong>{{position_prefixed}} {{assignment_prefixed}}</strong>"
+    );
   });
 
   it("uses the configured duration date for the start and signature", () => {

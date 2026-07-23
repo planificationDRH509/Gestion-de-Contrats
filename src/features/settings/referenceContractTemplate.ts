@@ -18,7 +18,7 @@ export const referenceContractTemplate: ContractTemplate = {
 
     <p><strong>Et</strong></p>
 
-    <p>{{honorific}} <strong>{{first_name}} {{last_name}},</strong> {{identifiee_identifie}} par son <strong>NINU : {{ninu}}</strong> et son <strong>NIF : {{nif}}</strong> demeurant et domicilié à {{address}}, ci-après {{denommee_denomme}} {{contractant_legal}}.</p>
+    <p>{{honorific}} <strong>{{first_name}} {{last_name}},</strong> {{identifiee_identifie}} par son <strong>NINU : {{ninu}}</strong> et son <strong>NIF : {{nif}}</strong> demeurant et domicilié {{address_prefixed}}, ci-après {{denommee_denomme}} {{contractant_legal}}.</p>
 
     <p>Considérant que pour pouvoir réaliser sa mission d’intérêt général et assurer le fonctionnement normal de ses différentes entités, l’employeur doit disposer de ressources humaines adéquates ; Qu’à cette fin, il convient d’engager des cadres compétents ;</p>
 
@@ -33,7 +33,7 @@ export const referenceContractTemplate: ContractTemplate = {
     <p><strong>Il a été convenu et arrêté ce qui suit :</strong></p>
 
     <p><strong>Article 1.- Objet du contrat</strong></p>
-    <p>L’employeur engage {{la_le_contractant}}, qui l’accepte, à titre de <strong>{{position}} à {{assignment}}</strong> selon la description de tâche annexée au présent contrat pour en faire partie.</p>
+    <p>L’employeur engage {{la_le_contractant}}, qui l’accepte, à titre <strong>{{position_prefixed}} {{assignment_prefixed}}</strong> selon la description de tâche annexée au présent contrat pour en faire partie.</p>
 
     <p><strong>Article 2.- Pièces constitutives</strong></p>
     <p><strong>Les documents contractuels sont les suivants :</strong></p>

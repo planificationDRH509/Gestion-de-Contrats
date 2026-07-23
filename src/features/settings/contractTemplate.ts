@@ -1,5 +1,11 @@
 import { Contract } from "../../data/types";
 import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
+import {
+  applySuggestionPrefix,
+  normalizeSuggestionGrammarValue,
+  stripSuggestionPrefix,
+  type SuggestionPrefixKind
+} from "../../lib/suggestionPrefixes";
 import { loadSuggestions } from "../../data/local/suggestionsDb";
 import { referenceContractTemplate } from "./referenceContractTemplate";
 import { getStoredContractStartDate } from "./settingsApi";
@@ -476,6 +482,18 @@ function withoutLegacyWorkspaceMarkup(html: string): string {
     .replace(/\{\{\s*workspace_name\s*\}\}/gi, "");
 }
 
+function withContextualContractGrammar(html: string): string {
+  return html
+    .replace(
+      /domicilié à\s+\{\{\s*address\s*\}\}/gi,
+      "domicilié {{address_prefixed}}"
+    )
+    .replace(
+      /à titre de(\s*(?:<strong>)?)\s*\{\{\s*position\s*\}\}\s+à\s+\{\{\s*assignment\s*\}\}/gi,
+      "à titre$1{{position_prefixed}} {{assignment_prefixed}}"
+    );
+}
+
 function getTemplateDefinition(type: DraftTemplateType): DraftTemplateDefinition {
   return TEMPLATE_DEFINITIONS[type];
 }
@@ -508,7 +526,9 @@ export function loadTemplateByType(type: DraftTemplateType): ContractTemplate {
     }
 
     return {
-      html: withoutLegacyWorkspaceMarkup(parsed.html),
+      html: type === "contract"
+        ? withContextualContractGrammar(withoutLegacyWorkspaceMarkup(parsed.html))
+        : withoutLegacyWorkspaceMarkup(parsed.html),
       css: parsed.css
     };
   } catch {
@@ -597,33 +617,42 @@ export function buildTemplateVariables(contract: Contract) {
   };
 
   const suggestions = loadSuggestions();
-  const positionMatch = suggestions.positions.find(p => p.label.toLowerCase() === contract.position.toLowerCase());
-  const assignmentMatch = suggestions.institutions.find(i => i.label.toLowerCase() === contract.assignment.toLowerCase());
-  const addressMatch = suggestions.addresses.find(a => a.label.toLowerCase() === contract.address.toLowerCase());
+  const findSuggestion = <T extends { label: string; labelFeminine?: string | null }>(
+    value: string,
+    kind: SuggestionPrefixKind,
+    items: T[]
+  ) => {
+    const normalizeForMatch = (label: string) => {
+      const normalized = normalizeSuggestionGrammarValue(stripSuggestionPrefix(label, kind));
+      return kind === "position" ? normalized : normalized.replace(/^(?:l'|le |la |les )/, "");
+    };
+    const normalizedValue = normalizeForMatch(value);
+    return items.find((item) => {
+      const labels = [item.label, item.labelFeminine].filter((label): label is string => Boolean(label));
+      return labels.some((label) => normalizeForMatch(label) === normalizedValue);
+    });
+  };
 
-  let positionLabel = contract.position;
-  if (isFeminine && positionMatch?.labelFeminine) {
-    positionLabel = positionMatch.labelFeminine;
-  }
-  if (positionMatch?.prefix) {
-    positionLabel = `${positionMatch.prefix}${positionLabel}`;
-  }
+  const positionMatch = findSuggestion(contract.position, "position", suggestions.positions);
+  const assignmentMatch = findSuggestion(contract.assignment, "institution", suggestions.institutions);
+  const addressMatch = findSuggestion(contract.address, "address", suggestions.addresses);
 
-  let assignmentLabel = contract.assignment;
-  if (isFeminine && assignmentMatch?.labelFeminine) {
-    assignmentLabel = assignmentMatch.labelFeminine;
-  }
-  if (assignmentMatch?.prefix) {
-    assignmentLabel = `${assignmentMatch.prefix}${assignmentLabel}`;
-  }
+  const positionLabel = stripSuggestionPrefix(
+    isFeminine && positionMatch?.labelFeminine ? positionMatch.labelFeminine : contract.position,
+    "position"
+  );
+  const assignmentLabel = stripSuggestionPrefix(
+    isFeminine && assignmentMatch?.labelFeminine ? assignmentMatch.labelFeminine : contract.assignment,
+    "institution"
+  );
+  const addressLabel = stripSuggestionPrefix(
+    isFeminine && addressMatch?.labelFeminine ? addressMatch.labelFeminine : contract.address,
+    "address"
+  );
 
-  let addressLabel = contract.address;
-  if (isFeminine && addressMatch?.labelFeminine) {
-    addressLabel = addressMatch.labelFeminine;
-  }
-  if (addressMatch?.prefix) {
-    addressLabel = `${addressMatch.prefix}${addressLabel}`;
-  }
+  const positionPrefixed = applySuggestionPrefix(positionLabel, "position", positionMatch?.prefix);
+  const assignmentPrefixed = applySuggestionPrefix(assignmentLabel, "institution", assignmentMatch?.prefix);
+  const addressPrefixed = applySuggestionPrefix(addressLabel, "address", addressMatch?.prefix);
 
   const formattedFirstName = formatFirstName(contract.firstName);
   const formattedLastName = formatLastName(contract.lastName);
@@ -656,7 +685,10 @@ export function buildTemplateVariables(contract: Contract) {
     nif: contract.nif ?? "",
     ninu: contract.ninu ?? "",
     position: positionLabel,
+    position_prefixed: positionPrefixed,
     assignment: assignmentLabel,
+    assignment_prefixed: assignmentPrefixed,
+    address_prefixed: addressPrefixed,
     salary_number: formatCurrency(contract.salaryNumber),
     salary_number_raw: contract.salaryNumber.toString(),
     salary_text: contract.salaryText,
@@ -706,7 +738,10 @@ export const templateVariables = [
   { key: "{{nif}}", label: "NIF" },
   { key: "{{ninu}}", label: "NINU" },
   { key: "{{position}}", label: "Poste" },
+  { key: "{{position_prefixed}}", label: "Poste avec préposition" },
   { key: "{{assignment}}", label: "Affectation" },
+  { key: "{{assignment_prefixed}}", label: "Affectation avec préposition" },
+  { key: "{{address_prefixed}}", label: "Adresse avec préposition" },
   { key: "{{salary_number}}", label: "Salaire formaté" },
   { key: "{{salary_number_raw}}", label: "Salaire brut" },
   { key: "{{salary_text}}", label: "Salaire en lettres" },
