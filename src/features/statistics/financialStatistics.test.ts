@@ -99,6 +99,19 @@ describe("calculateFinancialStatistics", () => {
     ]);
   });
 
+  it("ignores contracts from another fiscal year", () => {
+    const result = calculateFinancialStatistics(
+      [
+        contract({ salaryNumber: 100, durationMonths: 12, annee_fiscale: "2025-2026" }),
+        contract({ salaryNumber: 900, durationMonths: 12, annee_fiscale: "2024-2025" })
+      ],
+      "2025-2026"
+    );
+
+    expect(result.validContracts).toBe(1);
+    expect(result.totalCommittedBudget).toBe(1_200);
+  });
+
   it("ignores contracts without usable financial values", () => {
     const result = calculateFinancialStatistics(
       [

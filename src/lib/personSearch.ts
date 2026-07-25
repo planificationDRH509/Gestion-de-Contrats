@@ -8,6 +8,7 @@ type PersonSearchFields = {
 type ContractSearchFields = PersonSearchFields & {
   position?: string | null;
   assignment?: string | null;
+  annee_fiscale?: string | null;
 };
 
 function normalizeText(value: string): string {
@@ -48,7 +49,8 @@ export function matchesContractSearch(contract: ContractSearchFields, query: str
       contract.nif,
       contract.ninu,
       contract.position,
-      contract.assignment
+      contract.assignment,
+      contract.annee_fiscale
     ],
     query
   );

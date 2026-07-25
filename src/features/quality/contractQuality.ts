@@ -2,6 +2,7 @@ import type { Contract } from "../../data/types";
 import type { PositionSuggestion } from "../../data/local/suggestionsDb";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
+import { getContractFiscalYear } from "../../lib/contractDateFilters";
 
 export type QualitySeverity = "critical" | "warning" | "info";
 
@@ -51,11 +52,8 @@ function normalizedText(value: string) {
     .trim();
 }
 
-function fiscalYearKey(dateValue: string) {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  const year = date.getMonth() >= 9 ? date.getFullYear() : date.getFullYear() - 1;
-  return `${year}-${year + 1}`;
+function fiscalYearKey(contract: Pick<Contract, "createdAt" | "annee_fiscale">) {
+  return getContractFiscalYear(contract);
 }
 
 function makeId(parts: Array<string | number>) {
@@ -298,7 +296,7 @@ export function analyzeContractQuality({
       normalizedText(contract.position),
       normalizedText(contract.assignment),
       contract.salaryNumber,
-      fiscalYearKey(contract.createdAt)
+      fiscalYearKey(contract)
     ].join("|");
     const group = duplicateGroups.get(key) ?? [];
     group.push(contract);

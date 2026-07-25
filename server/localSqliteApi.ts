@@ -38,6 +38,7 @@ type ContractDateShape = {
   createdAt: string;
   updatedAt: string;
   durationMonths: number;
+  annee_fiscale?: string | null;
 };
 
 type ContractDateFilterMode =
@@ -299,11 +300,11 @@ function matchesContractDateFilter(
   const now = options.now ?? new Date();
 
   if (mode === "fiscal_year_current") {
-    const contractStart = getContractStartDate(contract);
-    const fiscalStart = startOfDay(getCurrentFiscalYearStart(now));
-    const tomorrow = new Date(startOfDay(now));
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return isDateInRange(contractStart, fiscalStart, tomorrow);
+    const currentStartYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+    const currentFiscalYear = `${currentStartYear}-${currentStartYear + 1}`;
+    const createdAt = toValidDate(contract.createdAt) ?? now;
+    const contractFiscalYear = contract.annee_fiscale?.trim() || `${createdAt.getMonth() >= 9 ? createdAt.getFullYear() : createdAt.getFullYear() - 1}-${createdAt.getMonth() >= 9 ? createdAt.getFullYear() + 1 : createdAt.getFullYear()}`;
+    return contractFiscalYear === currentFiscalYear;
   }
 
   const activityDate = getContractActivityDate(contract);
@@ -380,7 +381,8 @@ function contractMatchesQuery(
     contract.nif ?? "",
     contract.ninu ?? "",
     contract.position,
-    contract.assignment
+    contract.assignment,
+    contract.annee_fiscale ?? ""
   ];
   const queryDigits = query.replace(/\D/g, "");
   if (queryDigits && !normalizedQuery.replace(/\d/g, "").trim()) {
@@ -619,6 +621,7 @@ function mapContract(row: ContractRow) {
     salaryNumber: row.salaire_en_chiffre,
     salaryText: row.salaire,
     durationMonths: row.duree_contrat,
+    annee_fiscale: row.annee_fiscale,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -1100,8 +1103,18 @@ function buildContractRows(workspaceId: string): ContractRow[] {
   return rows;
 }
 
-function buildContractId(db: DatabaseSync, date = new Date()): { id: string; fiscalYearLabel: string } {
-  const fiscal = fiscalYearFor(date);
+function buildContractId(
+  db: DatabaseSync,
+  date = new Date(),
+  requestedFiscalYear?: string
+): { id: string; fiscalYearLabel: string } {
+  const fiscalMatch = /^(\d{4})-(\d{4})$/.exec(requestedFiscalYear?.trim() ?? "");
+  const fiscal = fiscalMatch && Number(fiscalMatch[2]) === Number(fiscalMatch[1]) + 1
+    ? {
+        code: `${fiscalMatch[1].slice(-2)}${fiscalMatch[2].slice(-2)}`,
+        label: `${fiscalMatch[1]}-${fiscalMatch[2]}`
+      }
+    : fiscalYearFor(date);
 
   const existsStatement = db.prepare("SELECT id_contrat FROM contrat WHERE id_contrat = :id LIMIT 1");
   for (let index = 0; index < 200; index += 1) {
@@ -1924,10 +1937,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     if (payload.dateFilterMode && payload.dateFilterMode !== "all") {
       items = items.filter((contract) =>
         matchesContractDateFilter(
-          {
-            createdAt: contract.createdAt,
-            updatedAt: contract.updatedAt,
-            durationMonths: contract.durationMonths
+            {
+              createdAt: contract.createdAt,
+              updatedAt: contract.updatedAt,
+              durationMonths: contract.durationMonths,
+              annee_fiscale: contract.annee_fiscale
           },
           payload.dateFilterMode,
           {
@@ -2015,7 +2029,9 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     const timestamp = nowIso();
-    const { id, fiscalYearLabel } = buildContractId(db);
+    const requestedFiscalYear = asString(body.annee_fiscale).trim();
+    const { id, fiscalYearLabel } = buildContractId(db, new Date(), requestedFiscalYear);
+    const fiscalYear = fiscalYearLabel;
     const operator = operatorFromRequest(req);
 
     const history: HistoryPayload = {
@@ -2068,7 +2084,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       nif,
       duree_contrat: durationMonths,
       salaire: salaryText,
-      annee_fiscale: fiscalYearLabel,
+      annee_fiscale: fiscalYear,
       salaire_en_chiffre: salaryNumber,
       titre: position,
       lieu_affectation: assignment,

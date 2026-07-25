@@ -91,6 +91,18 @@ describe("reference contract template", () => {
     expect(html).not.toMatch(/\{\{[^}]+\}\}/);
   });
 
+  it("uses the contract fiscal year for dates on pages 3 and 4", () => {
+    const variables = buildTemplateVariables({
+      ...contract,
+      createdAt: "2026-01-05T12:00:00.000Z",
+      annee_fiscale: "2024-2025"
+    });
+
+    expect(variables.date_debut).toBe("06 Janvier 2025");
+    expect(variables.date_fin).toBe("30 Septembre 2025");
+    expect(variables.fiscal_year).toBe("2024-2025");
+  });
+
   it("removes prefixes already stored in contract values before applying them once", () => {
     localStorage.setItem(
       "contribution_suggestions_db",

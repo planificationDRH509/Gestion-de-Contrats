@@ -67,6 +67,14 @@ describe("contractDateFilters", () => {
         { now }
       )
     ).toBe(false);
+
+    expect(
+      matchesContractDateFilter(
+        { ...inCurrentFiscalYear, annee_fiscale: "2024-2025" },
+        "fiscal_year_current",
+        { now }
+      )
+    ).toBe(false);
   });
 
   it("matches a custom range using activity date", () => {

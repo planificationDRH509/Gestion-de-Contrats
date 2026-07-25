@@ -1,5 +1,5 @@
 import type { Contract } from "../../data/types";
-import { getContractStartDate } from "../../lib/contractDateFilters";
+import { getContractFiscalYear, getContractStartDate } from "../../lib/contractDateFilters";
 
 type FinancialContract = Pick<
   Contract,
@@ -82,38 +82,40 @@ export function calculateFinancialStatistics(
   let totalCommittedBudget = 0;
   let monthlySalaryBase = 0;
 
-  contracts.forEach((contract) => {
-    const salary = Number(contract.salaryNumber);
-    const duration = Math.trunc(Number(contract.durationMonths));
+  contracts
+    .filter((contract) => getContractFiscalYear(contract) === fiscalYear)
+    .forEach((contract) => {
+      const salary = Number(contract.salaryNumber);
+      const duration = Math.trunc(Number(contract.durationMonths));
 
-    if (!Number.isFinite(salary) || salary <= 0 || !Number.isFinite(duration) || duration <= 0) {
-      return;
-    }
-
-    validContracts += 1;
-    monthlySalaryBase += salary;
-
-    const committedBudget = salary * duration;
-    totalCommittedBudget += committedBudget;
-
-    const assignment = contract.assignment.trim() || "Non renseignée";
-    assignmentBudgets.set(
-      assignment,
-      (assignmentBudgets.get(assignment) ?? 0) + committedBudget
-    );
-
-    const contractStartMonth = monthIndex(getContractStartDate(contract));
-    const contractEndMonth = contractStartMonth + duration;
-
-    monthlyTrend.forEach((month) => {
-      const [year, monthNumber] = month.key.split("-").map(Number);
-      const currentMonth = year * 12 + (monthNumber - 1);
-      if (currentMonth >= contractStartMonth && currentMonth < contractEndMonth) {
-        month.monthlyBudget += salary;
-        month.activeContracts += 1;
+      if (!Number.isFinite(salary) || salary <= 0 || !Number.isFinite(duration) || duration <= 0) {
+        return;
       }
+
+      validContracts += 1;
+      monthlySalaryBase += salary;
+
+      const committedBudget = salary * duration;
+      totalCommittedBudget += committedBudget;
+
+      const assignment = contract.assignment.trim() || "Non renseignée";
+      assignmentBudgets.set(
+        assignment,
+        (assignmentBudgets.get(assignment) ?? 0) + committedBudget
+      );
+
+      const contractStartMonth = monthIndex(getContractStartDate(contract));
+      const contractEndMonth = contractStartMonth + duration;
+
+      monthlyTrend.forEach((month) => {
+        const [year, monthNumber] = month.key.split("-").map(Number);
+        const currentMonth = year * 12 + (monthNumber - 1);
+        if (currentMonth >= contractStartMonth && currentMonth < contractEndMonth) {
+          month.monthlyBudget += salary;
+          month.activeContracts += 1;
+        }
+      });
     });
-  });
 
   const fiscalYearProjectedBudget = monthlyTrend.reduce(
     (sum, month) => sum + month.monthlyBudget,

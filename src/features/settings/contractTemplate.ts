@@ -9,6 +9,10 @@ import {
 import { loadSuggestions } from "../../data/local/suggestionsDb";
 import { referenceContractTemplate } from "./referenceContractTemplate";
 import { getStoredContractStartDate } from "./settingsApi";
+import {
+  getContractFiscalYear,
+  getFiscalYearEndYear
+} from "../../lib/contractDateFilters";
 
 export type ContractTemplate = {
   html: string;
@@ -578,11 +582,8 @@ export function subscribeTemplate(listener: () => void) {
 
 export function buildTemplateVariables(contract: Contract) {
   const date = new Date(contract.createdAt);
-
-  let endYear = date.getFullYear();
-  if (date.getMonth() >= 9) {
-    endYear++;
-  }
+  const fiscalYear = getContractFiscalYear(contract);
+  const endYear = getFiscalYearEndYear(contract);
   const endDate = new Date(endYear, 8, 30);
 
   const d = contract.durationMonths ?? 12;
@@ -591,8 +592,14 @@ export function buildTemplateVariables(contract: Contract) {
   while (automaticStartDate.getDay() !== 1) {
     automaticStartDate.setDate(automaticStartDate.getDate() + 1);
   }
-  const startDate =
-    getStoredContractStartDate(contract.workspaceId, d) ?? automaticStartDate;
+  const configuredStartDate = getStoredContractStartDate(contract.workspaceId, d);
+  const startDate = configuredStartDate
+    ? new Date(
+        configuredStartDate.getMonth() >= 9 ? endYear - 1 : endYear,
+        configuredStartDate.getMonth(),
+        configuredStartDate.getDate()
+      )
+    : automaticStartDate;
 
   const formatReferenceDate = (value: Date) => {
     const parts = new Intl.DateTimeFormat("fr-FR", {
@@ -659,6 +666,7 @@ export function buildTemplateVariables(contract: Contract) {
 
   return {
     contract_id: contract.id,
+    fiscal_year: fiscalYear,
     first_name: formattedFirstName,
     last_name: formattedLastName,
     full_name: `${formattedLastName} ${formattedFirstName}`.trim(),
@@ -712,6 +720,7 @@ export function renderTemplate(html: string, variables: Record<string, string>) 
 
 export const templateVariables = [
   { key: "{{contract_id}}", label: "ID du contrat" },
+  { key: "{{fiscal_year}}", label: "Année fiscale" },
   { key: "{{first_name}}", label: "Prénom" },
   { key: "{{last_name}}", label: "Nom" },
   { key: "{{full_name}}", label: "Nom complet" },

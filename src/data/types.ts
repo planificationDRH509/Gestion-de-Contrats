@@ -124,6 +124,8 @@ export type Contract = {
   salaryNumber: number;
   salaryText: string;
   durationMonths: number;
+  /** Fiscal year stored on the contract, for example "2025-2026". */
+  annee_fiscale?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;

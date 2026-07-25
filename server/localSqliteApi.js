@@ -230,18 +230,18 @@ function getCurrentFiscalYearStart(now) {
     return new Date(fiscalStartYear, 9, 1);
 }
 function matchesContractDateFilter(contract, mode, options) {
-    var _a;
+    var _a, _b, _c;
     if (options === void 0) { options = {}; }
     if (!mode || mode === "all") {
         return true;
     }
     var now = (_a = options.now) !== null && _a !== void 0 ? _a : new Date();
     if (mode === "fiscal_year_current") {
-        var contractStart = getContractStartDate(contract);
-        var fiscalStart = startOfDay(getCurrentFiscalYearStart(now));
-        var tomorrow = new Date(startOfDay(now));
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return isDateInRange(contractStart, fiscalStart, tomorrow);
+        var currentStartYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+        var currentFiscalYear = "".concat(currentStartYear, "-").concat(currentStartYear + 1);
+        var createdAt = (_b = toValidDate(contract.createdAt)) !== null && _b !== void 0 ? _b : now;
+        var contractFiscalYear = ((_c = contract.annee_fiscale) === null || _c === void 0 ? void 0 : _c.trim()) || "".concat(createdAt.getMonth() >= 9 ? createdAt.getFullYear() : createdAt.getFullYear() - 1, "-").concat(createdAt.getMonth() >= 9 ? createdAt.getFullYear() + 1 : createdAt.getFullYear());
+        return contractFiscalYear === currentFiscalYear;
     }
     var activityDate = getContractActivityDate(contract);
     var todayStart = startOfDay(now);
@@ -289,7 +289,7 @@ function matchesContractDateFilter(contract, mode, options) {
     return true;
 }
 function contractMatchesQuery(contract, query) {
-    var _a, _b;
+    var _a, _b, _c;
     var normalizedQuery = query
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -304,7 +304,8 @@ function contractMatchesQuery(contract, query) {
         (_a = contract.nif) !== null && _a !== void 0 ? _a : "",
         (_b = contract.ninu) !== null && _b !== void 0 ? _b : "",
         contract.position,
-        contract.assignment
+        contract.assignment,
+        (_c = contract.annee_fiscale) !== null && _c !== void 0 ? _c : ""
     ];
     var queryDigits = query.replace(/\D/g, "");
     if (queryDigits && !normalizedQuery.replace(/\d/g, "").trim()) {
@@ -522,6 +523,7 @@ function mapContract(row) {
         salaryNumber: row.salaire_en_chiffre,
         salaryText: row.salaire,
         durationMonths: row.duree_contrat,
+        annee_fiscale: row.annee_fiscale,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at,
@@ -584,7 +586,7 @@ function getDb() {
     db.exec("PRAGMA journal_mode = WAL;");
     db.exec("\n    CREATE TABLE IF NOT EXISTS workspaces (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT\n    );\n\n    CREATE TABLE IF NOT EXISTS identification (\n      nif TEXT PRIMARY KEY,\n      nom TEXT NOT NULL,\n      prenom TEXT NOT NULL,\n      sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),\n      ninu TEXT UNIQUE,\n      adresse TEXT NOT NULL,\n      workspace_id TEXT NOT NULL DEFAULT 'workspace_default',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS identification_workspace_idx\n      ON identification (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS identification_name_idx\n      ON identification (workspace_id, nom, prenom);\n\n    CREATE INDEX IF NOT EXISTS identification_ninu_idx\n      ON identification (workspace_id, ninu);\n\n    CREATE TABLE IF NOT EXISTS dossiers (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      id_contrat TEXT,\n      name TEXT NOT NULL,\n      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','classified')),\n      is_ephemeral INTEGER NOT NULL DEFAULT 0,\n      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgence')),\n      contract_target_count INTEGER NOT NULL DEFAULT 0 CHECK (contract_target_count >= 0),\n      comment TEXT,\n      deadline_date TEXT,\n      focal_point TEXT,\n      roadmap_sheet_number TEXT,\n      default_duration_months INTEGER,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS dossiers_workspace_name_unique_idx\n      ON dossiers (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS dossiers_workspace_idx\n      ON dossiers (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contrat (\n      id_contrat TEXT PRIMARY KEY,\n      nif TEXT NOT NULL,\n      duree_contrat INTEGER NOT NULL DEFAULT 12,\n      salaire TEXT NOT NULL,\n      annee_fiscale TEXT NOT NULL,\n      salaire_en_chiffre REAL NOT NULL,\n      titre TEXT NOT NULL,\n      lieu_affectation TEXT NOT NULL,\n      historique_saisie TEXT NOT NULL,\n      commentaire TEXT,\n      created_by TEXT,\n      workspace_id TEXT NOT NULL,\n      dossier_id TEXT,\n      status TEXT NOT NULL DEFAULT 'draft'\n        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      FOREIGN KEY (nif) REFERENCES identification(nif) ON DELETE RESTRICT ON UPDATE CASCADE,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,\n      FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL\n    );\n\n    CREATE INDEX IF NOT EXISTS contrat_workspace_idx\n      ON contrat (workspace_id);\n\n    CREATE INDEX IF NOT EXISTS contrat_nif_idx\n      ON contrat (workspace_id, nif);\n\n    CREATE INDEX IF NOT EXISTS contrat_dossier_idx\n      ON contrat (workspace_id, dossier_id);\n\n    CREATE TABLE IF NOT EXISTS tags (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      name TEXT NOT NULL,\n      color TEXT NOT NULL DEFAULT '#64748b',\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      deleted_at TEXT,\n      created_by TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE UNIQUE INDEX IF NOT EXISTS tags_workspace_name_unique_idx\n      ON tags (workspace_id, name COLLATE NOCASE)\n      WHERE deleted_at IS NULL;\n\n    CREATE INDEX IF NOT EXISTS tags_workspace_idx\n      ON tags (workspace_id);\n\n    CREATE TABLE IF NOT EXISTS contract_tags (\n      contract_id TEXT NOT NULL,\n      tag_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      PRIMARY KEY (contract_id, tag_id),\n      FOREIGN KEY (contract_id) REFERENCES contrat(id_contrat) ON DELETE CASCADE,\n      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS contract_tags_contract_id_idx\n      ON contract_tags (contract_id);\n\n    CREATE INDEX IF NOT EXISTS contract_tags_tag_id_idx\n      ON contract_tags (tag_id);\n\n    CREATE TABLE IF NOT EXISTS contract_print_jobs (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      contract_ids_json TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      printed_at TEXT,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE TABLE IF NOT EXISTS autocompletion (\n      id TEXT PRIMARY KEY,\n      type TEXT NOT NULL CHECK (type IN ('address','position','institution')),\n      label TEXT NOT NULL,\n      salaries TEXT,\n      address_keywords TEXT,\n      order_index INTEGER NOT NULL DEFAULT 0,\n      workspace_id TEXT NOT NULL,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE\n    );\n\n    CREATE INDEX IF NOT EXISTS autocompletion_workspace_type_idx\n      ON autocompletion (workspace_id, type);\n  ");
     var ensureColumns = function (table, columns) {
-        var info = db.pragma("table_info(".concat(table, ")"));
+        var info = db.prepare("PRAGMA table_info(".concat(table, ")")).all();
         var _loop_1 = function (column) {
             if (!info.some(function (item) { return item.name === column.name; })) {
                 db.exec(column.sql);
@@ -762,9 +764,16 @@ function buildContractRows(workspaceId) {
         .all({ workspace_id: workspaceId });
     return rows;
 }
-function buildContractId(db, date) {
+function buildContractId(db, date, requestedFiscalYear) {
+    var _a;
     if (date === void 0) { date = new Date(); }
-    var fiscal = fiscalYearFor(date);
+    var fiscalMatch = /^(\d{4})-(\d{4})$/.exec((_a = requestedFiscalYear === null || requestedFiscalYear === void 0 ? void 0 : requestedFiscalYear.trim()) !== null && _a !== void 0 ? _a : "");
+    var fiscal = fiscalMatch && Number(fiscalMatch[2]) === Number(fiscalMatch[1]) + 1
+        ? {
+            code: "".concat(fiscalMatch[1].slice(-2)).concat(fiscalMatch[2].slice(-2)),
+            label: "".concat(fiscalMatch[1], "-").concat(fiscalMatch[2])
+        }
+        : fiscalYearFor(date);
     var existsStatement = db.prepare("SELECT id_contrat FROM contrat WHERE id_contrat = :id LIMIT 1");
     for (var index = 0; index < 200; index += 1) {
         var suffix = String(randomInt(0, 10000)).padStart(4, "0");
@@ -798,7 +807,7 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, _a, id, fiscalYearLabel, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, existingId, nif, ninu, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
         var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
         return __generator(this, function (_u) {
             switch (_u.label) {
@@ -1271,7 +1280,8 @@ function handleApiRequest(req, res) {
                             return matchesContractDateFilter({
                                 createdAt: contract.createdAt,
                                 updatedAt: contract.updatedAt,
-                                durationMonths: contract.durationMonths
+                                durationMonths: contract.durationMonths,
+                                annee_fiscale: contract.annee_fiscale
                             }, payload_1.dateFilterMode, {
                                 dayDateInput: payload_1.dateFilterDate,
                                 rangeStartInput: payload_1.dateFilterStart,
@@ -1339,7 +1349,9 @@ function handleApiRequest(req, res) {
                         throw new HttpError(400, "Statut de contrat invalide.");
                     }
                     timestamp = nowIso();
-                    _a = buildContractId(db), id = _a.id, fiscalYearLabel = _a.fiscalYearLabel;
+                    requestedFiscalYear = asString(body.annee_fiscale).trim();
+                    _a = buildContractId(db, new Date(), requestedFiscalYear), id = _a.id, fiscalYearLabel = _a.fiscalYearLabel;
+                    fiscalYear = fiscalYearLabel;
                     operator = operatorFromRequest(req);
                     history_1 = {
                         version: 2,
@@ -1352,7 +1364,7 @@ function handleApiRequest(req, res) {
                         nif: nif,
                         duree_contrat: durationMonths,
                         salaire: salaryText,
-                        annee_fiscale: fiscalYearLabel,
+                        annee_fiscale: fiscalYear,
                         salaire_en_chiffre: salaryNumber,
                         titre: position,
                         lieu_affectation: assignment,

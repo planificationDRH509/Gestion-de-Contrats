@@ -18,6 +18,8 @@ import {
   readCachedContractsByIds
 } from "../../data/local/localContractRepository";
 import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
+import { getStoredFiscalYear } from "../settings/settingsApi";
+import { getContractFiscalYear } from "../../lib/contractDateFilters";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ export interface NifIdentification {
 export interface NifContractMatch {
   id_contrat: string;
   annee_fiscale: string;
+  createdAt?: string;
   titre: string;
   lieu_affectation: string;
   salaire: string;
@@ -62,7 +65,8 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
       .filter((contract) => contract.nif === nif || contract.applicantId === nif)
       .map((contract) => ({
         id_contrat: contract.id,
-        annee_fiscale: "",
+        annee_fiscale: getContractFiscalYear(contract),
+        createdAt: contract.createdAt,
         titre: contract.position,
         lieu_affectation: contract.assignment,
         salaire: contract.salaryText,
@@ -160,8 +164,12 @@ export function useCreateContract() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateContractInput) => 
-      provider.contracts.create({ ...input, createdBy: user?.id }),
+    mutationFn: (input: CreateContractInput) =>
+      provider.contracts.create({
+        ...input,
+        annee_fiscale: input.annee_fiscale ?? getStoredFiscalYear(),
+        createdBy: user?.id
+      }),
     onMutate: async (newContract) => {
       await queryClient.cancelQueries({ queryKey: ["contracts"] });
       const previousData = queryClient.getQueryData<ContractListResult>(["contracts"]);
@@ -417,6 +425,7 @@ export function useImportContracts() {
 
       const contractInputs: CreateContractInput[] = rows.map((row) => ({
         workspaceId,
+        annee_fiscale: getStoredFiscalYear(),
         applicantId: row.nif,
         dossierId,
         status: "saisie",

@@ -2,7 +2,7 @@ import { Contract, ContractDateFilterMode } from "../data/types";
 
 type ContractDateShape = Pick<
   Contract,
-  "createdAt" | "updatedAt" | "durationMonths"
+  "createdAt" | "updatedAt" | "durationMonths" | "annee_fiscale"
 >;
 
 export type ContractDateFilterOptions = {
@@ -52,13 +52,39 @@ export function getContractActivityDate(contract: ContractDateShape): Date {
   return created;
 }
 
-export function getContractStartDate(contract: ContractDateShape): Date {
-  const createdAt = toValidDate(contract.createdAt) ?? new Date();
+export function getFiscalYearForDate(date: Date): string {
+  const startYear = date.getMonth() >= 9 ? date.getFullYear() : date.getFullYear() - 1;
+  return `${startYear}-${startYear + 1}`;
+}
 
-  let endYear = createdAt.getFullYear();
-  if (createdAt.getMonth() >= 9) {
-    endYear += 1;
-  }
+export function parseFiscalYear(fiscalYear?: string | null): {
+  startYear: number;
+  endYear: number;
+} | null {
+  const match = /^(\d{4})-(\d{4})$/.exec(fiscalYear?.trim() ?? "");
+  if (!match) return null;
+
+  const startYear = Number(match[1]);
+  const endYear = Number(match[2]);
+  return endYear === startYear + 1 ? { startYear, endYear } : null;
+}
+
+export function getContractFiscalYear(contract: Pick<Contract, "createdAt" | "annee_fiscale">): string {
+  return parseFiscalYear(contract.annee_fiscale)
+    ? contract.annee_fiscale!.trim()
+    : getFiscalYearForDate(toValidDate(contract.createdAt) ?? new Date());
+}
+
+export function getFiscalYearEndYear(contract: Pick<Contract, "createdAt" | "annee_fiscale">): number {
+  const parsed = parseFiscalYear(contract.annee_fiscale);
+  if (parsed) return parsed.endYear;
+
+  const createdAt = toValidDate(contract.createdAt) ?? new Date();
+  return createdAt.getFullYear() + (createdAt.getMonth() >= 9 ? 1 : 0);
+}
+
+export function getContractStartDate(contract: ContractDateShape): Date {
+  const endYear = getFiscalYearEndYear(contract);
 
   const durationMonths = contract.durationMonths ?? 12;
   const targetStartMonth = 8 - durationMonths + 1;
@@ -92,11 +118,7 @@ export function matchesContractDateFilter(
   const now = options.now ?? new Date();
 
   if (mode === "fiscal_year_current") {
-    const contractStart = getContractStartDate(contract);
-    const fiscalStart = startOfDay(getCurrentFiscalYearStart(now));
-    const tomorrow = new Date(startOfDay(now));
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return isDateInRange(contractStart, fiscalStart, tomorrow);
+    return getContractFiscalYear(contract) === getFiscalYearForDate(now);
   }
 
   const activityDate = getContractActivityDate(contract);

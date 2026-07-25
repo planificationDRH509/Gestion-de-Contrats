@@ -19,6 +19,8 @@ import {
 } from "recharts";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { calculateFinancialStatistics } from "./financialStatistics";
+import { getStoredFiscalYear } from "../settings/settingsApi";
+import { getContractFiscalYear } from "../../lib/contractDateFilters";
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f43f5e'];
 const HTG_FORMATTER = new Intl.NumberFormat("fr-FR", {
@@ -105,22 +107,8 @@ export function StatisticsPage() {
   const workspaceId = user?.workspaceId ?? "";
   const { data: usersData } = useAppUsers();
 
-  // Fiscal Year list
-  const fiscalYears = useMemo(() => {
-    const now = new Date();
-    const currentStartYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
-    const years = [];
-    for (let i = 0; i < 5; i++) {
-      const start = currentStartYear - i;
-      years.push(`${start}-${start + 1}`);
-    }
-    return years;
-  }, []);
-
   const [fiscalYear, setFiscalYear] = useState<string>(() => {
-    const now = new Date();
-    const startYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
-    return `${startYear}-${startYear + 1}`;
+    return getStoredFiscalYear();
   });
 
   // 1. FILTER STATE
@@ -139,6 +127,14 @@ export function StatisticsPage() {
   });
 
   const rawContracts = data?.items ?? [];
+
+  // Include every fiscal year present in the workspace, not only a fixed
+  // five-year window.
+  const fiscalYears = useMemo(() => {
+    const years = new Set(rawContracts.map((contract) => getContractFiscalYear(contract)));
+    years.add(getStoredFiscalYear());
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [rawContracts]);
 
   const uniqueAssignments = useMemo(() => {
     return Array.from(new Set(rawContracts.map(c => c.assignment).filter(Boolean))).sort();
@@ -169,6 +165,12 @@ export function StatisticsPage() {
       case 'month':
         start = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
         break;
+      case 'custom':
+        start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        break;
       case 'quarter':
         start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
         break;
@@ -184,17 +186,14 @@ export function StatisticsPage() {
         break;
     }
 
-    const [fyStartStr, fyEndStr] = fiscalYear.split("-");
-    const fiscalStart = new Date(Number(fyStartStr), 9, 1); // Oct 1
-    const fiscalEnd = new Date(Number(fyEndStr), 8, 30, 23, 59, 59, 999); // Sep 30
-
     return rawContracts.filter(c => {
-      const contractDate = new Date(c.createdAt);
-      
-      // Must fall within the selected fiscal year
-      if (contractDate < fiscalStart || contractDate > fiscalEnd) {
+      // The fiscal year is an explicit contract attribute. createdAt is only
+      // a fallback for legacy records that predate this field.
+      if (getContractFiscalYear(c) !== fiscalYear) {
         return false;
       }
+
+      const contractDate = new Date(c.createdAt);
 
       let dateMatch = true;
       if (filterType !== 'all') {

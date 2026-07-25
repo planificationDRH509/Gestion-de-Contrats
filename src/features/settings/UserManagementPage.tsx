@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import { getDefaultWorkspace } from "../../data/local/workspaces";
 import type { AppUser } from "../../data/types";
+import { fetchAppUsers, isMissingRoleColumn } from "../auth/usersApi";
 import { useAuth } from "../auth/auth";
 import {
   APP_ROLES,
   APP_ROLE_LABELS,
-  normalizeAppRole,
   type AppRole
 } from "../auth/permissions";
 
@@ -14,6 +14,7 @@ export function UserManagementPage() {
   const { user, can } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [roleColumnAvailable, setRoleColumnAvailable] = useState(true);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
@@ -31,26 +32,21 @@ export function UserManagementPage() {
 
   async function fetchUsers() {
     setLoading(true);
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("app_users")
-      .select("id, username, full_name, role, created_at, updated_at")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const result = await fetchAppUsers();
+      setUsers(result.users);
+      setRoleColumnAvailable(result.hasRoleColumn);
+      if (!result.hasRoleColumn) {
+        setMessage({
+          type: "error",
+          text: "La gestion des rôles est inactive : appliquez supabase/migrations/013_app_user_roles.sql."
+        });
+      }
+    } catch (error) {
       setMessage({
         type: "error",
-        text: `Impossible de charger les utilisateurs : ${error.message}`
+        text: `Impossible de charger les utilisateurs : ${error instanceof Error ? error.message : "Erreur Supabase"}`
       });
-    } else {
-      setUsers((data ?? []).map((item) => ({
-        id: item.id,
-        username: item.username,
-        fullName: item.full_name,
-        role: normalizeAppRole(item.role, item.username),
-        createdAt: item.created_at,
-        updatedAt: item.updated_at
-      })));
     }
     setLoading(false);
   }
@@ -77,13 +73,24 @@ export function UserManagementPage() {
     setIsSubmitting(true);
     setMessage(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("app_users").insert({
+    const payload = {
       username: username.trim(),
       full_name: fullName.trim(),
       password,
-      role,
       workspaces: [getDefaultWorkspace().id]
-    });
+    };
+    let roleColumnMissing = false;
+    let { error } = await supabase.from("app_users").insert(
+      roleColumnAvailable ? { ...payload, role } : payload
+    );
+
+    // Allow account creation before the role migration, while making it clear
+    // that the selected role cannot be stored until the migration is applied.
+    if (error && isMissingRoleColumn(error)) {
+      roleColumnMissing = true;
+      ({ error } = await supabase.from("app_users").insert(payload));
+      setRoleColumnAvailable(false);
+    }
 
     if (error) {
       setMessage({
@@ -91,11 +98,16 @@ export function UserManagementPage() {
         text: `Erreur lors de la création : ${error.message}`
       });
     } else {
-      setMessage({ type: "success", text: "Utilisateur créé avec succès." });
       setUsername("");
       setFullName("");
       setPassword("");
       setRole("agent");
+      setMessage({
+        type: roleColumnMissing ? "error" : "success",
+        text: roleColumnMissing
+          ? "Compte créé comme agent, mais le rôle n’est pas synchronisé. Appliquez supabase/migrations/013_app_user_roles.sql."
+          : "Utilisateur créé avec succès."
+      });
       await fetchUsers();
     }
     setIsSubmitting(false);
@@ -103,6 +115,13 @@ export function UserManagementPage() {
 
   async function updateRole(target: AppUser, nextRole: AppRole) {
     if (!can("users.manage")) return;
+    if (!roleColumnAvailable) {
+      setMessage({
+        type: "error",
+        text: "Impossible de modifier les rôles tant que supabase/migrations/013_app_user_roles.sql n’est pas appliquée."
+      });
+      return;
+    }
     if (target.id === user?.id) {
       setMessage({
         type: "error",
@@ -129,8 +148,11 @@ export function UserManagementPage() {
     if (error) {
       setMessage({
         type: "error",
-        text: `Impossible de modifier le rôle : ${error.message}`
+        text: isMissingRoleColumn(error)
+          ? "La colonne role manque dans Supabase. Appliquez supabase/migrations/013_app_user_roles.sql."
+          : `Impossible de modifier le rôle : ${error.message}`
       });
+      if (isMissingRoleColumn(error)) setRoleColumnAvailable(false);
     } else {
       setUsers((current) => current.map((item) =>
         item.id === target.id ? { ...item, role: nextRole } : item
@@ -164,6 +186,13 @@ export function UserManagementPage() {
           <button type="button" onClick={() => setMessage(null)} aria-label="Fermer">
             <span className="material-symbols-rounded">close</span>
           </button>
+        </div>
+      ) : null}
+
+      {!roleColumnAvailable ? (
+        <div className="app-toast app-toast-error" role="status">
+          Les comptes restent visibles, mais les rôles ne peuvent pas être synchronisés tant que la migration
+          <code>013_app_user_roles.sql</code> n’est pas exécutée dans Supabase.
         </div>
       ) : null}
 
@@ -212,6 +241,7 @@ export function UserManagementPage() {
               <select
                 className="select"
                 value={role}
+                disabled={!roleColumnAvailable}
                 onChange={(event) => setRole(event.target.value as AppRole)}
               >
                 {APP_ROLES.map((item) => (
@@ -256,7 +286,7 @@ export function UserManagementPage() {
                   <select
                     className="select"
                     value={item.role}
-                    disabled={updatingUserId === item.id || item.id === user?.id}
+                    disabled={!roleColumnAvailable || updatingUserId === item.id || item.id === user?.id}
                     onChange={(event) =>
                       void updateRole(item, event.target.value as AppRole)
                     }

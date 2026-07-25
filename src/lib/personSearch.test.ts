@@ -24,4 +24,8 @@ describe("person search", () => {
   it("keeps contract-specific fields searchable", () => {
     expect(matchesContractSearch({ ...person, position: "Technicien", assignment: "Nord" }, "technicien")).toBe(true);
   });
+
+  it("searches the contract fiscal year", () => {
+    expect(matchesContractSearch({ ...person, position: "Technicien", assignment: "Nord", annee_fiscale: "2024-2025" }, "2024-2025")).toBe(true);
+  });
 });

@@ -120,6 +120,7 @@ function mapContract(row: any): Contract {
     salaryNumber: row.salaire_en_chiffre,
     salaryText: row.salaire,
     durationMonths: row.duree_contrat,
+    annee_fiscale: row.annee_fiscale || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
     deletedAt: row.deleted_at || null,
@@ -553,7 +554,7 @@ class SupabaseContractRepository implements ContractRepository {
       salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
       commentaire: input.commentaire || null,
-      annee_fiscale: getStoredFiscalYear(),
+      annee_fiscale: input.annee_fiscale || getStoredFiscalYear(),
       historique_saisie: serializeContractAudit(auditHistory),
       created_by: input.createdBy
     };
