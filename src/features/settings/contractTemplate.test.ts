@@ -59,6 +59,8 @@ describe("reference contract template", () => {
     expect(template.css).toContain("p.contract-title");
     expect(template.css).toContain('.contract-sheet[data-page="3"] p');
     expect(template.css).toContain("margin-bottom: 7.4pt");
+    expect(template.css).toContain("width: max-content");
+    expect(template.css).toContain("white-space: nowrap");
   });
 
   it("flattens the application layout before paginating contract sheets", () => {
@@ -66,6 +68,7 @@ describe("reference contract template", () => {
     expect(printCss).toContain(".app-content,");
     expect(printCss).toContain(".contract-document + .contract-document");
     expect(printCss).toContain("break-before: page !important");
+    expect(printCss).toContain("white-space: nowrap !important");
   });
 
   it("renders dates and duration in the same presentation as the reference", () => {

@@ -99,6 +99,17 @@
   }
 }
 
+/* Keep long employee names on one line in both previews and printed copies.
+   This also overrides reference templates previously saved in localStorage. */
+.contract-document
+  .draft-doc[data-contract-layout^="morquette-reference-"]
+  .contract-signature-name {
+  width: max-content !important;
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
 .contract-page {
   background: white !important;
   color: black !important;

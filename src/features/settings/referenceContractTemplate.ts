@@ -272,6 +272,13 @@ export const referenceContractTemplate: ContractTemplate = {
   margin-top: 6pt;
 }
 
+.draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-signature-name {
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+}
+
 .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-signature-right .contract-signature-name,
 .draft-doc[data-contract-layout="${REFERENCE_CONTRACT_LAYOUT}"] .contract-signature-right .contract-signature-label {
   margin-left: 17.5pt;
