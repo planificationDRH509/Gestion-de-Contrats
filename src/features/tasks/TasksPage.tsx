@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -14,16 +15,21 @@ import type {
 } from "../../data/types";
 import {
   filterTaskRecipients,
+  findActiveContractTag,
   findActiveMention,
+  insertContractTag,
   insertRecipientMention,
+  type ActiveContractTag,
   type ActiveMention
 } from "./taskMentions";
 import {
   getTaskErrorMessage,
+  type TaskContractSuggestion,
   useCreatePrivateTask,
   useDeletePrivateTask,
   usePrivateTasks,
   useSetTaskStatus,
+  useTaskContractSuggestions,
   useTaskRecipients
 } from "./tasksApi";
 
@@ -65,6 +71,8 @@ export function TasksPage() {
   const [draft, setDraft] = useState("");
   const [recipient, setRecipient] = useState<TaskRecipient | null>(null);
   const [activeMention, setActiveMention] = useState<ActiveMention | null>(null);
+  const [activeContractTag, setActiveContractTag] = useState<ActiveContractTag | null>(null);
+  const [selectedContract, setSelectedContract] = useState<TaskContractSuggestion | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [view, setView] = useState<TaskView>("list");
@@ -72,12 +80,17 @@ export function TasksPage() {
   const [dragTargetStatus, setDragTargetStatus] = useState<TaskStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const recipients = recipientsQuery.data ?? [];
   const suggestions = useMemo(
     () => filterTaskRecipients(recipients, activeMention?.query ?? "").slice(0, 6),
     [activeMention?.query, recipients]
   );
+  const contractSuggestionsQuery = useTaskContractSuggestions(
+    activeContractTag?.query ?? null
+  );
+  const contractSuggestions = contractSuggestionsQuery.data ?? [];
   const tasks = tasksQuery.data ?? [];
   const todoCount = tasks.filter((task) => task.status === "todo").length;
   const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
@@ -90,13 +103,29 @@ export function TasksPage() {
   const queryError = tasksQuery.error ?? recipientsQuery.error;
   const isBusy = createTask.isPending || setStatus.isPending || deleteTask.isPending;
 
-  function updateMention(value: string, caret: number) {
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  function updateComposerTokens(value: string, caret: number) {
     const mention = findActiveMention(value, caret);
+    const contractTag = findActiveContractTag(value, caret);
     setActiveMention(mention);
+    setActiveContractTag(contractTag);
     setHighlightedIndex(0);
 
     if (recipient && !value.includes(`@${recipient.username}`)) {
       setRecipient(null);
+    }
+    if (selectedContract && !value.includes(`#${selectedContract.nif}`)) {
+      setSelectedContract(null);
     }
   }
 
@@ -113,28 +142,54 @@ export function TasksPage() {
     });
   }
 
+  function selectContract(nextContract: TaskContractSuggestion) {
+    if (!activeContractTag) return;
+    const inserted = insertContractTag(draft, activeContractTag, nextContract.nif);
+    setDraft(inserted.value);
+    setSelectedContract(nextContract);
+    setActiveContractTag(null);
+
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(inserted.caret, inserted.caret);
+    });
+  }
+
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (activeMention && suggestions.length > 0) {
+    const activeSuggestions = activeMention
+      ? suggestions
+      : activeContractTag
+        ? contractSuggestions
+        : [];
+
+    if ((activeMention || activeContractTag) && activeSuggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setHighlightedIndex((current) => (current + 1) % suggestions.length);
+        setHighlightedIndex((current) => (current + 1) % activeSuggestions.length);
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
         setHighlightedIndex((current) =>
-          (current - 1 + suggestions.length) % suggestions.length
+          (current - 1 + activeSuggestions.length) % activeSuggestions.length
         );
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        selectRecipient(suggestions[highlightedIndex] ?? suggestions[0]);
+        if (activeMention) {
+          selectRecipient(suggestions[highlightedIndex] ?? suggestions[0]);
+        } else {
+          selectContract(
+            contractSuggestions[highlightedIndex] ?? contractSuggestions[0]
+          );
+        }
         return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
         setActiveMention(null);
+        setActiveContractTag(null);
         return;
       }
     }
@@ -153,17 +208,29 @@ export function TasksPage() {
     setActionError(null);
     setNotice(null);
     try {
-      await createTask.mutateAsync({
+      const result = await createTask.mutateAsync({
         content,
         assigneeId: recipient?.id ?? null
       });
+      const queued = Boolean(
+        result &&
+        typeof result === "object" &&
+        "queued" in result &&
+        result.queued
+      );
       setDraft("");
       setActiveMention(null);
+      setActiveContractTag(null);
       setRecipient(null);
+      setSelectedContract(null);
       setNotice(
-        recipient
-          ? `Tâche transmise à ${recipient.fullName}.`
-          : "Tâche ajoutée à votre liste privée."
+        queued
+          ? recipient
+            ? `Tâche enregistrée hors ligne. Elle sera transmise à ${recipient.fullName} à la reconnexion.`
+            : "Tâche enregistrée hors ligne. Elle sera synchronisée à la reconnexion."
+          : recipient
+            ? `Tâche transmise à ${recipient.fullName}.`
+            : "Tâche ajoutée à votre liste privée."
       );
       window.setTimeout(() => setNotice(null), 3500);
     } catch (error) {
@@ -217,20 +284,29 @@ export function TasksPage() {
           <span className="page-eyebrow">Espace personnel</span>
           <h1 className="section-title">Mes tâches</h1>
           <div className="section-subtitle">
-            Votre liste est confidentielle. Utilisez <strong>@</strong> pour transmettre une tâche.
+            Votre liste est confidentielle et disponible hors ligne. Utilisez{" "}
+            <strong>@</strong> pour transmettre et <strong>#</strong> pour lier un contrat.
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-outline tasks-sync-button"
-          onClick={() => void tasksQuery.refetch()}
-          disabled={tasksQuery.isFetching || sessionUnavailable}
-        >
-          <span className={`material-symbols-rounded${tasksQuery.isFetching ? " is-spinning" : ""}`}>
-            sync
+        <div className="tasks-header-actions">
+          <span className={`tasks-connectivity${isOnline ? " is-online" : " is-offline"}`}>
+            <span className="material-symbols-rounded">
+              {isOnline ? "cloud_done" : "cloud_off"}
+            </span>
+            {isOnline ? "En ligne" : "Mode hors ligne"}
           </span>
-          Synchroniser
-        </button>
+          <button
+            type="button"
+            className="btn btn-outline tasks-sync-button"
+            onClick={() => void tasksQuery.refetch()}
+            disabled={tasksQuery.isFetching || sessionUnavailable || !isOnline}
+          >
+            <span className={`material-symbols-rounded${tasksQuery.isFetching ? " is-spinning" : ""}`}>
+              sync
+            </span>
+            Synchroniser
+          </button>
+        </div>
       </header>
 
       {sessionUnavailable ? (
@@ -288,20 +364,27 @@ export function TasksPage() {
               rows={3}
               maxLength={1000}
               disabled={sessionUnavailable}
-              placeholder="Ex. Vérifier les dossiers… Tapez @ pour transmettre"
+              placeholder="Ex. Vérifier le dossier #NIF puis prévenir @utilisateur"
               aria-label="Description de la tâche"
-              aria-expanded={Boolean(activeMention && suggestions.length)}
-              aria-controls="task-mention-suggestions"
+              aria-expanded={Boolean(
+                (activeMention && suggestions.length) ||
+                (activeContractTag && contractSuggestions.length)
+              )}
+              aria-controls={
+                activeContractTag
+                  ? "task-contract-suggestions"
+                  : "task-mention-suggestions"
+              }
               onChange={(event) => {
                 setDraft(event.target.value);
-                updateMention(event.target.value, event.target.selectionStart);
+                updateComposerTokens(event.target.value, event.target.selectionStart);
               }}
               onClick={(event) =>
-                updateMention(event.currentTarget.value, event.currentTarget.selectionStart)
+                updateComposerTokens(event.currentTarget.value, event.currentTarget.selectionStart)
               }
               onKeyUp={(event) => {
                 if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
-                updateMention(event.currentTarget.value, event.currentTarget.selectionStart);
+                updateComposerTokens(event.currentTarget.value, event.currentTarget.selectionStart);
               }}
               onKeyDown={handleComposerKeyDown}
             />
@@ -336,33 +419,106 @@ export function TasksPage() {
                 ))}
               </div>
             ) : null}
+
+            {activeContractTag ? (
+              <div
+                className="task-mention-menu task-contract-menu"
+                id="task-contract-suggestions"
+                role="listbox"
+                aria-label="Contrats par NIF"
+              >
+                <div className="task-mention-menu-label">Lier un contrat par NIF</div>
+                {contractSuggestions.length > 0 ? (
+                  contractSuggestions.map((contract, index) => (
+                    <button
+                      key={contract.id}
+                      type="button"
+                      className={`task-mention-option task-contract-option${index === highlightedIndex ? " is-active" : ""}`}
+                      role="option"
+                      aria-selected={index === highlightedIndex}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => selectContract(contract)}
+                    >
+                      <span className="task-avatar task-contract-avatar" aria-hidden="true">
+                        #
+                      </span>
+                      <span>
+                        <strong>#{contract.nif}</strong>
+                        <small>
+                          {contract.personName}
+                          {contract.position ? ` · ${contract.position}` : ""}
+                          {contract.fiscalYear ? ` · ${contract.fiscalYear}` : ""}
+                        </small>
+                      </span>
+                      <span className="material-symbols-rounded">link</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="task-contract-empty">
+                    <span className={`material-symbols-rounded${contractSuggestionsQuery.isFetching ? " is-spinning" : ""}`}>
+                      {contractSuggestionsQuery.isFetching ? "sync" : "search_off"}
+                    </span>
+                    {contractSuggestionsQuery.isFetching
+                      ? "Recherche des contrats…"
+                      : "Aucun contrat trouvé dans les données disponibles."}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="task-composer-footer">
-            <div className="task-recipient-state">
-              {recipient ? (
-                <>
-                  <span className="material-symbols-rounded">send</span>
-                  Sera transmise à <strong>{recipient.fullName}</strong>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraft((current) =>
-                        current.replace(`@${recipient.username}`, "").replace(/\s{2,}/g, " ")
-                      );
-                      setRecipient(null);
-                    }}
-                    aria-label="Retirer le destinataire"
-                  >
-                    <span className="material-symbols-rounded">close</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-rounded">alternate_email</span>
-                  Tapez @ puis choisissez un compte
-                </>
-              )}
+            <div className="task-composer-contexts">
+              <div className="task-recipient-state">
+                {recipient ? (
+                  <>
+                    <span className="material-symbols-rounded">send</span>
+                    Sera transmise à <strong>{recipient.fullName}</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft((current) =>
+                          current.replace(`@${recipient.username}`, "").replace(/\s{2,}/g, " ")
+                        );
+                        setRecipient(null);
+                      }}
+                      aria-label="Retirer le destinataire"
+                    >
+                      <span className="material-symbols-rounded">close</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-rounded">alternate_email</span>
+                    @ pour transmettre
+                  </>
+                )}
+              </div>
+              <div className="task-recipient-state task-contract-state">
+                {selectedContract ? (
+                  <>
+                    <span className="material-symbols-rounded">tag</span>
+                    Contrat <strong>#{selectedContract.nif}</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft((current) =>
+                          current.replace(`#${selectedContract.nif}`, "").replace(/\s{2,}/g, " ")
+                        );
+                        setSelectedContract(null);
+                      }}
+                      aria-label="Retirer le contrat"
+                    >
+                      <span className="material-symbols-rounded">close</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-rounded">tag</span>
+                    # pour lier un contrat
+                  </>
+                )}
+              </div>
             </div>
             <button
               type="submit"
@@ -481,13 +637,19 @@ export function TasksPage() {
                     </span>
                   </button>
                   <div className="task-row-content">
-                    <p>{task.content}</p>
+                    <p><TaskText content={task.content} /></p>
                     <div className="task-row-meta">
                       <TaskStatusSelect
                         task={task}
                         disabled={isBusy}
                         onChange={(status) => void changeTaskStatus(task.id, status)}
                       />
+                      {task.id.startsWith("offline-task-") ? (
+                        <span className="task-pending-sync">
+                          <span className="material-symbols-rounded">cloud_upload</span>
+                          En attente de synchronisation
+                        </span>
+                      ) : null}
                       {received ? (
                         <span className="task-sender">
                           <span className="material-symbols-rounded">forward_to_inbox</span>
@@ -574,8 +736,14 @@ export function TasksPage() {
                                 <span className="material-symbols-rounded">delete</span>
                               </button>
                             </div>
-                            <p>{task.content}</p>
+                            <p><TaskText content={task.content} /></p>
                             <div className="kanban-card-meta">
+                              {task.id.startsWith("offline-task-") ? (
+                                <span className="task-pending-sync">
+                                  <span className="material-symbols-rounded">cloud_upload</span>
+                                  À synchroniser
+                                </span>
+                              ) : null}
                               {received ? (
                                 <span className="task-sender">
                                   <span className="material-symbols-rounded">forward_to_inbox</span>
@@ -635,5 +803,23 @@ function TaskStatusSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function TaskText({ content }: { content: string }) {
+  const parts = content.split(/(#[\p{L}\p{N}._-]+)/gu);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.startsWith("#") ? (
+          <span className="task-inline-contract-tag" key={`${part}-${index}`}>
+            <span className="material-symbols-rounded" aria-hidden="true">tag</span>
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
   );
 }

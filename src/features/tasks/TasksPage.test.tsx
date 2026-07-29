@@ -6,6 +6,15 @@ import type { PersonalTask } from "../../data/types";
 const createMutateAsync = vi.fn();
 const statusMutateAsync = vi.fn();
 let mockTasks: PersonalTask[] = [];
+let mockContractSuggestions = [
+  {
+    id: "contract-1",
+    nif: "123-456-789-0",
+    personName: "Jean Dupont",
+    position: "Comptable",
+    fiscalYear: "2025-2026"
+  }
+];
 
 vi.mock("../auth/auth", () => ({
   useAuth: () => ({
@@ -37,6 +46,10 @@ vi.mock("./tasksApi", () => ({
     ],
     error: null
   }),
+  useTaskContractSuggestions: () => ({
+    data: mockContractSuggestions,
+    isFetching: false
+  }),
   useCreatePrivateTask: () => ({
     isPending: false,
     mutateAsync: createMutateAsync
@@ -58,6 +71,15 @@ describe("TasksPage", () => {
 
   beforeEach(() => {
     mockTasks = [];
+    mockContractSuggestions = [
+      {
+        id: "contract-1",
+        nif: "123-456-789-0",
+        personName: "Jean Dupont",
+        position: "Comptable",
+        fiscalYear: "2025-2026"
+      }
+    ];
     createMutateAsync.mockReset();
     createMutateAsync.mockResolvedValue("task-id");
     statusMutateAsync.mockReset();
@@ -109,6 +131,28 @@ describe("TasksPage", () => {
         assigneeId: null
       });
     });
+  });
+
+  it("suggests a contract by NIF after #", () => {
+    render(<TasksPage />);
+
+    const composer = screen.getByRole("textbox", {
+      name: "Description de la tâche"
+    });
+    fireEvent.change(composer, {
+      target: { value: "Vérifier #123", selectionStart: 13 }
+    });
+
+    expect(screen.getByRole("listbox", { name: "Contrats par NIF" }))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByText("#123-456-789-0"));
+
+    expect(composer).toHaveValue("Vérifier #123-456-789-0 ");
+    expect(
+      screen.getByText("#123-456-789-0", {
+        selector: ".task-contract-state strong"
+      })
+    ).toBeInTheDocument();
   });
 
   it("moves a task to En cours by dragging it in the Kanban", async () => {

@@ -8,6 +8,7 @@ import {
   type AppPermission,
   type AppRole
 } from "./permissions";
+import { clearPrivateTaskOfflineData } from "../tasks/privateTaskOffline";
 
 export type AuthUser = {
   id: string;
@@ -158,6 +159,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         queryClient.removeQueries({ queryKey: ["private_tasks"] });
         queryClient.removeQueries({ queryKey: ["task_recipients"] });
+        if (user?.id) {
+          void clearPrivateTaskOfflineData(user.id);
+        }
         setUser(null);
         saveSession(null);
       },

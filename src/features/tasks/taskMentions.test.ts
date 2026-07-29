@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   filterTaskRecipients,
+  findActiveContractTag,
   findActiveMention,
+  insertContractTag,
   insertRecipientMention
 } from "./taskMentions";
 
@@ -35,5 +37,14 @@ describe("task mentions", () => {
   it("filters on either full name or username", () => {
     expect(filterTaskRecipients(recipients, "noël")).toEqual([recipients[1]]);
     expect(filterTaskRecipients(recipients, "jdu")).toEqual([recipients[0]]);
+  });
+
+  it("detects and inserts a contract tag introduced by #", () => {
+    const tag = findActiveContractTag("Vérifier #123", 13);
+    expect(tag).toEqual({ start: 9, end: 13, query: "123" });
+    expect(insertContractTag("Vérifier #123", tag!, "123-456-789-0")).toEqual({
+      value: "Vérifier #123-456-789-0 ",
+      caret: 24
+    });
   });
 });
