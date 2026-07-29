@@ -12,14 +12,14 @@ import {
   useUpdateContractComment
 } from "./contractsApi";
 import { useAppUsers } from "../auth/usersApi";
-import { Contract, ContractDateFilterMode, ContractStatus, Dossier } from "../../data/types";
+import { Contract, ContractDateFilterMode, ContractStatus, Dossier, Tag } from "../../data/types";
 import { Pagination } from "../../app/components/Pagination";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { formatCurrency } from "../../lib/format";
 import { getDataProvider } from "../../data/dataProvider";
 import { useDossierContractMetrics, useDossiersList } from "../dossiers/dossiersApi";
 import { DossiersInlinePanel } from "../dossiers/DossiersInlinePanel";
-import { useTags } from "./tagsApi";
+import { useAssignTagToContract, useCreateTag, useTags } from "./tagsApi";
 import { useAddresses, usePositions, useInstitutions } from "../settings/suggestionsApi";
 import {
   getCurrentFiscalYearStart,
@@ -130,9 +130,10 @@ export function ContractsListPage() {
   const [pendingAssignIds, setPendingAssignIds] = useState<string[] | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export">("main");
+  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export" | "tags">("main");
   const [dossierSubmenu, setDossierSubmenu] = useState<"archived" | "classified" | null>(null);
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
+  const [tagSearch, setTagSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
@@ -151,6 +152,7 @@ export function ContractsListPage() {
         setContextMenu(null);
         setMenuView("main");
         setDossierSubmenu(null);
+        setTagSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -245,6 +247,8 @@ export function ContractsListPage() {
   const changeContractsDuration = useChangeContractsDuration();
   const deleteContract = useDeleteContract();
   const updateContractComment = useUpdateContractComment();
+  const createTag = useCreateTag();
+  const assignTag = useAssignTagToContract();
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
   const { data: tags = [] } = useTags(workspaceId);
@@ -284,6 +288,21 @@ export function ContractsListPage() {
   const contextContract = contextMenu
     ? items.find((contract) => contract.id === contextMenu.id) ?? null
     : null;
+  const contextAssignedTagIds = new Set(
+    (contextContract?.tags ?? []).map((tag) => tag.id)
+  );
+  const normalizedTagSearch = tagSearch.trim().toLocaleLowerCase("fr");
+  const contextTagOptions = tags.filter(
+    (tag) =>
+      !contextAssignedTagIds.has(tag.id) &&
+      (!normalizedTagSearch ||
+        tag.name.toLocaleLowerCase("fr").includes(normalizedTagSearch))
+  );
+  const exactContextTag = normalizedTagSearch
+    ? tags.find(
+        (tag) => tag.name.trim().toLocaleLowerCase("fr") === normalizedTagSearch
+      )
+    : undefined;
   const activeCommentContract = commentOpen
     ? items.find((contract) => contract.id === commentOpen) ?? null
     : null;
@@ -798,6 +817,73 @@ export function ContractsListPage() {
     setMenuView("dossiers");
     setDossierSubmenu(null);
     setMenuMode("main");
+  }
+
+  function openTagMenu(event: React.MouseEvent, contractId: string) {
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const estimatedHeight = 360;
+    const padding = 12;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const y =
+      spaceBelow < estimatedHeight
+        ? rect.top - estimatedHeight - 8
+        : rect.bottom + 8;
+
+    setContextMenu({
+      id: contractId,
+      x: Math.min(window.innerWidth - 320, Math.max(padding, rect.left - 180)),
+      y: Math.max(padding, y)
+    });
+    setMenuView("tags");
+    setDossierSubmenu(null);
+    setMenuMode("main");
+    setTagSearch("");
+  }
+
+  async function handleAssignTagToContract(contractId: string, tag: Tag) {
+    if (!can("contracts.edit")) return;
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      await assignTag.mutateAsync({
+        workspaceId,
+        contractId,
+        tagId: tag.id
+      });
+      setContextMenu(null);
+      setTagSearch("");
+      setActionMessage(`Tag « ${tag.name} » ajouté au contrat.`);
+    } catch (error) {
+      console.error(error);
+      setActionError("Impossible d'ajouter le tag au contrat.");
+    }
+  }
+
+  async function handleCreateAndAssignTag() {
+    if (!contextContract || !normalizedTagSearch || !can("contracts.edit")) return;
+
+    if (exactContextTag) {
+      if (contextAssignedTagIds.has(exactContextTag.id)) {
+        setActionError("Ce tag est déjà attribué au contrat.");
+        return;
+      }
+      await handleAssignTagToContract(contextContract.id, exactContextTag);
+      return;
+    }
+
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      const newTag = await createTag.mutateAsync({
+        workspaceId,
+        name: tagSearch.trim()
+      });
+      await handleAssignTagToContract(contextContract.id, newTag);
+    } catch (error) {
+      console.error(error);
+      setActionError("Impossible de créer et d'ajouter le tag.");
+    }
   }
 
   function getDossierLabel(dossierId: string | null | undefined) {
@@ -1546,6 +1632,18 @@ export function ContractsListPage() {
                               ))}
                             </div>
                           )}
+                          {can("contracts.edit") ? (
+                            <button
+                              type="button"
+                              className="badge contract-tag-add"
+                              onClick={(event) => openTagMenu(event, contract.id)}
+                              aria-label={`Ajouter un tag au contrat de ${contract.firstName} ${contract.lastName}`}
+                              title="Ajouter un tag"
+                            >
+                              <span className="material-symbols-rounded">add</span>
+                              Tag
+                            </button>
+                          ) : null}
                         </div>
 
                         <div className="contracts-meta">
@@ -1650,6 +1748,8 @@ export function ContractsListPage() {
                     width:
                       contextMenu.id === "date-filter-trigger"
                         ? "260px"
+                        : menuView === "tags"
+                          ? "300px"
                         : menuMode === "main"
                           ? "240px"
                           : "200px",
@@ -1896,6 +1996,122 @@ export function ContractsListPage() {
                             {s.label}
                           </button>
                         ))}
+                      </div>
+                    </>
+                  ) : menuView === "tags" ? (
+                    <>
+                      <div className="context-menu-header-main contract-tag-menu-header">
+                        <div>
+                          <span>Tags du contrat</span>
+                          <strong>
+                            {contextContract
+                              ? `${contextContract.firstName} ${contextContract.lastName}`
+                              : "Contrat"}
+                          </strong>
+                        </div>
+                        <button
+                          className="icon-btn"
+                          type="button"
+                          onClick={() => {
+                            setContextMenu(null);
+                            setTagSearch("");
+                          }}
+                          aria-label="Fermer le menu des tags"
+                        >
+                          <span className="material-symbols-rounded">close</span>
+                        </button>
+                      </div>
+
+                      {contextContract?.tags?.length ? (
+                        <div className="contract-tag-menu-assigned">
+                          <span>Déjà attribués</span>
+                          <div>
+                            {contextContract.tags.map((tag) => (
+                              <TagBadge key={tag.id} tag={tag} />
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <form
+                        className="contract-tag-menu-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void handleCreateAndAssignTag();
+                        }}
+                      >
+                        <span className="material-symbols-rounded">search</span>
+                        <input
+                          autoFocus
+                          type="text"
+                          value={tagSearch}
+                          onChange={(event) => {
+                            setTagSearch(event.target.value);
+                            setActionError(null);
+                          }}
+                          placeholder="Rechercher ou créer un tag…"
+                          aria-label="Rechercher ou créer un tag"
+                        />
+                        {tagSearch ? (
+                          <button
+                            type="button"
+                            onClick={() => setTagSearch("")}
+                            aria-label="Effacer la recherche"
+                          >
+                            <span className="material-symbols-rounded">close</span>
+                          </button>
+                        ) : null}
+                      </form>
+
+                      <div className="context-menu-scroll contract-tag-menu-options">
+                        {contextTagOptions.map((tag) => (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            className="context-menu-item"
+                            disabled={assignTag.isPending || createTag.isPending}
+                            onClick={() => {
+                              if (!contextContract) return;
+                              void handleAssignTagToContract(contextContract.id, tag);
+                            }}
+                          >
+                            <span
+                              className="contract-tag-color"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            <span>{tag.name}</span>
+                            <span className="material-symbols-rounded contract-tag-add-icon">
+                              add
+                            </span>
+                          </button>
+                        ))}
+
+                        {normalizedTagSearch && !exactContextTag ? (
+                          <button
+                            type="button"
+                            className="context-menu-item contract-tag-create"
+                            disabled={assignTag.isPending || createTag.isPending}
+                            onClick={() => void handleCreateAndAssignTag()}
+                          >
+                            <span className="material-symbols-rounded">
+                              {createTag.isPending || assignTag.isPending
+                                ? "progress_activity"
+                                : "new_label"}
+                            </span>
+                            Créer et ajouter « {tagSearch.trim()} »
+                          </button>
+                        ) : exactContextTag &&
+                          contextAssignedTagIds.has(exactContextTag.id) ? (
+                          <div className="context-menu-empty">
+                            Ce tag est déjà attribué à ce contrat.
+                          </div>
+                        ) : contextTagOptions.length === 0 ? (
+                          <div className="context-menu-empty">
+                            {tags.length === 0
+                              ? "Saisissez un nom pour créer le premier tag."
+                              : "Tous les tags disponibles sont déjà attribués."}
+                          </div>
+                        ) : null}
                       </div>
                     </>
                   ) : menuMode === "status" ? (

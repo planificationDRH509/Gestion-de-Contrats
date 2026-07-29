@@ -1427,6 +1427,31 @@ img {
   flex-wrap: wrap;
 }
 
+.contract-tag-add {
+  min-height: 22px;
+  gap: 3px;
+  padding: 2px 8px;
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.contract-tag-add .material-symbols-rounded {
+  font-size: 14px;
+}
+
+.contract-tag-add:hover,
+.contract-tag-add:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .contracts-name {
   font-weight: 700;
   font-size: 15px;
@@ -2446,6 +2471,158 @@ img {
   padding: 6px 12px 10px;
   font-size: 12px;
   color: var(--ink-muted);
+}
+
+.contract-tag-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-muted);
+}
+
+.contract-tag-menu-header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.contract-tag-menu-header span {
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.contract-tag-menu-header strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-tag-menu-header .icon-btn {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border: 0;
+  background: transparent;
+}
+
+.contract-tag-menu-assigned {
+  display: grid;
+  gap: 6px;
+  padding: 9px 12px 4px;
+}
+
+.contract-tag-menu-assigned > span {
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.contract-tag-menu-assigned > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.contract-tag-menu-form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.contract-tag-menu-form:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.contract-tag-menu-form > .material-symbols-rounded {
+  color: var(--ink-muted);
+  font-size: 17px;
+}
+
+.contract-tag-menu-form input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.contract-tag-menu-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.contract-tag-menu-form button:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+
+.contract-tag-menu-form button .material-symbols-rounded {
+  font-size: 16px;
+}
+
+.contract-tag-menu-options {
+  max-height: 220px;
+  padding: 0 4px 4px;
+  overflow-y: auto;
+}
+
+.contract-tag-menu-options .context-menu-item:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.contract-tag-color {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.contract-tag-add-icon {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 17px;
+}
+
+.contract-tag-create {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.contract-tag-create .material-symbols-rounded {
+  font-size: 18px;
 }
 
 .toolbar {
