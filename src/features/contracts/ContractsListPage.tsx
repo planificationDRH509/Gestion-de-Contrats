@@ -288,8 +288,14 @@ export function ContractsListPage() {
   const contextContract = contextMenu
     ? items.find((contract) => contract.id === contextMenu.id) ?? null
     : null;
+  const isBulkTagContext = contextMenu?.id === "bulk-tag-trigger";
+  const contextTagTargetIds = isBulkTagContext
+    ? selected
+    : contextContract
+      ? [contextContract.id]
+      : [];
   const contextAssignedTagIds = new Set(
-    (contextContract?.tags ?? []).map((tag) => tag.id)
+    isBulkTagContext ? [] : (contextContract?.tags ?? []).map((tag) => tag.id)
   );
   const normalizedTagSearch = tagSearch.trim().toLocaleLowerCase("fr");
   const contextTagOptions = tags.filter(
@@ -841,34 +847,57 @@ export function ContractsListPage() {
     setTagSearch("");
   }
 
-  async function handleAssignTagToContract(contractId: string, tag: Tag) {
-    if (!can("contracts.edit")) return;
+  async function handleAssignTagToContracts(contractIds: string[], tag: Tag) {
+    if (!can("contracts.edit") || contractIds.length === 0) return;
     setActionMessage(null);
     setActionError(null);
-    try {
-      await assignTag.mutateAsync({
-        workspaceId,
-        contractId,
-        tagId: tag.id
-      });
+
+    const results = await Promise.allSettled(
+      contractIds.map((contractId) =>
+        assignTag.mutateAsync({
+          workspaceId,
+          contractId,
+          tagId: tag.id
+        })
+      )
+    );
+    const failureCount = results.filter((result) => result.status === "rejected").length;
+    const successCount = contractIds.length - failureCount;
+
+    if (failureCount === 0) {
       setContextMenu(null);
       setTagSearch("");
-      setActionMessage(`Tag « ${tag.name} » ajouté au contrat.`);
-    } catch (error) {
-      console.error(error);
-      setActionError("Impossible d'ajouter le tag au contrat.");
+      setActionMessage(
+        contractIds.length === 1
+          ? `Tag « ${tag.name} » ajouté au contrat.`
+          : `Tag « ${tag.name} » ajouté à ${contractIds.length} contrats.`
+      );
+      return;
     }
+
+    results.forEach((result) => {
+      if (result.status === "rejected") console.error(result.reason);
+    });
+    setActionError(
+      successCount === 0
+        ? "Impossible d'ajouter le tag aux contrats sélectionnés."
+        : `Tag ajouté à ${successCount} contrat(s), mais ${failureCount} ajout(s) ont échoué.`
+    );
   }
 
   async function handleCreateAndAssignTag() {
-    if (!contextContract || !normalizedTagSearch || !can("contracts.edit")) return;
+    if (
+      contextTagTargetIds.length === 0 ||
+      !normalizedTagSearch ||
+      !can("contracts.edit")
+    ) return;
 
     if (exactContextTag) {
       if (contextAssignedTagIds.has(exactContextTag.id)) {
         setActionError("Ce tag est déjà attribué au contrat.");
         return;
       }
-      await handleAssignTagToContract(contextContract.id, exactContextTag);
+      await handleAssignTagToContracts(contextTagTargetIds, exactContextTag);
       return;
     }
 
@@ -879,7 +908,7 @@ export function ContractsListPage() {
         workspaceId,
         name: tagSearch.trim()
       });
-      await handleAssignTagToContract(contextContract.id, newTag);
+      await handleAssignTagToContracts(contextTagTargetIds, newTag);
     } catch (error) {
       console.error(error);
       setActionError("Impossible de créer et d'ajouter le tag.");
@@ -2004,7 +2033,9 @@ export function ContractsListPage() {
                         <div>
                           <span>Tags du contrat</span>
                           <strong>
-                            {contextContract
+                            {isBulkTagContext
+                              ? `${contextTagTargetIds.length} contrats sélectionnés`
+                              : contextContract
                               ? `${contextContract.firstName} ${contextContract.lastName}`
                               : "Contrat"}
                           </strong>
@@ -2071,8 +2102,7 @@ export function ContractsListPage() {
                             className="context-menu-item"
                             disabled={assignTag.isPending || createTag.isPending}
                             onClick={() => {
-                              if (!contextContract) return;
-                              void handleAssignTagToContract(contextContract.id, tag);
+                              void handleAssignTagToContracts(contextTagTargetIds, tag);
                             }}
                           >
                             <span
@@ -2531,6 +2561,24 @@ export function ContractsListPage() {
 
               {can("contracts.edit") ? (
               <>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "130px" }}>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  onClick={(event) => openTagMenu(event, "bulk-tag-trigger")}
+                  title="Ajouter un tag aux contrats sélectionnés"
+                  aria-label="Ajouter un tag aux contrats sélectionnés"
+                  style={{ background: "#fff", border: "1px solid var(--border)" }}
+                >
+                  <span className="material-symbols-rounded">new_label</span>
+                </button>
+                <div style={{ fontSize: "12px", fontWeight: 600 }}>
+                  Ajouter un tag
+                </div>
+              </div>
+
+              <div className="toolbar-divider" />
+
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <input
                    className="input"
