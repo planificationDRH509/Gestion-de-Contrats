@@ -5339,6 +5339,22 @@ button {
   background: var(--panel-muted) !important;
 }
 
+.contract-task-trigger {
+  position: relative;
+}
+
+.contract-task-trigger.has-tasks::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--panel);
+  border-radius: 999px;
+  background: var(--accent);
+}
+
 .contract-editor-page {
   width: min(100%, 1180px) !important;
 }
@@ -7718,6 +7734,36 @@ body,
   line-height: 1.5;
 }
 
+.tasks-session-card .tasks-session-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.tasks-session-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.tasks-session-password {
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.tasks-session-password .input {
+  height: 40px;
+  background: var(--panel);
+}
+
+.tasks-session-form .btn {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .tasks-toast {
   position: static;
   width: 100%;
@@ -8509,8 +8555,19 @@ body,
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .tasks-session-card .btn {
+  .tasks-session-form {
     grid-column: 1 / -1;
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tasks-session-password {
+    width: 100%;
+  }
+
+  .tasks-session-form .btn {
+    width: 100%;
   }
 
   .task-composer-heading,

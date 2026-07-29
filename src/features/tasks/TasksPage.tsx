@@ -60,7 +60,7 @@ const taskDateFormatter = new Intl.DateTimeFormat("fr-HT", {
 });
 
 export function TasksPage() {
-  const { user, logout } = useAuth();
+  const { user, activateTaskSession } = useAuth();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const tasksQuery = usePrivateTasks();
   const recipientsQuery = useTaskRecipients();
@@ -80,6 +80,9 @@ export function TasksPage() {
   const [dragTargetStatus, setDragTargetStatus] = useState<TaskStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [sessionPassword, setSessionPassword] = useState("");
+  const [sessionActivationError, setSessionActivationError] = useState<string | null>(null);
+  const [isActivatingSession, setIsActivatingSession] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const recipients = recipientsQuery.data ?? [];
@@ -113,6 +116,30 @@ export function TasksPage() {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  async function handleTaskSessionActivation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sessionPassword || isActivatingSession) return;
+
+    setSessionActivationError(null);
+    setIsActivatingSession(true);
+    try {
+      const result = await activateTaskSession(sessionPassword);
+      if (!result.success) {
+        setSessionActivationError(result.error ?? "Impossible d’activer la liste privée.");
+        return;
+      }
+      setSessionPassword("");
+      setNotice("Votre liste privée est activée.");
+      window.setTimeout(() => setNotice(null), 3500);
+    } catch {
+      setSessionActivationError(
+        "Impossible de joindre le serveur. Vérifiez votre connexion puis réessayez."
+      );
+    } finally {
+      setIsActivatingSession(false);
+    }
+  }
 
   function updateComposerTokens(value: string, caret: number) {
     const mention = findActiveMention(value, caret);
@@ -313,14 +340,39 @@ export function TasksPage() {
         <section className="card tasks-session-card" role="alert">
           <span className="material-symbols-rounded">lock</span>
           <div>
-            <h2>Reconnectez-vous une fois</h2>
+            <h2>Activez votre liste privée</h2>
             <p>
-              Une nouvelle session sécurisée est nécessaire pour ouvrir votre liste confidentielle.
+              Confirmez le mot de passe de votre compte. Vous resterez connecté à l’application.
             </p>
+            {sessionActivationError ? (
+              <p className="tasks-session-error">{sessionActivationError}</p>
+            ) : null}
           </div>
-          <button type="button" className="btn btn-primary" onClick={logout}>
-            Se reconnecter
-          </button>
+          <form className="tasks-session-form" onSubmit={handleTaskSessionActivation}>
+            <label className="tasks-session-password">
+              <span>Mot de passe</span>
+              <input
+                className="input"
+                type="password"
+                value={sessionPassword}
+                autoComplete="current-password"
+                disabled={isActivatingSession || !isOnline}
+                onChange={(event) => setSessionPassword(event.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!sessionPassword || isActivatingSession || !isOnline}
+            >
+              <span
+                className={`material-symbols-rounded${isActivatingSession ? " is-spinning" : ""}`}
+              >
+                {isActivatingSession ? "sync" : "lock_open"}
+              </span>
+              {isActivatingSession ? "Activation…" : "Activer mes tâches"}
+            </button>
+          </form>
         </section>
       ) : null}
 

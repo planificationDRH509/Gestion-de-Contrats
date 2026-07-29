@@ -41,6 +41,12 @@ import {
   applySuggestionPrefix,
   normalizeSuggestionGrammarValue
 } from "../../lib/suggestionPrefixes";
+import { usePrivateTasks } from "../tasks/tasksApi";
+import {
+  indexTasksByContractNif,
+  normalizeContractNif
+} from "../tasks/taskMentions";
+import { ContractTaskIndicator } from "./ContractTaskIndicator";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -213,6 +219,11 @@ export function ContractsListPage() {
   ]);
 
   const { data, isLoading, isFetching } = useContractsList(queryParams);
+  const { data: privateTasks = [] } = usePrivateTasks();
+  const privateTasksByNif = useMemo(
+    () => indexTasksByContractNif(privateTasks),
+    [privateTasks]
+  );
 
   // Prefetch next page for a smoother offline experience
   const queryClient = useQueryClient();
@@ -1406,6 +1417,11 @@ export function ContractsListPage() {
                   </div>
                   {items.map((contract) => {
                     const hasComment = Boolean(contract.commentaire?.trim());
+                    const contractNif =
+                      contract.nif?.trim() || contract.applicantId?.trim() || "";
+                    const linkedTasks = contractNif
+                      ? privateTasksByNif.get(normalizeContractNif(contractNif)) ?? []
+                      : [];
                     return (
                       <div
                         className={`contracts-row ${isExpanded(contract.id) ? "expanded" : ""}`}
@@ -1603,6 +1619,10 @@ export function ContractsListPage() {
                               <span className="material-symbols-rounded">chat_bubble</span>
                             </button>
                           ) : null}
+                          <ContractTaskIndicator
+                            tasks={linkedTasks}
+                            onOpenTasks={() => navigate("/app/taches")}
+                          />
                           {can("contracts.change_status") || can("dossiers.manage") || can("contracts.delete") ? (
                             <button
                               className="icon-btn"

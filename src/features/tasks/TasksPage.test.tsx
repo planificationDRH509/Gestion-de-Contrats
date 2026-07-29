@@ -5,7 +5,9 @@ import type { PersonalTask } from "../../data/types";
 
 const createMutateAsync = vi.fn();
 const statusMutateAsync = vi.fn();
+const activateTaskSession = vi.fn();
 let mockTasks: PersonalTask[] = [];
+let mockTaskSessionToken: string | undefined = "session-token";
 let mockContractSuggestions = [
   {
     id: "contract-1",
@@ -24,9 +26,9 @@ vi.mock("../auth/auth", () => ({
       name: "Administrateur",
       workspaceId: "workspace",
       role: "admin",
-      taskSessionToken: "session-token"
+      taskSessionToken: mockTaskSessionToken
     },
-    logout: vi.fn()
+    activateTaskSession
   })
 }));
 
@@ -71,6 +73,7 @@ describe("TasksPage", () => {
 
   beforeEach(() => {
     mockTasks = [];
+    mockTaskSessionToken = "session-token";
     mockContractSuggestions = [
       {
         id: "contract-1",
@@ -84,6 +87,36 @@ describe("TasksPage", () => {
     createMutateAsync.mockResolvedValue("task-id");
     statusMutateAsync.mockReset();
     statusMutateAsync.mockResolvedValue(true);
+    activateTaskSession.mockReset();
+    activateTaskSession.mockResolvedValue({ success: true });
+  });
+
+  it("activates an older session without logging the user out", async () => {
+    mockTaskSessionToken = undefined;
+    activateTaskSession.mockImplementation(async () => {
+      mockTaskSessionToken = "new-private-session";
+      return { success: true };
+    });
+
+    const { rerender } = render(<TasksPage />);
+
+    const password = screen.getByLabelText("Mot de passe");
+    fireEvent.change(password, { target: { value: "secret" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "lock_open Activer mes tâches" })
+    );
+
+    await waitFor(() => {
+      expect(activateTaskSession).toHaveBeenCalledWith("secret");
+    });
+
+    rerender(<TasksPage />);
+    expect(
+      screen.queryByRole("heading", { name: "Activez votre liste privée" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Description de la tâche" })
+    ).toBeEnabled();
   });
 
   it("shows other users after @ and transmits to the selected account", async () => {

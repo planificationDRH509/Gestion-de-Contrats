@@ -1,4 +1,4 @@
-import type { TaskRecipient } from "../../data/types";
+import type { PersonalTask, TaskRecipient } from "../../data/types";
 
 export type ActiveMention = {
   start: number;
@@ -70,13 +70,51 @@ export function insertContractTag(
   tag: ActiveContractTag,
   nif: string
 ) {
+  const tagValue = nif
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-");
   const nextValue =
     value.slice(0, tag.start) +
-    `#${nif} ` +
+    `#${tagValue} ` +
     value.slice(tag.end);
 
   return {
     value: nextValue,
-    caret: tag.start + nif.length + 2
+    caret: tag.start + tagValue.length + 2
   };
+}
+
+export function normalizeContractNif(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("fr")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+export function extractContractTags(content: string) {
+  return Array.from(
+    content.matchAll(/(?:^|\s)#([\p{L}\p{N}._-]+)/gu),
+    (match) => match[1] ?? ""
+  ).filter(Boolean);
+}
+
+export function indexTasksByContractNif(tasks: PersonalTask[]) {
+  const index = new Map<string, PersonalTask[]>();
+
+  tasks.forEach((task) => {
+    const taskNifs = new Set(
+      extractContractTags(task.content)
+        .map(normalizeContractNif)
+        .filter(Boolean)
+    );
+
+    taskNifs.forEach((nif) => {
+      const linkedTasks = index.get(nif) ?? [];
+      linkedTasks.push(task);
+      index.set(nif, linkedTasks);
+    });
+  });
+
+  return index;
 }

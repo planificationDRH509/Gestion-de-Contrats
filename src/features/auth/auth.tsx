@@ -23,6 +23,9 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   login: (username: string, password: string) => Promise<boolean>;
+  activateTaskSession: (
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   can: (permission: AppPermission) => boolean;
 };
@@ -31,7 +34,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_KEY = "contribution_auth";
 
-function loadSession(): AuthUser | null {
+export function loadStoredAuthSession(): AuthUser | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
     if (!raw) return null;
@@ -52,7 +55,11 @@ function loadSession(): AuthUser | null {
       username: parsed.username,
       name: parsed.name,
       workspaceId: parsed.workspaceId,
-      role: normalizeAppRole(parsed.role, parsed.username)
+      role: normalizeAppRole(parsed.role, parsed.username),
+      taskSessionToken:
+        typeof parsed.taskSessionToken === "string"
+          ? parsed.taskSessionToken
+          : undefined
     };
   } catch {
     localStorage.removeItem(AUTH_KEY);
@@ -73,7 +80,7 @@ function saveSession(user: AuthUser | null) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => loadSession());
+  const [user, setUser] = useState<AuthUser | null>(() => loadStoredAuthSession());
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -150,6 +157,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(sessionUser);
         saveSession(sessionUser);
         return true;
+      },
+      activateTaskSession: async (password: string) => {
+        if (!user?.id) {
+          return {
+            success: false,
+            error: "Votre session principale a expiré. Veuillez vous reconnecter."
+          };
+        }
+
+        const taskSession = await getSupabaseClient().rpc(
+          "create_task_session",
+          {
+            p_user_id: user.id,
+            p_password: password
+          }
+        );
+
+        if (taskSession.error || typeof taskSession.data !== "string") {
+          const message = taskSession.error?.message ?? "";
+          if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(message)) {
+            return {
+              success: false,
+              error: "Mot de passe incorrect."
+            };
+          }
+          if (/Could not find the function|PGRST202|create_task_session/i.test(message)) {
+            return {
+              success: false,
+              error: "La liste privée n’est pas encore activée sur le serveur."
+            };
+          }
+          return {
+            success: false,
+            error: message || "Impossible d’activer la liste privée."
+          };
+        }
+
+        const nextUser = {
+          ...user,
+          taskSessionToken: taskSession.data
+        };
+        setUser(nextUser);
+        saveSession(nextUser);
+        await queryClient.invalidateQueries({ queryKey: ["private_tasks", user.id] });
+        await queryClient.invalidateQueries({ queryKey: ["task_recipients", user.id] });
+        return { success: true };
       },
       logout: () => {
         if (user?.taskSessionToken) {
