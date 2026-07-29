@@ -74,7 +74,7 @@ begin
   select user_id
   into session_user_id
   from public.app_task_sessions
-  where token_hash = digest(p_session_token, 'sha256')
+  where token_hash = extensions.digest(p_session_token, 'sha256')
     and expires_at > now();
 
   if session_user_id is null then
@@ -83,7 +83,7 @@ begin
 
   update public.app_task_sessions
   set last_used_at = now()
-  where token_hash = digest(p_session_token, 'sha256');
+  where token_hash = extensions.digest(p_session_token, 'sha256');
 
   return session_user_id;
 end;
@@ -112,10 +112,10 @@ begin
 
   delete from public.app_task_sessions where expires_at <= now();
 
-  raw_token := encode(gen_random_bytes(32), 'hex');
+  raw_token := encode(extensions.gen_random_bytes(32), 'hex');
 
   insert into public.app_task_sessions(user_id, token_hash)
-  values (p_user_id, digest(raw_token, 'sha256'));
+  values (p_user_id, extensions.digest(raw_token, 'sha256'));
 
   return raw_token;
 end;
@@ -129,7 +129,7 @@ set search_path = public, pg_temp
 as $$
 begin
   delete from public.app_task_sessions
-  where token_hash = digest(coalesce(p_session_token, ''), 'sha256');
+  where token_hash = extensions.digest(coalesce(p_session_token, ''), 'sha256');
   return found;
 end;
 $$;
