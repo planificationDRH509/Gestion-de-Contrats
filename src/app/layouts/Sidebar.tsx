@@ -71,6 +71,12 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
             collapsed={collapsed}
           />
         ) : null}
+        <NavItem
+          to="/app/taches"
+          icon="checklist"
+          label="Mes tâches"
+          collapsed={collapsed}
+        />
         <NavItem 
           to="/app/statistiques" 
           icon="analytics" 

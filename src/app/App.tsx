@@ -91,6 +91,12 @@ export function App() {
           persister: cachePersister,
           maxAge: 1000 * 60 * 60 * 24 * 7, // Persist for 7 days
           buster: "v1",
+          dehydrateOptions: {
+            // Personal tasks must never be written to the shared offline cache.
+            shouldDehydrateQuery: (query) =>
+              query.queryKey[0] !== "private_tasks" &&
+              query.queryKey[0] !== "task_recipients"
+          }
         }}
         onSuccess={() => {
           // Resume mutations after restoration

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getDefaultWorkspace, listLocalWorkspaces } from "../../data/local/workspaces";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import {
@@ -15,6 +16,7 @@ export type AuthUser = {
   // Kept as an internal data partition key for backward compatibility.
   workspaceId: string;
   role: AppRole;
+  taskSessionToken?: string;
 };
 
 type AuthContextValue = {
@@ -71,6 +73,7 @@ function saveSession(user: AuthUser | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadSession());
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -122,25 +125,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           listLocalWorkspaces().find((item) => legacyWorkspaceIds.includes(item.id)) ||
           getDefaultWorkspace();
 
+        let taskSessionToken: string | undefined;
+        const taskSession = await supabase.rpc("create_task_session", {
+          p_user_id: data.id,
+          p_password: password
+        });
+        if (!taskSession.error && typeof taskSession.data === "string") {
+          taskSessionToken = taskSession.data;
+        } else if (taskSession.error) {
+          // Keep the main application available when the task migration has
+          // not been applied yet. The task page explains how to reconnect.
+          console.warn("Private task session unavailable:", taskSession.error.message);
+        }
+
         const sessionUser: AuthUser = {
           id: data.id,
           username: data.username,
           name: data.full_name,
           workspaceId: dataPartition.id,
-          role: normalizeAppRole((data as { role?: unknown }).role, data.username)
+          role: normalizeAppRole((data as { role?: unknown }).role, data.username),
+          taskSessionToken
         };
         setUser(sessionUser);
         saveSession(sessionUser);
         return true;
       },
       logout: () => {
+        if (user?.taskSessionToken) {
+          void getSupabaseClient().rpc("revoke_task_session", {
+            p_session_token: user.taskSessionToken
+          });
+        }
+        queryClient.removeQueries({ queryKey: ["private_tasks"] });
+        queryClient.removeQueries({ queryKey: ["task_recipients"] });
         setUser(null);
         saveSession(null);
       },
       can: (permission: AppPermission) =>
         Boolean(user && hasPermission(user.role, permission))
     }),
-    [user]
+    [queryClient, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

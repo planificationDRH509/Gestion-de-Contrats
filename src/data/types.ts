@@ -248,3 +248,24 @@ export type AppUser = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+
+export type TaskRecipient = {
+  id: string;
+  username: string;
+  fullName: string;
+};
+
+export type TaskStatus = "todo" | "in_progress" | "done";
+
+export type PersonalTask = {
+  id: string;
+  content: string;
+  status: TaskStatus;
+  completed: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  createdByName: string;
+  createdByUsername: string;
+};

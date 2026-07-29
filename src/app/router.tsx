@@ -20,6 +20,7 @@ import { IdentificationPage } from "../features/identification/IdentificationPag
 import { RequirePermission } from "../features/auth/RequirePermission";
 import { AuditPage } from "../features/audit/AuditPage";
 import { QualityPage } from "../features/quality/QualityPage";
+import { TasksPage } from "../features/tasks/TasksPage";
 
 export function AppRoutes() {
   return (
@@ -35,6 +36,7 @@ export function AppRoutes() {
         }
       >
         <Route path="contrats" element={<ContractsListPage />} />
+        <Route path="taches" element={<TasksPage />} />
         <Route path="dossiers" element={<Navigate to="/app/contrats" replace />} />
         <Route path="contrats/nouveau" element={<RequirePermission permission="contracts.create"><ContractNewPage /></RequirePermission>} />
         <Route path="contrats/preview" element={<RequirePermission permission="contracts.create"><ContractPreviewPage /></RequirePermission>} />

@@ -47,6 +47,41 @@ export type Database = {
         }
         Relationships: []
       }
+      app_task_sessions: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          last_used_at: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_used_at?: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_used_at?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_task_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       autocompletion: {
         Row: {
           address_keywords: string | null
@@ -392,12 +427,133 @@ export type Database = {
         }
         Relationships: []
       }
+      private_tasks: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          content: string
+          created_at: string
+          created_by: string
+          id: string
+          owner_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          content: string
+          created_at?: string
+          created_by: string
+          id?: string
+          owner_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          owner_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "private_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_tasks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_private_task: {
+        Args: {
+          p_assignee_id: string | null
+          p_content: string
+          p_session_token: string
+        }
+        Returns: string
+      }
+      create_task_session: {
+        Args: {
+          p_password: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      delete_private_task: {
+        Args: {
+          p_session_token: string
+          p_task_id: string
+        }
+        Returns: boolean
+      }
+      list_private_tasks: {
+        Args: {
+          p_session_token: string
+        }
+        Returns: {
+          completed: boolean
+          completed_at: string | null
+          content: string
+          created_at: string
+          created_by: string
+          created_by_name: string
+          created_by_username: string
+          id: string
+          status: string
+          updated_at: string
+        }[]
+      }
+      list_task_recipients: {
+        Args: {
+          p_session_token: string
+        }
+        Returns: {
+          full_name: string
+          id: string
+          username: string
+        }[]
+      }
+      revoke_task_session: {
+        Args: {
+          p_session_token: string
+        }
+        Returns: boolean
+      }
+      set_private_task_completed: {
+        Args: {
+          p_completed: boolean
+          p_session_token: string
+          p_task_id: string
+        }
+        Returns: boolean
+      }
+      set_private_task_status: {
+        Args: {
+          p_session_token: string
+          p_status: string
+          p_task_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
