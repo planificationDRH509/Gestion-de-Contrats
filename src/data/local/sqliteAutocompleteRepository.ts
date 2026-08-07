@@ -41,17 +41,26 @@ export class SqliteAutocompleteRepository implements AutocompleteRepository {
   async deletePosition(id: string): Promise<void> {
     deletePosition(id);
   }
-  async addInstitution(_workspaceId: string, label: string, addressKeywords: string[]): Promise<InstitutionSuggestion> {
-    return addInstitution(label, addressKeywords);
+  async addInstitution(
+    _workspaceId: string,
+    label: string,
+    addressKeywords: string[],
+    _createdBy?: string,
+    department?: string | null,
+    commune?: string | null
+  ): Promise<InstitutionSuggestion> {
+    return addInstitution(label, addressKeywords, department, commune);
   }
   async updateInstitution(
     id: string,
     label: string,
     addressKeywords: string[],
     prefix?: string | null,
-    labelFeminine?: string | null
+    labelFeminine?: string | null,
+    department?: string | null,
+    commune?: string | null
   ): Promise<void> {
-    updateInstitution(id, label, addressKeywords, prefix, labelFeminine);
+    updateInstitution(id, label, addressKeywords, prefix, labelFeminine, department, commune);
   }
   async deleteInstitution(id: string): Promise<void> {
     deleteInstitution(id);

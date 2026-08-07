@@ -77,8 +77,20 @@ export function useAddInstitution() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ workspaceId, label, addressKeywords }: { workspaceId: string; label: string; addressKeywords: string[] }) =>
-      repo().addInstitution(workspaceId, label, addressKeywords, user?.id),
+    mutationFn: ({ workspaceId, label, addressKeywords, department, commune }: {
+      workspaceId: string;
+      label: string;
+      addressKeywords: string[];
+      department?: string | null;
+      commune?: string | null;
+    }) => repo().addInstitution(
+      workspaceId,
+      label,
+      addressKeywords,
+      user?.id,
+      department,
+      commune
+    ),
     onSuccess: (_, { workspaceId }) => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "institutions", workspaceId] });
     }
@@ -110,8 +122,23 @@ export function useUpdatePosition() {
 export function useUpdateInstitution() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, label, addressKeywords, prefix, labelFeminine }: { id: string; label: string; addressKeywords: string[]; prefix?: string | null; labelFeminine?: string | null }) =>
-      repo().updateInstitution(id, label, addressKeywords, prefix, labelFeminine),
+    mutationFn: ({ id, label, addressKeywords, prefix, labelFeminine, department, commune }: {
+      id: string;
+      label: string;
+      addressKeywords: string[];
+      prefix?: string | null;
+      labelFeminine?: string | null;
+      department?: string | null;
+      commune?: string | null;
+    }) => repo().updateInstitution(
+      id,
+      label,
+      addressKeywords,
+      prefix,
+      labelFeminine,
+      department,
+      commune
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suggestions", "institutions"] });
     }

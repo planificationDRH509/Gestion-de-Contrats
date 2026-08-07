@@ -4078,6 +4078,41 @@ img {
   flex: 1;
 }
 
+.sug-institution-form {
+  display: grid;
+  grid-template-columns: 92px minmax(240px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(210px, 1.4fr) auto;
+  align-items: center;
+}
+
+.sug-institution-form .input {
+  min-width: 0;
+  width: 100%;
+}
+
+.sug-institution-location-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sug-location-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+  vertical-align: middle;
+}
+
+.sug-location-tag .material-symbols-rounded {
+  font-size: 13px;
+}
+
 .sug-list {
   display: flex;
   flex-direction: column;
@@ -4249,6 +4284,21 @@ img {
   .sug-edit-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .sug-institution-form,
+  .sug-institution-location-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1350px) {
+  .sug-institution-form {
+    grid-template-columns: 92px repeat(3, minmax(0, 1fr));
+  }
+
+  .sug-institution-name {
+    grid-column: 2 / -1;
   }
 }
 

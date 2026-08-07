@@ -85,8 +85,10 @@ export type Database = {
       autocompletion: {
         Row: {
           address_keywords: string | null
+          commune: string | null
           created_at: string
           default_salary: number | null
+          department: string | null
           id: string
           label: string
           order_index: number
@@ -96,8 +98,10 @@ export type Database = {
         }
         Insert: {
           address_keywords?: string | null
+          commune?: string | null
           created_at?: string
           default_salary?: number | null
+          department?: string | null
           id: string
           label: string
           order_index?: number
@@ -107,8 +111,10 @@ export type Database = {
         }
         Update: {
           address_keywords?: string | null
+          commune?: string | null
           created_at?: string
           default_salary?: number | null
+          department?: string | null
           id?: string
           label?: string
           order_index?: number

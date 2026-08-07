@@ -841,6 +841,8 @@ function getDb(): DatabaseSync {
       label TEXT NOT NULL,
       salaries TEXT,
       address_keywords TEXT,
+      department TEXT,
+      commune TEXT,
       order_index INTEGER NOT NULL DEFAULT 0,
       workspace_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
@@ -865,6 +867,14 @@ function getDb(): DatabaseSync {
     {
       name: "salaries",
       sql: "ALTER TABLE autocompletion ADD COLUMN salaries TEXT;"
+    },
+    {
+      name: "department",
+      sql: "ALTER TABLE autocompletion ADD COLUMN department TEXT;"
+    },
+    {
+      name: "commune",
+      sql: "ALTER TABLE autocompletion ADD COLUMN commune TEXT;"
     }
   ]);
   ensureColumns("dossiers", [
@@ -2679,7 +2689,14 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       } else if (row.type === "institution") {
         let kw = [];
         try { kw = JSON.parse(asString(row.address_keywords) || "[]"); } catch {}
-        result.institutions.push({ id: row.id, label: row.label, addressKeywords: kw, order: row.order_index });
+        result.institutions.push({
+          id: row.id,
+          label: row.label,
+          department: row.department || null,
+          commune: row.commune || null,
+          addressKeywords: kw,
+          order: row.order_index
+        });
       }
     });
 
@@ -2699,13 +2716,13 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       db.prepare("DELETE FROM autocompletion WHERE workspace_id = :workspaceId").run({ workspaceId });
       const insertAuto = db.prepare(`
-        INSERT INTO autocompletion (id, type, label, salaries, address_keywords, order_index, workspace_id, created_at, updated_at)
-        VALUES (:id, :type, :label, :salaries, :address_keywords, :order_index, :workspace_id, :created_at, :updated_at)
+        INSERT INTO autocompletion (id, type, label, salaries, address_keywords, department, commune, order_index, workspace_id, created_at, updated_at)
+        VALUES (:id, :type, :label, :salaries, :address_keywords, :department, :commune, :order_index, :workspace_id, :created_at, :updated_at)
       `);
       
       if (Array.isArray(data.addresses)) {
         data.addresses.forEach((a: any, idx: number) => {
-          insertAuto.run({ id: a.id || randomUUID(), type: "address", label: a.label, salaries: null, address_keywords: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          insertAuto.run({ id: a.id || randomUUID(), type: "address", label: a.label, salaries: null, address_keywords: null, department: null, commune: null, order_index: typeof a.order === 'number' ? a.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
         });
       }
       if (Array.isArray(data.positions)) {
@@ -2717,6 +2734,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
             label: p.label, 
             salaries: JSON.stringify(salaries),
             address_keywords: null, 
+            department: null,
+            commune: null,
             order_index: typeof p.order === 'number' ? p.order : idx, 
             workspace_id: workspaceId, 
             created_at: now, 
@@ -2726,7 +2745,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (Array.isArray(data.institutions)) {
         data.institutions.forEach((i: any, idx: number) => {
-          insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, salaries: null, address_keywords: JSON.stringify(i.addressKeywords || []), order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, salaries: null, address_keywords: JSON.stringify(i.addressKeywords || []), department: i.department || null, commune: i.commune || null, order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
         });
       }
       

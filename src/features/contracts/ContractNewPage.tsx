@@ -26,6 +26,7 @@ import {
   useInstitutions
 } from "../settings/suggestionsApi";
 import {
+  formatInstitutionLocation,
   getLastChoice,
   getInstitutionAddressRankingBoost,
   saveLastChoice,
@@ -245,6 +246,7 @@ export function ContractNewPage() {
       .map((i) => ({
         id: i.id,
         label: i.label,
+        sublabel: formatInstitutionLocation(i),
         rankingBoost: getInstitutionAddressRankingBoost(i, addressValue || ""),
       }));
   }, [allInstitutions, assignmentValue, addressValue]);

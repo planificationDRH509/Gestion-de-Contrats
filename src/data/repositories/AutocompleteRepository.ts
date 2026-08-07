@@ -13,7 +13,22 @@ export interface AutocompleteRepository {
   updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null): Promise<void>;
   deletePosition(id: string): Promise<void>;
   
-  addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion>;
-  updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null): Promise<void>;
+  addInstitution(
+    workspaceId: string,
+    label: string,
+    addressKeywords: string[],
+    createdBy?: string,
+    department?: string | null,
+    commune?: string | null
+  ): Promise<InstitutionSuggestion>;
+  updateInstitution(
+    id: string,
+    label: string,
+    addressKeywords: string[],
+    prefix?: string | null,
+    labelFeminine?: string | null,
+    department?: string | null,
+    commune?: string | null
+  ): Promise<void>;
   deleteInstitution(id: string): Promise<void>;
 }

@@ -6,6 +6,7 @@ import {
   useUpdateAddress, useUpdatePosition, useUpdateInstitution
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
+import { formatInstitutionLocation } from "../../data/local/suggestionsDb";
 import {
   getAutomaticSuggestionPrefix,
   type SuggestionPrefixKind
@@ -18,6 +19,19 @@ import {
 } from "./settingsApi";
 
 type Tab = "addresses" | "positions" | "institutions" | "contractDates";
+
+const HAITI_DEPARTMENTS = [
+  "Artibonite",
+  "Centre",
+  "Grand'Anse",
+  "Nippes",
+  "Nord",
+  "Nord-Est",
+  "Nord-Ouest",
+  "Ouest",
+  "Sud",
+  "Sud-Est"
+] as const;
 
 function automaticPrefixPlaceholder(label: string, kind: SuggestionPrefixKind) {
   const prefix = getAutomaticSuggestionPrefix(label, kind);
@@ -361,12 +375,16 @@ function InstitutionsPanel() {
   const [newLabel, setNewLabel] = useState("");
   const [newKeywords, setNewKeywords] = useState("");
   const [newPrefix, setNewPrefix] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newCommune, setNewCommune] = useState("");
   
   const [editId, setEditId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editKeywords, setEditKeywords] = useState("");
   const [editPrefix, setEditPrefix] = useState("");
   const [editLabelFeminine, setEditLabelFeminine] = useState("");
+  const [editDepartment, setEditDepartment] = useState("");
+  const [editCommune, setEditCommune] = useState("");
   const repo = getDataProvider().suggestions;
 
   async function handleAdd() {
@@ -374,31 +392,47 @@ function InstitutionsPanel() {
     const res = await addMutation.mutateAsync({ 
       workspaceId, 
       label: newLabel.trim(), 
-      addressKeywords: newKeywords.split(",").map(k => k.trim()).filter(Boolean) 
+      addressKeywords: newKeywords.split(",").map(k => k.trim()).filter(Boolean),
+      department: newDepartment || null,
+      commune: newCommune.trim() || null
     });
     if (newPrefix.trim()) {
       await updateMutation.mutateAsync({
         id: res.id,
         label: res.label,
         addressKeywords: res.addressKeywords,
-        prefix: newPrefix.trim()
+        prefix: newPrefix.trim(),
+        department: res.department,
+        commune: res.commune
       });
     }
     setNewLabel("");
     setNewKeywords("");
     setNewPrefix("");
+    setNewDepartment("");
+    setNewCommune("");
   }
 
   return (
     <div>
       <div className="sug-panel-header">
         <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>account_balance</span>
-        <strong>Institutions</strong>
+        <div>
+          <strong>Institutions</strong>
+          <p className="helper-text">
+            Le département et la commune permettent de situer l’institution et de mieux la classer selon l’adresse du contractuel.
+          </p>
+        </div>
       </div>
-      <div className="sug-add-row sug-add-row-multi" style={{ gap: 4 }}>
+      <div className="sug-add-row sug-institution-form">
         <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
-        <input className="input" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom de l'institution..." style={{ flex: 2 }} />
-        <input className="input" value={newKeywords} onChange={(e) => setNewKeywords(e.target.value)} placeholder="villes (ex: delmas, tabarre)" style={{ flex: 1.5 }} />
+        <input className="input sug-institution-name" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom de l'institution..." />
+        <select className="input" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)} aria-label="Département de l’institution">
+          <option value="">Département...</option>
+          {HAITI_DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}
+        </select>
+        <input className="input" value={newCommune} onChange={(e) => setNewCommune(e.target.value)} placeholder="Commune..." aria-label="Commune de l’institution" />
+        <input className="input sug-institution-keywords" value={newKeywords} onChange={(e) => setNewKeywords(e.target.value)} placeholder="Mots-clés d’adresse (facultatif)" />
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
       </div>
       <div className="sug-list">
@@ -410,8 +444,15 @@ function InstitutionsPanel() {
                   <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(editLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
                   <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 2 }} placeholder="Nom" />
                 </div>
+                <div className="sug-institution-location-fields">
+                  <select className="input" value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)} aria-label="Département de l’institution">
+                    <option value="">Département...</option>
+                    {HAITI_DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}
+                  </select>
+                  <input className="input" value={editCommune} onChange={(e) => setEditCommune(e.target.value)} placeholder="Commune..." aria-label="Commune de l’institution" />
+                </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                   <input className="input" value={editKeywords} onChange={e => setEditKeywords(e.target.value)} style={{ flex: 2 }} placeholder="mots-clés (villes)" />
+                   <input className="input" value={editKeywords} onChange={e => setEditKeywords(e.target.value)} style={{ flex: 2 }} placeholder="Mots-clés d’adresse (facultatif)" />
                    <input className="input" value={editLabelFeminine} onChange={e => setEditLabelFeminine(e.target.value)} placeholder="Équivalent féminin" style={{ flex: 1 }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -422,7 +463,9 @@ function InstitutionsPanel() {
                           label: editLabel.trim(), 
                           addressKeywords: editKeywords.split(",").map(k => k.trim()).filter(Boolean),
                           prefix: editPrefix.trim() || null,
-                          labelFeminine: editLabelFeminine.trim() || null
+                          labelFeminine: editLabelFeminine.trim() || null,
+                          department: editDepartment || null,
+                          commune: editCommune.trim() || null
                        });
                      }
                      setEditId(null);
@@ -435,8 +478,9 @@ function InstitutionsPanel() {
                 <div style={{ flex: 1 }}>
                   <SuggestionPrefix label={item.label} prefix={item.prefix} kind="institution" />
                   <span className="sug-item-label">
-                    {item.label} 
-                    {item.addressKeywords && item.addressKeywords.length > 0 && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>({item.addressKeywords.join(", ")})</span>}
+                    {item.label}
+                    {formatInstitutionLocation(item) && <span className="sug-location-tag"><span className="material-symbols-rounded">location_on</span>{formatInstitutionLocation(item)}</span>}
+                    {item.addressKeywords && item.addressKeywords.length > 0 && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>Mots-clés : {item.addressKeywords.join(", ")}</span>}
                     {item.labelFeminine && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>(f: {item.labelFeminine})</span>}
                   </span>
                 </div>
@@ -447,6 +491,8 @@ function InstitutionsPanel() {
                     setEditKeywords((item.addressKeywords||[]).join(", ")); 
                     setEditPrefix(item.prefix || "");
                     setEditLabelFeminine(item.labelFeminine || "");
+                    setEditDepartment(item.department || "");
+                    setEditCommune(item.commune || "");
                   }}><span className="material-symbols-rounded">edit</span></button>
                   <button className="icon-btn" onClick={async () => { if(confirm("Supprimer ?")) { await repo.deleteInstitution(item.id); window.location.reload(); } }}><span className="material-symbols-rounded">delete</span></button>
                 </div>

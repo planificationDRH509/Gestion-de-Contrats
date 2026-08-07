@@ -4,6 +4,7 @@ import { Contract, Gender } from "../../data/types";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
+  formatInstitutionLocation,
   getInstitutionAddressRankingBoost,
   getLastChoice,
   learnSuggestions,
@@ -552,6 +553,7 @@ export function ContractsSpreadsheetView({
     return allInstitutions.map((institution) => ({
       id: institution.id,
       label: institution.label,
+      sublabel: formatInstitutionLocation(institution),
       rankingBoost: getInstitutionAddressRankingBoost(institution, address)
     }));
   }

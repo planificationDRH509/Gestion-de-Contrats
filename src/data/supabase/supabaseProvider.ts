@@ -1072,6 +1072,8 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       label: r.label, 
       prefix: r.prefix,
       labelFeminine: r.label_feminine,
+      department: r.department,
+      commune: r.commune,
       addressKeywords: typeof r.address_keywords === 'string' ? JSON.parse(r.address_keywords) : (r.address_keywords || []), 
       order: r.order_index 
     }));
@@ -1132,7 +1134,14 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     if (error) throw repositoryError("Impossible de supprimer le poste.", error);
   }
 
-  async addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string): Promise<InstitutionSuggestion> {
+  async addInstitution(
+    workspaceId: string,
+    label: string,
+    addressKeywords: string[],
+    createdBy?: string,
+    department?: string | null,
+    commune?: string | null
+  ): Promise<InstitutionSuggestion> {
     const client = getSupabaseClient();
     const id = crypto.randomUUID();
     const payload = { 
@@ -1141,21 +1150,40 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       type: "institution", 
       label, 
       address_keywords: JSON.stringify(addressKeywords),
+      department: department?.trim() || null,
+      commune: commune?.trim() || null,
       order_index: 0,
       created_by: createdBy
     };
     const { error } = await (client.from("autocompletion").insert(payload as any) as any);
     if (error) throw repositoryError("Impossible d'ajouter l'affectation.", error);
-    return { id, label, addressKeywords, order: 0 };
+    return {
+      id,
+      label,
+      department: department?.trim() || null,
+      commune: commune?.trim() || null,
+      addressKeywords,
+      order: 0
+    };
   }
 
-  async updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null): Promise<void> {
+  async updateInstitution(
+    id: string,
+    label: string,
+    addressKeywords: string[],
+    prefix?: string | null,
+    labelFeminine?: string | null,
+    department?: string | null,
+    commune?: string | null
+  ): Promise<void> {
     const client = getSupabaseClient();
     const { error } = await (client.from("autocompletion").update({
       label, 
       address_keywords: JSON.stringify(addressKeywords),
       prefix,
-      label_feminine: labelFeminine
+      label_feminine: labelFeminine,
+      department: department?.trim() || null,
+      commune: commune?.trim() || null
     } as any).eq("id", id) as any);
     if (error) throw repositoryError("Impossible de modifier l'affectation.", error);
   }
@@ -1222,11 +1250,34 @@ class OfflineFirstAutocompleteRepository implements AutocompleteRepository {
   deletePosition(id: string) {
     return this.remote.deletePosition(id);
   }
-  addInstitution(workspaceId: string, label: string, addressKeywords: string[], createdBy?: string) {
-    return this.remote.addInstitution(workspaceId, label, addressKeywords, createdBy);
+  addInstitution(
+    workspaceId: string,
+    label: string,
+    addressKeywords: string[],
+    createdBy?: string,
+    department?: string | null,
+    commune?: string | null
+  ) {
+    return this.remote.addInstitution(workspaceId, label, addressKeywords, createdBy, department, commune);
   }
-  updateInstitution(id: string, label: string, addressKeywords: string[], prefix?: string | null, labelFeminine?: string | null) {
-    return this.remote.updateInstitution(id, label, addressKeywords, prefix, labelFeminine);
+  updateInstitution(
+    id: string,
+    label: string,
+    addressKeywords: string[],
+    prefix?: string | null,
+    labelFeminine?: string | null,
+    department?: string | null,
+    commune?: string | null
+  ) {
+    return this.remote.updateInstitution(
+      id,
+      label,
+      addressKeywords,
+      prefix,
+      labelFeminine,
+      department,
+      commune
+    );
   }
   deleteInstitution(id: string) {
     return this.remote.deleteInstitution(id);

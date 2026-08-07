@@ -29,6 +29,8 @@ export type InstitutionSuggestion = {
   label: string;
   prefix?: string | null;
   labelFeminine?: string | null;
+  department?: string | null;
+  commune?: string | null;
   addressKeywords: string[]; // which address areas this institution is linked to
   order: number;
 };
@@ -239,10 +241,22 @@ export function getInstitutions(): InstitutionSuggestion[] {
   return loadSuggestions().institutions.slice().sort((a, b) => a.order - b.order);
 }
 
-export function addInstitution(label: string, addressKeywords: string[]): InstitutionSuggestion {
+export function addInstitution(
+  label: string,
+  addressKeywords: string[],
+  department?: string | null,
+  commune?: string | null
+): InstitutionSuggestion {
   const db = loadSuggestions();
   const maxOrder = db.institutions.reduce((m, i) => Math.max(m, i.order), -1);
-  const entry: InstitutionSuggestion = { id: sugId(), label, addressKeywords, order: maxOrder + 1 };
+  const entry: InstitutionSuggestion = {
+    id: sugId(),
+    label,
+    department: department?.trim() || null,
+    commune: commune?.trim() || null,
+    addressKeywords,
+    order: maxOrder + 1
+  };
   db.institutions.push(entry);
   saveSuggestions(db);
   return entry;
@@ -253,7 +267,9 @@ export function updateInstitution(
   label: string,
   addressKeywords: string[],
   prefix?: string | null,
-  labelFeminine?: string | null
+  labelFeminine?: string | null,
+  department?: string | null,
+  commune?: string | null
 ) {
   const db = loadSuggestions();
   const idx = db.institutions.findIndex((i) => i.id === id);
@@ -262,6 +278,8 @@ export function updateInstitution(
     db.institutions[idx].addressKeywords = addressKeywords;
     db.institutions[idx].prefix = prefix ?? null;
     db.institutions[idx].labelFeminine = labelFeminine ?? null;
+    db.institutions[idx].department = department?.trim() || null;
+    db.institutions[idx].commune = commune?.trim() || null;
     saveSuggestions(db);
   }
 }
@@ -336,30 +354,69 @@ function normalizeLocation(str: string): string {
     .trim();
 }
 
+const NORMALIZED_HAITI_DEPARTMENTS = [
+  "grand anse",
+  "nord ouest",
+  "nord est",
+  "sud est",
+  "artibonite",
+  "nippes",
+  "centre",
+  "ouest",
+  "nord",
+  "sud"
+];
+
+function locationTermMatches(address: string, rawTerm: string): boolean {
+  const term = normalizeLocation(rawTerm);
+  if (!term || Math.min(address.length, term.length) < 4) return false;
+
+  const paddedAddress = ` ${address} `;
+  const paddedTerm = ` ${term} `;
+  return paddedAddress.includes(paddedTerm) || paddedTerm.includes(paddedAddress);
+}
+
 /**
  * Return a small autocomplete ranking bonus when an institution is linked to
  * the applicant's address. Punctuation, accents and hyphenation are ignored so
  * values such as "Pétion Ville" and "petion-ville" still match.
  */
 export function getInstitutionAddressRankingBoost(
-  institution: Pick<InstitutionSuggestion, "addressKeywords">,
+  institution: Pick<InstitutionSuggestion, "addressKeywords"> &
+    Partial<Pick<InstitutionSuggestion, "department" | "commune">>,
   addressValue: string
 ): number {
   const address = normalizeLocation(addressValue);
   if (!address) return 0;
 
   const paddedAddress = ` ${address} `;
-  const matchesAddress = (institution.addressKeywords ?? []).some((rawKeyword) => {
-    const keyword = normalizeLocation(rawKeyword);
-    if (!keyword || Math.min(address.length, keyword.length) < 4) return false;
-
-    const paddedKeyword = ` ${keyword} `;
-    return paddedAddress.includes(paddedKeyword) || paddedKeyword.includes(paddedAddress);
-  });
+  const detectedDepartment = NORMALIZED_HAITI_DEPARTMENTS.find((department) =>
+    paddedAddress.includes(` ${department} `)
+  );
+  const department = institution.department ? normalizeLocation(institution.department) : "";
+  const matchesDepartment = Boolean(department) && (
+    detectedDepartment
+      ? department === detectedDepartment
+      : locationTermMatches(address, department)
+  );
+  const otherLocationTerms = [institution.commune, ...(institution.addressKeywords ?? [])];
+  const matchesAddress = matchesDepartment || otherLocationTerms.some((rawTerm) =>
+    Boolean(rawTerm) && locationTermMatches(address, rawTerm as string)
+  );
 
   // Deliberately lower than the bonuses for pinned, typed-prefix and recent
   // choices in AutocompleteField: the address should guide, not dictate.
   return matchesAddress ? 40 : 0;
+}
+
+/** Build the location shown below an institution in autocomplete menus. */
+export function formatInstitutionLocation(
+  institution: Partial<Pick<InstitutionSuggestion, "department" | "commune">>
+): string | undefined {
+  const parts = [institution.commune?.trim(), institution.department?.trim()].filter(
+    (part): part is string => Boolean(part)
+  );
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 // ─── Smart Queries ──────────────────────────────────────────────
