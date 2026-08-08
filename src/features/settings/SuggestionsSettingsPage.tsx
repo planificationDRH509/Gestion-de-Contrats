@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/auth";
 import { 
   useAddresses, usePositions, useInstitutions,
@@ -17,6 +17,7 @@ import {
   getStoredContractStartDates,
   setStoredContractStartDates
 } from "./settingsApi";
+import { filterAndSortSuggestions } from "./suggestionList";
 
 type Tab = "addresses" | "positions" | "institutions" | "contractDates";
 
@@ -58,6 +59,40 @@ function SuggestionPrefix({
     >
       {displayedPrefix}
     </span>
+  );
+}
+
+function SuggestionSearch({
+  value,
+  onChange,
+  label
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="sug-search-field">
+      <span className="material-symbols-rounded" aria-hidden="true">search</span>
+      <input
+        type="search"
+        className="input sug-search-input"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Rechercher..."
+        aria-label={`Rechercher dans les ${label}`}
+      />
+      {value && (
+        <button
+          type="button"
+          className="sug-search-clear"
+          onClick={() => onChange("")}
+          aria-label="Effacer la recherche"
+        >
+          <span className="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -192,7 +227,16 @@ function AddressesPanel() {
   const [editLabel, setEditLabel] = useState("");
   const [editPrefix, setEditPrefix] = useState("");
   const [editLabelFeminine, setEditLabelFeminine] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const repo = getDataProvider().suggestions;
+  const visibleItems = useMemo(
+    () => filterAndSortSuggestions(items, searchQuery, (item) => [
+      item.label,
+      item.labelFeminine,
+      item.prefix
+    ]),
+    [items, searchQuery]
+  );
 
   async function handleAdd() {
     if (!newLabel.trim()) return;
@@ -209,6 +253,7 @@ function AddressesPanel() {
       <div className="sug-panel-header">
         <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>location_on</span>
         <strong>Adresses</strong>
+        <SuggestionSearch value={searchQuery} onChange={setSearchQuery} label="adresses" />
       </div>
       <div className="sug-add-row sug-add-row-multi">
         <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "address")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
@@ -217,7 +262,7 @@ function AddressesPanel() {
       </div>
       <div className="sug-list">
         {isLoading && <div className="sug-empty">Chargement...</div>}
-        {items.map(item => (
+        {visibleItems.map(item => (
           <div key={item.id} className="sug-item" style={{ flexDirection: editId === item.id ? 'column' : 'row', alignItems: editId === item.id ? 'stretch' : 'center', gap: 4 }}>
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
@@ -261,6 +306,9 @@ function AddressesPanel() {
             )}
           </div>
         ))}
+        {!isLoading && visibleItems.length === 0 && (
+          <div className="sug-empty">Aucune adresse trouvée.</div>
+        )}
       </div>
     </div>
   );
@@ -281,7 +329,16 @@ function PositionsPanel() {
   const [editSalary, setEditSalary] = useState("");
   const [editPrefix, setEditPrefix] = useState("");
   const [editLabelFeminine, setEditLabelFeminine] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const repo = getDataProvider().suggestions;
+  const visibleItems = useMemo(
+    () => filterAndSortSuggestions(items, searchQuery, (item) => [
+      item.label,
+      item.labelFeminine,
+      item.prefix
+    ]),
+    [items, searchQuery]
+  );
 
   async function handleAdd() {
     if (!newLabel.trim()) return;
@@ -305,6 +362,7 @@ function PositionsPanel() {
       <div className="sug-panel-header">
         <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>badge</span>
         <strong>Postes</strong>
+        <SuggestionSearch value={searchQuery} onChange={setSearchQuery} label="postes" />
       </div>
       <div className="sug-add-row sug-add-row-multi" style={{ gap: 4 }}>
         <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "position")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
@@ -313,7 +371,7 @@ function PositionsPanel() {
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
       </div>
       <div className="sug-list">
-        {items.map(item => (
+        {visibleItems.map(item => (
           <div key={item.id} className="sug-item" style={{ flexDirection: editId === item.id ? 'column' : 'row', alignItems: editId === item.id ? 'stretch' : 'center', gap: 4 }}>
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
@@ -361,6 +419,9 @@ function PositionsPanel() {
             )}
           </div>
         ))}
+        {visibleItems.length === 0 && (
+          <div className="sug-empty">Aucun poste trouvé.</div>
+        )}
       </div>
     </div>
   );
@@ -385,7 +446,19 @@ function InstitutionsPanel() {
   const [editLabelFeminine, setEditLabelFeminine] = useState("");
   const [editDepartment, setEditDepartment] = useState("");
   const [editCommune, setEditCommune] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const repo = getDataProvider().suggestions;
+  const visibleItems = useMemo(
+    () => filterAndSortSuggestions(items, searchQuery, (item) => [
+      item.label,
+      item.labelFeminine,
+      item.prefix,
+      item.department,
+      item.commune,
+      ...(item.addressKeywords ?? [])
+    ]),
+    [items, searchQuery]
+  );
 
   async function handleAdd() {
     if (!newLabel.trim()) return;
@@ -423,6 +496,7 @@ function InstitutionsPanel() {
             Le département et la commune permettent de situer l’institution et de mieux la classer selon l’adresse du contractuel.
           </p>
         </div>
+        <SuggestionSearch value={searchQuery} onChange={setSearchQuery} label="institutions" />
       </div>
       <div className="sug-add-row sug-institution-form">
         <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
@@ -436,7 +510,7 @@ function InstitutionsPanel() {
         <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
       </div>
       <div className="sug-list">
-        {items.map(item => (
+        {visibleItems.map(item => (
           <div key={item.id} className="sug-item" style={{ flexDirection: editId === item.id ? 'column' : 'row', alignItems: editId === item.id ? 'stretch' : 'center', gap: 4 }}>
             {editId === item.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
@@ -500,6 +574,9 @@ function InstitutionsPanel() {
             )}
           </div>
         ))}
+        {visibleItems.length === 0 && (
+          <div className="sug-empty">Aucune institution trouvée.</div>
+        )}
       </div>
     </div>
   );
