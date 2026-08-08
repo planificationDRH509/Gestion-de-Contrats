@@ -47,6 +47,11 @@ import {
   normalizeContractNif
 } from "../tasks/taskMentions";
 import { ContractTaskIndicator } from "./ContractTaskIndicator";
+import {
+  combineAssignmentAndInstitutionLocationFilters,
+  getInstitutionCommuneOptions,
+  getInstitutionDepartmentOptions
+} from "./institutionLocationFilters";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -110,6 +115,8 @@ export function ContractsListPage() {
   const [tagFilterId, setTagFilterId] = useState<string | null>(null);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc">(
@@ -184,6 +191,30 @@ export function ContractsListPage() {
     localStorage.setItem("contracts_page_size", String(nextPageSize));
   }
 
+  const { data: positionsData = [] } = usePositions(workspaceId);
+  const { data: institutionsData = [] } = useInstitutions(workspaceId);
+  const { data: addressesData = [] } = useAddresses(workspaceId);
+
+  const positionOptions = useMemo(() => positionsData.map(p => p.label), [positionsData]);
+  const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
+  const departmentOptions = useMemo(
+    () => getInstitutionDepartmentOptions(institutionsData),
+    [institutionsData]
+  );
+  const communeOptions = useMemo(
+    () => getInstitutionCommuneOptions(institutionsData),
+    [institutionsData]
+  );
+  const effectiveAssignments = useMemo(
+    () => combineAssignmentAndInstitutionLocationFilters(
+      institutionsData,
+      selectedAssignments,
+      selectedDepartments,
+      selectedCommunes
+    ),
+    [institutionsData, selectedAssignments, selectedCommunes, selectedDepartments]
+  );
+
   const queryParams = useMemo(() => ({
     workspaceId,
     query: query.trim() ? query : undefined,
@@ -199,7 +230,7 @@ export function ContractsListPage() {
     dateFilterStart: dateFilterMode === "range" ? dateFilterStart : undefined,
     dateFilterEnd: dateFilterMode === "range" ? dateFilterEnd : undefined,
     tagId: tagFilterId ?? undefined,
-    assignments: selectedAssignments.length > 0 ? selectedAssignments : undefined,
+    assignments: effectiveAssignments,
     positions: selectedPositions.length > 0 ? selectedPositions : undefined
   }), [
     dateFilterDate,
@@ -207,10 +238,10 @@ export function ContractsListPage() {
     dateFilterMode,
     dateFilterStart,
     dossierFilterId,
+    effectiveAssignments,
     page,
     pageSize,
     query,
-    selectedAssignments,
     selectedPositions,
     showAll,
     sort,
@@ -253,13 +284,6 @@ export function ContractsListPage() {
   const { data: dossierMetrics = {} } = useDossierContractMetrics(workspaceId);
   const { data: tags = [] } = useTags(workspaceId);
   const { data: appUsers = [] } = useAppUsers();
-
-  const { data: positionsData = [] } = usePositions(workspaceId);
-  const { data: institutionsData = [] } = useInstitutions(workspaceId);
-  const { data: addressesData = [] } = useAddresses(workspaceId);
-
-  const positionOptions = useMemo(() => positionsData.map(p => p.label), [positionsData]);
-  const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
 
   const userMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -336,7 +360,9 @@ export function ContractsListPage() {
     dateFilterMode !== "all" ||
     query.trim().length > 0 ||
     selectedAssignments.length > 0 ||
-    selectedPositions.length > 0;
+    selectedPositions.length > 0 ||
+    selectedDepartments.length > 0 ||
+    selectedCommunes.length > 0;
 
   function clearFilters() {
     const today = getTodayDateInputValue();
@@ -349,6 +375,8 @@ export function ContractsListPage() {
     setQuery("");
     setSelectedAssignments([]);
     setSelectedPositions([]);
+    setSelectedDepartments([]);
+    setSelectedCommunes([]);
     setPage(1);
     setContextMenu(null);
   }
@@ -1386,6 +1414,32 @@ export function ContractsListPage() {
                 </button>
               ) : null}
 
+              {selectedDepartments.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedDepartments([]); setPage(1); }}
+                  title="Retirer le filtre département"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>map</span>
+                  Département: {selectedDepartments.length === 1 ? selectedDepartments[0] : `${selectedDepartments.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
+              {selectedCommunes.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedCommunes([]); setPage(1); }}
+                  title="Retirer le filtre commune"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>location_on</span>
+                  Commune: {selectedCommunes.length === 1 ? selectedCommunes[0] : `${selectedCommunes.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
               {selectedPositions.length > 0 ? (
                 <button
                   type="button"
@@ -1413,7 +1467,7 @@ export function ContractsListPage() {
                   <span className="material-symbols-rounded">sort</span><span>Trier</span>
                 </button>
                 <button
-                  className={`toolbar-action-button ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 ? "active" : ""}`}
+                  className={`toolbar-action-button ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 || selectedDepartments.length > 0 || selectedCommunes.length > 0 ? "active" : ""}`}
                   onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                   aria-expanded={showAdvancedFilters}
                 >
@@ -1481,6 +1535,20 @@ export function ContractsListPage() {
                 selectedValues={selectedAssignments}
                 onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
                 placeholder="Toutes les institutions"
+              />
+              <MultiSelectDropdown
+                label="Département"
+                options={departmentOptions}
+                selectedValues={selectedDepartments}
+                onChange={(values) => { setSelectedDepartments(values); setPage(1); }}
+                placeholder="Tous les départements"
+              />
+              <MultiSelectDropdown
+                label="Commune"
+                options={communeOptions}
+                selectedValues={selectedCommunes}
+                onChange={(values) => { setSelectedCommunes(values); setPage(1); }}
+                placeholder="Toutes les communes"
               />
               <MultiSelectDropdown
                 label="Fonction (Poste)"

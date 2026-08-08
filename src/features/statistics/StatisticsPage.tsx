@@ -21,6 +21,12 @@ import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { calculateFinancialStatistics } from "./financialStatistics";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
+import { useInstitutions } from "../settings/suggestionsApi";
+import {
+  createInstitutionLocationMatcher,
+  getInstitutionCommuneOptions,
+  getInstitutionDepartmentOptions
+} from "../contracts/institutionLocationFilters";
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f43f5e'];
 const HTG_FORMATTER = new Intl.NumberFormat("fr-FR", {
@@ -118,6 +124,8 @@ export function StatisticsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Fetch all contracts (using a large pageSize for stats)
@@ -125,6 +133,7 @@ export function StatisticsPage() {
     workspaceId,
     pageSize: 5000 // Get up to 5000 contracts for more accurate statistics
   });
+  const { data: institutionsData = [] } = useInstitutions(workspaceId);
 
   const rawContracts = data?.items ?? [];
 
@@ -143,6 +152,25 @@ export function StatisticsPage() {
   const uniquePositions = useMemo(() => {
     return Array.from(new Set(rawContracts.map(c => c.position).filter(Boolean))).sort();
   }, [rawContracts]);
+
+  const departmentOptions = useMemo(
+    () => getInstitutionDepartmentOptions(institutionsData),
+    [institutionsData]
+  );
+
+  const communeOptions = useMemo(
+    () => getInstitutionCommuneOptions(institutionsData),
+    [institutionsData]
+  );
+
+  const matchesInstitutionLocation = useMemo(
+    () => createInstitutionLocationMatcher(
+      institutionsData,
+      selectedDepartments,
+      selectedCommunes
+    ),
+    [institutionsData, selectedCommunes, selectedDepartments]
+  );
 
   // Users mapping for full names
   const usersMap = useMemo(() => {
@@ -174,12 +202,6 @@ export function StatisticsPage() {
       case 'quarter':
         start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
         break;
-      case 'custom':
-        start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        break;
       default:
         start = new Date(0); // far past
         end = new Date(); // now
@@ -210,10 +232,22 @@ export function StatisticsPage() {
       const positionMatch = selectedPositions.length === 0
         ? true
         : selectedPositions.includes(c.position);
+
+      const locationMatch = matchesInstitutionLocation(c.assignment);
       
-      return dateMatch && statusMatch && assignmentMatch && positionMatch;
+      return dateMatch && statusMatch && assignmentMatch && positionMatch && locationMatch;
     });
-  }, [rawContracts, filterType, startDate, endDate, statusFilter, selectedAssignments, selectedPositions, fiscalYear]);
+  }, [
+    rawContracts,
+    filterType,
+    startDate,
+    endDate,
+    statusFilter,
+    selectedAssignments,
+    selectedPositions,
+    matchesInstitutionLocation,
+    fiscalYear
+  ]);
 
   const contracts = filteredContracts;
   const financialStats = useMemo(
@@ -481,7 +515,12 @@ export function StatisticsPage() {
     );
   };
 
-  const isAdvancedFilterActive = statusFilter !== 'all' || selectedAssignments.length > 0 || selectedPositions.length > 0;
+  const isAdvancedFilterActive =
+    statusFilter !== 'all' ||
+    selectedAssignments.length > 0 ||
+    selectedPositions.length > 0 ||
+    selectedDepartments.length > 0 ||
+    selectedCommunes.length > 0;
   const financialCoverage = totalContracts > 0
     ? Math.round((financialStats.validContracts / totalContracts) * 100)
     : 0;
@@ -826,6 +865,22 @@ export function StatisticsPage() {
               selectedValues={selectedAssignments}
               onChange={setSelectedAssignments}
               placeholder="Toutes les affectations"
+            />
+
+            <MultiSelectDropdown
+              label="Département"
+              options={departmentOptions}
+              selectedValues={selectedDepartments}
+              onChange={setSelectedDepartments}
+              placeholder="Tous les départements"
+            />
+
+            <MultiSelectDropdown
+              label="Commune"
+              options={communeOptions}
+              selectedValues={selectedCommunes}
+              onChange={setSelectedCommunes}
+              placeholder="Toutes les communes"
             />
 
             <MultiSelectDropdown
