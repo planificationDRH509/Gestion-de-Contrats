@@ -1128,6 +1128,22 @@ img {
   transition: background 0.16s ease, color 0.16s ease;
 }
 
+.contracts-sheet-save-row-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--success);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.contracts-sheet-save-row-btn span {
+  font-size: 14px;
+}
+
+.contracts-sheet-save-row-btn:hover {
+  background: var(--success-soft);
+}
+
 .contracts-sheet-delete-btn span {
   font-size: 14px;
 }
@@ -3879,8 +3895,9 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  min-width: 18px;
   height: 18px;
+  padding: 0 4px;
   border-radius: 4px;
   background: var(--panel-muted);
   border: 1px solid var(--border);
@@ -5235,27 +5252,12 @@ button {
   line-height: 1.02;
 }
 
-.haitian-emblem {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 150px;
-  height: 150px;
-  margin-bottom: 4vh;
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  border-radius: 50%;
-  color: #fff;
-  background: linear-gradient(135deg, rgba(0, 102, 204, 0.8) 0 50%, rgba(210, 16, 52, 0.8) 50%);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
-}
-
-.haitian-emblem span:first-child {
-  font-size: 54px;
-}
-
-.haitian-emblem span:last-child {
-  font-size: 38px;
+.haitian-emblem-image {
+  display: block;
+  width: min(100%, 460px);
+  max-height: 64vh;
+  margin-top: auto;
+  object-fit: contain;
 }
 
 .auth-side-text {
@@ -5941,6 +5943,7 @@ button {
 
 .icon-btn.contracts-sheet-action-btn,
 .icon-btn.contracts-sheet-add-row-btn,
+.icon-btn.contracts-sheet-save-row-btn,
 .icon-btn.contracts-sheet-delete-btn,
 .icon-btn.contracts-sheet-comment-btn {
   width: 24px;
@@ -5953,6 +5956,7 @@ button {
 
 .icon-btn.contracts-sheet-action-btn span,
 .icon-btn.contracts-sheet-add-row-btn span,
+.icon-btn.contracts-sheet-save-row-btn span,
 .icon-btn.contracts-sheet-delete-btn span {
   font-size: 14px;
 }
@@ -6560,6 +6564,116 @@ button {
 
 .settings-form-actions {
   align-items: center;
+}
+
+.fiscal-year-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.fiscal-year-settings .label:not(:first-child) {
+  margin-top: 8px;
+}
+
+.fiscal-year-settings .select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.fiscal-year-settings .select:disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.fiscal-year-settings .select.is-past-fiscal-year {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.fiscal-year-inline-warning,
+.fiscal-year-contract-warning,
+.fiscal-year-sheet-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.fiscal-year-inline-warning {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fiscal-year-inline-warning .material-symbols-rounded,
+.fiscal-year-contract-warning .material-symbols-rounded,
+.fiscal-year-sheet-warning .material-symbols-rounded {
+  flex: 0 0 auto;
+  color: var(--danger);
+  font-size: 19px;
+}
+
+.contract-fiscal-year-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  background: var(--panel-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.contract-fiscal-year-badge .material-symbols-rounded {
+  font-size: 15px;
+}
+
+.contract-fiscal-year-badge.is-past {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: var(--danger-soft);
+}
+
+.fiscal-year-past-outline {
+  border: 2px solid var(--danger) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent) !important;
+}
+
+.fiscal-year-contract-warning {
+  margin-bottom: 18px;
+  padding: 11px 13px;
+  border-radius: 9px;
+}
+
+.fiscal-year-contract-warning div {
+  display: grid;
+  gap: 2px;
+}
+
+.fiscal-year-contract-warning strong {
+  font-size: 13px;
+}
+
+.fiscal-year-contract-warning div > span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fiscal-year-sheet-warning {
+  align-items: center;
+  align-self: center;
+  margin-right: auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .appearance-card {

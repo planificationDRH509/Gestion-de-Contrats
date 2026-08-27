@@ -66,10 +66,11 @@ export function LoginPage() {
       <div className="auth-side">
         <div className="auth-side-card">
           <div className="auth-side-title">MSPP - DRH</div>
-          <div className="haitian-emblem" aria-label="Armoirie haïtienne" role="img">
-            <span className="material-symbols-rounded">park</span>
-            <span className="material-symbols-rounded">flag</span>
-          </div>
+          <img
+            className="haitian-emblem-image"
+            src="/armoirie-haitienne.png"
+            alt="Armoirie de la République d’Haïti"
+          />
         </div>
       </div>
     </div>

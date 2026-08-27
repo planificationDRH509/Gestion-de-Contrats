@@ -38,6 +38,7 @@ import {
   buildPositionSalaryItems,
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
+import { areSpreadsheetDraftsEqual } from "./contractSpreadsheetDrafts";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -251,22 +252,6 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
   return null;
 }
 
-function areDraftsEqual(a: SpreadsheetDraft, b: SpreadsheetDraft): boolean {
-  return (
-    a.nif === b.nif &&
-    a.firstName === b.firstName &&
-    a.lastName === b.lastName &&
-    a.gender === b.gender &&
-    a.ninu === b.ninu &&
-    a.address === b.address &&
-    a.position === b.position &&
-    a.assignment === b.assignment &&
-    parseMoney(a.salaryNumber) === parseMoney(b.salaryNumber) &&
-    a.salaryText === b.salaryText &&
-    a.comment === b.comment
-  );
-}
-
 export function ContractsSpreadsheetView({
   workspaceId,
   userId,
@@ -430,7 +415,7 @@ export function ContractsSpreadsheetView({
     const changedDraftById = Object.fromEntries(
       Object.entries(draftById).filter(([contractId, draft]) => {
         const contract = contractsMap.get(contractId);
-        return !contract || !areDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+        return !contract || !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
       })
     ) as Record<string, SpreadsheetDraft>;
 
@@ -776,8 +761,8 @@ export function ContractsSpreadsheetView({
   }
 
   function setNewField(rowId: string, key: SpreadsheetFieldKey, value: string) {
-    setNewRows((prev) =>
-      prev.map((row) => {
+    setNewRows((prev) => {
+      const nextRows = prev.map((row) => {
         if (row.id !== rowId) return row;
         const next: SpreadsheetDraft = { ...row.draft };
         if (key === "nif") next.nif = formatNifInput(value);
@@ -793,8 +778,12 @@ export function ContractsSpreadsheetView({
           ...row,
           draft: next
         };
-      })
-    );
+      });
+      // Keep creation reads in sync with the most recent keystroke, including
+      // when the user validates immediately after changing the duration.
+      newRowsRef.current = nextRows;
+      return nextRows;
+    });
     // Reset NIF status when NIF field is modified
     if (key === "nif") {
       setNifStatusByRow((prev) => {
@@ -961,7 +950,7 @@ export function ContractsSpreadsheetView({
       return;
     }
 
-    if (areDraftsEqual(editedDraft, baseDraft)) {
+    if (areSpreadsheetDraftsEqual(editedDraft, baseDraft)) {
       setRowErrors((prev) => {
         if (!prev[contractId]) return prev;
         const next = { ...prev };
@@ -1061,12 +1050,21 @@ export function ContractsSpreadsheetView({
     }
   }
 
-  async function maybeCreateFromNewRow(rowId: string) {
-    if (!workspaceId || !userId || creatingRows[rowId]) return;
+  async function maybeCreateFromNewRow(
+    rowId: string,
+    draftOverride: Partial<SpreadsheetDraft> = {}
+  ) {
+    if (
+      !workspaceId ||
+      !userId ||
+      creatingRows[rowId] ||
+      nifCheckingRows[rowId] ||
+      nifStatusByRow[rowId]?.type === "blocked"
+    ) return;
 
     const row = newRowsRef.current.find((item) => item.id === rowId);
     if (!row) return;
-    const candidate = normalizeDraft(row.draft);
+    const candidate = normalizeDraft({ ...row.draft, ...draftOverride });
 
     if (isDraftEmpty(candidate)) {
       setNewRowErrors((prev) => {
@@ -1292,6 +1290,8 @@ export function ContractsSpreadsheetView({
       onCommentClick?: () => void;
       onAddClick?: () => void;
       addLabel?: string;
+      onSaveClick?: () => void;
+      saveLabel?: string;
       onDeleteClick?: () => void;
       deleteLabel?: string;
     }
@@ -1325,7 +1325,7 @@ export function ContractsSpreadsheetView({
         <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>
           {icon}
         </span>
-        {showCommentButton || options?.onAddClick || options?.onDeleteClick ? (
+        {showCommentButton || options?.onAddClick || options?.onSaveClick || options?.onDeleteClick ? (
           <div className={`contracts-sheet-state-actions ${hasComment ? "has-visible-action" : ""}`}>
             {options?.onAddClick ? (
               <button
@@ -1340,6 +1340,21 @@ export function ContractsSpreadsheetView({
                 }}
               >
                 <span className="material-symbols-rounded">add</span>
+              </button>
+            ) : null}
+            {options?.onSaveClick ? (
+              <button
+                type="button"
+                className="icon-btn contracts-sheet-save-row-btn"
+                title={options.saveLabel ?? "Enregistrer cette ligne"}
+                aria-label={options.saveLabel ?? "Enregistrer cette ligne"}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  options.onSaveClick?.();
+                }}
+              >
+                <span className="material-symbols-rounded">check</span>
               </button>
             ) : null}
             {showCommentButton ? (
@@ -1394,7 +1409,7 @@ export function ContractsSpreadsheetView({
           <span className="material-symbols-rounded contracts-sheet-overview-icon">table_view</span>
           <div>
             <strong>Tableur des contrats</strong>
-            <span>La saisie et les modifications sont enregistrées automatiquement</span>
+            <span>Pour une nouvelle ligne, confirmez la durée en dernier ou utilisez le bouton de validation</span>
           </div>
         </div>
         <div className="contracts-sheet-overview-stats">
@@ -1586,8 +1601,12 @@ export function ContractsSpreadsheetView({
               <div key={row.id} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${creating ? "is-saving" : ""}`}>
                   {renderRowStatusIcon(syncState, label, {
-                    onAddClick: creating ? undefined : () => insertNewRowAfter(row.id),
+                    onAddClick: !hasValues && !creating ? () => insertNewRowAfter(row.id) : undefined,
                     addLabel: "Ajouter une ligne en dessous",
+                    onSaveClick: hasValues && !creating && !nifChecking && !isBlocked
+                      ? () => { void maybeCreateFromNewRow(row.id); }
+                      : undefined,
+                    saveLabel: "Valider et enregistrer cette ligne",
                     onDeleteClick: hasValues && !creating ? () => clearNewRow(row.id) : undefined,
                     deleteLabel: "Effacer cette ligne"
                   })}
@@ -1614,7 +1633,6 @@ export function ContractsSpreadsheetView({
                           }
                         }}
                         onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 0)}
-                        onBlur={() => { void maybeCreateFromNewRow(row.id); }}
                       />
                       <div style={{ position: "absolute", right: "8px", top: 0, bottom: 0, display: "flex", alignItems: "center", pointerEvents: "none" }}>
                         {/* Loading spinner */}
@@ -1650,9 +1668,6 @@ export function ContractsSpreadsheetView({
                       placeholder="Prénom"
                       onChange={(event) => setNewField(row.id, "firstName", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 1)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                     />
                     <input
                       data-sheet-row={rowKey}
@@ -1662,9 +1677,6 @@ export function ContractsSpreadsheetView({
                       placeholder="Nom"
                       onChange={(event) => setNewField(row.id, "lastName", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 2)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                     />
                     <input
                       data-sheet-row={rowKey}
@@ -1688,9 +1700,6 @@ export function ContractsSpreadsheetView({
                         });
                         handleGridArrowNavigation(event, rowKey, 3);
                       }}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                     />
                     <input
                       data-sheet-row={rowKey}
@@ -1703,9 +1712,6 @@ export function ContractsSpreadsheetView({
                         checkAutoNext(row.id, 4, "ninu", event.target.value);
                       }}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 4)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                     />
                     <AutocompleteField
                       dataSheetRow={rowKey}
@@ -1715,9 +1721,6 @@ export function ContractsSpreadsheetView({
                       value={row.draft.address}
                       onChange={(value) => setNewField(row.id, "address", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 5)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                       items={addressItems}
                       placeholder="Adresse"
                       featuredItem={featuredAddress}
@@ -1732,9 +1735,6 @@ export function ContractsSpreadsheetView({
                       onChange={(value) => setNewField(row.id, "position", value)}
                       onSelect={(item) => applyNewPositionSelection(row.id, item)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 6)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                       items={positionItems}
                       placeholder="Poste"
                       featuredItem={featuredPosition}
@@ -1748,9 +1748,6 @@ export function ContractsSpreadsheetView({
                       value={row.draft.assignment}
                       onChange={(value) => setNewField(row.id, "assignment", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                       items={assignmentItemsForAddress(row.draft.address)}
                       placeholder="Affectation"
                       featuredItem={featuredAssignment}
@@ -1764,9 +1761,6 @@ export function ContractsSpreadsheetView({
                       placeholder="Ex: 45000"
                       onChange={(value) => setNewField(row.id, "salaryNumber", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
-                      }}
                       items={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).map(s => ({ id: s.toString(), label: s.toString() }))}
                       showAllOnFocus={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).length > 1}
                     />
@@ -1779,8 +1773,10 @@ export function ContractsSpreadsheetView({
                       inputMode="numeric"
                       onChange={(event) => setNewField(row.id, "durationMonths", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
-                      onBlur={() => {
-                        void maybeCreateFromNewRow(row.id);
+                      onBlur={(event) => {
+                        void maybeCreateFromNewRow(row.id, {
+                          durationMonths: event.currentTarget.value
+                        });
                       }}
                     />
                   </div>
@@ -1823,7 +1819,7 @@ export function ContractsSpreadsheetView({
             const draft = getRowDraft(contract);
             const rowError = rowErrors[contract.id];
             const saving = Boolean(savingRows[contract.id]);
-            const hasChanges = !areDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+            const hasChanges = !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
             
             let syncState: SyncState = "saved";
             let label = "Enregistré";

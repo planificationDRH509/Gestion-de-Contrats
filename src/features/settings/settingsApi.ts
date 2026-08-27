@@ -1,8 +1,14 @@
 import { useState, useEffect } from "react";
-import { getDefaultFiscalYearString } from "../../lib/contractDateFilters";
+import {
+  getDefaultFiscalYearString,
+  parseFiscalYear
+} from "../../lib/contractDateFilters";
 
 const FISCAL_YEAR_KEY = "contribution_current_fiscal_year";
+const FISCAL_YEAR_MODE_KEY = "contribution_fiscal_year_mode";
 const CONTRACT_START_DATES_KEY = "contribution_contract_start_dates";
+
+export type FiscalYearMode = "online" | "local";
 
 export const CONTRACT_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 
@@ -81,23 +87,74 @@ export function getStoredContractStartDate(
   return value ? parseContractDateInput(value) : null;
 }
 
-export function getStoredFiscalYear(): string {
-  return localStorage.getItem(FISCAL_YEAR_KEY) || getDefaultFiscalYearString();
+export function getStoredFiscalYearMode(now = new Date()): FiscalYearMode {
+  const storedMode = localStorage.getItem(FISCAL_YEAR_MODE_KEY);
+  if (storedMode === "online" || storedMode === "local") {
+    return storedMode;
+  }
+
+  // Preserve an older manual override when upgrading from the former setting,
+  // which stored only the year and had no explicit mode.
+  const legacyYear = localStorage.getItem(FISCAL_YEAR_KEY);
+  return parseFiscalYear(legacyYear) && legacyYear!.trim() !== getDefaultFiscalYearString(now)
+    ? "local"
+    : "online";
 }
 
-export function setStoredFiscalYear(year: string) {
-  localStorage.setItem(FISCAL_YEAR_KEY, year);
+export function getStoredLocalFiscalYear(now = new Date()): string {
+  const storedYear = localStorage.getItem(FISCAL_YEAR_KEY);
+  return parseFiscalYear(storedYear) ? storedYear!.trim() : getDefaultFiscalYearString(now);
+}
+
+export function getStoredFiscalYear(now = new Date()): string {
+  return getStoredFiscalYearMode(now) === "online"
+    ? getDefaultFiscalYearString(now)
+    : getStoredLocalFiscalYear(now);
+}
+
+function dispatchFiscalYearChange() {
   window.dispatchEvent(new Event("fiscal-year-changed"));
 }
 
+export function setStoredFiscalYear(year: string) {
+  if (!parseFiscalYear(year)) return;
+  localStorage.setItem(FISCAL_YEAR_KEY, year.trim());
+  localStorage.setItem(FISCAL_YEAR_MODE_KEY, "local");
+  dispatchFiscalYearChange();
+}
+
+export function setStoredFiscalYearPreference(mode: FiscalYearMode, localFiscalYear: string) {
+  if (parseFiscalYear(localFiscalYear)) {
+    localStorage.setItem(FISCAL_YEAR_KEY, localFiscalYear.trim());
+  }
+  localStorage.setItem(FISCAL_YEAR_MODE_KEY, mode);
+  dispatchFiscalYearChange();
+}
+
 export function useFiscalYear() {
-  const [fiscalYear, setFiscalYear] = useState(getStoredFiscalYear());
+  const [preference, setPreference] = useState(() => ({
+    fiscalYear: getStoredFiscalYear(),
+    localFiscalYear: getStoredLocalFiscalYear(),
+    mode: getStoredFiscalYearMode()
+  }));
 
   useEffect(() => {
-    const handleStorageChange = () => setFiscalYear(getStoredFiscalYear());
+    const handleStorageChange = () => setPreference({
+      fiscalYear: getStoredFiscalYear(),
+      localFiscalYear: getStoredLocalFiscalYear(),
+      mode: getStoredFiscalYearMode()
+    });
     window.addEventListener("fiscal-year-changed", handleStorageChange);
-    return () => window.removeEventListener("fiscal-year-changed", handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("fiscal-year-changed", handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
-  return { fiscalYear, setFiscalYear: setStoredFiscalYear };
+  return {
+    ...preference,
+    setFiscalYear: setStoredFiscalYear,
+    setPreference: setStoredFiscalYearPreference
+  };
 }

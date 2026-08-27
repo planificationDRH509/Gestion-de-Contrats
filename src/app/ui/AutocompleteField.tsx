@@ -229,24 +229,32 @@ export function AutocompleteField({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const isInputFocused = document.activeElement === inputRef.current;
-      const hasShortcutModifier = e.altKey || e.ctrlKey || e.metaKey;
+      const shortcutCodeMatch = /^(?:Digit|Numpad)([0-9])$/.exec(e.code);
+      const shortcutDigit = shortcutCodeMatch
+        ? Number(shortcutCodeMatch[1])
+        : /^[0-9]$/.test(e.key)
+          ? Number(e.key)
+          : null;
       const canUseNumericShortcuts =
-        isInputFocused && !hasShortcutModifier && !Boolean(e.nativeEvent.isComposing);
+        e.altKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        !Boolean(e.nativeEvent.isComposing);
 
-      // 0 shortcut picks the featured item
-      if (canUseNumericShortcuts && open && featuredItem && e.key === "0") {
+      // Alt+0 picks the featured item.
+      if (canUseNumericShortcuts && open && featuredItem && shortcutDigit === 0) {
         e.preventDefault();
         selectItem(featuredItem);
         return;
       }
 
-      // Number shortcuts: 1-9 pick item
-      if (canUseNumericShortcuts && open && visibleItems.length > 0) {
-        const digit = parseInt(e.key, 10);
-        if (!isNaN(digit) && digit >= 1 && digit <= maxShortcuts) {
+      // Alt+1 through Alt+9 pick the corresponding item while bare digits
+      // remain available for normal text and salary entry.
+      if (canUseNumericShortcuts && open && visibleItems.length > 0 && shortcutDigit !== null) {
+        if (shortcutDigit >= 1 && shortcutDigit <= maxShortcuts) {
           const offset = featuredItem ? 0 : -1;
-          const targetIndex = digit + offset;
+          const targetIndex = shortcutDigit + offset;
           if (targetIndex >= 0 && targetIndex < visibleItems.length) {
             e.preventDefault();
             selectItem(visibleItems[targetIndex]);
@@ -384,7 +392,7 @@ export function AutocompleteField({
                 }}
               >
                 {shortcutKey !== null && (
-                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>{shortcutKey}</span>
+                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Alt+{shortcutKey}</span>
                 )}
 
                 <span className="autocomplete-item-label">

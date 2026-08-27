@@ -2,11 +2,15 @@ import { useNavigate } from "react-router-dom";
 import { useCreateContract } from "./contractsApi";
 import { ContractDocument } from "./ContractDocument";
 import { clearDraftContract, loadDraftContract } from "./contractDraft";
+import { getStoredFiscalYear } from "../settings/settingsApi";
+import { isPastFiscalYear } from "../../lib/contractDateFilters";
 
 export function ContractPreviewPage() {
   const navigate = useNavigate();
   const draft = loadDraftContract();
   const createContract = useCreateContract();
+  const fiscalYear = draft?.annee_fiscale || getStoredFiscalYear();
+  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
 
   async function handleSave(mode: "save" | "print") {
     if (!draft) return;
@@ -25,7 +29,8 @@ export function ContractPreviewPage() {
       assignment: draft.assignment,
       salaryNumber: draft.salaryNumber,
       salaryText: draft.salaryText,
-      durationMonths: draft.durationMonths
+      durationMonths: draft.durationMonths,
+      annee_fiscale: fiscalYear
     });
     clearDraftContract();
     if (mode === "print") {
@@ -50,6 +55,10 @@ export function ContractPreviewPage() {
           <span className="page-eyebrow">Contrats</span>
           <h1 className="section-title">Vérification du contrat</h1>
           <div className="section-subtitle">Vérifiez les informations avant l'enregistrement final.</div>
+          <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
+            <span className="material-symbols-rounded">calendar_month</span>
+            Année fiscale {fiscalYear}
+          </div>
         </div>
         <div className="toolbar">
           <button className="btn btn-outline" onClick={() => navigate("/app/contrats/nouveau")}>
@@ -77,7 +86,17 @@ export function ContractPreviewPage() {
         </div>
       </div>
 
-      <div className="preview-stage" data-theme="light">
+      {fiscalYearIsPast ? (
+        <div className="fiscal-year-contract-warning" role="alert">
+          <span className="material-symbols-rounded">warning</span>
+          <div>
+            <strong>Attention : année fiscale passée ({fiscalYear})</strong>
+            <span>Ce contrat sera enregistré dans un exercice déjà terminé.</span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`preview-stage ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} data-theme="light">
         <div className="paper-sheet">
           <ContractDocument contract={draft} />
         </div>

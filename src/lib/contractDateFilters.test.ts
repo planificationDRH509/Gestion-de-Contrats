@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   getContractActivityDate,
+  getDefaultFiscalYearString,
+  getFiscalYearOptions,
   getTodayDateInputValue,
+  isPastFiscalYear,
   matchesContractDateFilter
 } from "./contractDateFilters";
 
@@ -10,6 +13,29 @@ function isoLocal(year: number, month: number, day: number, hour = 12): string {
 }
 
 describe("contractDateFilters", () => {
+  it("changes fiscal year on October 1", () => {
+    expect(getDefaultFiscalYearString(new Date(2026, 8, 30, 23, 59))).toBe("2025-2026");
+    expect(getDefaultFiscalYearString(new Date(2026, 9, 1, 0, 0))).toBe("2026-2027");
+  });
+
+  it("detects only completed fiscal years as past", () => {
+    const now = new Date(2026, 7, 26, 12, 0, 0);
+
+    expect(isPastFiscalYear("2024-2025", now)).toBe(true);
+    expect(isPastFiscalYear("2025-2026", now)).toBe(false);
+    expect(isPastFiscalYear("2026-2027", now)).toBe(false);
+    expect(isPastFiscalYear("invalid", now)).toBe(false);
+  });
+
+  it("builds dropdown options around the current fiscal year", () => {
+    expect(getFiscalYearOptions(new Date(2026, 7, 26), 2, 1)).toEqual([
+      "2026-2027",
+      "2025-2026",
+      "2024-2025",
+      "2023-2024"
+    ]);
+  });
+
   it("prioritizes updatedAt when it is newer than createdAt", () => {
     const createdAt = isoLocal(2026, 3, 20, 11);
     const updatedAt = isoLocal(2026, 3, 24, 11);

@@ -35,6 +35,7 @@ import {
   buildPositionSalaryItems,
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
+import { getContractFiscalYear, isPastFiscalYear } from "../../lib/contractDateFilters";
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -406,16 +407,32 @@ export function ContractEditPage() {
     return <div className="card">Contrat introuvable.</div>;
   }
 
+  const fiscalYear = getContractFiscalYear(data);
+  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
+
   return (
     <div className="page-container contract-editor-page">
       <div className="section-header page-header">
         <div>
           <span className="page-eyebrow">Contrats</span>
           <h1 className="section-title">Modifier le contrat</h1>
+          <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
+            <span className="material-symbols-rounded">calendar_month</span>
+            Année fiscale {fiscalYear}
+          </div>
         </div>
       </div>
 
-      <form className="card form-compact" onSubmit={handleSubmit(onSubmit)} onKeyDown={handleFormKeyDown}>
+      <form className={`card form-compact ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={handleSubmit(onSubmit)} onKeyDown={handleFormKeyDown}>
+        {fiscalYearIsPast ? (
+          <div className="fiscal-year-contract-warning" role="alert">
+            <span className="material-symbols-rounded">warning</span>
+            <div>
+              <strong>Attention : année fiscale passée ({fiscalYear})</strong>
+              <span>Vous modifiez un contrat appartenant à un exercice déjà terminé.</span>
+            </div>
+          </div>
+        ) : null}
         <div className="form-grid compact">
           <div className="form-section-heading span-2 form-section-heading-first">
             <span className="material-symbols-rounded">person</span>

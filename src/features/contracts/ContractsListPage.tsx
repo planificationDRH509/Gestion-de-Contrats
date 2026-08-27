@@ -567,7 +567,7 @@ export function ContractsListPage() {
               institutionPrefixes.get(normalizeSuggestionGrammarValue(contract.assignment))
             )
           : contract.assignment,
-        String(contract.salaryNumber.toLocaleString("en-US")),
+        contract.salaryNumber,
         contract.salaryText,
         contract.durationMonths,
         exportWithPrepositions

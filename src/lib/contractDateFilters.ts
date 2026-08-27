@@ -106,6 +106,29 @@ export function getDefaultFiscalYearString(now = new Date()): string {
   return `${startYear}-${startYear + 1}`;
 }
 
+export function isPastFiscalYear(fiscalYear?: string | null, now = new Date()): boolean {
+  const selected = parseFiscalYear(fiscalYear);
+  const current = parseFiscalYear(getDefaultFiscalYearString(now));
+  return Boolean(selected && current && selected.startYear < current.startYear);
+}
+
+export function getFiscalYearOptions(
+  now = new Date(),
+  yearsBefore = 10,
+  yearsAfter = 2
+): string[] {
+  const current = parseFiscalYear(getDefaultFiscalYearString(now));
+  if (!current) return [];
+
+  return Array.from(
+    { length: yearsBefore + yearsAfter + 1 },
+    (_, index) => {
+      const startYear = current.startYear + yearsAfter - index;
+      return `${startYear}-${startYear + 1}`;
+    }
+  );
+}
+
 export function matchesContractDateFilter(
   contract: ContractDateShape,
   mode: ContractDateFilterMode | undefined,

@@ -15,7 +15,7 @@ import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
 import { saveDraftContract } from "./contractDraft";
-import { getStoredFiscalYear } from "../settings/settingsApi";
+import { useFiscalYear } from "../settings/settingsApi";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
 import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
@@ -39,6 +39,7 @@ import {
   buildPositionSalaryItems,
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
+import { isPastFiscalYear } from "../../lib/contractDateFilters";
 
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
 const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
@@ -175,7 +176,8 @@ export function ContractNewPage() {
     renewalContract?: { annee_fiscale: string };
   }>({ type: null, message: "" });
   const [fieldsLockedByNif, setFieldsLockedByNif] = useState(false);
-  const currentFiscalYear = getStoredFiscalYear();
+  const { fiscalYear } = useFiscalYear();
+  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
 
   // Track which NIF was last processed to avoid double-processing
   const lastProcessedNif = useRef<string | null>(null);
@@ -312,8 +314,9 @@ export function ContractNewPage() {
 
     // Avoid reprocessing the same NIF twice
     const formattedNif = `${nifDigits.slice(0,3)}-${nifDigits.slice(3,6)}-${nifDigits.slice(6,9)}-${nifDigits.slice(9)}`;
-    if (lastProcessedNif.current === formattedNif) return;
-    lastProcessedNif.current = formattedNif;
+    const lookupKey = `${formattedNif}:${fiscalYear}`;
+    if (lastProcessedNif.current === lookupKey) return;
+    lastProcessedNif.current = lookupKey;
 
     const { identification, contracts } = nifLookup;
 
@@ -347,11 +350,11 @@ export function ContractNewPage() {
     }
 
     // Check if a contract exists for the CURRENT fiscal year
-    const currentYearContract = contracts.find(c => c.annee_fiscale === currentFiscalYear);
+    const currentYearContract = contracts.find(c => c.annee_fiscale === fiscalYear);
     if (currentYearContract) {
       setNifAlert({
         type: "blocked",
-        message: `Un contrat existe déjà pour ce NIF dans l'année fiscale en cours (${currentFiscalYear}). La création est bloquée.`
+        message: `Un contrat existe déjà pour ce NIF dans l'année fiscale sélectionnée (${fiscalYear}). La création est bloquée.`
       });
       setFieldsLockedByNif(true);
       return;
@@ -370,7 +373,7 @@ export function ContractNewPage() {
     });
     setFieldsLockedByNif(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nifLookup, nifFetching, nifIsComplete]);
+  }, [fiscalYear, nifLookup, nifFetching, nifIsComplete]);
 
   useEffect(() => {
     localStorage.setItem("new_contract_entry_mode", entryMode);
@@ -491,7 +494,8 @@ export function ContractNewPage() {
       assignment: values.assignment,
       salaryNumber: salaryNumberValue,
       salaryText: values.salaryText,
-      durationMonths: values.durationMonths
+      durationMonths: values.durationMonths,
+      annee_fiscale: fiscalYear
     } as const;
 
     if (mode === "preview") {
@@ -699,6 +703,10 @@ export function ContractNewPage() {
         <div>
           <span className="page-eyebrow">Contrats</span>
           <h1 className="section-title">Nouveau contrat</h1>
+          <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
+            <span className="material-symbols-rounded">calendar_month</span>
+            Année fiscale {fiscalYear}
+          </div>
         </div>
         <div className="new-contract-header-actions">
           <div className="entry-mode-switch" role="group" aria-label="Mode de saisie">
@@ -729,7 +737,16 @@ export function ContractNewPage() {
       </div>
 
       {!isSheetMode ? (
-      <form className="card form-compact" onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
+      <form className={`card form-compact ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
+        {fiscalYearIsPast ? (
+          <div className="fiscal-year-contract-warning" role="alert">
+            <span className="material-symbols-rounded">warning</span>
+            <div>
+              <strong>Attention : année fiscale passée ({fiscalYear})</strong>
+              <span>Ce contrat sera enregistré dans un exercice déjà terminé.</span>
+            </div>
+          </div>
+        ) : null}
         {/* ── NIF Alert Banner ──────────────────────────────────────────────── */}
         {nifAlert.type === "blocked" && (
           <div style={{
@@ -1096,8 +1113,14 @@ export function ContractNewPage() {
       </form>
       ) : (
         isSheetFullscreen ? (
-          <div className="contracts-sheet-fullscreen">
+          <div className={`contracts-sheet-fullscreen ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
             <div className="contracts-sheet-fullscreen-topbar">
+              {fiscalYearIsPast ? (
+                <div className="fiscal-year-sheet-warning" role="alert">
+                  <span className="material-symbols-rounded">warning</span>
+                  Année fiscale passée : {fiscalYear}
+                </div>
+              ) : null}
               {sheetControls}
               <button
                 type="button"
@@ -1123,7 +1146,16 @@ export function ContractNewPage() {
             </div>
           </div>
         ) : (
-          <div className="card">
+          <div className={`card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
+            {fiscalYearIsPast ? (
+              <div className="fiscal-year-contract-warning" role="alert">
+                <span className="material-symbols-rounded">warning</span>
+                <div>
+                  <strong>Attention : année fiscale passée ({fiscalYear})</strong>
+                  <span>Les nouveaux contrats saisis ici seront enregistrés dans un exercice déjà terminé.</span>
+                </div>
+              </div>
+            ) : null}
             <ContractsSpreadsheetView
               workspaceId={workspaceId}
               userId={userId}
