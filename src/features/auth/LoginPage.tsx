@@ -68,7 +68,7 @@ export function LoginPage() {
           <div className="auth-side-title">MSPP - DRH</div>
           <img
             className="haitian-emblem-image"
-            src="/armoirie-haitienne.png"
+            src={`${import.meta.env.BASE_URL}armoirie-haitienne.png`}
             alt="Armoirie de la République d’Haïti"
           />
         </div>
