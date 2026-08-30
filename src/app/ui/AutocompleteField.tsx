@@ -236,21 +236,21 @@ export function AutocompleteField({
           ? Number(e.key)
           : null;
       const canUseNumericShortcuts =
-        e.altKey &&
-        !e.ctrlKey &&
+        e.ctrlKey &&
+        !e.altKey &&
         !e.metaKey &&
         !e.shiftKey &&
         !Boolean(e.nativeEvent.isComposing);
 
-      // Alt+0 picks the featured item.
+      // Ctrl+0 picks the featured item.
       if (canUseNumericShortcuts && open && featuredItem && shortcutDigit === 0) {
         e.preventDefault();
         selectItem(featuredItem);
         return;
       }
 
-      // Alt+1 through Alt+9 pick the corresponding item while bare digits
-      // remain available for normal text and salary entry.
+      // Ctrl+1 through Ctrl+9 pick the corresponding item while bare digits
+      // and Alt/Option combinations remain available for normal text entry.
       if (canUseNumericShortcuts && open && visibleItems.length > 0 && shortcutDigit !== null) {
         if (shortcutDigit >= 1 && shortcutDigit <= maxShortcuts) {
           const offset = featuredItem ? 0 : -1;
@@ -392,7 +392,7 @@ export function AutocompleteField({
                 }}
               >
                 {shortcutKey !== null && (
-                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Alt+{shortcutKey}</span>
+                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Ctrl+{shortcutKey}</span>
                 )}
 
                 <span className="autocomplete-item-label">

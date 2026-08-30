@@ -24,7 +24,7 @@ describe("AutocompleteField contextual ranking", () => {
     expect(options[1]).toHaveTextContent("A");
   });
 
-  it("keeps bare digits for input and selects suggestions with Alt+digit", () => {
+  it("keeps bare and Alt-modified digits for input and selects suggestions with Ctrl+digit", () => {
     const onChange = vi.fn();
     const onSelect = vi.fn();
     render(
@@ -48,13 +48,16 @@ describe("AutocompleteField contextual ranking", () => {
     expect(onChange).toHaveBeenCalledWith("2");
 
     fireEvent.keyDown(input, { key: "2", code: "Digit2", altKey: true });
+    expect(onSelect).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: "2", code: "Digit2", ctrlKey: true });
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "second" })
     );
     expect(onChange).toHaveBeenCalledWith("Deuxième suggestion");
   });
 
-  it("shows the Alt modifier in numeric shortcut hints", () => {
+  it("shows the Ctrl modifier in numeric shortcut hints", () => {
     render(
       <AutocompleteField
         value=""
@@ -65,6 +68,6 @@ describe("AutocompleteField contextual ranking", () => {
 
     fireEvent.focus(screen.getByRole("textbox"));
 
-    expect(screen.getByText("Alt+1")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl+1")).toBeInTheDocument();
   });
 });
