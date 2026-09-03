@@ -716,7 +716,7 @@ export function ContractNewPage() {
 
 
   return (
-    <div className="page-container contract-editor-page">
+    <div className={`page-container contract-editor-page ${!isSheetMode ? "contract-editor-form-mode" : ""}`}>
       <div className="section-header page-header">
         <div>
           <span className="page-eyebrow">Contrats</span>
@@ -769,7 +769,7 @@ export function ContractNewPage() {
       </div>
 
       {!isSheetMode ? (
-      <form className={`card form-compact ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
+      <form className={`card form-compact contract-quick-form ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
         {fiscalYearIsPast ? (
           <div className="fiscal-year-contract-warning" role="alert">
             <span className="material-symbols-rounded">warning</span>
@@ -806,83 +806,73 @@ export function ContractNewPage() {
         {nifError && null}
 
         <div className="form-grid compact">
-          <div className="form-section-heading span-2 form-section-heading-first">
-            <span className="material-symbols-rounded">person</span>
-            <div><h2>Identité</h2><p>Informations personnelles et coordonnées.</p></div>
-          </div>
-          <label className="field">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-              <span>NIF *</span>
-              {nifFetching && (
-                <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--ink-muted)" }}>
-                  <span className="material-symbols-rounded is-spinning" style={{ fontSize: "14px" }}>sync</span>
-                  Vérification…
-                </span>
-              )}
-              {!nifFetching && nifLookup?.identification && nifAlert.type !== "blocked" && (
-                <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success, #16a34a)" }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>check_circle</span>
-                  Identifié
-                </span>
-              )}
-            </div>
-            <input 
-              className="input" 
-              placeholder="000-000-000-0" 
-              {...register("nif", {
-                onChange: (e) => {
-                  setMsppModalOpen(false);
-                  // Reset NIF lookup state on change
-                  lastProcessedNif.current = null;
-                  setNifAlert({ type: null, message: "" });
-                  setFieldsLockedByNif(false);
-                  let val = e.target.value.replace(/\D/g, "");
-                  if (val.length > 10) val = val.slice(0, 10);
-                  let formatted = "";
-                  if (val.length > 0) formatted += val.substring(0, 3);
-                  if (val.length > 3) formatted += "-" + val.substring(3, 6);
-                  if (val.length > 6) formatted += "-" + val.substring(6, 9);
-                  if (val.length > 9) formatted += "-" + val.substring(9, 10);
-                  e.target.value = formatted;
-                  if (val.length === 10) {
-                     setTimeout(() => setFocus("firstName"), 50);
+          <div className="field contract-compact-field contract-nif-field">
+            <div className="contract-input-with-status">
+              <input
+                className="input"
+                placeholder="NIF * — 000-000-000-0"
+                aria-label="NIF"
+                {...register("nif", {
+                  onChange: (e) => {
+                    setMsppModalOpen(false);
+                    lastProcessedNif.current = null;
+                    setNifAlert({ type: null, message: "" });
+                    setFieldsLockedByNif(false);
+                    let val = e.target.value.replace(/\D/g, "");
+                    if (val.length > 10) val = val.slice(0, 10);
+                    let formatted = "";
+                    if (val.length > 0) formatted += val.substring(0, 3);
+                    if (val.length > 3) formatted += "-" + val.substring(3, 6);
+                    if (val.length > 6) formatted += "-" + val.substring(6, 9);
+                    if (val.length > 9) formatted += "-" + val.substring(9, 10);
+                    e.target.value = formatted;
+                    if (val.length === 10) {
+                      setTimeout(() => setFocus("firstName"), 50);
+                    }
                   }
-                }
-              })}
-              style={errors.nif ? { borderColor: "red" } : undefined}
-              autoFocus
-            />
-            {errors.nif ? <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.nif.message}</span> : null}
-          </label>
+                })}
+                style={errors.nif ? { borderColor: "red" } : undefined}
+                autoFocus
+              />
+              {nifFetching ? (
+                <span className="contract-input-status" role="status" aria-label="Vérification du NIF en cours" title="Vérification du NIF en cours">
+                  <span className="material-symbols-rounded is-spinning">sync</span>
+                </span>
+              ) : null}
+              {!nifFetching && nifLookup?.identification && nifAlert.type !== "blocked" ? (
+                <span className="contract-input-status is-success" role="status" aria-label="NIF identifié" title="NIF identifié">
+                  <span className="material-symbols-rounded">check_circle</span>
+                </span>
+              ) : null}
+            </div>
+            {errors.nif ? <span className="form-error">{errors.nif.message}</span> : null}
+          </div>
 
-          <label className="field">
-            <span>Prénom *</span>
+          <label className="field contract-compact-field">
             <input
               className="input"
+              placeholder="Prénom *"
+              aria-label="Prénom"
               {...register("firstName")}
               readOnly={fieldsLockedByNif}
               style={fieldsLockedByNif ? { background: "var(--surface-muted, #f3f4f6)", cursor: "not-allowed" } : undefined}
             />
-            {errors.firstName ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.firstName.message}</span>
-            ) : null}
+            {errors.firstName ? <span className="form-error">{errors.firstName.message}</span> : null}
           </label>
 
-          <label className="field">
-            <span>Nom *</span>
+          <label className="field contract-compact-field">
             <input
               className="input"
+              placeholder="Nom *"
+              aria-label="Nom"
               {...register("lastName")}
               readOnly={fieldsLockedByNif}
               style={fieldsLockedByNif ? { background: "var(--surface-muted, #f3f4f6)", cursor: "not-allowed" } : undefined}
             />
-            {errors.lastName ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.lastName.message}</span>
-            ) : null}
+            {errors.lastName ? <span className="form-error">{errors.lastName.message}</span> : null}
           </label>
 
-          <div className="field">
-            <span>Sexe *</span>
+          <div className="field contract-compact-field">
             <input type="hidden" {...register("gender")} />
             <div
               className="gender-toggle"
@@ -912,67 +902,46 @@ export function ContractNewPage() {
                 M · Homme
               </button>
             </div>
-            {errors.gender ? <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.gender.message}</span> : null}
+            {errors.gender ? <span className="form-error">{errors.gender.message}</span> : null}
           </div>
 
-          <label className="field">
-            <span>NINU</span>
-            <input 
-              className="input" 
-              placeholder="0000000000" 
+          <label className="field contract-compact-field">
+            <input
+              className="input"
+              placeholder="NINU facultatif — 0000000000"
+              aria-label="NINU facultatif"
               {...register("ninu", {
                 onChange: (e) => {
                   let val = e.target.value.replace(/\D/g, "");
                   if (val.length > 10) val = val.slice(0, 10);
                   e.target.value = val;
                   if (val.length === 10) {
-                     focusFormField("address");
+                    focusFormField("address");
                   }
                 }
               })}
               style={errors.ninu ? { borderColor: "red" } : undefined}
             />
-            {errors.ninu ? <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.ninu.message}</span> : null}
+            {errors.ninu ? <span className="form-error">{errors.ninu.message}</span> : null}
           </label>
 
-          <div className="field" ref={addressContainerRef}>
-            <span>Adresse *</span>
+          <div className="field contract-compact-field" ref={addressContainerRef}>
             <AutocompleteField
               value={addressValue}
               onChange={(val) => setValue("address", val, { shouldValidate: true, shouldDirty: true })}
               onAfterSelect={() => positionContainerRef.current?.querySelector("input")?.focus()}
               featuredItem={featuredAddress}
               items={addressItems}
-              placeholder="Commencez à taper une adresse…"
+              placeholder="Adresse *"
+              ariaLabel="Adresse"
               hasError={!!errors.address}
               name="address"
               pinCategory="address"
             />
-            {errors.address ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.address.message}</span>
-            ) : null}
+            {errors.address ? <span className="form-error">{errors.address.message}</span> : null}
           </div>
 
-          <div className="form-section-heading span-2">
-            <span className="material-symbols-rounded">work</span>
-            <div><h2>Affectation et rémunération</h2><p>Fonction, établissement et conditions du contrat.</p></div>
-          </div>
-
-          <div className="field" ref={positionContainerRef}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>Poste *</span>
-              {isMedical && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ padding: "2px 8px", fontSize: "11px", height: "auto", minHeight: "24px" }}
-                  onClick={handleVerifyMspp}
-                >
-                  <span className="material-symbols-rounded" style={{ fontSize: "14px", verticalAlign: "middle" }}>verified_user</span>
-                  {" "}Vérifier permis MSPP
-                </button>
-              )}
-            </div>
+          <div className="field contract-compact-field contract-position-field" ref={positionContainerRef}>
             <AutocompleteField
               value={positionValue}
               onChange={(val) => setValue("position", val, { shouldValidate: true, shouldDirty: true })}
@@ -980,120 +949,119 @@ export function ContractNewPage() {
               onAfterSelect={() => assignmentContainerRef.current?.querySelector("input")?.focus()}
               featuredItem={featuredPosition}
               items={positionItems}
-              placeholder="Sélectionnez ou tapez un poste…"
+              placeholder="Poste *"
+              ariaLabel="Poste"
+              style={isMedical ? { paddingRight: "42px" } : undefined}
               hasError={!!errors.position}
               name="position"
               pinCategory="position"
             />
-            {errors.position ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.position.message}</span>
+            {isMedical ? (
+              <button
+                type="button"
+                className="icon-btn contract-mspp-button"
+                title="Vérifier le permis MSPP"
+                aria-label="Vérifier le permis MSPP"
+                onClick={handleVerifyMspp}
+              >
+                <span className="material-symbols-rounded">verified_user</span>
+              </button>
             ) : null}
+            {errors.position ? <span className="form-error">{errors.position.message}</span> : null}
           </div>
 
-          <div className="field" ref={assignmentContainerRef}>
-            <span>Affectation *</span>
+          <div className="field contract-compact-field" ref={assignmentContainerRef}>
             <AutocompleteField
               value={assignmentValue}
               onChange={(val) => setValue("assignment", val, { shouldValidate: true, shouldDirty: true })}
               onAfterSelect={() => focusFormField("salaryNumber")}
               featuredItem={featuredAssignment}
               items={assignmentItems}
-              placeholder="Institution d'affectation…"
+              placeholder="Affectation *"
+              ariaLabel="Affectation"
               hasError={!!errors.assignment}
               name="assignment"
               pinCategory="assignment"
             />
-            {errors.assignment ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.assignment.message}</span>
-            ) : null}
+            {errors.assignment ? <span className="form-error">{errors.assignment.message}</span> : null}
           </div>
 
-          <div className="field" ref={salaryContainerRef}>
-            <span>Salaire (HTG) *</span>
+          <div className="field contract-compact-field" ref={salaryContainerRef}>
             <AutocompleteField
               value={watch("salaryNumber")}
               onChange={(val) => {
                 setValue("salaryNumber", val, { shouldValidate: true, shouldDirty: true });
               }}
               items={availableSalaries.map(s => ({ id: s.toString(), label: s.toString() }))}
-              placeholder="Ex: 45000"
+              placeholder="Salaire HTG *"
+              ariaLabel="Salaire en gourdes"
               hasError={!!errors.salaryNumber}
               name="salaryNumber"
               showAllOnFocus={availableSalaries.length > 1}
             />
-            {errors.salaryNumber ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.salaryNumber.message}</span>
-            ) : null}
+            {errors.salaryNumber ? <span className="form-error">{errors.salaryNumber.message}</span> : null}
           </div>
 
-          <div className="field">
-            <label htmlFor="salaryText">
-              <span>Salaire en lettre</span>
-            </label>
+          <label className="field contract-compact-field">
             <input
               id="salaryText"
               className="input"
+              placeholder="Salaire en lettres (automatique)"
+              aria-label="Salaire en lettres"
               {...register("salaryText")}
               readOnly
               tabIndex={-1}
             />
-          </div>
+          </label>
 
-          <div className="form-section-heading span-2">
-            <span className="material-symbols-rounded">folder</span>
-            <div><h2>Classement</h2><p>Dossier, durée et étiquettes de suivi.</p></div>
-          </div>
-
-          <div className="field span-2">
-            <span>Dossier</span>
+          <div className="field contract-compact-field contract-dossier-field span-2">
             <div className="field-inline-actions">
               <select
                 className="select"
+                aria-label="Dossier facultatif"
                 {...dossierField}
                 ref={(element) => {
                   dossierField.ref(element);
                   dossierSelectRef.current = element;
                 }}
               >
-                <DossierSelectOptions dossiers={dossiers} />
+                <DossierSelectOptions dossiers={dossiers} emptyLabel="Dossier facultatif" />
               </select>
               <button
                 type="button"
-                className="btn btn-outline"
+                className="icon-btn"
+                title="Créer un dossier"
+                aria-label="Créer un dossier"
                 onClick={handleCreateDossier}
                 disabled={createDossier.isPending}
               >
-                <span className="material-symbols-rounded icon">create_new_folder</span>
-                Dossier
+                <span className="material-symbols-rounded">create_new_folder</span>
               </button>
             </div>
           </div>
 
-          <label className="field">
-            <span>Durée du contrat *</span>
-            <div style={{ position: "relative" }}>
-               <input
-                 className="input"
-                 type="number"
-                 min="1"
-                 max="12"
-                 style={{ paddingRight: "42px" }}
-                 {...durationField}
-                 ref={(element) => {
-                   durationField.ref(element);
-                   durationInputRef.current = element;
-                 }}
-               />
-               <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--ink-muted)", pointerEvents: "none" }}>mois</span>
+          <label className="field contract-compact-field contract-duration-field">
+            <div className="contract-input-suffix">
+              <input
+                className="input"
+                type="number"
+                min="1"
+                max="12"
+                placeholder="Durée *"
+                aria-label="Durée du contrat en mois"
+                {...durationField}
+                ref={(element) => {
+                  durationField.ref(element);
+                  durationInputRef.current = element;
+                }}
+              />
+              <span>mois</span>
             </div>
-            {errors.durationMonths ? (
-              <span className="form-error" style={{ padding: "4px 8px", fontSize: "11px" }}>{errors.durationMonths.message}</span>
-            ) : null}
+            {errors.durationMonths ? <span className="form-error">{errors.durationMonths.message}</span> : null}
           </label>
-          
-          <div className="field span-2" style={{ marginTop: "8px" }}>
-            <span>Tags</span>
-            <TagSelector 
+
+          <div className="field contract-compact-field span-2">
+            <TagSelector
               workspaceId={workspaceId}
               selectedTags={selectedTags}
               onAssignTag={(tag) =>

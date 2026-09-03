@@ -5741,6 +5741,141 @@ button {
   border-top: 1px solid var(--border);
 }
 
+.contract-editor-form-mode {
+  gap: 12px;
+}
+
+.contract-editor-form-mode > .page-header {
+  margin-bottom: 0;
+  padding-block: 12px;
+}
+
+.contract-editor-page .form-compact.contract-quick-form {
+  padding: 16px;
+}
+
+.contract-editor-page .contract-quick-form .field {
+  gap: 4px;
+}
+
+.contract-editor-page .contract-quick-form .input,
+.contract-editor-page .contract-quick-form .select {
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.contract-editor-page .contract-quick-form .gender-toggle {
+  min-height: 38px;
+}
+
+.contract-editor-page .contract-quick-form .gender-option {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.contract-input-with-status,
+.contract-input-suffix {
+  position: relative;
+}
+
+.contract-input-with-status .input {
+  padding-right: 38px !important;
+}
+
+.contract-input-status,
+.contract-input-suffix > span {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.contract-input-status .material-symbols-rounded {
+  font-size: 17px;
+}
+
+.contract-input-status.is-success {
+  color: var(--success, #16a34a);
+}
+
+.contract-input-suffix .input {
+  padding-right: 44px !important;
+}
+
+.contract-input-suffix > span {
+  font-size: 11px;
+}
+
+.contract-position-field {
+  position: relative;
+}
+
+.contract-position-field .contract-mspp-button {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+}
+
+.contract-dossier-field .field-inline-actions {
+  gap: 6px;
+}
+
+.contract-editor-page .contract-quick-form .contract-tag-selector,
+.contract-editor-page .contract-quick-form .contract-tag-selector-control {
+  width: 100%;
+}
+
+.contract-editor-page .contract-quick-form .contract-tag-selector-selected {
+  margin-bottom: 4px;
+}
+
+.contract-editor-page .contract-quick-form .contract-tag-selector-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: none;
+  font: inherit;
+  font-size: 12px;
+}
+
+.contract-editor-page .contract-quick-form .contract-tag-selector-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.contract-editor-page .contract-quick-form .form-actions {
+  position: static;
+  margin: 14px 0 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+@media (min-width: 761px) {
+  .contract-editor-page .contract-quick-form .form-grid.compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+}
+
 .sheet-top-controls {
   border-radius: 9px;
   background: var(--panel);

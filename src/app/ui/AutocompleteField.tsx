@@ -34,6 +34,8 @@ interface AutocompleteFieldProps {
   onAfterSelect?: () => void;
   items: AutocompleteItem[];
   placeholder?: string;
+  /** Accessible name when the field intentionally has no visible label. */
+  ariaLabel?: string;
   className?: string;
   style?: React.CSSProperties;
   name?: string;
@@ -75,6 +77,7 @@ export function AutocompleteField({
   onAfterSelect,
   items,
   placeholder,
+  ariaLabel,
   className = "input",
   style,
   name,
@@ -344,6 +347,7 @@ export function AutocompleteField({
         value={value}
         name={name}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         style={{
           ...style,
           ...(hasError ? { borderColor: "red" } : {}),

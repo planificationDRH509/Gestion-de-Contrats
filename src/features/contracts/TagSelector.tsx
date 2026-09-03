@@ -49,19 +49,21 @@ export function TagSelector({ workspaceId, selectedTags, onAssignTag, onRemoveTa
   };
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {selectedTags.map((tag) => (
-          <TagBadge 
-            key={tag.id} 
-            tag={tag} 
-            onRemove={disabled ? undefined : onRemoveTag} 
-          />
-        ))}
-      </div>
+    <div className="relative w-full contract-tag-selector" ref={wrapperRef}>
+      {selectedTags.length > 0 ? (
+        <div className="flex flex-wrap gap-2 mb-2 contract-tag-selector-selected">
+          {selectedTags.map((tag) => (
+            <TagBadge
+              key={tag.id}
+              tag={tag}
+              onRemove={disabled ? undefined : onRemoveTag}
+            />
+          ))}
+        </div>
+      ) : null}
       
       {!disabled && workspaceId && (
-        <div className="relative">
+        <div className="relative contract-tag-selector-control">
           <input
             type="text"
             placeholder="Ajouter un tag..."
@@ -71,10 +73,10 @@ export function TagSelector({ workspaceId, selectedTags, onAssignTag, onRemoveTa
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
-            className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+            className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border contract-tag-selector-input"
           />
           {isOpen && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto contract-tag-selector-menu">
               {isLoadingTags ? (
                 <div className="p-3 text-center text-gray-500 flex justify-center">
                   <Loader2 className="w-4 h-4 animate-spin" />
