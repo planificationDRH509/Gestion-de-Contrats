@@ -75,4 +75,28 @@ describe("LocalApplicantRepository offline mutations", () => {
     expect(saved).toHaveLength(2);
     expect(await repository.list(workspaceId)).toHaveLength(2);
   });
+
+  it("finds soft-deleted NIF and NINU owners during an import check", async () => {
+    const repository = new LocalApplicantRepository();
+    const workspaceId = "workspace_deleted_import_test";
+    const applicant = await repository.upsert({
+      workspaceId,
+      gender: "Homme",
+      firstName: "Jean",
+      lastName: "Louis",
+      nif: "100-000-000-3",
+      ninu: "1234567890",
+      address: "Delmas"
+    });
+    await repository.softDelete(applicant.id, workspaceId);
+
+    const matches = await repository.findManyByNifOrNinu(
+      workspaceId,
+      ["100-000-000-3"],
+      ["1234567890"]
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].deletedAt).toBeTruthy();
+  });
 });

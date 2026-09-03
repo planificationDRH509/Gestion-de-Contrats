@@ -1372,6 +1372,18 @@ img {
   transform: translateY(-1px);
 }
 
+.contracts-import.is-past-fiscal-year,
+.contracts-import.is-past-fiscal-year:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.contracts-import .contracts-import-warning-icon {
+  color: var(--danger);
+  font-size: 17px;
+}
+
 .contracts-row {
   display: grid;
   grid-template-columns: 52px 1fr auto;

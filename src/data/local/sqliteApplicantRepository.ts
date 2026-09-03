@@ -29,6 +29,17 @@ export class SqliteApplicantRepository implements ApplicantRepository {
     return sqliteApiRequest<Applicant | null>(`/applicants/find?${params.toString()}`);
   }
 
+  async findManyByNifOrNinu(
+    workspaceId: string,
+    nifs: string[],
+    ninus: string[]
+  ): Promise<Applicant[]> {
+    return sqliteApiRequest<Applicant[]>("/applicants/find-many", {
+      method: "POST",
+      body: { workspaceId, nifs, ninus }
+    });
+  }
+
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     return sqliteApiRequest<Applicant>("/applicants/upsert", {
       method: "POST",

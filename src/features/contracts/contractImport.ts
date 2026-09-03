@@ -1,4 +1,4 @@
-import type { Gender } from "../../data/types";
+import type { Applicant, Gender } from "../../data/types";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 
 export type ContractImportFieldId =
@@ -79,6 +79,21 @@ export type ContractImportValidatedEditableRow = {
   errors: string[];
   warnings: string[];
 };
+
+export type ContractImportIdentityValue = {
+  nif: string;
+  ninu?: string | null;
+};
+
+export type ContractImportIdentityIssue = {
+  errors: string[];
+  warnings: string[];
+};
+
+type ExistingImportApplicant = Pick<
+  Applicant,
+  "id" | "nif" | "ninu" | "firstName" | "lastName" | "deletedAt"
+>;
 
 export const CONTRACT_IMPORT_FIELDS: { id: ContractImportFieldId; label: string }[] = [
   { id: "ignore", label: "Ignorer" },
@@ -354,6 +369,104 @@ function normalizeNifKey(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function normalizeNinuKey(value?: string | null) {
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits.length === 10 ? digits : "";
+}
+
+function applicantNif(applicant: ExistingImportApplicant) {
+  return applicant.nif?.trim() || applicant.id;
+}
+
+function applicantName(applicant: ExistingImportApplicant) {
+  return [applicant.firstName, applicant.lastName].filter(Boolean).join(" ").trim();
+}
+
+function applicantLabel(applicant: ExistingImportApplicant) {
+  const name = applicantName(applicant);
+  const details = [name, applicant.deletedAt ? "fiche supprimée" : ""].filter(Boolean).join(", ");
+  return details ? ` (${details})` : "";
+}
+
+export function getContractImportIdentityIssues(
+  rows: ContractImportIdentityValue[],
+  existingApplicants: ExistingImportApplicant[] = []
+): ContractImportIdentityIssue[] {
+  const normalizedRows = rows.map((row) => ({
+    nif: normalizeNif(row.nif),
+    ninu: normalizeNinuKey(row.ninu)
+  }));
+  const importNinusByNif = new Map<string, Set<string>>();
+  const importNifsByNinu = new Map<string, Set<string>>();
+
+  normalizedRows.forEach(({ nif, ninu }) => {
+    if (!nif) return;
+    const nifKey = normalizeNifKey(nif);
+    if (ninu) {
+      const ninus = importNinusByNif.get(nifKey) ?? new Set<string>();
+      ninus.add(ninu);
+      importNinusByNif.set(nifKey, ninus);
+
+      const nifs = importNifsByNinu.get(ninu) ?? new Set<string>();
+      nifs.add(nifKey);
+      importNifsByNinu.set(ninu, nifs);
+    }
+  });
+
+  const existingByNif = new Map<string, ExistingImportApplicant>();
+  const existingByNinu = new Map<string, ExistingImportApplicant>();
+  existingApplicants.forEach((applicant) => {
+    const nifKey = normalizeNifKey(applicantNif(applicant));
+    const ninuKey = normalizeNinuKey(applicant.ninu);
+    if (nifKey) existingByNif.set(nifKey, applicant);
+    if (ninuKey) existingByNinu.set(ninuKey, applicant);
+  });
+
+  return normalizedRows.map(({ nif, ninu }) => {
+    const errors = new Set<string>();
+    const warnings = new Set<string>();
+    if (!nif) return { errors: [], warnings: [] };
+
+    const nifKey = normalizeNifKey(nif);
+    if ((importNinusByNif.get(nifKey)?.size ?? 0) > 1) {
+      errors.add(`Le NIF ${nif} est associé à plusieurs NINU dans le fichier importé.`);
+    }
+    if (ninu && (importNifsByNinu.get(ninu)?.size ?? 0) > 1) {
+      errors.add(`Le NINU ${ninu} est associé à plusieurs NIF dans le fichier importé.`);
+    }
+
+    const applicantWithNif = existingByNif.get(nifKey);
+    const applicantWithNinu = ninu ? existingByNinu.get(ninu) : undefined;
+    if (applicantWithNinu) {
+      const ownerNif = applicantNif(applicantWithNinu);
+      if (normalizeNifKey(ownerNif) !== nifKey) {
+        errors.add(
+          `Le NINU ${ninu} existe déjà dans la base et appartient au NIF ${ownerNif}${applicantLabel(applicantWithNinu)}.`
+        );
+      }
+    }
+
+    if (applicantWithNif) {
+      const storedNinu = normalizeNinuKey(applicantWithNif.ninu);
+      if (applicantWithNif.deletedAt) {
+        const name = applicantName(applicantWithNif);
+        errors.add(
+          `Le NIF ${nif} appartient à une fiche supprimée${name ? ` (${name})` : ""}. Restaurez cette fiche avant l'import.`
+        );
+      } else if (ninu && storedNinu && ninu !== storedNinu) {
+        errors.add(
+          `Le NIF ${nif} existe déjà dans la base avec le NINU ${storedNinu}${applicantLabel(applicantWithNif)}.`
+        );
+      }
+      if (errors.size === 0) {
+        warnings.add(`NIF ${nif} déjà présent dans la base : la fiche existante sera réutilisée.`);
+      }
+    }
+
+    return { errors: Array.from(errors), warnings: Array.from(warnings) };
+  });
+}
+
 function buildRowDraft(
   row: string[],
   mapping: ContractImportMapping
@@ -493,10 +606,17 @@ export function buildImportEditableRows(
 
 export function validateImportEditableRows(
   rows: ContractImportEditableRow[],
-  options: { existingNifs?: string[] } = {}
+  options: {
+    existingNifs?: string[];
+    existingApplicants?: ExistingImportApplicant[];
+  } = {}
 ): ContractImportValidatedEditableRow[] {
   const existingNifs = new Set((options.existingNifs ?? []).map(normalizeNifKey).filter(Boolean));
   const importNifCounts = new Map<string, number>();
+  const identityIssues = getContractImportIdentityIssues(
+    rows.map((row) => (row.excluded ? { nif: "", ninu: null } : row)),
+    options.existingApplicants
+  );
 
   rows.forEach((row) => {
     if (row.excluded) return;
@@ -506,11 +626,12 @@ export function validateImportEditableRows(
     importNifCounts.set(key, (importNifCounts.get(key) ?? 0) + 1);
   });
 
-  return rows.map((row) => {
+  return rows.map((row, index) => {
     const result = row.excluded
       ? { values: null, errors: [] }
       : buildDraftFromEditableRow(row);
-    const warnings: string[] = [];
+    const issues = row.excluded ? { errors: [], warnings: [] } : identityIssues[index];
+    const warnings = [...issues.warnings];
     const nif = normalizeNif(row.nif);
     if (!row.excluded && nif) {
       const key = normalizeNifKey(nif);
@@ -526,8 +647,8 @@ export function validateImportEditableRows(
       sourceRowNumber: row.sourceRowNumber,
       excluded: row.excluded,
       values: result.values,
-      errors: result.errors,
-      warnings
+      errors: Array.from(new Set([...result.errors, ...issues.errors])),
+      warnings: Array.from(new Set(warnings))
     };
   });
 }

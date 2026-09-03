@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildImportPreview,
   buildImportEditableRows,
+  getContractImportIdentityIssues,
   inferImportMapping,
   parseImportMoney,
   parsePastedContractTable,
@@ -49,6 +50,96 @@ describe("contractImport", () => {
 
     expect(previewRows[0].warnings).toContain("Doublon possible: NIF répété dans le collage.");
     expect(previewRows[1].errors).toContain("Le sexe est invalide.");
+  });
+
+  it("blocks a NINU associated with different NIFs in the same import", () => {
+    const issues = getContractImportIdentityIssues([
+      { nif: "001-002-003-4", ninu: "1234567890" },
+      { nif: "001-002-003-5", ninu: "1234567890" }
+    ]);
+
+    expect(issues[0].errors).toContain(
+      "Le NINU 1234567890 est associé à plusieurs NIF dans le fichier importé."
+    );
+    expect(issues[1].errors).toEqual(issues[0].errors);
+  });
+
+  it("identifies the database owner of a duplicated NINU", () => {
+    const issues = getContractImportIdentityIssues(
+      [{ nif: "001-002-003-4", ninu: "1234567890" }],
+      [
+        {
+          id: "999-888-777-6",
+          nif: "999-888-777-6",
+          ninu: "1234567890",
+          firstName: "Anne",
+          lastName: "PIERRE"
+        }
+      ]
+    );
+
+    expect(issues[0].errors).toContain(
+      "Le NINU 1234567890 existe déjà dans la base et appartient au NIF 999-888-777-6 (Anne PIERRE)."
+    );
+  });
+
+  it("reuses a matching existing identification without overwriting it", () => {
+    const issues = getContractImportIdentityIssues(
+      [{ nif: "001-002-003-4", ninu: "1234567890" }],
+      [
+        {
+          id: "001-002-003-4",
+          nif: "001-002-003-4",
+          ninu: "1234567890",
+          firstName: "Jean",
+          lastName: "DOE"
+        }
+      ]
+    );
+
+    expect(issues[0].errors).toEqual([]);
+    expect(issues[0].warnings).toContain(
+      "NIF 001-002-003-4 déjà présent dans la base : la fiche existante sera réutilisée."
+    );
+  });
+
+  it("reports when an existing NIF has a different NINU", () => {
+    const issues = getContractImportIdentityIssues(
+      [{ nif: "001-002-003-4", ninu: "1234567890" }],
+      [
+        {
+          id: "001-002-003-4",
+          nif: "001-002-003-4",
+          ninu: "0987654321",
+          firstName: "Jean",
+          lastName: "DOE"
+        }
+      ]
+    );
+
+    expect(issues[0].errors).toContain(
+      "Le NIF 001-002-003-4 existe déjà dans la base avec le NINU 0987654321 (Jean DOE)."
+    );
+  });
+
+  it("reports a soft-deleted identification that still owns the NIF", () => {
+    const issues = getContractImportIdentityIssues(
+      [{ nif: "001-002-003-4", ninu: "1234567890" }],
+      [
+        {
+          id: "001-002-003-4",
+          nif: "001-002-003-4",
+          ninu: "1234567890",
+          firstName: "Jean",
+          lastName: "DOE",
+          deletedAt: "2026-09-01T00:00:00.000Z"
+        }
+      ]
+    );
+
+    expect(issues[0].errors).toContain(
+      "Le NIF 001-002-003-4 appartient à une fiche supprimée (Jean DOE). Restaurez cette fiche avant l'import."
+    );
   });
 
   it("parses common imported salary formats", () => {

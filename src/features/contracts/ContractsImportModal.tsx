@@ -19,7 +19,13 @@ import {
   loadContractImportDraft,
   saveContractImportDraft
 } from "./contractImportDraft";
-import { useImportContracts, type ContractImportProgress } from "./contractsApi";
+import {
+  useImportApplicantMatches,
+  useImportContracts,
+  type ContractImportProgress
+} from "./contractsApi";
+import { useFiscalYear } from "../settings/settingsApi";
+import { isPastFiscalYear } from "../../lib/contractDateFilters";
 
 type UserOption = {
   id: string;
@@ -79,6 +85,8 @@ export function ContractsImportModal({
   const restoringRef = useRef(false);
   const hydratedClipboardSignatureRef = useRef<string | null>(null);
   const importContracts = useImportContracts();
+  const { fiscalYear } = useFiscalYear();
+  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
 
   const table = useMemo(() => parsePastedContractTable(clipboardText), [clipboardText]);
   const headerSignature = table.headers.join("\u001f");
@@ -187,10 +195,43 @@ export function ContractsImportModal({
     () => existingContracts.map((contract) => contract.nif ?? "").filter(Boolean),
     [existingContracts]
   );
+  const importIdentityKeys = useMemo(() => {
+    const nifs = new Set<string>();
+    const ninus = new Set<string>();
+    editableRows.forEach((row) => {
+      if (row.excluded) return;
+      const nifDigits = row.nif.replace(/\D/g, "");
+      const ninuDigits = row.ninu.replace(/\D/g, "");
+      if (nifDigits.length === 10) {
+        nifs.add(
+          `${nifDigits.slice(0, 3)}-${nifDigits.slice(3, 6)}-${nifDigits.slice(6, 9)}-${nifDigits.slice(9)}`
+        );
+      }
+      if (ninuDigits.length === 10) ninus.add(ninuDigits);
+    });
+    return {
+      nifs: Array.from(nifs).sort(),
+      ninus: Array.from(ninus).sort()
+    };
+  }, [editableRows]);
+  const identityCheckEnabled =
+    isOpen && (importIdentityKeys.nifs.length > 0 || importIdentityKeys.ninus.length > 0);
+  const identityMatches = useImportApplicantMatches(
+    workspaceId,
+    importIdentityKeys.nifs,
+    importIdentityKeys.ninus,
+    identityCheckEnabled
+  );
+  const isCheckingIdentities =
+    identityCheckEnabled && (identityMatches.isPending || identityMatches.isFetching);
   const mappingIssues = useMemo(() => validateImportMapping(mapping), [mapping]);
   const validatedRows = useMemo(
-    () => validateImportEditableRows(editableRows, { existingNifs }),
-    [editableRows, existingNifs]
+    () =>
+      validateImportEditableRows(editableRows, {
+        existingNifs,
+        existingApplicants: identityMatches.data ?? []
+      }),
+    [editableRows, existingNifs, identityMatches.data]
   );
   const validationById = useMemo(
     () => new Map(validatedRows.map((row) => [row.id, row])),
@@ -205,13 +246,22 @@ export function ContractsImportModal({
   const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
   const selectedErrorRowCount = selectedRows.filter((row) => row.errors.length > 0).length;
   const errorRowCount = includedRows.filter((row) => row.errors.length > 0).length;
+  const identityConflictRowCount = includedRows.filter((row) =>
+    row.errors.some(
+      (error) =>
+        (error.includes("NIF") || error.includes("NINU")) &&
+        (error.includes("existe déjà") ||
+          error.includes("associé à plusieurs") ||
+          error.includes("fiche supprimée"))
+    )
+  ).length;
   const warningRowCount = includedRows.filter((row) => row.warnings.length > 0).length;
   const excludedRowCount = validatedRows.filter((row) => row.excluded).length;
-  const problemRowIds = useMemo(
+  const errorRowIds = useMemo(
     () =>
       new Set(
         validatedRows
-          .filter((row) => !row.excluded && (row.errors.length > 0 || row.warnings.length > 0))
+          .filter((row) => !row.excluded && row.errors.length > 0)
           .map((row) => row.id)
       ),
     [validatedRows]
@@ -234,6 +284,8 @@ export function ContractsImportModal({
     mappingIssues.duplicateFields.length === 0 &&
     selectedErrorRowCount === 0 &&
     !isOverflow &&
+    !isCheckingIdentities &&
+    !identityMatches.isError &&
     !importContracts.isPending;
 
   useEffect(() => {
@@ -291,18 +343,21 @@ export function ContractsImportModal({
 
   function setSelectedRowsExcluded(excluded: boolean) {
     const targetIds = new Set(selectedRowIds);
+    if (excluded) {
+      setSelectedRowIds(
+        editableRows
+          .filter((row) => !row.excluded && !targetIds.has(row.id))
+          .map((row) => row.id)
+      );
+    }
     setEditableRows((prev) =>
       prev.map((row) => (targetIds.has(row.id) ? { ...row, excluded } : row))
     );
   }
 
-  function selectProblemRows() {
-    setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      problemRowIds.forEach((rowId) => next.add(rowId));
-      return Array.from(next);
-    });
-    const firstProblemIndex = editableRows.findIndex((row) => problemRowIds.has(row.id));
+  function selectErrorRows() {
+    setSelectedRowIds(Array.from(errorRowIds));
+    const firstProblemIndex = editableRows.findIndex((row) => errorRowIds.has(row.id));
     if (firstProblemIndex >= 0) {
       setPreviewPage(Math.floor(firstProblemIndex / IMPORT_PREVIEW_PAGE_SIZE) + 1);
     }
@@ -334,12 +389,22 @@ export function ContractsImportModal({
       setImportError(`Cet import dépasse la limite de sécurité de ${MAX_IMPORT_ROWS} lignes. Divisez-le en plusieurs lots.`);
       return;
     }
+    if (isCheckingIdentities) {
+      setImportError("Attendez la fin de la vérification des NIF et NINU.");
+      return;
+    }
+    if (identityMatches.isError) {
+      setImportError("Impossible de vérifier les doublons NIF/NINU dans la base. Réessayez.");
+      return;
+    }
     if (
       mappingIssues.missingFields.length > 0 ||
       mappingIssues.duplicateFields.length > 0 ||
       selectedErrorRowCount > 0
     ) {
-      setImportError("Corrigez le mapping ou les lignes sélectionnées invalides avant l'enregistrement.");
+      setImportError(
+        "Corrigez les lignes en erreur, ou sélectionnez les erreurs puis retirez-les de l'import."
+      );
       return;
     }
 
@@ -348,6 +413,7 @@ export function ContractsImportModal({
         workspaceId,
         dossierId: selectedDossierId,
         responsibleUserId,
+        fiscalYear,
         rows: selectedValidRows.map((row) => row.values!),
         onProgress: setImportProgress
       });
@@ -363,7 +429,7 @@ export function ContractsImportModal({
 
   return (
     <div className="contracts-import-modal" role="dialog" aria-modal="true" aria-labelledby="contracts-import-title">
-      <div className="contracts-import-modal-card">
+      <div className={`contracts-import-modal-card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
         <div className="contracts-import-modal-head">
           <div>
             <div id="contracts-import-title" className="contracts-import-modal-title">
@@ -374,11 +440,25 @@ export function ContractsImportModal({
                 ? `${table.rows.length} ligne(s), ${table.headers.length} colonne(s)`
                 : "Collage Excel"}
             </div>
+            <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
+              <span className="material-symbols-rounded">calendar_month</span>
+              Année fiscale {fiscalYear}
+            </div>
           </div>
           <button className="icon-btn" type="button" onClick={closeModal} title="Fermer">
             <span className="material-symbols-rounded">close</span>
           </button>
         </div>
+
+        {fiscalYearIsPast ? (
+          <div className="fiscal-year-contract-warning" role="alert">
+            <span className="material-symbols-rounded">warning</span>
+            <div>
+              <strong>Attention : année fiscale passée ({fiscalYear})</strong>
+              <span>Tous les contrats de cet import seront enregistrés dans un exercice déjà terminé.</span>
+            </div>
+          </div>
+        ) : null}
 
         <textarea
           ref={pasteRef}
@@ -430,8 +510,23 @@ export function ContractsImportModal({
               <span>{warningRowCount} alerte(s)</span>
               <span>{excludedRowCount} retirée(s)</span>
               {isOverflow ? <span>Maximum {MAX_IMPORT_ROWS} lignes</span> : null}
+              {isCheckingIdentities ? <span>Vérification NIF/NINU…</span> : null}
               {importProgressLabel ? <span>{importProgressLabel}</span> : null}
             </div>
+
+            {identityMatches.isError ? (
+              <div className="form-error">
+                Impossible de vérifier les doublons NIF/NINU dans la base. Corrigez la connexion puis réessayez.
+              </div>
+            ) : null}
+
+            {identityConflictRowCount > 0 ? (
+              <div className="form-error">
+                {identityConflictRowCount} ligne(s) bloquée(s) par un conflit NIF/NINU. Le détail et le propriétaire
+                existant apparaissent dans la colonne « État ». Corrigez ces lignes ou utilisez « Sélectionner les
+                erreurs », puis « Retirer sélection » pour importer le reste.
+              </div>
+            ) : null}
 
             {isOverflow ? (
               <div className="form-error">
@@ -545,10 +640,10 @@ export function ContractsImportModal({
               <button
                 className="btn btn-outline"
                 type="button"
-                onClick={selectProblemRows}
-                disabled={problemRowIds.size === 0}
+                onClick={selectErrorRows}
+                disabled={errorRowIds.size === 0}
               >
-                Sélectionner alertes / erreurs
+                Sélectionner les erreurs
               </button>
             </div>
             <div className="contracts-import-preview">

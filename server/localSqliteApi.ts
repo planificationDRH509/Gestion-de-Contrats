@@ -1383,6 +1383,54 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === `${API_PREFIX}/applicants/find-many` && method === "POST") {
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const nifs = Array.isArray(body.nifs)
+      ? Array.from(new Set(body.nifs.map(asString).map((value) => value.trim()).filter(Boolean)))
+      : [];
+    const ninus = Array.isArray(body.ninus)
+      ? Array.from(new Set(body.ninus.map(asString).map((value) => value.trim()).filter(Boolean)))
+      : [];
+    if (!workspaceId) {
+      throw new HttpError(400, "workspaceId est obligatoire.");
+    }
+    if (nifs.length === 0 && ninus.length === 0) {
+      sendJson(res, 200, []);
+      return;
+    }
+
+    const params: Record<string, string> = { workspace_id: workspaceId };
+    const filters: string[] = [];
+    if (nifs.length > 0) {
+      const placeholders = nifs.map((nif, index) => {
+        const key = `nif_${index}`;
+        params[key] = nif;
+        return `:${key}`;
+      });
+      filters.push(`nif IN (${placeholders.join(", ")})`);
+    }
+    if (ninus.length > 0) {
+      const placeholders = ninus.map((ninu, index) => {
+        const key = `ninu_${index}`;
+        params[key] = ninu;
+        return `:${key}`;
+      });
+      filters.push(`ninu IN (${placeholders.join(", ")})`);
+    }
+
+    const rows = db
+      .prepare(`
+        SELECT *
+        FROM identification
+        WHERE workspace_id = :workspace_id
+          AND (${filters.join(" OR ")})
+      `)
+      .all(params) as RawRecord[];
+    sendJson(res, 200, rows.map(mapApplicant));
+    return;
+  }
+
   if (pathname === `${API_PREFIX}/applicants/upsert` && method === "POST") {
     const body = await parseBody(req);
     const workspaceId = asString(body.workspaceId) || "workspace_default";

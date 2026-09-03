@@ -23,8 +23,10 @@ import { useAssignTagToContract, useCreateTag, useTags } from "./tagsApi";
 import { useAddresses, usePositions, useInstitutions } from "../settings/suggestionsApi";
 import {
   getCurrentFiscalYearStart,
-  getTodayDateInputValue
+  getTodayDateInputValue,
+  isPastFiscalYear
 } from "../../lib/contractDateFilters";
+import { useFiscalYear } from "../settings/settingsApi";
 import { getDossierGroups } from "../../lib/dossier";
 import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
@@ -85,6 +87,8 @@ export function ContractsListPage() {
   const navigate = useNavigate();
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
+  const { fiscalYear } = useFiscalYear();
+  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
 
   const [printHistoryOpen, setPrintHistoryOpen] = useState(false);
   const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>(() =>
@@ -1584,13 +1588,18 @@ export function ContractsListPage() {
                     {can("contracts.import") ? (
                       <button
                         type="button"
-                        className="contracts-import"
+                        className={`contracts-import ${fiscalYearIsPast ? "is-past-fiscal-year" : ""}`}
                         aria-label="Importer"
-                        title="Importer"
+                        title={fiscalYearIsPast
+                          ? `Importer dans l’année fiscale passée ${fiscalYear}`
+                          : `Importer dans l’année fiscale ${fiscalYear}`}
                         onClick={() => setImportOpen(true)}
                       >
                         <span className="material-symbols-rounded icon">file_upload</span>
                         <span>Importer</span>
+                        {fiscalYearIsPast ? (
+                          <span className="material-symbols-rounded contracts-import-warning-icon">warning</span>
+                        ) : null}
                       </button>
                     ) : null}
                     <button type="button" className="contracts-import" aria-label="Collaboration" title="Collaboration">

@@ -8,6 +8,11 @@ export interface ApplicantRepository {
     nif?: string | null,
     ninu?: string | null
   ): Promise<Applicant | null>;
+  findManyByNifOrNinu(
+    workspaceId: string,
+    nifs: string[],
+    ninus: string[]
+  ): Promise<Applicant[]>;
   upsert(input: UpsertApplicantInput): Promise<Applicant>;
   upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]>;
   softDelete(id: string, workspaceId: string): Promise<void>;

@@ -55,6 +55,24 @@ export class LocalApplicantRepository implements ApplicantRepository {
     );
   }
 
+  async findManyByNifOrNinu(
+    workspaceId: string,
+    nifs: string[],
+    ninus: string[]
+  ): Promise<Applicant[]> {
+    const nifSet = new Set(nifs.map((value) => value.trim()).filter(Boolean));
+    const ninuSet = new Set(ninus.map((value) => value.trim()).filter(Boolean));
+    if (nifSet.size === 0 && ninuSet.size === 0) return [];
+
+    const db = loadDb();
+    return db.applicants.filter(
+      (applicant) =>
+        applicant.workspaceId === workspaceId &&
+        (nifSet.has(applicant.nif?.trim() || applicant.id) ||
+          Boolean(applicant.ninu?.trim() && ninuSet.has(applicant.ninu.trim())))
+    );
+  }
+
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     const db = loadDb();
     const timestamp = now();

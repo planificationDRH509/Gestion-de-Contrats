@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
+  Applicant,
   Contract,
   ContractListParams,
   ContractListResult,
@@ -11,7 +12,10 @@ import {
   UpsertApplicantInput
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
-import type { ContractImportDraft } from "./contractImport";
+import {
+  getContractImportIdentityIssues,
+  type ContractImportDraft
+} from "./contractImport";
 import {
   readCachedContract,
   readCachedContracts,
@@ -368,6 +372,21 @@ export type ContractImportProgress = {
   total: number;
 };
 
+export function useImportApplicantMatches(
+  workspaceId: string,
+  nifs: string[],
+  ninus: string[],
+  enabled: boolean
+) {
+  return useQuery<Applicant[]>({
+    queryKey: ["contract-import", "identity-matches", workspaceId, nifs, ninus],
+    queryFn: () => provider.applicants.findManyByNifOrNinu(workspaceId, nifs, ninus),
+    enabled: enabled && Boolean(workspaceId) && (nifs.length > 0 || ninus.length > 0),
+    staleTime: 30_000,
+    retry: 1
+  });
+}
+
 const IMPORT_BATCH_SIZE = 200;
 
 function batchesOf<T>(items: T[], size: number) {
@@ -385,32 +404,74 @@ export function useImportContracts() {
       workspaceId,
       dossierId,
       responsibleUserId,
+      fiscalYear,
       rows,
       onProgress
     }: {
       workspaceId: string;
       dossierId: string | null;
       responsibleUserId: string;
+      fiscalYear: string;
       rows: ContractImportDraft[];
       onProgress?: (progress: ContractImportProgress) => void;
     }) => {
-      const applicantRows = new Map<string, ContractImportDraft>();
-      for (const row of rows) {
-        applicantRows.set(row.nif, row);
+      const importedNifs = Array.from(new Set(rows.map((row) => row.nif)));
+      const importedNinus = Array.from(
+        new Set(rows.map((row) => row.ninu).filter((value): value is string => Boolean(value)))
+      );
+      const existingApplicants = await provider.applicants.findManyByNifOrNinu(
+        workspaceId,
+        importedNifs,
+        importedNinus
+      );
+      const identityIssues = getContractImportIdentityIssues(rows, existingApplicants);
+      const conflicts = identityIssues
+        .map((issue, index) => ({ index, errors: issue.errors }))
+        .filter((issue) => issue.errors.length > 0);
+      if (conflicts.length > 0) {
+        const firstConflict = conflicts[0];
+        throw new Error(
+          `Conflit NIF/NINU sur ${conflicts.length} ligne(s). Ligne ${firstConflict.index + 1} de la sélection : ${firstConflict.errors.join(" ")}`
+        );
       }
 
-      const applicantInputs: UpsertApplicantInput[] = Array.from(applicantRows.values()).map(
-        (row) => ({
-          workspaceId,
-          gender: row.gender,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          nif: row.nif,
-          ninu: row.ninu,
-          address: row.address,
-          createdBy: responsibleUserId
-        })
+      const existingByNif = new Map(
+        existingApplicants.map((applicant) => [
+          (applicant.nif || applicant.id).replace(/\D/g, ""),
+          applicant
+        ])
       );
+      const applicantInputsByNif = new Map<string, UpsertApplicantInput>();
+      for (const row of rows) {
+        const nifKey = row.nif.replace(/\D/g, "");
+        const existing = existingByNif.get(nifKey);
+        if (!existing) {
+          applicantInputsByNif.set(nifKey, {
+            workspaceId,
+            gender: row.gender,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            nif: row.nif,
+            ninu: row.ninu,
+            address: row.address,
+            createdBy: responsibleUserId
+          });
+        } else if (!existing.ninu && row.ninu) {
+          applicantInputsByNif.set(nifKey, {
+            id: existing.id,
+            workspaceId,
+            gender: existing.gender,
+            firstName: existing.firstName,
+            lastName: existing.lastName,
+            nif: existing.nif || existing.id,
+            ninu: row.ninu,
+            address: existing.address,
+            createdBy: existing.createdBy
+          });
+        }
+      }
+
+      const applicantInputs = Array.from(applicantInputsByNif.values());
       let preparedApplicants = 0;
       onProgress?.({ phase: "applicants", completed: 0, total: applicantInputs.length });
       for (const batch of batchesOf(applicantInputs, IMPORT_BATCH_SIZE)) {
@@ -425,7 +486,7 @@ export function useImportContracts() {
 
       const contractInputs: CreateContractInput[] = rows.map((row) => ({
         workspaceId,
-        annee_fiscale: getStoredFiscalYear(),
+        annee_fiscale: fiscalYear,
         applicantId: row.nif,
         dossierId,
         status: "saisie",

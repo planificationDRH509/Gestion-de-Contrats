@@ -84,6 +84,42 @@ function repositoryError(message: string, cause?: unknown): Error {
   return error;
 }
 
+function chunksOf<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function applicantImportError(cause: unknown): Error {
+  const details =
+    cause && typeof cause === "object"
+      ? ["message", "details", "hint"]
+          .map((key) => (cause as Record<string, unknown>)[key])
+          .filter((value): value is string => typeof value === "string")
+          .join(" ")
+      : "";
+  const duplicateValue = details.match(/Key \((nif|ninu)\)=\(([^)]+)\)/i);
+  const field = duplicateValue?.[1]?.toUpperCase();
+  const value = duplicateValue?.[2];
+
+  if (field === "NINU") {
+    return repositoryError(
+      `Conflit d'identification : le NINU${value ? ` ${value}` : ""} existe déjà dans la base pour un autre NIF.`,
+      cause
+    );
+  }
+  if (field === "NIF" || /duplicate key|unique constraint|23505/i.test(details)) {
+    return repositoryError(
+      `Conflit d'identification : le ${field ?? "NIF ou NINU"}${value ? ` ${value}` : ""} existe déjà dans la base.`,
+      cause
+    );
+  }
+
+  return repositoryError("Impossible d'enregistrer les fiches d'identification importées.", cause);
+}
+
 function mapApplicant(row: any): Applicant {
   return {
     id: row.nif,
@@ -231,6 +267,45 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     return mapApplicant(data);
   }
 
+  async findManyByNifOrNinu(
+    workspaceId: string,
+    nifs: string[],
+    ninus: string[]
+  ): Promise<Applicant[]> {
+    const client = getSupabaseClient();
+    const uniqueNifs = Array.from(new Set(nifs.map((value) => value.trim()).filter(Boolean)));
+    const uniqueNinus = Array.from(new Set(ninus.map((value) => value.trim()).filter(Boolean)));
+    const queryBatches: Array<PromiseLike<{ data: any[] | null; error: any }>> = [];
+
+    for (const values of chunksOf(uniqueNifs, 200)) {
+      queryBatches.push(
+        client
+          .from("identification")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .in("nif", values)
+      );
+    }
+    for (const values of chunksOf(uniqueNinus, 200)) {
+      queryBatches.push(
+        client
+          .from("identification")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .in("ninu", values)
+      );
+    }
+
+    const matches = new Map<string, Applicant>();
+    for (const { data, error } of await Promise.all(queryBatches)) {
+      if (error || !data) {
+        throw repositoryError("Impossible de vérifier les NIF et NINU importés.", error);
+      }
+      data.map(mapApplicant).forEach((applicant) => matches.set(applicant.id, applicant));
+    }
+    return Array.from(matches.values());
+  }
+
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     const client = getSupabaseClient();
     const nif = (input.nif || input.id || "").trim();
@@ -345,9 +420,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       .upsert(payloads as any, { onConflict: "nif" }) as any)
       .select("*");
 
-    if (error || !data) {
-      throw repositoryError("Impossible d'enregistrer les postulants importés.", error);
-    }
+    if (error || !data) throw applicantImportError(error);
     return (Array.isArray(data) ? data : [data]).map(mapApplicant);
   }
 
@@ -1586,6 +1659,21 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.findByNifOrNinu(workspaceId, nif, ninu);
+    }
+  }
+
+  async findManyByNifOrNinu(
+    workspaceId: string,
+    nifs: string[],
+    ninus: string[]
+  ): Promise<Applicant[]> {
+    try {
+      const applicants = await this.remote.findManyByNifOrNinu(workspaceId, nifs, ninus);
+      cacheApplicants(applicants);
+      return applicants;
+    } catch (error) {
+      if (!isOfflineFailure(error)) throw error;
+      return this.local.findManyByNifOrNinu(workspaceId, nifs, ninus);
     }
   }
 
