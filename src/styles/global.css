@@ -1294,6 +1294,31 @@ img {
   gap: 6px;
 }
 
+.contract-title-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contract-title-line .section-title {
+  margin: 0;
+}
+
+.contract-clear-form-btn {
+  color: var(--danger);
+}
+
+.contract-title-line .contract-clear-form-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.contract-clear-form-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .contracts-sheet-fullscreen-active {
   overflow: hidden;
 }

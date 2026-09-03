@@ -649,6 +649,24 @@ export function ContractNewPage() {
     }
   }
 
+  function handleClearForm() {
+    if (isSubmitting) return;
+
+    reset(defaultValues);
+    clearUnsavedDraft(unsavedDraftKey);
+    setSelectedTags([]);
+    setAvailableSalaries([]);
+    setNifAlert({ type: null, message: "" });
+    setFieldsLockedByNif(false);
+    setMsppModalOpen(false);
+    setMsppHtml("");
+    setMsppLoading(false);
+    setServerError(null);
+    setSuccessMessage(null);
+    lastProcessedNif.current = null;
+    requestAnimationFrame(() => setFocus("nif"));
+  }
+
   const sheetControls = isSheetMode ? (
     <div className="sheet-top-controls" aria-label="Options du tableur">
       <button
@@ -702,7 +720,21 @@ export function ContractNewPage() {
       <div className="section-header page-header">
         <div>
           <span className="page-eyebrow">Contrats</span>
-          <h1 className="section-title">Nouveau contrat</h1>
+          <div className="contract-title-line">
+            <h1 className="section-title">Nouveau contrat</h1>
+            {!isSheetMode ? (
+              <button
+                type="button"
+                className="icon-btn contract-clear-form-btn"
+                title="Effacer les informations saisies"
+                aria-label="Effacer les informations saisies"
+                onClick={handleClearForm}
+                disabled={isSubmitting}
+              >
+                <span className="material-symbols-rounded">delete_sweep</span>
+              </button>
+            ) : null}
+          </div>
           <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
             <span className="material-symbols-rounded">calendar_month</span>
             Année fiscale {fiscalYear}
