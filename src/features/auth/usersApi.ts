@@ -25,6 +25,31 @@ export function isMissingRoleColumn(error: { code?: string; message?: string } |
   );
 }
 
+export function getAppUserCreationErrorMessage(error: unknown): string {
+  const details =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; message?: unknown })
+      : null;
+  const code = typeof details?.code === "string" ? details.code : "";
+  const message =
+    typeof details?.message === "string"
+      ? details.message
+      : error instanceof Error
+        ? error.message
+        : "";
+
+  if (code === "23505" || /duplicate key|app_users_username_key/i.test(message)) {
+    return "Ce nom d’utilisateur existe déjà. Choisissez-en un autre.";
+  }
+  if (code === "42501" || /row-level security|permission denied/i.test(message)) {
+    return "La création de comptes est bloquée par les permissions Supabase.";
+  }
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return "Impossible de joindre le serveur. Vérifiez la connexion puis réessayez.";
+  }
+  return message || "Erreur Supabase inconnue.";
+}
+
 function mapAppUser(item: AppUserRow): AppUser {
   return {
     id: item.id,

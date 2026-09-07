@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import { getDefaultWorkspace } from "../../data/local/workspaces";
 import type { AppUser } from "../../data/types";
-import { fetchAppUsers, isMissingRoleColumn } from "../auth/usersApi";
+import {
+  fetchAppUsers,
+  getAppUserCreationErrorMessage,
+  isMissingRoleColumn
+} from "../auth/usersApi";
 import { useAuth } from "../auth/auth";
 import {
   APP_ROLES,
@@ -72,32 +76,35 @@ export function UserManagementPage() {
 
     setIsSubmitting(true);
     setMessage(null);
-    const supabase = getSupabaseClient();
-    const payload = {
-      username: username.trim(),
-      full_name: fullName.trim(),
-      password,
-      workspaces: [getDefaultWorkspace().id]
-    };
-    let roleColumnMissing = false;
-    let { error } = await supabase.from("app_users").insert(
-      roleColumnAvailable ? { ...payload, role } : payload
-    );
+    try {
+      const supabase = getSupabaseClient();
+      const payload = {
+        username: username.trim(),
+        full_name: fullName.trim(),
+        password,
+        workspaces: [getDefaultWorkspace().id]
+      };
+      let roleColumnMissing = false;
+      let { error } = await supabase.from("app_users").insert(
+        roleColumnAvailable ? { ...payload, role } : payload
+      );
 
-    // Allow account creation before the role migration, while making it clear
-    // that the selected role cannot be stored until the migration is applied.
-    if (error && isMissingRoleColumn(error)) {
-      roleColumnMissing = true;
-      ({ error } = await supabase.from("app_users").insert(payload));
-      setRoleColumnAvailable(false);
-    }
+      // Allow account creation before the role migration, while making it clear
+      // that the selected role cannot be stored until the migration is applied.
+      if (error && isMissingRoleColumn(error)) {
+        roleColumnMissing = true;
+        ({ error } = await supabase.from("app_users").insert(payload));
+        setRoleColumnAvailable(false);
+      }
 
-    if (error) {
-      setMessage({
-        type: "error",
-        text: `Erreur lors de la création : ${error.message}`
-      });
-    } else {
+      if (error) {
+        setMessage({
+          type: "error",
+          text: getAppUserCreationErrorMessage(error)
+        });
+        return;
+      }
+
       setUsername("");
       setFullName("");
       setPassword("");
@@ -109,8 +116,14 @@ export function UserManagementPage() {
           : "Utilisateur créé avec succès."
       });
       await fetchUsers();
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: getAppUserCreationErrorMessage(error)
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   }
 
   async function updateRole(target: AppUser, nextRole: AppRole) {
