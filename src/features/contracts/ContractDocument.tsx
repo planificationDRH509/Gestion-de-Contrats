@@ -7,7 +7,15 @@ import {
   subscribeTemplate
 } from "../settings/contractTemplate";
 
-export function ContractDocument({ contract }: { contract: Contract }) {
+export type ContractPageSelection = "all" | "first" | "fourth";
+
+export function ContractDocument({
+  contract,
+  pageSelection = "all"
+}: {
+  contract: Contract;
+  pageSelection?: ContractPageSelection;
+}) {
   const [template, setTemplate] = useState(() => loadTemplate());
 
   useEffect(() => {
@@ -20,7 +28,11 @@ export function ContractDocument({ contract }: { contract: Contract }) {
   }, [contract, template.html]);
 
   return (
-    <div className="contract-document" data-theme="light">
+    <div
+      className="contract-document"
+      data-theme="light"
+      data-contract-page-selection={pageSelection}
+    >
       <style>{template.css}</style>
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>

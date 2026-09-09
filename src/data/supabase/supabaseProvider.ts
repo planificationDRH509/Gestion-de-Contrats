@@ -129,6 +129,7 @@ function mapApplicant(row: any): Applicant {
     lastName: row.nom,
     nif: row.nif,
     ninu: row.ninu,
+    phone: row.telephone,
     address: row.adresse,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
@@ -334,6 +335,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
         prenom: formattedFirstName,
         nom: formattedLastName,
         ninu: input.ninu || null,
+        telephone: input.phone?.trim() || null,
         adresse: input.address,
         created_by: input.createdBy
       };
@@ -365,6 +367,12 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     // For ninu: only update if a new value is provided AND it differs
     if (input.ninu && input.ninu !== existing.ninu) {
       changes.ninu = input.ninu;
+    }
+    if (input.phone !== undefined) {
+      const phone = input.phone?.trim() || null;
+      if (phone !== (existing.telephone || null)) {
+        changes.telephone = phone;
+      }
     }
     if (input.address && input.address !== existing.adresse) {
       changes.adresse = input.address;
@@ -399,6 +407,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
 
     const client = getSupabaseClient();
     const timestamp = new Date().toISOString();
+    const includesPhone = inputs.some((input) => input.phone !== undefined);
     const payloads = inputs.map((input) => ({
       nif: (input.nif || input.id || "").trim(),
       workspace_id: input.workspaceId,
@@ -406,6 +415,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       prenom: formatFirstName(input.firstName),
       nom: formatLastName(input.lastName),
       ninu: input.ninu || null,
+      ...(includesPhone ? { telephone: input.phone?.trim() || null } : {}),
       adresse: input.address,
       updated_at: timestamp,
       deleted_at: null

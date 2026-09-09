@@ -575,6 +575,7 @@ function mapApplicant(row: RawRecord) {
     lastName: asString(row.nom),
     nif: asString(row.nif),
     ninu: asNullableString(row.ninu),
+    phone: asNullableString(row.telephone),
     address: asString(row.adresse),
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
@@ -714,6 +715,7 @@ function getDb(): DatabaseSync {
       prenom TEXT NOT NULL,
       sexe TEXT NOT NULL CHECK (sexe IN ('Homme','Femme')),
       ninu TEXT UNIQUE,
+      telephone TEXT,
       adresse TEXT NOT NULL,
       workspace_id TEXT NOT NULL DEFAULT 'workspace_default',
       created_at TEXT NOT NULL,
@@ -875,6 +877,12 @@ function getDb(): DatabaseSync {
     {
       name: "commune",
       sql: "ALTER TABLE autocompletion ADD COLUMN commune TEXT;"
+    }
+  ]);
+  ensureColumns("identification", [
+    {
+      name: "telephone",
+      sql: "ALTER TABLE identification ADD COLUMN telephone TEXT;"
     }
   ]);
   ensureColumns("dossiers", [
@@ -1437,6 +1445,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const existingId = asNullableString(body.id);
     const nif = asNullableString(body.nif);
     const ninu = asNullableString(body.ninu);
+    const hasPhone = Object.prototype.hasOwnProperty.call(body, "phone");
+    const phone = asNullableString(body.phone);
     const gender = asString(body.gender) as "Homme" | "Femme";
     const firstName = asString(body.firstName).trim();
     const lastName = asString(body.lastName).trim();
@@ -1519,6 +1529,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
             prenom = :prenom,
             sexe = :sexe,
             ninu = :ninu,
+            telephone = :telephone,
             adresse = :adresse,
             workspace_id = :workspace_id,
             updated_at = :updated_at,
@@ -1530,6 +1541,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         prenom: firstName,
         sexe: gender,
         ninu,
+        telephone: hasPhone ? phone : asNullableString(target.telephone),
         adresse: address,
         workspace_id: workspaceId,
         updated_at: timestamp,
@@ -1543,6 +1555,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           prenom,
           sexe,
           ninu,
+          telephone,
           adresse,
           workspace_id,
           created_at,
@@ -1553,6 +1566,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           :prenom,
           :sexe,
           :ninu,
+          :telephone,
           :adresse,
           :workspace_id,
           :created_at,
@@ -1564,6 +1578,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         prenom: firstName,
         sexe: gender,
         ninu,
+        telephone: phone,
         adresse: address,
         workspace_id: workspaceId,
         created_at: timestamp,

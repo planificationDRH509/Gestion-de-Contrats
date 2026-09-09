@@ -3,6 +3,7 @@ type PersonSearchFields = {
   lastName?: string | null;
   nif?: string | null;
   ninu?: string | null;
+  phone?: string | null;
 };
 
 type ContractSearchFields = PersonSearchFields & {
@@ -36,7 +37,7 @@ function matchesFields(values: Array<string | null | undefined>, query: string):
 
 export function matchesPersonSearch(person: PersonSearchFields, query: string): boolean {
   return matchesFields(
-    [person.firstName, person.lastName, person.nif, person.ninu],
+    [person.firstName, person.lastName, person.nif, person.ninu, person.phone],
     query
   );
 }

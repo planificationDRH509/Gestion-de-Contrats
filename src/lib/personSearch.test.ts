@@ -5,7 +5,8 @@ const person = {
   firstName: "Élodie",
   lastName: "Saint-Fleur",
   nif: "123-456-789-0",
-  ninu: "9876543210"
+  ninu: "9876543210",
+  phone: "+509 37 12 3456"
 };
 
 describe("person search", () => {
@@ -19,6 +20,11 @@ describe("person search", () => {
     expect(matchesPersonSearch(person, "1234567890")).toBe(true);
     expect(matchesPersonSearch(person, "123-456")).toBe(true);
     expect(matchesPersonSearch(person, "987 654 3210")).toBe(true);
+  });
+
+  it("matches an optional phone number with or without separators", () => {
+    expect(matchesPersonSearch(person, "37123456")).toBe(true);
+    expect(matchesPersonSearch(person, "+509 37 12")).toBe(true);
   });
 
   it("keeps contract-specific fields searchable", () => {

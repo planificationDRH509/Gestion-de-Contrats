@@ -55,6 +55,7 @@ export type Applicant = {
   lastName: string;
   nif?: string | null;
   ninu?: string | null;
+  phone?: string | null;
   address: string;
   createdAt: string;
   updatedAt: string;

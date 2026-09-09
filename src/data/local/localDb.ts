@@ -123,7 +123,12 @@ function normalizeDb(value: LocalDb): LocalDb {
   return {
     ...value,
     workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
-    applicants: Array.isArray(value.applicants) ? value.applicants : [],
+    applicants: Array.isArray(value.applicants)
+      ? value.applicants.map((applicant) => ({
+          ...applicant,
+          phone: applicant.phone ?? null
+        }))
+      : [],
     dossiers: Array.isArray(value.dossiers)
         ? value.dossiers.map((dossier) => ({
           ...dossier,

@@ -285,6 +285,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     lastName: formatLastName(input.lastName),
     nif: input.nif ?? null,
     ninu: input.ninu ?? null,
+    phone: input.phone !== undefined ? input.phone?.trim() || null : existing?.phone ?? null,
     address: input.address,
     updatedAt: timestamp,
     deletedAt: null,

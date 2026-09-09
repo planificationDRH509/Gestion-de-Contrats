@@ -318,6 +318,7 @@ export type Database = {
           nom: string
           prenom: string
           sexe: string | null
+          telephone: string | null
           updated_at: string | null
           workspace_id: string
         }
@@ -330,6 +331,7 @@ export type Database = {
           nom: string
           prenom: string
           sexe?: string | null
+          telephone?: string | null
           updated_at?: string | null
           workspace_id?: string
         }
@@ -342,6 +344,7 @@ export type Database = {
           nom?: string
           prenom?: string
           sexe?: string | null
+          telephone?: string | null
           updated_at?: string | null
           workspace_id?: string
         }

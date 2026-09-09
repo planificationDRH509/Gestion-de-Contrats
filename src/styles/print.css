@@ -93,6 +93,16 @@
     page-break-before: always !important;
   }
 
+  /* Hidden sheets still count as adjacent siblings for CSS selectors. Remove
+     their inherited break so a page-4-only batch does not start with blanks. */
+  .contract-document[data-contract-page-selection="first"]
+    .contract-sheet[data-page="1"],
+  .contract-document[data-contract-page-selection="fourth"]
+    .contract-sheet[data-page="4"] {
+    break-before: auto !important;
+    page-break-before: auto !important;
+  }
+
   .page-break {
     break-before: page;
     page-break-before: always;
@@ -108,6 +118,14 @@
   max-width: none !important;
   overflow: visible !important;
   white-space: nowrap !important;
+}
+
+/* The grouped-print page can keep only the same sheet from every contract. */
+.contract-document[data-contract-page-selection="first"]
+  .contract-sheet:not([data-page="1"]),
+.contract-document[data-contract-page-selection="fourth"]
+  .contract-sheet:not([data-page="4"]) {
+  display: none !important;
 }
 
 .contract-page {

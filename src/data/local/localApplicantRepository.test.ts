@@ -19,6 +19,7 @@ describe("LocalApplicantRepository offline mutations", () => {
       lastName: "jean",
       nif: "111-222-333-4",
       ninu: "1234567890",
+      phone: "+509 37 12 3456",
       address: "Delmas"
     });
 
@@ -39,12 +40,36 @@ describe("LocalApplicantRepository offline mutations", () => {
     expect(updated.id).toBe("999-888-777-6");
     expect(await repository.getById(created.id)).toBeNull();
     expect((await repository.getById(updated.id))?.lastName).toBe("PIERRE");
+    expect((await repository.getById(updated.id))?.phone).toBe("+509 37 12 3456");
     expect(loadDb().outbox.filter((item) => item.type === "applicant.upsert")).toHaveLength(2);
 
     await repository.softDelete(updated.id, workspaceId);
 
     expect(await repository.list(workspaceId)).toHaveLength(0);
     expect(loadDb().outbox.some((item) => item.type === "applicant.delete")).toBe(true);
+  });
+
+  it("stores, updates and clears an optional phone number", async () => {
+    const repository = new LocalApplicantRepository();
+    const workspaceId = "workspace_phone_test";
+    const baseInput = {
+      workspaceId,
+      gender: "Homme" as const,
+      firstName: "Jean",
+      lastName: "Louis",
+      nif: "100-000-000-4",
+      ninu: null,
+      address: "Delmas"
+    };
+
+    const created = await repository.upsert({ ...baseInput, phone: "  3712-3456  " });
+    expect(created.phone).toBe("3712-3456");
+
+    const preserved = await repository.upsert({ ...baseInput, id: created.id });
+    expect(preserved.phone).toBe("3712-3456");
+
+    const cleared = await repository.upsert({ ...baseInput, id: created.id, phone: null });
+    expect(cleared.phone).toBeNull();
   });
 
   it("upserts an import batch", async () => {

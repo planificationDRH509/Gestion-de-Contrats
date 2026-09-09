@@ -68,7 +68,8 @@ export function savePrintHistory(
 export function appendPrintHistory(
   userId: string,
   workspaceId: string,
-  contracts: Contract[]
+  contracts: Contract[],
+  options: { partial?: boolean } = {}
 ): PrintHistoryEntry[] {
   if (!userId || !workspaceId || contracts.length === 0) return [];
   const existing = loadPrintHistory(userId, workspaceId);
@@ -87,7 +88,7 @@ export function appendPrintHistory(
       ninu: contract.ninu ?? null,
       position: contract.position,
       printedAt: timestamp,
-      partial: false
+      partial: options.partial ?? false
     });
   });
   savePrintHistory(userId, workspaceId, next);

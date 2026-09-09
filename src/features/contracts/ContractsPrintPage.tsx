@@ -1,8 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import { useChangeContractsStatus, useContractsByIds } from "./contractsApi";
-import { ContractDocument } from "./ContractDocument";
+import {
+  ContractDocument,
+  type ContractPageSelection
+} from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
 
 export function ContractsPrintPage() {
@@ -13,6 +16,7 @@ export function ContractsPrintPage() {
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
   const lastAutoPrintedSelectionRef = useRef<string | null>(null);
+  const [pageSelection, setPageSelection] = useState<ContractPageSelection>("all");
 
   const idsParam = searchParams.get("ids") ?? "";
   const ids = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
@@ -24,6 +28,7 @@ export function ContractsPrintPage() {
       !isLoading &&
       data &&
       data.length > 0 &&
+      ids.length === 1 &&
       lastAutoPrintedSelectionRef.current !== printSelectionKey
     ) {
       const timer = setTimeout(() => {
@@ -34,7 +39,7 @@ export function ContractsPrintPage() {
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [isLoading, data, printSelectionKey]);
+  }, [isLoading, data, ids.length, printSelectionKey]);
 
   function handlePrint() {
     lastAutoPrintedSelectionRef.current = printSelectionKey;
@@ -49,27 +54,30 @@ export function ContractsPrintPage() {
         return;
       }
       lastAfterPrintAtRef.current = now;
+      const isPartialPrint = pageSelection !== "all";
+      const nextStatus = isPartialPrint ? "impression_partiel" : "imprime";
+      const nextStatusLabel = isPartialPrint ? "Impression partielle" : "Imprimé";
       if (can("contracts.change_status")) {
         const shouldMarkAsPrinted = window.confirm(
           ids.length === 1
-            ? 'Voulez-vous changer l’état de ce contrat en « Imprimé » ?'
-            : `Voulez-vous changer l’état de ces ${ids.length} contrats en « Imprimé » ?`
+            ? `Voulez-vous changer l’état de ce contrat en « ${nextStatusLabel} » ?`
+            : `Voulez-vous changer l’état de ces ${ids.length} contrats en « ${nextStatusLabel} » ?`
         );
         if (shouldMarkAsPrinted) {
           changeContractsStatus.mutate({
             workspaceId,
             contractIds: ids,
-            status: "imprime"
+            status: nextStatus
           });
         }
       }
       if (user && data && data.length > 0) {
-        appendPrintHistory(user.id, workspaceId, data);
+        appendPrintHistory(user.id, workspaceId, data, { partial: isPartialPrint });
       }
     };
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [ids, workspaceId, changeContractsStatus, user, data, can]);
+  }, [ids, workspaceId, changeContractsStatus, user, data, can, pageSelection]);
 
   if (isLoading) {
     return <div className="card">Chargement des contrats…</div>;
@@ -92,6 +100,41 @@ export function ContractsPrintPage() {
       <div className="section-header no-print">
         <div>
           <div className="section-title">Impression</div>
+          {ids.length > 1 ? (
+            <div className="print-page-selection" role="radiogroup" aria-label="Pages à imprimer">
+              <span className="print-page-selection-label">Pages de chaque contrat :</span>
+              <label className={pageSelection === "all" ? "is-active" : ""}>
+                <input
+                  type="radio"
+                  name="contract-pages"
+                  value="all"
+                  checked={pageSelection === "all"}
+                  onChange={() => setPageSelection("all")}
+                />
+                Les 4 pages
+              </label>
+              <label className={pageSelection === "first" ? "is-active" : ""}>
+                <input
+                  type="radio"
+                  name="contract-pages"
+                  value="first"
+                  checked={pageSelection === "first"}
+                  onChange={() => setPageSelection("first")}
+                />
+                Page 1 seulement
+              </label>
+              <label className={pageSelection === "fourth" ? "is-active" : ""}>
+                <input
+                  type="radio"
+                  name="contract-pages"
+                  value="fourth"
+                  checked={pageSelection === "fourth"}
+                  onChange={() => setPageSelection("fourth")}
+                />
+                Page 4 seulement
+              </label>
+            </div>
+          ) : null}
         </div>
         <div className="toolbar">
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
@@ -104,7 +147,11 @@ export function ContractsPrintPage() {
       </div>
 
       {pages.map((item) => (
-        <ContractDocument key={item.key} contract={item.contract} />
+        <ContractDocument
+          key={item.key}
+          contract={item.contract}
+          pageSelection={pageSelection}
+        />
       ))}
     </div>
   );

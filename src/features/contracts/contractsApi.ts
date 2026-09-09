@@ -465,6 +465,7 @@ export function useImportContracts() {
             lastName: existing.lastName,
             nif: existing.nif || existing.id,
             ninu: row.ninu,
+            phone: existing.phone,
             address: existing.address,
             createdBy: existing.createdBy
           });

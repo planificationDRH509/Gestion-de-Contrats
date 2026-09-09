@@ -13,12 +13,13 @@ const mocks = vi.hoisted(() => ({
   ],
   canChangeStatus: true,
   mutate: vi.fn(),
-  navigate: vi.fn()
+  navigate: vi.fn(),
+  searchParams: "ids=contract-1"
 }));
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mocks.navigate,
-  useSearchParams: () => [new URLSearchParams("ids=contract-1")]
+  useSearchParams: () => [new URLSearchParams(mocks.searchParams)]
 }));
 
 vi.mock("../auth/auth", () => ({
@@ -34,7 +35,9 @@ vi.mock("./contractsApi", () => ({
 }));
 
 vi.mock("./ContractDocument", () => ({
-  ContractDocument: () => <div>Contrat</div>
+  ContractDocument: ({ pageSelection }: { pageSelection: string }) => (
+    <div data-testid="contract-document" data-page-selection={pageSelection}>Contrat</div>
+  )
 }));
 
 vi.mock("../../lib/printHistory", () => ({
@@ -57,6 +60,7 @@ describe("ContractsPrintPage", () => {
     mocks.mutate.mockReset();
     mocks.navigate.mockReset();
     mocks.canChangeStatus = true;
+    mocks.searchParams = "ids=contract-1";
     vi.spyOn(window, "print").mockImplementation(() => undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
@@ -98,6 +102,54 @@ describe("ContractsPrintPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
 
     expect(window.print).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for the page choice before printing a group", () => {
+    mocks.searchParams = "ids=contract-1,contract-2";
+    mocks.contracts = [
+      mocks.contracts[0],
+      { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }
+    ];
+    render(<ContractsPrintPage />);
+
+    act(() => vi.advanceTimersByTime(300));
+    expect(window.print).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "Les 4 pages" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Page 4 seulement" }));
+    screen.getAllByTestId("contract-document").forEach((document) => {
+      expect(document).toHaveAttribute("data-page-selection", "fourth");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
+    expect(window.print).toHaveBeenCalledOnce();
+  });
+
+  it("marks a one-page group print as partial", () => {
+    mocks.searchParams = "ids=contract-1,contract-2";
+    mocks.contracts = [
+      mocks.contracts[0],
+      { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }
+    ];
+    render(<ContractsPrintPage />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Page 1 seulement" }));
+    act(() => window.dispatchEvent(new Event("afterprint")));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Voulez-vous changer l’état de ces 2 contrats en « Impression partielle » ?'
+    );
+    expect(mocks.mutate).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contractIds: ["contract-1", "contract-2"],
+      status: "impression_partiel"
+    });
+    expect(mocks.appendPrintHistory).toHaveBeenCalledWith(
+      "user-1",
+      "workspace-1",
+      mocks.contracts,
+      { partial: true }
+    );
   });
 
   it("asks before changing the contract status after printing", () => {

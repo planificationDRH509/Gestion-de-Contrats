@@ -14,7 +14,7 @@ import {
   IdentificationRow
 } from "./identificationApi";
 
-type SpreadsheetFieldKey = "nif" | "firstName" | "lastName" | "gender" | "ninu" | "address";
+type SpreadsheetFieldKey = "nif" | "firstName" | "lastName" | "gender" | "ninu" | "phone" | "address";
 
 type SpreadsheetDraft = {
   nif: string;
@@ -22,6 +22,7 @@ type SpreadsheetDraft = {
   lastName: string;
   gender: Gender | "";
   ninu: string;
+  phone: string;
   address: string;
 };
 
@@ -43,6 +44,7 @@ const COLUMNS: SpreadsheetColumn[] = [
   { key: "lastName", label: "Nom", width: 160, min: 120 },
   { key: "gender", label: "Sexe", width: 100, min: 80 },
   { key: "ninu", label: "NINU", width: 160, min: 140 },
+  { key: "phone", label: "Téléphone", width: 170, min: 140 },
   { key: "address", label: "Adresse", width: 300, min: 200 },
 ];
 
@@ -52,11 +54,12 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
   lastName: "",
   gender: "",
   ninu: "",
+  phone: "",
   address: "",
 };
 
 const EMPTY_NEW_ROWS_COUNT = 5;
-const NAVIGABLE_COLUMN_COUNT = 6;
+const NAVIGABLE_COLUMN_COUNT = 7;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT };
@@ -91,6 +94,7 @@ function toDraft(row: IdentificationRow): SpreadsheetDraft {
     lastName: row.nom,
     gender: (row.sexe as Gender) || "Homme",
     ninu: row.ninu || "",
+    phone: row.telephone || "",
     address: row.adresse,
   };
 }
@@ -101,6 +105,7 @@ function isDraftEmpty(draft: SpreadsheetDraft): boolean {
     !draft.firstName.trim() &&
     !draft.lastName.trim() &&
     !draft.ninu.trim() &&
+    !draft.phone.trim() &&
     !draft.address.trim()
   );
 }
@@ -112,6 +117,7 @@ function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
     lastName: formatLastName(draft.lastName),
     gender: draft.gender === "Femme" ? "Femme" : draft.gender === "Homme" ? "Homme" : "",
     ninu: formatNinuInput(draft.ninu),
+    phone: draft.phone.trim(),
     address: draft.address.trim(),
   };
 }
@@ -167,7 +173,8 @@ export function IdentificationSpreadsheetView({
       firstName: identity.prenom,
       lastName: identity.nom,
       nif: identity.nif,
-      ninu: identity.ninu
+      ninu: identity.ninu,
+      phone: identity.telephone
     }, searchQuery));
   }, [identities, searchQuery]);
 
@@ -435,6 +442,7 @@ export function IdentificationSpreadsheetView({
         nom: candidate.lastName,
         sexe: candidate.gender as Gender,
         ninu: candidate.ninu || null,
+        telephone: candidate.phone || null,
         adresse: candidate.address,
         workspace_id: workspaceId,
         created_by: userId
@@ -500,6 +508,7 @@ export function IdentificationSpreadsheetView({
         nom: candidate.lastName,
         sexe: candidate.gender as Gender,
         ninu: candidate.ninu || null,
+        telephone: candidate.phone || null,
         adresse: candidate.address,
       });
 
@@ -698,7 +707,7 @@ export function IdentificationSpreadsheetView({
                       handleGridArrowNavigation(e, row.id, 3);
                     }}
                   />
-                   <input
+                  <input
                     data-sheet-row={row.id}
                     data-sheet-col={4}
                     className="input contracts-sheet-input"
@@ -712,15 +721,27 @@ export function IdentificationSpreadsheetView({
                     onBlur={() => handleSaveNew(row.id)}
                     onKeyDown={e => handleGridArrowNavigation(e, row.id, 4)}
                   />
+                  <input
+                    data-sheet-row={row.id}
+                    data-sheet-col={5}
+                    type="tel"
+                    inputMode="tel"
+                    className="input contracts-sheet-input"
+                    value={row.draft.phone}
+                    placeholder="Téléphone (facultatif)"
+                    onChange={e => setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, phone: e.target.value } } : r))}
+                    onBlur={() => handleSaveNew(row.id)}
+                    onKeyDown={e => handleGridArrowNavigation(e, row.id, 5)}
+                  />
                   <AutocompleteField
                     dataSheetRow={row.id}
-                    dataSheetCol={5}
+                    dataSheetCol={6}
                     className="input contracts-sheet-input"
                     value={row.draft.address}
                     placeholder="Adresse"
                     onChange={val => setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, address: val } } : r))}
                     onBlur={() => handleSaveNew(row.id)}
-                    onKeyDown={e => handleGridArrowNavigation(e, row.id, 5)}
+                    onKeyDown={e => handleGridArrowNavigation(e, row.id, 6)}
                     items={addressItems}
                     pinCategory="address"
                   />
@@ -855,16 +876,31 @@ export function IdentificationSpreadsheetView({
                             handleGridArrowNavigation(e, identity.nif, 4);
                           }}
                         />
+                        <input
+                          data-sheet-row={identity.nif}
+                          data-sheet-col={5}
+                          type="tel"
+                          inputMode="tel"
+                          className="input contracts-sheet-input editing"
+                          value={draft.phone}
+                          placeholder="Téléphone (facultatif)"
+                          onChange={e => setExistingField(identity.nif, "phone", e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSaveExisting(identity.nif);
+                            if (e.key === "Escape") cancelEditing(identity.nif);
+                            handleGridArrowNavigation(e, identity.nif, 5);
+                          }}
+                        />
                         <AutocompleteField
                           dataSheetRow={identity.nif}
-                          dataSheetCol={5}
+                          dataSheetCol={6}
                           className="input contracts-sheet-input editing"
                           value={draft.address}
                           onChange={val => setExistingField(identity.nif, "address", val)}
                           onKeyDown={e => {
                             if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
-                            handleGridArrowNavigation(e, identity.nif, 5);
+                            handleGridArrowNavigation(e, identity.nif, 6);
                           }}
                           items={addressItems}
                           pinCategory="address"
@@ -877,6 +913,7 @@ export function IdentificationSpreadsheetView({
                         <div className="contracts-sheet-cell-text">{identity.nom}</div>
                         <div className="contracts-sheet-cell-text">{identity.sexe}</div>
                         <div className="contracts-sheet-cell-text">{identity.ninu || "-"}</div>
+                        <div className="contracts-sheet-cell-text">{identity.telephone || "-"}</div>
                         <div className="contracts-sheet-cell-text is-secondary">{identity.adresse}</div>
                       </>
                     )}

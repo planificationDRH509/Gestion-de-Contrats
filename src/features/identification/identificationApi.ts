@@ -14,6 +14,7 @@ function mapApplicant(applicant: Applicant): IdentificationRow {
     prenom: applicant.firstName,
     sexe: applicant.gender,
     ninu: applicant.ninu ?? null,
+    telephone: applicant.phone ?? null,
     adresse: applicant.address,
     workspace_id: applicant.workspaceId,
     created_at: applicant.createdAt,
@@ -31,6 +32,7 @@ export interface IdentificationRow {
   prenom: string;
   sexe: string | null;
   ninu: string | null;
+  telephone: string | null;
   adresse: string;
   workspace_id: string;
   created_at: string;
@@ -45,6 +47,7 @@ export interface CreateIdentificationInput {
   prenom: string;
   sexe: Gender;
   ninu: string | null;
+  telephone: string | null;
   adresse: string;
   workspace_id: string;
   created_by?: string | null;
@@ -58,6 +61,7 @@ export interface UpdateIdentificationInput {
   prenom?: string;
   sexe?: Gender;
   ninu?: string | null;
+  telephone?: string | null;
   adresse?: string;
 }
 
@@ -100,6 +104,7 @@ export function useCreateIdentification() {
         lastName: input.nom,
         nif: input.nif,
         ninu: input.ninu,
+        phone: input.telephone,
         address: input.adresse,
         createdBy: input.created_by ?? null
       }));
@@ -124,6 +129,7 @@ export function useUpdateIdentification() {
         lastName: input.nom ?? current.lastName,
         nif: input.nif ?? current.nif ?? current.id,
         ninu: input.ninu !== undefined ? input.ninu : current.ninu,
+        phone: input.telephone !== undefined ? input.telephone : current.phone,
         address: input.adresse ?? current.address,
         createdBy: current.createdBy
       }));
