@@ -77,6 +77,7 @@ import {
   parseContractAudit,
   serializeContractAudit
 } from "../../lib/contractAudit";
+import { buildApplicantInsertPayload } from "./applicantPayload";
 
 function repositoryError(message: string, cause?: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -328,17 +329,11 @@ class SupabaseApplicantRepository implements ApplicantRepository {
 
     if (!existing) {
       // ── 2a. NIF not found → INSERT ────────────────────────────────────
-      const payload = {
-        nif,
-        workspace_id: input.workspaceId,
-        sexe: input.gender,
-        prenom: formattedFirstName,
-        nom: formattedLastName,
-        ninu: input.ninu || null,
-        telephone: input.phone?.trim() || null,
-        adresse: input.address,
-        created_by: input.createdBy
-      };
+      const payload = buildApplicantInsertPayload(
+        input,
+        formattedFirstName,
+        formattedLastName
+      );
 
       const { data, error } = await (client
         .from("identification")
