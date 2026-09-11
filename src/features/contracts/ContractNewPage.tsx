@@ -43,6 +43,7 @@ import { isPastFiscalYear } from "../../lib/contractDateFilters";
 
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
 const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
+const SHEET_ZOOM_MODE_STORAGE_KEY = "new_contract_sheet_zoom_mode_v2";
 
 function readStoredPageSize(key: string, fallback = 25) {
   const value = Number(localStorage.getItem(key));
@@ -83,7 +84,7 @@ export function ContractNewPage() {
   const userId = user?.id ?? "";
   const { data: dossiers = [] } = useDossiersList(workspaceId);
   const [sheetZoomMode, setSheetZoomMode] = useState<SpreadsheetZoomMode>(
-    () => (localStorage.getItem("new_contract_sheet_zoom_mode") === "fit" ? "fit" : "custom")
+    () => (localStorage.getItem(SHEET_ZOOM_MODE_STORAGE_KEY) === "custom" ? "custom" : "fit")
   );
   const [sheetZoomPercent, setSheetZoomPercent] = useState(() => {
     const value = Number(localStorage.getItem("new_contract_sheet_zoom_percent"));
@@ -380,7 +381,7 @@ export function ContractNewPage() {
   }, [entryMode]);
 
   useEffect(() => {
-    localStorage.setItem("new_contract_sheet_zoom_mode", sheetZoomMode);
+    localStorage.setItem(SHEET_ZOOM_MODE_STORAGE_KEY, sheetZoomMode);
   }, [sheetZoomMode]);
 
   useEffect(() => {

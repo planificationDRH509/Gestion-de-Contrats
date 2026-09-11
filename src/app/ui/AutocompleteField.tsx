@@ -16,6 +16,7 @@ export type AutocompleteItem = {
 
 type AutocompleteDisplayItem = AutocompleteItem & {
   isCustom?: boolean;
+  isFeatured?: boolean;
   isRecent?: boolean;
   matchStart?: number;
   matchLength?: number;
@@ -43,7 +44,7 @@ interface AutocompleteFieldProps {
   showAllOnFocus?: boolean;
   /** Error styling */
   hasError?: boolean;
-  /** Max shortcuts shown (1-9). Defaults to 9. */
+  /** Max shortcuts shown (Alt+1…Alt+9, then Alt+0). Defaults to 10. */
   maxShortcuts?: number;
   /** Featured item (last chosen value) to show at the top */
   featuredItem?: AutocompleteItem;
@@ -83,7 +84,7 @@ export function AutocompleteField({
   name,
   showAllOnFocus = true,
   hasError = false,
-  maxShortcuts = 9,
+  maxShortcuts = 10,
   featuredItem,
   pinCategory,
   onBlur,
@@ -121,8 +122,25 @@ export function AutocompleteField({
   const visibleItems = useMemo<AutocompleteDisplayItem[]>(() => {
     if (!open) return [];
 
-    const exactMatch = q ? items.find(it => normalize(it.label) === q) : null;
-    const scored = items
+    const featuredKey = featuredItem
+      ? `${normalize(featuredItem.label)}\u0000${normalize(featuredItem.sublabel ?? "")}`
+      : null;
+    let hasFeaturedCandidate = false;
+    const candidates: AutocompleteDisplayItem[] = items.map((item) => {
+      const itemKey = `${normalize(item.label)}\u0000${normalize(item.sublabel ?? "")}`;
+      const isFeatured = Boolean(featuredItem) && (
+        item.id === featuredItem?.id || itemKey === featuredKey
+      );
+      if (isFeatured) hasFeaturedCandidate = true;
+      return { ...item, isFeatured };
+    });
+
+    if (featuredItem && !hasFeaturedCandidate) {
+      candidates.push({ ...featuredItem, isFeatured: true });
+    }
+
+    const exactMatch = q ? candidates.find(it => normalize(it.label) === q) : null;
+    const scored = candidates
       .map((item): ScoredAutocompleteItem | null => {
         const normalizedLabel = normalize(item.label);
         const matchStart = q ? normalizedLabel.indexOf(q) : -1;
@@ -139,7 +157,10 @@ export function AutocompleteField({
         if (startsWithQuery) score += 500;
         else if (wordStartsWithQuery) score += 350;
         else if (q) score += 150 - Math.min(matchStart, 100);
-        if (isRecent) score += 80 - recentIndex;
+        // A contextual probability signal must beat recency. Recency is only a
+        // tie-breaker, as in spreadsheet-style autocomplete.
+        if (isRecent) score += 8 - recentIndex;
+        if (item.isFeatured && !q) score += 2000;
         score += item.rankingBoost ?? 0;
         score -= item.label.length / 100;
 
@@ -169,14 +190,6 @@ export function AutocompleteField({
       return true;
     });
 
-    if (featuredItem) {
-      const featuredKey = `${normalize(featuredItem.label)}\u0000${normalize(featuredItem.sublabel ?? "")}`;
-      filtered = filtered.filter((item) => {
-        const itemKey = `${normalize(item.label)}\u0000${normalize(item.sublabel ?? "")}`;
-        return item.id !== featuredItem.id && itemKey !== featuredKey;
-      });
-    }
-
     const customItem: AutocompleteDisplayItem | null = q && !exactMatch
       ? {
           id: `__custom_${q}`,
@@ -185,12 +198,11 @@ export function AutocompleteField({
           isCustom: true,
         }
       : null;
-    const baseItems = featuredItem ? [featuredItem, ...filtered] : filtered;
     if (q && !exactMatch) {
-      return customItem ? [...baseItems, customItem] : baseItems;
+      return customItem ? [...filtered, customItem] : filtered;
     }
 
-    return baseItems;
+    return filtered;
   }, [open, items, q, showAllOnFocus, featuredItem, pinnedIds, recentIds, value]);
 
   // Close on outside click
@@ -209,7 +221,7 @@ export function AutocompleteField({
     if (activeIndex >= 0 && listRef.current) {
       const els = listRef.current.children;
       if (els[activeIndex]) {
-        (els[activeIndex] as HTMLElement).scrollIntoView({ block: "nearest" });
+        (els[activeIndex] as HTMLElement).scrollIntoView?.({ block: "nearest" });
       }
     }
   }, [activeIndex]);
@@ -225,9 +237,36 @@ export function AutocompleteField({
     setOpen(false);
     setActiveIndex(-1);
     
-    if (onAfterSelect) {
-      setTimeout(onAfterSelect, 0);
-    }
+    setTimeout(() => {
+      if (onAfterSelect) {
+        onAfterSelect();
+        return;
+      }
+
+      const input = inputRef.current;
+      if (!input) return;
+
+      if (dataSheetRow !== undefined && dataSheetCol !== undefined) {
+        const sheetFields = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-sheet-row][data-sheet-col]")
+        );
+        const nextSheetField = sheetFields.find(
+          (field) =>
+            field.dataset.sheetRow === dataSheetRow &&
+            Number(field.dataset.sheetCol) === dataSheetCol + 1
+        );
+        nextSheetField?.focus();
+        return;
+      }
+
+      const focusableFields = Array.from(
+        (input.form ?? document).querySelectorAll<HTMLElement>(
+          "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        )
+      ).filter((field) => !(field instanceof HTMLInputElement && field.readOnly));
+      const currentIndex = focusableFields.indexOf(input);
+      focusableFields[currentIndex + 1]?.focus();
+    }, 0);
   }
 
   const handleKeyDown = useCallback(
@@ -239,30 +278,20 @@ export function AutocompleteField({
           ? Number(e.key)
           : null;
       const canUseNumericShortcuts =
-        e.ctrlKey &&
-        !e.altKey &&
+        e.altKey &&
+        !e.ctrlKey &&
         !e.metaKey &&
         !e.shiftKey &&
         !Boolean(e.nativeEvent.isComposing);
 
-      // Ctrl+0 picks the featured item.
-      if (canUseNumericShortcuts && open && featuredItem && shortcutDigit === 0) {
-        e.preventDefault();
-        selectItem(featuredItem);
-        return;
-      }
-
-      // Ctrl+1 through Ctrl+9 pick the corresponding item while bare digits
-      // and Alt/Option combinations remain available for normal text entry.
+      // The displayed order maps to Alt+1…Alt+9, then Alt+0 for item 10.
       if (canUseNumericShortcuts && open && visibleItems.length > 0 && shortcutDigit !== null) {
-        if (shortcutDigit >= 1 && shortcutDigit <= maxShortcuts) {
-          const offset = featuredItem ? 0 : -1;
-          const targetIndex = shortcutDigit + offset;
-          if (targetIndex >= 0 && targetIndex < visibleItems.length) {
-            e.preventDefault();
-            selectItem(visibleItems[targetIndex]);
-            return;
-          }
+        const targetIndex = shortcutDigit === 0 ? 9 : shortcutDigit - 1;
+        const shortcutLimit = Math.min(maxShortcuts, 10);
+        if (targetIndex >= 0 && targetIndex < shortcutLimit && targetIndex < visibleItems.length) {
+          e.preventDefault();
+          selectItem(visibleItems[targetIndex]);
+          return;
         }
       }
 
@@ -297,14 +326,11 @@ export function AutocompleteField({
           break;
         case "Enter":
           e.preventDefault();
-          if (activeIndex >= 0 && activeIndex < visibleItems.length) {
-            selectItem(visibleItems[activeIndex]);
-          } else if (q) {
-            setOpen(false);
-            setActiveIndex(-1);
-            if (onAfterSelect) {
-              setTimeout(onAfterSelect, 0);
-            }
+          if (visibleItems.length > 0) {
+            const selectedIndex = activeIndex >= 0 && activeIndex < visibleItems.length
+              ? activeIndex
+              : 0;
+            selectItem(visibleItems[selectedIndex]);
           }
           break;
         case "Escape":
@@ -315,7 +341,7 @@ export function AutocompleteField({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, activeIndex, visibleItems, maxShortcuts, featuredItem, enableArrowNavigationInMenu]
+    [open, activeIndex, visibleItems, maxShortcuts, enableArrowNavigationInMenu]
   );
 
   function renderHighlightedLabel(item: AutocompleteDisplayItem) {
@@ -354,12 +380,12 @@ export function AutocompleteField({
         }}
         onFocus={() => {
           setOpen(true);
-          setActiveIndex(-1);
+          setActiveIndex(0);
         }}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
-          setActiveIndex(-1);
+          setActiveIndex(0);
         }}
         onKeyDown={(event) => {
           handleKeyDown(event);
@@ -371,17 +397,10 @@ export function AutocompleteField({
       {open && visibleItems.length > 0 && (
         <div className="autocomplete-dropdown" ref={listRef}>
           {visibleItems.map((item, idx) => {
-            const isFeatured = featuredItem && item.id === featuredItem.id;
-            let shortcutKey = null;
-            if (isFeatured) {
-              shortcutKey = 0;
-            } else {
-              const offset = featuredItem ? 0 : 1;
-              const computedShortcut = idx + offset;
-              if (computedShortcut <= maxShortcuts) {
-                shortcutKey = computedShortcut;
-              }
-            }
+            const isFeatured = Boolean(item.isFeatured);
+            const shortcutKey = idx < Math.min(maxShortcuts, 10)
+              ? (idx === 9 ? 0 : idx + 1)
+              : null;
             
             return (
               <div
@@ -396,7 +415,7 @@ export function AutocompleteField({
                 }}
               >
                 {shortcutKey !== null && (
-                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Ctrl+{shortcutKey}</span>
+                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Alt+{shortcutKey}</span>
                 )}
 
                 <span className="autocomplete-item-label">

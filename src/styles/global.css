@@ -4012,9 +4012,6 @@ img {
 .autocomplete-item.featured {
   background: rgba(16, 185, 129, 0.05);
   border-bottom: 1px solid var(--border-soft);
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
 .autocomplete-shortcut.featured {
@@ -5728,6 +5725,11 @@ button {
 
 .contract-editor-page {
   width: min(100%, 1180px) !important;
+}
+
+.app-content > .contract-editor-page:not(.contract-editor-form-mode) {
+  width: 100% !important;
+  max-width: none;
 }
 
 .contract-editor-page .form-compact {

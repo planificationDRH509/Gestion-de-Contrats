@@ -292,6 +292,7 @@ export function ContractsSpreadsheetView({
   });
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [creatingRows, setCreatingRows] = useState<Record<string, boolean>>({});
+  const creatingRowIdsRef = useRef<Set<string>>(new Set());
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [newRowErrors, setNewRowErrors] = useState<Record<string, string>>({});
 
@@ -660,15 +661,32 @@ export function ContractsSpreadsheetView({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      // Jump directly to the first available empty row's NIF column
-      const firstEmpty = newRows.find(r => isDraftEmpty(r.draft));
-      if (firstEmpty) {
-        focusNewRowCell(firstEmpty.id, 0);
-      } else {
-        // Fallback: next row col 0 if no empty one found
+      const newRowPrefix = "newRow_";
+      const existingRowPrefix = "existingRow_";
+
+      if (rowKey.startsWith(newRowPrefix)) {
+        const rowId = rowKey.slice(newRowPrefix.length);
+        // Start the save without awaiting it so data entry can continue immediately.
+        void maybeCreateFromNewRow(rowId);
+
+        const nextEmptyRow = newRowsRef.current.find(
+          (row) => row.id !== rowId && isDraftEmpty(normalizeDraft(row.draft))
+        );
+        if (nextEmptyRow) {
+          window.requestAnimationFrame(() => focusNewRowCell(nextEmptyRow.id, 0));
+        } else {
+          insertNewRowAfter(rowId);
+        }
+      } else if (rowKey.startsWith(existingRowPrefix)) {
+        const contractId = rowKey.slice(existingRowPrefix.length);
         const currentRowIndex = rowOrder.indexOf(rowKey);
         const nextRowKey = rowOrder[currentRowIndex + 1];
-        if (nextRowKey) focusGridCell(nextRowKey, 0);
+        if (nextRowKey) {
+          // Moving focus triggers the cell's existing blur-based save.
+          window.requestAnimationFrame(() => focusGridCell(nextRowKey, 0));
+        } else {
+          queueExistingSave(contractId);
+        }
       }
       return;
     }
@@ -1057,7 +1075,7 @@ export function ContractsSpreadsheetView({
     if (
       !workspaceId ||
       !userId ||
-      creatingRows[rowId] ||
+      creatingRowIdsRef.current.has(rowId) ||
       nifCheckingRows[rowId] ||
       nifStatusByRow[rowId]?.type === "blocked"
     ) return;
@@ -1082,6 +1100,7 @@ export function ContractsSpreadsheetView({
       return;
     }
 
+    creatingRowIdsRef.current.add(rowId);
     setCreatingRows((prev) => ({ ...prev, [rowId]: true }));
     setNewRowErrors((prev) => {
       if (!prev[rowId]) return prev;
@@ -1189,6 +1208,7 @@ export function ContractsSpreadsheetView({
             : "Impossible de créer le contrat."
       }));
     } finally {
+      creatingRowIdsRef.current.delete(rowId);
       setCreatingRows((prev) => {
         const next = { ...prev };
         delete next[rowId];
@@ -1409,7 +1429,7 @@ export function ContractsSpreadsheetView({
           <span className="material-symbols-rounded contracts-sheet-overview-icon">table_view</span>
           <div>
             <strong>Tableur des contrats</strong>
-            <span>Pour une nouvelle ligne, confirmez la durée en dernier ou utilisez le bouton de validation</span>
+            <span>Appuyez sur Entrée pour enregistrer la ligne et passer à la suivante</span>
           </div>
         </div>
         <div className="contracts-sheet-overview-stats">
@@ -2019,7 +2039,7 @@ export function ContractsSpreadsheetView({
         </div>
         <div className="contracts-sheet-keyboard-hint">
           <span className="material-symbols-rounded">keyboard</span>
-          Flèches pour naviguer · Tab pour avancer
+          Entrée pour enregistrer et changer de ligne · Flèches pour naviguer · Tab pour avancer
         </div>
       </div>
       <ContractCommentModal
