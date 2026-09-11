@@ -8,6 +8,7 @@ import {
 } from "../../data/supabase/supabaseProvider";
 import { useAuth } from "../../features/auth/auth";
 import { GlobalContractSearch } from "../components/GlobalContractSearch";
+import { SessionLockScreen } from "../../features/auth/SessionLockScreen";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -16,7 +17,7 @@ const MIN_W = 200;
 const MAX_W = 480;
 
 export function AppLayout() {
-  const { user } = useAuth();
+  const { user, isLocked } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
   const mainRef = useRef<HTMLDivElement>(null);
@@ -158,8 +159,8 @@ export function AppLayout() {
   } as React.CSSProperties;
 
   return (
-    <div 
-      className={`app-shell${collapsed ? " sidebar-collapsed" : ""}`} 
+    <div
+      className={`app-shell${collapsed ? " sidebar-collapsed" : ""}${isLocked ? " session-locked" : ""}`}
       style={style}
     >
       <Sidebar 
@@ -177,6 +178,7 @@ export function AppLayout() {
         </main>
       </div>
       <GlobalContractSearch />
+      {isLocked ? <SessionLockScreen /> : null}
     </div>
   );
 }

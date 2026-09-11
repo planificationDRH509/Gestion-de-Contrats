@@ -7056,6 +7056,20 @@ button {
   align-items: center;
 }
 
+.password-settings-form {
+  display: grid;
+  gap: 18px;
+}
+
+.password-settings-form .field-help {
+  margin: -10px 0 0;
+}
+
+.password-settings-toast {
+  width: min(100%, 680px);
+  margin-bottom: 18px;
+}
+
 .fiscal-year-settings {
   display: grid;
   gap: 10px;
@@ -9545,4 +9559,87 @@ body,
   .selection-actions-row > div[style*="min-width: 150px"] {
     flex-basis: 100%;
   }
+}
+
+.session-locked > .sidebar,
+.session-locked > .main {
+  pointer-events: none;
+  user-select: none;
+  filter: blur(5px);
+}
+
+.session-lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.session-lock-card {
+  width: min(100%, 420px);
+  padding: 34px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.session-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.session-lock-icon .material-symbols-rounded {
+  font-size: 30px;
+}
+
+.session-lock-card h1 {
+  margin: 8px 0;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: 24px;
+}
+
+.session-lock-card > p {
+  margin: 0 0 24px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.session-lock-form {
+  display: grid;
+  gap: 14px;
+  text-align: left;
+}
+
+.session-lock-form .button {
+  justify-content: center;
+  width: 100%;
+}
+
+.session-lock-logout {
+  margin-top: 18px;
+  border: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.session-lock-logout:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }

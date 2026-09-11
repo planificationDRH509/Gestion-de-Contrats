@@ -363,7 +363,16 @@ export function AutocompleteField({
   }
 
   return (
-    <div className="autocomplete-container" ref={containerRef}>
+    <div
+      className="autocomplete-container"
+      ref={containerRef}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          setActiveIndex(-1);
+        }
+      }}
+    >
       <input
         ref={inputRef}
         type="text"

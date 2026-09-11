@@ -247,4 +247,35 @@ describe("AutocompleteField contextual ranking", () => {
 
     expect(screen.getByLabelText("Ligne suivante")).toHaveFocus();
   });
+
+  it("closes the previous suggestion menu when another autocomplete receives focus", () => {
+    render(
+      <>
+        <AutocompleteField
+          ariaLabel="Premier champ"
+          value=""
+          onChange={vi.fn()}
+          items={[{ id: "first", label: "Suggestion du premier champ" }]}
+        />
+        <AutocompleteField
+          ariaLabel="Deuxième champ"
+          value=""
+          onChange={vi.fn()}
+          items={[{ id: "second", label: "Suggestion du deuxième champ" }]}
+        />
+      </>
+    );
+
+    const firstInput = screen.getByLabelText("Premier champ");
+    const secondInput = screen.getByLabelText("Deuxième champ");
+    fireEvent.focus(firstInput);
+    expect(screen.getByText("Suggestion du premier champ")).toBeInTheDocument();
+
+    fireEvent.blur(firstInput, { relatedTarget: secondInput });
+    fireEvent.focus(secondInput);
+
+    expect(screen.queryByText("Suggestion du premier champ")).not.toBeInTheDocument();
+    expect(screen.getByText("Suggestion du deuxième champ")).toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+  });
 });

@@ -492,6 +492,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      change_app_user_password: {
+        Args: {
+          p_current_password: string
+          p_new_password: string
+          p_session_token: string
+        }
+        Returns: boolean
+      }
       create_private_task: {
         Args: {
           p_assignee_id: string | null

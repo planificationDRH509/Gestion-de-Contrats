@@ -57,6 +57,7 @@ Notes :
    - appliquer tous les fichiers de `supabase/migrations/` dans l'ordre de leur nom ;
    - `013_app_user_roles.sql` ajoute les rôles et promeut le compte `admin` existant ;
    - `014_contract_audit_columns.sql` finalise `historique_saisie` et ajoute le filet de sécurité d'audit.
+   - `20260911023257_change_app_user_password.sql` active la modification sécurisée du mot de passe dans les paramètres.
 2. Ajouter les variables d'environnement.
 3. Passer `VITE_DATA_PROVIDER=supabase`.
 

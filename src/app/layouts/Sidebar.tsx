@@ -94,14 +94,12 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
 
         <div className="nav-divider" />
         
-        {can("settings.manage") ? (
-          <NavItem
-            to="/app/parametres"
-            icon="settings"
-            label="Paramètres"
-            collapsed={collapsed}
-          />
-        ) : null}
+        <NavItem
+          to="/app/parametres"
+          icon="settings"
+          label="Paramètres"
+          collapsed={collapsed}
+        />
       </nav>
 
       <SidebarFooter 

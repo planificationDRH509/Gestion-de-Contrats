@@ -78,6 +78,7 @@ import {
   serializeContractAudit
 } from "../../lib/contractAudit";
 import { buildApplicantInsertPayload } from "./applicantPayload";
+import { fetchAllPages } from "./fetchAllPages";
 
 function repositoryError(message: string, cause?: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -695,12 +696,17 @@ class SupabaseContractRepository implements ContractRepository {
       default:
         query = query.order("created_at", { ascending: false });
     }
+    // Keep page boundaries deterministic when several imports share a timestamp.
+    query = query.order("id_contrat", { ascending: true });
 
     if (requiresClientFiltering) {
-      const { data, error } = await query;
-      if (error || !data) {
-        throw repositoryError("Impossible de charger les contrats.", error);
-      }
+      const data = await fetchAllPages(async (rangeFrom, rangeTo) => {
+        const { data: pageData, error, count } = await query.range(rangeFrom, rangeTo);
+        if (error || !pageData) {
+          throw repositoryError("Impossible de charger les contrats.", error);
+        }
+        return { items: pageData, total: count };
+      });
 
       const filteredItems = data
         .map(mapContract)

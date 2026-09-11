@@ -16,6 +16,7 @@ import { BackupSqlPage } from "../features/settings/BackupSqlPage";
 import { UserManagementPage } from "../features/settings/UserManagementPage";
 import { DisplaySettingsPage } from "../features/settings/DisplaySettingsPage";
 import { GeneralSettingsPage } from "../features/settings/GeneralSettingsPage";
+import { PasswordSettingsPage } from "../features/settings/PasswordSettingsPage";
 import { IdentificationPage } from "../features/identification/IdentificationPage";
 import { RequirePermission } from "../features/auth/RequirePermission";
 import { AuditPage } from "../features/audit/AuditPage";
@@ -47,7 +48,8 @@ export function AppRoutes() {
         <Route path="audit" element={<RequirePermission permission="audit.view"><AuditPage /></RequirePermission>} />
         <Route path="controle-qualite" element={<RequirePermission permission="quality.view"><QualityPage /></RequirePermission>} />
         <Route path="identification" element={<RequirePermission permission="identification.manage"><IdentificationPage /></RequirePermission>} />
-        <Route path="parametres" element={<RequirePermission permission="settings.manage"><SettingsPage /></RequirePermission>} />
+        <Route path="parametres" element={<SettingsPage />} />
+        <Route path="parametres/mot-de-passe" element={<PasswordSettingsPage />} />
         <Route path="parametres/draft-html" element={<RequirePermission permission="settings.manage"><DraftHtmlPage /></RequirePermission>} />
         <Route path="parametres/suggestions" element={<RequirePermission permission="settings.manage"><SuggestionsSettingsPage /></RequirePermission>} />
         <Route path="parametres/backup-sql" element={<RequirePermission permission="settings.manage"><BackupSqlPage /></RequirePermission>} />

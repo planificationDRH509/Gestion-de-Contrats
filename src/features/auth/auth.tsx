@@ -22,7 +22,13 @@ export type AuthUser = {
 
 type AuthContextValue = {
   user: AuthUser | null;
+  isLocked: boolean;
   login: (username: string, password: string) => Promise<boolean>;
+  unlock: (password: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; error?: string }>;
   activateTaskSession: (
     password: string
   ) => Promise<{ success: boolean; error?: string }>;
@@ -33,6 +39,36 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_KEY = "contribution_auth";
+const LAST_ACTIVITY_KEY = "contribution_last_activity";
+export const SESSION_INACTIVITY_MS = 15 * 60 * 1000;
+
+export function hasSessionInactivityExpired(
+  lastActivityAt: number,
+  now = Date.now()
+): boolean {
+  return now - lastActivityAt >= SESSION_INACTIVITY_MS;
+}
+
+function loadLastActivityAt(): number | null {
+  try {
+    const value = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastActivityAt(value: number | null) {
+  try {
+    if (value === null) {
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+    } else {
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(value));
+    }
+  } catch {
+    // Ignore storage write errors (private mode/quota).
+  }
+}
 
 export function loadStoredAuthSession(): AuthUser | null {
   try {
@@ -81,7 +117,59 @@ function saveSession(user: AuthUser | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredAuthSession());
+  const [isLocked, setIsLocked] = useState(() => {
+    const lastActivityAt = loadLastActivityAt();
+    return Boolean(
+      loadStoredAuthSession() &&
+        lastActivityAt &&
+        hasSessionInactivityExpired(lastActivityAt)
+    );
+  });
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!user?.id || isLocked) return;
+
+    let lastActivityAt = loadLastActivityAt() ?? Date.now();
+    let inactivityTimer = 0;
+
+    const scheduleLock = () => {
+      window.clearTimeout(inactivityTimer);
+      const remaining = SESSION_INACTIVITY_MS - (Date.now() - lastActivityAt);
+      if (remaining <= 0) {
+        setIsLocked(true);
+        return;
+      }
+      inactivityTimer = window.setTimeout(() => setIsLocked(true), remaining);
+    };
+
+    const recordActivity = () => {
+      lastActivityAt = Date.now();
+      saveLastActivityAt(lastActivityAt);
+      scheduleLock();
+    };
+
+    const checkAfterVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      lastActivityAt = loadLastActivityAt() ?? lastActivityAt;
+      scheduleLock();
+    };
+
+    saveLastActivityAt(lastActivityAt);
+    scheduleLock();
+    window.addEventListener("pointerdown", recordActivity);
+    window.addEventListener("keydown", recordActivity);
+    window.addEventListener("touchstart", recordActivity, { passive: true });
+    document.addEventListener("visibilitychange", checkAfterVisibilityChange);
+
+    return () => {
+      window.clearTimeout(inactivityTimer);
+      window.removeEventListener("pointerdown", recordActivity);
+      window.removeEventListener("keydown", recordActivity);
+      window.removeEventListener("touchstart", recordActivity);
+      document.removeEventListener("visibilitychange", checkAfterVisibilityChange);
+    };
+  }, [isLocked, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -112,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      isLocked,
       login: async (username: string, password: string) => {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
@@ -156,7 +245,120 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         setUser(sessionUser);
         saveSession(sessionUser);
+        saveLastActivityAt(Date.now());
+        setIsLocked(false);
         return true;
+      },
+      unlock: async (password: string) => {
+        if (!user?.id) {
+          return {
+            success: false,
+            error: "Votre session a expiré. Veuillez vous reconnecter."
+          };
+        }
+
+        const taskSession = await getSupabaseClient().rpc("create_task_session", {
+          p_user_id: user.id,
+          p_password: password
+        });
+        if (taskSession.error || typeof taskSession.data !== "string") {
+          const message = taskSession.error?.message ?? "";
+          return {
+            success: false,
+            error: /TASK_SESSION_INVALID_CREDENTIALS/i.test(message)
+              ? "Mot de passe incorrect."
+              : message || "Impossible de déverrouiller la session."
+          };
+        }
+
+        const nextUser = { ...user, taskSessionToken: taskSession.data };
+        setUser(nextUser);
+        saveSession(nextUser);
+        saveLastActivityAt(Date.now());
+        setIsLocked(false);
+        return { success: true };
+      },
+      changePassword: async (currentPassword: string, newPassword: string) => {
+        if (!user?.id) {
+          return {
+            success: false,
+            error: "Votre session a expiré. Veuillez vous reconnecter."
+          };
+        }
+
+        const supabase = getSupabaseClient();
+        const verificationSession = await supabase.rpc("create_task_session", {
+          p_user_id: user.id,
+          p_password: currentPassword
+        });
+        if (
+          verificationSession.error ||
+          typeof verificationSession.data !== "string"
+        ) {
+          const message = verificationSession.error?.message ?? "";
+          if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(message)) {
+            return { success: false, error: "Le mot de passe actuel est incorrect." };
+          }
+          return {
+            success: false,
+            error: message || "Impossible de vérifier le mot de passe actuel."
+          };
+        }
+
+        const result = await supabase.rpc("change_app_user_password", {
+          p_session_token: verificationSession.data,
+          p_current_password: currentPassword,
+          p_new_password: newPassword
+        });
+
+        if (result.error || result.data !== true) {
+          await supabase.rpc("revoke_task_session", {
+            p_session_token: verificationSession.data
+          });
+          const message = result.error?.message ?? "";
+          if (/APP_PASSWORD_CURRENT_INVALID/i.test(message)) {
+            return { success: false, error: "Le mot de passe actuel est incorrect." };
+          }
+          if (/APP_PASSWORD_TOO_SHORT/i.test(message)) {
+            return {
+              success: false,
+              error: "Le nouveau mot de passe doit contenir au moins 8 caractères."
+            };
+          }
+          if (/APP_PASSWORD_UNCHANGED/i.test(message)) {
+            return {
+              success: false,
+              error: "Le nouveau mot de passe doit être différent du mot de passe actuel."
+            };
+          }
+          if (/Could not find the function|PGRST202|change_app_user_password/i.test(message)) {
+            return {
+              success: false,
+              error: "La modification du mot de passe n’est pas encore activée sur le serveur."
+            };
+          }
+          return {
+            success: false,
+            error: message || "Impossible de modifier le mot de passe."
+          };
+        }
+
+        const taskSession = await supabase.rpc("create_task_session", {
+          p_user_id: user.id,
+          p_password: newPassword
+        });
+        const nextUser = {
+          ...user,
+          taskSessionToken:
+            !taskSession.error && typeof taskSession.data === "string"
+              ? taskSession.data
+              : undefined
+        };
+        setUser(nextUser);
+        saveSession(nextUser);
+        await queryClient.invalidateQueries({ queryKey: ["private_tasks", user.id] });
+        await queryClient.invalidateQueries({ queryKey: ["task_recipients", user.id] });
+        return { success: true };
       },
       activateTaskSession: async (password: string) => {
         if (!user?.id) {
@@ -217,11 +419,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setUser(null);
         saveSession(null);
+        saveLastActivityAt(null);
+        setIsLocked(false);
       },
       can: (permission: AppPermission) =>
         Boolean(user && hasPermission(user.role, permission))
     }),
-    [queryClient, user]
+    [isLocked, queryClient, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
