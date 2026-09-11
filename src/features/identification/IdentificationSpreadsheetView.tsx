@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Gender } from "../../data/types";
 import { formatFirstName, formatLastName } from "../../lib/format";
+import {
+  formatNifInput,
+  formatNifInputElement,
+  prepareNifDigitOverwrite
+} from "../../lib/nifInput";
 import { matchesPersonSearch } from "../../lib/personSearch";
 import {
   useAddresses
@@ -70,17 +75,6 @@ function createNewRow(): SpreadsheetNewRow {
     id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     draft: createEmptyDraft()
   };
-}
-
-function formatNifInput(value: string): string {
-  let digits = value.replace(/\D/g, "");
-  if (digits.length > 10) digits = digits.slice(0, 10);
-  let formatted = "";
-  if (digits.length > 0) formatted += digits.slice(0, 3);
-  if (digits.length > 3) formatted += `-${digits.slice(3, 6)}`;
-  if (digits.length > 6) formatted += `-${digits.slice(6, 9)}`;
-  if (digits.length > 9) formatted += `-${digits.slice(9, 10)}`;
-  return formatted;
 }
 
 function formatNinuInput(value: string): string {
@@ -652,10 +646,12 @@ export function IdentificationSpreadsheetView({
                     className="input contracts-sheet-input"
                     value={row.draft.nif}
                     placeholder="000-000-000-0"
+                    onBeforeInput={e => prepareNifDigitOverwrite(e.currentTarget, (e.nativeEvent as InputEvent).data)}
                     onChange={e => {
-                      const val = formatNifInput(e.target.value);
+                      const wasComplete = row.draft.nif.replace(/\D/g, "").length === 10;
+                      const val = formatNifInputElement(e.currentTarget);
                       setNewRows(prev => prev.map(r => r.id === row.id ? { ...r, draft: { ...r.draft, nif: val } } : r));
-                      checkAutoNext(row.id, 0, "nif", val);
+                      if (!wasComplete) checkAutoNext(row.id, 0, "nif", val);
                     }}
                     onBlur={() => handleSaveNew(row.id)}
                     onKeyDown={e => handleGridArrowNavigation(e, row.id, 0)}
@@ -819,7 +815,8 @@ export function IdentificationSpreadsheetView({
                           data-sheet-col={0}
                           className="input contracts-sheet-input editing"
                           value={draft.nif}
-                          onChange={e => setExistingField(identity.nif, "nif", e.target.value)}
+                          onBeforeInput={e => prepareNifDigitOverwrite(e.currentTarget, (e.nativeEvent as InputEvent).data)}
+                          onChange={e => setExistingField(identity.nif, "nif", formatNifInputElement(e.currentTarget))}
                           onKeyDown={e => {
                             if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
@@ -897,6 +894,7 @@ export function IdentificationSpreadsheetView({
                           className="input contracts-sheet-input editing"
                           value={draft.address}
                           onChange={val => setExistingField(identity.nif, "address", val)}
+                          onBlur={() => handleSaveExisting(identity.nif)}
                           onKeyDown={e => {
                             if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);

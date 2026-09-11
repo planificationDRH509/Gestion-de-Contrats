@@ -255,8 +255,12 @@ export function AutocompleteField({
             field.dataset.sheetRow === dataSheetRow &&
             Number(field.dataset.sheetCol) === dataSheetCol + 1
         );
-        nextSheetField?.focus();
-        return;
+        const currentSheetIndex = sheetFields.indexOf(input);
+        const nextField = nextSheetField ?? sheetFields[currentSheetIndex + 1];
+        if (nextField) {
+          nextField.focus();
+          return;
+        }
       }
 
       const focusableFields = Array.from(
@@ -296,18 +300,12 @@ export function AutocompleteField({
       }
 
       if (!open) {
-        if (enableArrowNavigationInMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-          e.preventDefault();
-          setOpen(true);
-          setActiveIndex(0);
-          return;
-        }
         return;
       }
 
       switch (e.key) {
         case "ArrowDown":
-          if (!enableArrowNavigationInMenu) {
+          if (!enableArrowNavigationInMenu || visibleItems.length === 0) {
             break;
           }
           e.preventDefault();
@@ -316,7 +314,7 @@ export function AutocompleteField({
           );
           break;
         case "ArrowUp":
-          if (!enableArrowNavigationInMenu) {
+          if (!enableArrowNavigationInMenu || visibleItems.length === 0) {
             break;
           }
           e.preventDefault();
@@ -325,8 +323,8 @@ export function AutocompleteField({
           );
           break;
         case "Enter":
-          e.preventDefault();
           if (visibleItems.length > 0) {
+            e.preventDefault();
             const selectedIndex = activeIndex >= 0 && activeIndex < visibleItems.length
               ? activeIndex
               : 0;
@@ -334,9 +332,11 @@ export function AutocompleteField({
           }
           break;
         case "Escape":
-          e.preventDefault();
           setOpen(false);
           setActiveIndex(-1);
+          if (visibleItems.length > 0) {
+            e.preventDefault();
+          }
           break;
       }
     },
@@ -389,7 +389,9 @@ export function AutocompleteField({
         }}
         onKeyDown={(event) => {
           handleKeyDown(event);
-          onKeyDown?.(event);
+          if (!event.defaultPrevented) {
+            onKeyDown?.(event);
+          }
         }}
         onBlur={onBlur}
         autoComplete="off"

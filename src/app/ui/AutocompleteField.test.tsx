@@ -151,4 +151,100 @@ describe("AutocompleteField contextual ranking", () => {
     vi.runAllTimers();
     expect(screen.getByLabelText("Champ suivant")).toHaveFocus();
   });
+
+  it("navigates visible suggestions with ArrowUp and ArrowDown", () => {
+    const onSelect = vi.fn();
+    const parentKeys: string[] = [];
+    render(
+      <AutocompleteField
+        value=""
+        onChange={vi.fn()}
+        onSelect={onSelect}
+        onKeyDown={(event) => parentKeys.push(event.key)}
+        items={[
+          { id: "first", label: "Première suggestion" },
+          { id: "second", label: "Deuxième suggestion" },
+          { id: "third", label: "Troisième suggestion" },
+        ]}
+      />
+    );
+
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+    expect(screen.getAllByRole("option")[1]).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
+    expect(screen.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+    expect(parentKeys).toEqual([]);
+
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "first" }));
+  });
+
+  it("returns arrow navigation to the parent after Escape", () => {
+    const parentKeys: string[] = [];
+    render(
+      <AutocompleteField
+        value=""
+        onChange={vi.fn()}
+        onKeyDown={(event) => parentKeys.push(event.key)}
+        items={[{ id: "first", label: "Première suggestion" }]}
+      />
+    );
+
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    expect(screen.getByRole("option")).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: "Escape", code: "Escape" });
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+    expect(parentKeys).toEqual(["ArrowDown"]);
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+  });
+
+  it("keeps field and row navigation when there are no suggestions", () => {
+    const parentKeys: string[] = [];
+    render(
+      <AutocompleteField
+        value=""
+        onChange={vi.fn()}
+        onKeyDown={(event) => parentKeys.push(event.key)}
+        items={[]}
+      />
+    );
+
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    expect(parentKeys).toEqual(["ArrowDown", "ArrowUp", "Enter"]);
+  });
+
+  it("advances from the last autocomplete column to the next spreadsheet row", () => {
+    vi.useFakeTimers();
+    render(
+      <>
+        <AutocompleteField
+          dataSheetRow="row-1"
+          dataSheetCol={6}
+          value=""
+          onChange={vi.fn()}
+          items={[{ id: "first", label: "Première suggestion" }]}
+        />
+        <input data-sheet-row="row-2" data-sheet-col={0} aria-label="Ligne suivante" />
+      </>
+    );
+
+    const input = screen.getAllByRole("textbox")[0];
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    vi.runAllTimers();
+
+    expect(screen.getByLabelText("Ligne suivante")).toHaveFocus();
+  });
 });

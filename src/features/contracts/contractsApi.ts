@@ -114,7 +114,10 @@ export function useNifLookupQuery(rawNif: string | null, workspaceId: string) {
 const provider = getDataProvider();
 const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
 
-export function useContractsList(params: ContractListParams) {
+export function useContractsList(
+  params: ContractListParams,
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: ["contracts", params],
     queryFn: () => provider.contracts.list(params),
@@ -127,6 +130,7 @@ export function useContractsList(params: ContractListParams) {
     refetchOnMount: "always",
     refetchOnReconnect: "always",
     refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
   });
 }
 

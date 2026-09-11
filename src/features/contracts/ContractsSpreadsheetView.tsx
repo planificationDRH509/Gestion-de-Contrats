@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Contract, Gender } from "../../data/types";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
+import {
+  formatNifInput,
+  formatNifInputElement,
+  prepareNifDigitOverwrite
+} from "../../lib/nifInput";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
   formatInstitutionLocation,
@@ -153,17 +158,6 @@ type ContractsSpreadsheetViewProps = {
 };
 
 export type SpreadsheetZoomMode = "fit" | "custom";
-
-function formatNifInput(value: string): string {
-  let digits = value.replace(/\D/g, "");
-  if (digits.length > 10) digits = digits.slice(0, 10);
-  let formatted = "";
-  if (digits.length > 0) formatted += digits.slice(0, 3);
-  if (digits.length > 3) formatted += `-${digits.slice(3, 6)}`;
-  if (digits.length > 6) formatted += `-${digits.slice(6, 9)}`;
-  if (digits.length > 9) formatted += `-${digits.slice(9, 10)}`;
-  return formatted;
-}
 
 function formatNinuInput(value: string): string {
   return value.replace(/\D/g, "").slice(0, 10);
@@ -1263,7 +1257,8 @@ export function ContractsSpreadsheetView({
           style={{ paddingRight: canVerify ? "32px" : "8px" }}
           value={value}
           placeholder="000-000-000-0"
-          onChange={(event) => onChange(event.target.value)}
+          onBeforeInput={(event) => prepareNifDigitOverwrite(event.currentTarget, (event.nativeEvent as InputEvent).data)}
+          onChange={(event) => onChange(formatNifInputElement(event.currentTarget))}
           onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, columnIndex)}
           onBlur={onBlur}
         />
@@ -1643,10 +1638,12 @@ export function ContractsSpreadsheetView({
                         style={{ paddingRight: (nifChecking || nifStatus) ? "52px" : "8px" }}
                         value={row.draft.nif}
                         placeholder="000-000-000-0"
+                        onBeforeInput={(event) => prepareNifDigitOverwrite(event.currentTarget, (event.nativeEvent as InputEvent).data)}
                         onChange={(event) => {
-                          const formatted = formatNifInput(event.target.value);
+                          const wasComplete = row.draft.nif.replace(/\D/g, "").length === 10;
+                          const formatted = formatNifInputElement(event.currentTarget);
                           setNewField(row.id, "nif", formatted);
-                          checkAutoNext(row.id, 0, "nif", formatted);
+                          if (!wasComplete) checkAutoNext(row.id, 0, "nif", formatted);
                           const digits = formatted.replace(/\D/g, "");
                           if (digits.length === 10) {
                             void handleNewRowNifComplete(row.id, formatted);
@@ -1736,7 +1733,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={5}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={row.draft.address}
                       onChange={(value) => setNewField(row.id, "address", value)}
@@ -1749,7 +1745,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={6}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={row.draft.position}
                       onChange={(value) => setNewField(row.id, "position", value)}
@@ -1763,7 +1758,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={7}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={row.draft.assignment}
                       onChange={(value) => setNewField(row.id, "assignment", value)}
@@ -1943,7 +1937,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={5}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={draft.address}
                       onChange={(value) => setExistingField(contract.id, "address", value)}
@@ -1956,7 +1949,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={6}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={draft.position}
                       onChange={(value) => setExistingField(contract.id, "position", value)}
@@ -1970,7 +1962,6 @@ export function ContractsSpreadsheetView({
                     <AutocompleteField
                       dataSheetRow={rowKey}
                       dataSheetCol={7}
-                      enableArrowNavigationInMenu={false}
                       className="input contracts-sheet-input"
                       value={draft.assignment}
                       onChange={(value) => setExistingField(contract.id, "assignment", value)}

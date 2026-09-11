@@ -7,6 +7,7 @@ import {
   syncSupabaseWorkspace
 } from "../../data/supabase/supabaseProvider";
 import { useAuth } from "../../features/auth/auth";
+import { GlobalContractSearch } from "../components/GlobalContractSearch";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -175,6 +176,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <GlobalContractSearch />
     </div>
   );
 }

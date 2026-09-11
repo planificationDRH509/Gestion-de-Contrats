@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../auth/auth";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
+import { formatNifInputElement, prepareNifDigitOverwrite } from "../../lib/nifInput";
 import { saveDraftContract } from "./contractDraft";
 import { useFiscalYear } from "../settings/settingsApi";
 import { useCreateDossier, useDossiersList } from "../dossiers/dossiersApi";
@@ -813,23 +814,14 @@ export function ContractNewPage() {
                 className="input"
                 placeholder="NIF * — 000-000-000-0"
                 aria-label="NIF"
+                onBeforeInput={(e) => prepareNifDigitOverwrite(e.currentTarget, (e.nativeEvent as InputEvent).data)}
                 {...register("nif", {
                   onChange: (e) => {
                     setMsppModalOpen(false);
                     lastProcessedNif.current = null;
                     setNifAlert({ type: null, message: "" });
                     setFieldsLockedByNif(false);
-                    let val = e.target.value.replace(/\D/g, "");
-                    if (val.length > 10) val = val.slice(0, 10);
-                    let formatted = "";
-                    if (val.length > 0) formatted += val.substring(0, 3);
-                    if (val.length > 3) formatted += "-" + val.substring(3, 6);
-                    if (val.length > 6) formatted += "-" + val.substring(6, 9);
-                    if (val.length > 9) formatted += "-" + val.substring(9, 10);
-                    e.target.value = formatted;
-                    if (val.length === 10) {
-                      setTimeout(() => setFocus("firstName"), 50);
-                    }
+                    formatNifInputElement(e.target);
                   }
                 })}
                 style={errors.nif ? { borderColor: "red" } : undefined}
