@@ -121,7 +121,7 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 
 const EMPTY_NEW_ROWS_COUNT = 3;
 const NAVIGABLE_COLUMN_COUNT = 10;
-const STATUS_COLUMN_WIDTH = 96;
+const STATUS_COLUMN_WIDTH = 88;
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT, durationMonths: getLastChoice("durationMonths") || "12" };
@@ -331,7 +331,7 @@ export function ContractsSpreadsheetView({
   const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
     () =>
       COLUMNS.reduce((acc, column) => {
-        acc[column.key] = column.width;
+        acc[column.key] = column.min;
         return acc;
       }, {} as Record<SpreadsheetFieldKey, number>)
   );
@@ -565,9 +565,12 @@ export function ContractsSpreadsheetView({
   );
 
   function isHorizontalBoundaryReached(
-    event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
+    event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ): boolean {
-    if (!(event.currentTarget instanceof HTMLInputElement)) {
+    if (
+      !(event.currentTarget instanceof HTMLInputElement) &&
+      !(event.currentTarget instanceof HTMLTextAreaElement)
+    ) {
       return true;
     }
     if (event.currentTarget.selectionStart === null || event.currentTarget.selectionEnd === null) {
@@ -647,7 +650,7 @@ export function ContractsSpreadsheetView({
   }
 
   function handleGridArrowNavigation(
-    event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
     rowKey: string,
     columnIndex: number
   ) {
@@ -1677,19 +1680,21 @@ export function ContractsSpreadsheetView({
                         )}
                       </div>
                     </div>
-                    <input
+                    <textarea
+                      rows={1}
                       data-sheet-row={rowKey}
                       data-sheet-col={1}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={row.draft.firstName}
                       placeholder="Prénom"
                       onChange={(event) => setNewField(row.id, "firstName", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 1)}
                     />
-                    <input
+                    <textarea
+                      rows={1}
                       data-sheet-row={rowKey}
                       data-sheet-col={2}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={row.draft.lastName}
                       placeholder="Nom"
                       onChange={(event) => setNewField(row.id, "lastName", event.target.value)}
@@ -1731,9 +1736,10 @@ export function ContractsSpreadsheetView({
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 4)}
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={5}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={row.draft.address}
                       onChange={(value) => setNewField(row.id, "address", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 5)}
@@ -1743,9 +1749,10 @@ export function ContractsSpreadsheetView({
                       pinCategory="address"
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={6}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={row.draft.position}
                       onChange={(value) => setNewField(row.id, "position", value)}
                       onSelect={(item) => applyNewPositionSelection(row.id, item)}
@@ -1756,9 +1763,10 @@ export function ContractsSpreadsheetView({
                       pinCategory="position"
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={7}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={row.draft.assignment}
                       onChange={(value) => setNewField(row.id, "assignment", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
@@ -1881,10 +1889,11 @@ export function ContractsSpreadsheetView({
                       "input contracts-sheet-input",
                       draft.position
                     )}
-                    <input
+                    <textarea
+                      rows={1}
                       data-sheet-row={rowKey}
                       data-sheet-col={1}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={draft.firstName}
                       onChange={(event) =>
                         setExistingField(contract.id, "firstName", event.target.value)
@@ -1892,10 +1901,11 @@ export function ContractsSpreadsheetView({
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 1)}
                       onBlur={() => queueExistingSave(contract.id)}
                     />
-                    <input
+                    <textarea
+                      rows={1}
                       data-sheet-row={rowKey}
                       data-sheet-col={2}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={draft.lastName}
                       onChange={(event) =>
                         setExistingField(contract.id, "lastName", event.target.value)
@@ -1935,9 +1945,10 @@ export function ContractsSpreadsheetView({
                       onBlur={() => queueExistingSave(contract.id)}
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={5}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={draft.address}
                       onChange={(value) => setExistingField(contract.id, "address", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 5)}
@@ -1947,9 +1958,10 @@ export function ContractsSpreadsheetView({
                       pinCategory="address"
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={6}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={draft.position}
                       onChange={(value) => setExistingField(contract.id, "position", value)}
                       onSelect={(item) => applyPositionSelection(contract.id, item)}
@@ -1960,9 +1972,10 @@ export function ContractsSpreadsheetView({
                       pinCategory="position"
                     />
                     <AutocompleteField
+                      multiline
                       dataSheetRow={rowKey}
                       dataSheetCol={7}
-                      className="input contracts-sheet-input"
+                      className="input contracts-sheet-input contracts-sheet-input-multiline"
                       value={draft.assignment}
                       onChange={(value) => setExistingField(contract.id, "assignment", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
@@ -2002,7 +2015,7 @@ export function ContractsSpreadsheetView({
                 {contract.tags && contract.tags.length > 0 && (
                   <div style={{ 
                     display: "flex", gap: "4px", flexWrap: "wrap",
-                    padding: "4px 8px 4px 104px", 
+                    padding: "4px 8px 4px 96px",
                     borderBottom: "1px solid var(--border)", 
                     background: "var(--bg)",
                     borderRight: "1px solid var(--border)"

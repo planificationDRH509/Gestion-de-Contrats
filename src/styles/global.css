@@ -1308,7 +1308,7 @@ img {
 .contracts-sheet-header-shell,
 .contracts-sheet-row-shell {
   display: grid;
-  grid-template-columns: 96px auto;
+  grid-template-columns: 88px auto;
   align-items: stretch;
 }
 
@@ -1343,7 +1343,7 @@ img {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 96px;
+  min-width: 88px;
   padding: 0 6px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -1589,6 +1589,18 @@ img {
 
 .contracts-sheet-input:last-child {
   border-right: none !important;
+}
+
+.contracts-sheet-input-multiline {
+  field-sizing: content;
+  height: auto;
+  min-height: 44px;
+  padding-block: 12px !important;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  resize: none;
+  white-space: pre-wrap;
 }
 
 .contracts-sheet-input-readonly {
@@ -6006,6 +6018,23 @@ button {
 .app-content > .contract-editor-page:not(.contract-editor-form-mode) {
   width: 100% !important;
   max-width: none;
+}
+
+.contract-sheet-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.contract-sheet-card:hover {
+  box-shadow: none;
+}
+
+@media (min-width: 761px) {
+  .app-content:has(> .contract-editor-page:not(.contract-editor-form-mode)) {
+    padding-inline: clamp(10px, 1vw, 16px);
+  }
 }
 
 .contract-editor-page .form-compact {

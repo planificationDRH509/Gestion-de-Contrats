@@ -1139,7 +1139,7 @@ export function ContractNewPage() {
             </div>
           </div>
         ) : (
-          <div className={`card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
+          <div className={`card contract-sheet-card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
             {fiscalYearIsPast ? (
               <div className="fiscal-year-contract-warning" role="alert">
                 <span className="material-symbols-rounded">warning</span>

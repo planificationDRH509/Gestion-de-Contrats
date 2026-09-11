@@ -27,6 +27,8 @@ type ScoredAutocompleteItem = {
   score: number;
 };
 
+type AutocompleteInputElement = HTMLInputElement | HTMLTextAreaElement;
+
 interface AutocompleteFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -51,9 +53,11 @@ interface AutocompleteFieldProps {
   /** Category for pinning, e.g. "address". If provided, shows pin icons. */
   pinCategory?: string;
   /** Optional blur handler for parent autosave workflows. */
-  onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (event: React.FocusEvent<AutocompleteInputElement>) => void;
   /** Optional keydown handler from parent. */
-  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onKeyDown?: (event: React.KeyboardEvent<AutocompleteInputElement>) => void;
+  /** Allow long values to wrap onto multiple lines. */
+  multiline?: boolean;
   /** Disable internal ArrowUp/ArrowDown handling (useful for spreadsheet navigation). */
   enableArrowNavigationInMenu?: boolean;
   /** Optional row key used by spreadsheet keyboard navigation. */
@@ -92,13 +96,14 @@ export function AutocompleteField({
   enableArrowNavigationInMenu = true,
   dataSheetRow,
   dataSheetCol,
+  multiline = false,
 }: AutocompleteFieldProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<AutocompleteInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Filter items
@@ -373,38 +378,73 @@ export function AutocompleteField({
         }
       }}
     >
-      <input
-        ref={inputRef}
-        type="text"
-        data-sheet-row={dataSheetRow}
-        data-sheet-col={dataSheetCol}
-        className={className}
-        value={value}
-        name={name}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        style={{
-          ...style,
-          ...(hasError ? { borderColor: "red" } : {}),
-        }}
-        onFocus={() => {
-          setOpen(true);
-          setActiveIndex(0);
-        }}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-          setActiveIndex(0);
-        }}
-        onKeyDown={(event) => {
-          handleKeyDown(event);
-          if (!event.defaultPrevented) {
-            onKeyDown?.(event);
-          }
-        }}
-        onBlur={onBlur}
-        autoComplete="off"
-      />
+      {multiline ? (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          rows={1}
+          data-sheet-row={dataSheetRow}
+          data-sheet-col={dataSheetCol}
+          className={className}
+          value={value}
+          name={name}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          style={{
+            ...style,
+            ...(hasError ? { borderColor: "red" } : {}),
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setActiveIndex(0);
+          }}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+            setActiveIndex(0);
+          }}
+          onKeyDown={(event) => {
+            handleKeyDown(event);
+            if (!event.defaultPrevented) {
+              onKeyDown?.(event);
+            }
+          }}
+          onBlur={onBlur}
+          autoComplete="off"
+        />
+      ) : (
+        <input
+          ref={inputRef as React.RefObject<HTMLInputElement>}
+          type="text"
+          data-sheet-row={dataSheetRow}
+          data-sheet-col={dataSheetCol}
+          className={className}
+          value={value}
+          name={name}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          style={{
+            ...style,
+            ...(hasError ? { borderColor: "red" } : {}),
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setActiveIndex(0);
+          }}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+            setActiveIndex(0);
+          }}
+          onKeyDown={(event) => {
+            handleKeyDown(event);
+            if (!event.defaultPrevented) {
+              onKeyDown?.(event);
+            }
+          }}
+          onBlur={onBlur}
+          autoComplete="off"
+        />
+      )}
       {open && visibleItems.length > 0 && (
         <div className="autocomplete-dropdown" ref={listRef}>
           {visibleItems.map((item, idx) => {
