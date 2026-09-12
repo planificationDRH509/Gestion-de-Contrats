@@ -28,7 +28,7 @@ describe("AutocompleteField contextual ranking", () => {
     expect(options[1]).toHaveTextContent("A");
   });
 
-  it("keeps bare and Ctrl-modified digits for input and selects suggestions with Alt+digit", () => {
+  it("keeps bare and Alt-modified digits for input and selects suggestions with Ctrl+digit", () => {
     const onChange = vi.fn();
     const onSelect = vi.fn();
     render(
@@ -51,17 +51,17 @@ describe("AutocompleteField contextual ranking", () => {
     fireEvent.change(input, { target: { value: "2" } });
     expect(onChange).toHaveBeenCalledWith("2");
 
-    fireEvent.keyDown(input, { key: "2", code: "Digit2", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "2", code: "Digit2", altKey: true });
     expect(onSelect).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(input, { key: "2", code: "Digit2", altKey: true });
+    fireEvent.keyDown(input, { key: "2", code: "Digit2", ctrlKey: true });
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "second" })
     );
     expect(onChange).toHaveBeenCalledWith("Deuxième suggestion");
   });
 
-  it("shows the Alt modifier in numeric shortcut hints", () => {
+  it("shows the Ctrl modifier in numeric shortcut hints", () => {
     render(
       <AutocompleteField
         value=""
@@ -72,10 +72,10 @@ describe("AutocompleteField contextual ranking", () => {
 
     fireEvent.focus(screen.getByRole("textbox"));
 
-    expect(screen.getByText("Alt+1")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl+1")).toBeInTheDocument();
   });
 
-  it("maps the last choice to Alt+1 and the tenth choice to Alt+0", () => {
+  it("maps the last choice to Ctrl+1 and the tenth choice to Ctrl+0", () => {
     const onSelect = vi.fn();
     const featuredItem = { id: "last", label: "Dernier choix" };
     const otherItems = Array.from({ length: 9 }, (_, index) => ({
@@ -94,14 +94,14 @@ describe("AutocompleteField contextual ranking", () => {
 
     const input = screen.getByRole("textbox");
     fireEvent.focus(input);
-    expect(screen.getAllByRole("option")[0]).toHaveTextContent("Alt+1");
-    expect(screen.getAllByRole("option")[9]).toHaveTextContent("Alt+0");
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("Ctrl+1");
+    expect(screen.getAllByRole("option")[9]).toHaveTextContent("Ctrl+0");
 
-    fireEvent.keyDown(input, { key: "1", code: "Digit1", altKey: true });
+    fireEvent.keyDown(input, { key: "1", code: "Digit1", ctrlKey: true });
     expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: "last" }));
 
     fireEvent.focus(input);
-    fireEvent.keyDown(input, { key: "0", code: "Digit0", altKey: true });
+    fireEvent.keyDown(input, { key: "0", code: "Digit0", ctrlKey: true });
     expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: "choice-10" }));
   });
 

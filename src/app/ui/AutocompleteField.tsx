@@ -46,7 +46,7 @@ interface AutocompleteFieldProps {
   showAllOnFocus?: boolean;
   /** Error styling */
   hasError?: boolean;
-  /** Max shortcuts shown (Alt+1…Alt+9, then Alt+0). Defaults to 10. */
+  /** Max shortcuts shown (Ctrl+1…Ctrl+9, then Ctrl+0). Defaults to 10. */
   maxShortcuts?: number;
   /** Featured item (last chosen value) to show at the top */
   featuredItem?: AutocompleteItem;
@@ -287,13 +287,13 @@ export function AutocompleteField({
           ? Number(e.key)
           : null;
       const canUseNumericShortcuts =
-        e.altKey &&
-        !e.ctrlKey &&
+        e.ctrlKey &&
+        !e.altKey &&
         !e.metaKey &&
         !e.shiftKey &&
         !Boolean(e.nativeEvent.isComposing);
 
-      // The displayed order maps to Alt+1…Alt+9, then Alt+0 for item 10.
+      // The displayed order maps to Ctrl+1…Ctrl+9, then Ctrl+0 for item 10.
       if (canUseNumericShortcuts && open && visibleItems.length > 0 && shortcutDigit !== null) {
         const targetIndex = shortcutDigit === 0 ? 9 : shortcutDigit - 1;
         const shortcutLimit = Math.min(maxShortcuts, 10);
@@ -466,7 +466,7 @@ export function AutocompleteField({
                 }}
               >
                 {shortcutKey !== null && (
-                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Alt+{shortcutKey}</span>
+                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Ctrl+{shortcutKey}</span>
                 )}
 
                 <span className="autocomplete-item-label">
