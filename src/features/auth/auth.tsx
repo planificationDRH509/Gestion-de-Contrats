@@ -9,6 +9,12 @@ import {
   type AppRole
 } from "./permissions";
 import { clearPrivateTaskOfflineData } from "../tasks/privateTaskOffline";
+import {
+  clearOfflineUnlockCredential,
+  isNetworkAuthenticationError,
+  saveOfflineUnlockCredential,
+  verifyOfflineUnlockCredential
+} from "./offlineUnlock";
 
 export type AuthUser = {
   id: string;
@@ -245,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         setUser(sessionUser);
         saveSession(sessionUser);
+        await saveOfflineUnlockCredential(sessionUser.id, password);
         saveLastActivityAt(Date.now());
         setIsLocked(false);
         return true;
@@ -257,12 +264,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        const taskSession = await getSupabaseClient().rpc("create_task_session", {
-          p_user_id: user.id,
-          p_password: password
-        });
+        const unlockLocally = async () => {
+          const matches = await verifyOfflineUnlockCredential(user.id, password);
+          if (matches === null) {
+            return {
+              success: false as const,
+              error: "Une connexion Internet est requise pour activer le déverrouillage hors ligne."
+            };
+          }
+          if (!matches) {
+            return { success: false as const, error: "Mot de passe incorrect." };
+          }
+          saveLastActivityAt(Date.now());
+          setIsLocked(false);
+          return { success: true as const };
+        };
+
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          return unlockLocally();
+        }
+
+        let taskSession;
+        try {
+          taskSession = await getSupabaseClient().rpc("create_task_session", {
+            p_user_id: user.id,
+            p_password: password
+          });
+        } catch (error) {
+          if (isNetworkAuthenticationError(error)) return unlockLocally();
+          return { success: false, error: "Impossible de déverrouiller la session." };
+        }
         if (taskSession.error || typeof taskSession.data !== "string") {
           const message = taskSession.error?.message ?? "";
+          if (isNetworkAuthenticationError(taskSession.error)) {
+            return unlockLocally();
+          }
           return {
             success: false,
             error: /TASK_SESSION_INVALID_CREDENTIALS/i.test(message)
@@ -274,6 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextUser = { ...user, taskSessionToken: taskSession.data };
         setUser(nextUser);
         saveSession(nextUser);
+        await saveOfflineUnlockCredential(user.id, password);
         saveLastActivityAt(Date.now());
         setIsLocked(false);
         return { success: true };
@@ -356,6 +393,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         setUser(nextUser);
         saveSession(nextUser);
+        await saveOfflineUnlockCredential(user.id, newPassword);
         await queryClient.invalidateQueries({ queryKey: ["private_tasks", user.id] });
         await queryClient.invalidateQueries({ queryKey: ["task_recipients", user.id] });
         return { success: true };
@@ -416,6 +454,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         queryClient.removeQueries({ queryKey: ["task_recipients"] });
         if (user?.id) {
           void clearPrivateTaskOfflineData(user.id);
+          clearOfflineUnlockCredential(user.id);
         }
         setUser(null);
         saveSession(null);
