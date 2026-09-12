@@ -9,6 +9,7 @@ export type ContractImportFieldId =
   | "firstName"
   | "gender"
   | "address"
+  | "phone"
   | "salaryNumber"
   | "salaryText"
   | "position"
@@ -36,6 +37,7 @@ export type ContractImportDraft = {
   nif: string;
   ninu: string | null;
   address: string;
+  phone: string | null;
   position: string;
   assignment: string;
   salaryNumber: number;
@@ -58,6 +60,7 @@ export type ContractImportEditableField =
   | "firstName"
   | "gender"
   | "address"
+  | "phone"
   | "salaryNumber"
   | "salaryText"
   | "position"
@@ -102,7 +105,8 @@ export const CONTRACT_IMPORT_FIELDS: { id: ContractImportFieldId; label: string 
   { id: "lastName", label: "Nom" },
   { id: "firstName", label: "Prénom" },
   { id: "gender", label: "Sexe" },
-  { id: "address", label: "Adresse" },
+  { id: "address", label: "Adresse (optionnelle)" },
+  { id: "phone", label: "Téléphone (optionnel)" },
   { id: "salaryNumber", label: "Salaire" },
   { id: "salaryText", label: "Salaire en lettres" },
   { id: "position", label: "Poste" },
@@ -116,7 +120,6 @@ export const REQUIRED_IMPORT_FIELDS: DestinationFieldId[] = [
   "lastName",
   "firstName",
   "gender",
-  "address",
   "salaryNumber",
   "position",
   "assignment"
@@ -129,6 +132,7 @@ const FIELD_ALIASES: Record<DestinationFieldId, string[]> = {
   firstName: ["prenom", "prénom", "prenoms", "prénoms", "first name", "firstname", "given name"],
   gender: ["sexe", "genre", "gender", "sex", "civilite", "civilité"],
   address: ["adresse", "address", "domicile", "residence", "résidence", "adresse complète"],
+  phone: ["telephone", "téléphone", "tel", "tél", "numero telephone", "numéro téléphone", "phone", "mobile"],
   salaryNumber: ["salaire", "salaire en chiffre", "salaire chiffre", "montant", "salary", "traitement", "salaire brut"],
   salaryText: ["salaire en lettre", "salaire en lettres", "salaire lettre", "salary text", "montant en lettres"],
   position: ["poste", "fonction", "titre", "emploi", "position", "poste occupe"],
@@ -146,6 +150,7 @@ const FIELD_DETECTION_ORDER: DestinationFieldId[] = [
   "lastName",
   "commentaire",
   "address",
+  "phone",
   "position",
   "gender",
   "ninu",
@@ -156,6 +161,7 @@ const FIELD_LABELS = new Map(CONTRACT_IMPORT_FIELDS.map((field) => [field.id, fi
 // Keep a safety ceiling for malformed/accidental clipboard pastes while allowing
 // normal operational imports to be handled in a single pass.
 export const MAX_IMPORT_ROWS = 5_000;
+export const DEFAULT_IMPORT_ADDRESS = "Port-au-Prince";
 
 function normalizeHeader(value: string) {
   return value
@@ -474,7 +480,8 @@ function buildRowDraft(
   const errors: string[] = [];
   const firstName = getMappedValue(row, mapping, "firstName");
   const lastName = getMappedValue(row, mapping, "lastName");
-  const address = getMappedValue(row, mapping, "address");
+  const address = getMappedValue(row, mapping, "address") || DEFAULT_IMPORT_ADDRESS;
+  const phone = getMappedValue(row, mapping, "phone");
   const position = getMappedValue(row, mapping, "position");
   const assignment = getMappedValue(row, mapping, "assignment");
   const nif = normalizeNif(getMappedValue(row, mapping, "nif"));
@@ -490,7 +497,6 @@ function buildRowDraft(
   if (!firstName) errors.push("Le prénom est obligatoire.");
   if (!lastName) errors.push("Le nom est obligatoire.");
   if (!gender) errors.push("Le sexe est invalide.");
-  if (!address) errors.push("L'adresse est obligatoire.");
   if (!position) errors.push("Le poste est obligatoire.");
   if (!assignment) errors.push("L'affectation est obligatoire.");
   if (salaryNumber === null || salaryNumber <= 0) errors.push("Le salaire est invalide.");
@@ -510,6 +516,7 @@ function buildRowDraft(
       nif,
       ninu: ninu.value,
       address,
+      phone: phone || null,
       position,
       assignment,
       salaryNumber,
@@ -525,7 +532,8 @@ function buildDraftFromEditableRow(row: ContractImportEditableRow) {
   const errors: string[] = [];
   const firstName = row.firstName.trim();
   const lastName = row.lastName.trim();
-  const address = row.address.trim();
+  const address = row.address.trim() || DEFAULT_IMPORT_ADDRESS;
+  const phone = (row.phone ?? "").trim();
   const position = row.position.trim();
   const assignment = row.assignment.trim();
   const nif = normalizeNif(row.nif);
@@ -541,7 +549,6 @@ function buildDraftFromEditableRow(row: ContractImportEditableRow) {
   if (!firstName) errors.push("Le prénom est obligatoire.");
   if (!lastName) errors.push("Le nom est obligatoire.");
   if (!gender) errors.push("Le sexe est invalide.");
-  if (!address) errors.push("L'adresse est obligatoire.");
   if (!position) errors.push("Le poste est obligatoire.");
   if (!assignment) errors.push("L'affectation est obligatoire.");
   if (salaryNumber === null || salaryNumber <= 0) errors.push("Le salaire est invalide.");
@@ -561,6 +568,7 @@ function buildDraftFromEditableRow(row: ContractImportEditableRow) {
       nif,
       ninu: ninu.value,
       address,
+      phone: phone || null,
       position,
       assignment,
       salaryNumber,
@@ -593,7 +601,8 @@ export function buildImportEditableRows(
       lastName: getMappedValue(row, mapping, "lastName"),
       firstName: getMappedValue(row, mapping, "firstName"),
       gender: normalizedGender ?? getMappedValue(row, mapping, "gender"),
-      address: getMappedValue(row, mapping, "address"),
+      address: getMappedValue(row, mapping, "address") || DEFAULT_IMPORT_ADDRESS,
+      phone: getMappedValue(row, mapping, "phone"),
       salaryNumber,
       salaryText: salaryText || (parsedSalary ? numberToFrenchWords(parsedSalary) : ""),
       position: getMappedValue(row, mapping, "position"),

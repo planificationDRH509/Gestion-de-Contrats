@@ -37,6 +37,57 @@ describe("contractImport", () => {
     expect(previewRows[0].values?.salaryText).toContain("QUARANTE");
   });
 
+  it("accepts an import without an address column", () => {
+    const table = parsePastedContractTable(
+      [
+        "NIF\tNom\tPrénom\tSexe\tSalaire\tPoste\tAffectation",
+        "0010020034\tDOE\tJean\tHomme\t45000\tAgent\tMSPP"
+      ].join("\n")
+    );
+
+    const mapping = inferImportMapping(table.headers);
+    const mappingIssues = validateImportMapping(mapping);
+    const previewRows = buildImportPreview(table, mapping);
+
+    expect(mappingIssues.missingFields).toEqual([]);
+    expect(previewRows[0].errors).toEqual([]);
+    expect(previewRows[0].values?.address).toBe("Port-au-Prince");
+  });
+
+  it("accepts an empty address value when the column is present", () => {
+    const table = parsePastedContractTable(
+      [
+        "NIF\tNom\tPrénom\tSexe\tAdresse\tSalaire\tPoste\tAffectation",
+        "0010020034\tDOE\tJean\tHomme\t\t45000\tAgent\tMSPP"
+      ].join("\n")
+    );
+
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
+    const validatedRows = validateImportEditableRows(rows);
+
+    expect(validatedRows[0].errors).toEqual([]);
+    expect(validatedRows[0].values?.address).toBe("Port-au-Prince");
+  });
+
+  it("imports an optional telephone number", () => {
+    const table = parsePastedContractTable(
+      [
+        "NIF\tNom\tPrénom\tSexe\tTéléphone\tSalaire\tPoste\tAffectation",
+        "0010020034\tDOE\tJean\tHomme\t+509 37 00 00 00\t45000\tAgent\tMSPP"
+      ].join("\n")
+    );
+
+    const mapping = inferImportMapping(table.headers);
+    const previewRows = buildImportPreview(table, mapping);
+
+    expect(validateImportMapping(mapping).missingFields).toEqual([]);
+    expect(previewRows[0].errors).toEqual([]);
+    expect(previewRows[0].values).toMatchObject({
+      address: "Port-au-Prince",
+      phone: "+509 37 00 00 00"
+    });
+  });
+
   it("detects invalid rows and duplicate NIFs", () => {
     const table = parsePastedContractTable(
       [

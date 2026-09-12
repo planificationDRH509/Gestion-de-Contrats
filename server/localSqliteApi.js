@@ -328,6 +328,10 @@ function sortContracts(contracts, sort) {
             return sorted.sort(function (a, b) { return "".concat(a.lastName, " ").concat(a.firstName).localeCompare("".concat(b.lastName, " ").concat(b.firstName)); });
         case "name_desc":
             return sorted.sort(function (a, b) { return "".concat(b.lastName, " ").concat(b.firstName).localeCompare("".concat(a.lastName, " ").concat(a.firstName)); });
+        case "nif_asc":
+            return sorted.sort(function (a, b) { var _a, _b; return ((_a = a.nif) !== null && _a !== void 0 ? _a : "").localeCompare((_b = b.nif) !== null && _b !== void 0 ? _b : "", "fr", { numeric: true }); });
+        case "nif_desc":
+            return sorted.sort(function (a, b) { var _a, _b; return ((_a = b.nif) !== null && _a !== void 0 ? _a : "").localeCompare((_b = a.nif) !== null && _b !== void 0 ? _b : "", "fr", { numeric: true }); });
         case "createdAt_desc":
         default:
             return sorted.sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });

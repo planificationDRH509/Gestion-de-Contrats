@@ -35,8 +35,8 @@ vi.mock("./contractsApi", () => ({
 }));
 
 vi.mock("./ContractDocument", () => ({
-  ContractDocument: ({ pageSelection }: { pageSelection: string }) => (
-    <div data-testid="contract-document" data-page-selection={pageSelection}>Contrat</div>
+  ContractDocument: ({ contract, pageSelection }: { contract: { id: string }; pageSelection: string }) => (
+    <div data-testid="contract-document" data-contract-id={contract.id} data-page-selection={pageSelection}>Contrat</div>
   )
 }));
 
@@ -123,6 +123,20 @@ describe("ContractsPrintPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
     expect(window.print).toHaveBeenCalledOnce();
+  });
+
+  it("renders a group in the same order as the requested ids", () => {
+    mocks.searchParams = "ids=contract-2,contract-1";
+    mocks.contracts = [
+      { id: "contract-1", workspaceId: "workspace-1", status: "saisie" },
+      { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }
+    ];
+
+    render(<ContractsPrintPage />);
+
+    expect(screen.getAllByTestId("contract-document").map((document) =>
+      document.getAttribute("data-contract-id")
+    )).toEqual(["contract-2", "contract-1"]);
   });
 
   it("marks a one-page group print as partial", () => {

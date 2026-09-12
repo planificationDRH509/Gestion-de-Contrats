@@ -7,6 +7,7 @@ import {
   type ContractPageSelection
 } from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
+import { orderContractsByIds } from "../../lib/contractSorting";
 
 export function ContractsPrintPage() {
   const [searchParams] = useSearchParams();
@@ -72,7 +73,9 @@ export function ContractsPrintPage() {
         }
       }
       if (user && data && data.length > 0) {
-        appendPrintHistory(user.id, workspaceId, data, { partial: isPartialPrint });
+        appendPrintHistory(user.id, workspaceId, orderContractsByIds(data, ids), {
+          partial: isPartialPrint
+        });
       }
     };
     window.addEventListener("afterprint", handleAfterPrint);
@@ -87,8 +90,10 @@ export function ContractsPrintPage() {
     return <div className="card">Aucun contrat à imprimer.</div>;
   }
 
+  const orderedContracts = orderContractsByIds(data, ids);
+
   const copies = 1;
-  const pages = data.flatMap((contract) =>
+  const pages = orderedContracts.flatMap((contract) =>
     Array.from({ length: copies }, (_, index) => ({
       contract,
       key: `${contract.id}-${index}`

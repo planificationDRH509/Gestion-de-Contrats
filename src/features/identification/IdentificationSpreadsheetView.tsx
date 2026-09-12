@@ -8,6 +8,7 @@ import {
   prepareNifDigitOverwrite
 } from "../../lib/nifInput";
 import { matchesPersonSearch } from "../../lib/personSearch";
+import { getNextSpreadsheetCell } from "../../lib/spreadsheetNavigation";
 import {
   useAddresses
 } from "../settings/suggestionsApi";
@@ -361,18 +362,16 @@ export function IdentificationSpreadsheetView({
   }
 
   function handleGridArrowNavigation(event: React.KeyboardEvent, rowKey: string, columnIndex: number) {
+    if (event.defaultPrevented) return;
+
     if (event.key === "Enter") {
       event.preventDefault();
-      // Jump directly to the first available empty row's NIF column
-      const firstEmpty = newRows.find(r => isDraftEmpty(r.draft));
-      if (firstEmpty) {
-        focusGridCell(firstEmpty.id, 0);
-      } else {
-        // Fallback: next row col 0 if no empty one found
-        const rows = [...newRows.map(r => r.id), ...paginatedIdentities.map(i => i.nif)];
-        const rowIndex = rows.indexOf(rowKey);
-        const nextRowKey = rows[rowIndex + 1];
-        if (nextRowKey) focusGridCell(nextRowKey, 0);
+      const rows = [...newRows.map((row) => row.id), ...paginatedIdentities.map((identity) => identity.nif)];
+      const nextCell = getNextSpreadsheetCell(rows, rowKey, columnIndex, NAVIGABLE_COLUMN_COUNT);
+      if (nextCell) {
+        window.requestAnimationFrame(() => {
+          focusGridCell(nextCell.rowKey, nextCell.columnIndex);
+        });
       }
       return;
     }
@@ -818,7 +817,6 @@ export function IdentificationSpreadsheetView({
                           onBeforeInput={e => prepareNifDigitOverwrite(e.currentTarget, (e.nativeEvent as InputEvent).data)}
                           onChange={e => setExistingField(identity.nif, "nif", formatNifInputElement(e.currentTarget))}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 0);
                           }}
@@ -830,7 +828,6 @@ export function IdentificationSpreadsheetView({
                           value={draft.firstName}
                           onChange={e => setExistingField(identity.nif, "firstName", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 1);
                           }}
@@ -842,7 +839,6 @@ export function IdentificationSpreadsheetView({
                           value={draft.lastName}
                           onChange={e => setExistingField(identity.nif, "lastName", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 2);
                           }}
@@ -854,7 +850,6 @@ export function IdentificationSpreadsheetView({
                           value={draft.gender}
                           onChange={e => setExistingField(identity.nif, "gender", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             if (e.key.toLowerCase() === "f") { e.preventDefault(); setExistingField(identity.nif, "gender", "Femme"); }
                             if (["h", "m"].includes(e.key.toLowerCase())) { e.preventDefault(); setExistingField(identity.nif, "gender", "Homme"); }
@@ -868,7 +863,6 @@ export function IdentificationSpreadsheetView({
                           value={draft.ninu}
                           onChange={e => setExistingField(identity.nif, "ninu", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 4);
                           }}
@@ -883,7 +877,6 @@ export function IdentificationSpreadsheetView({
                           placeholder="Téléphone (facultatif)"
                           onChange={e => setExistingField(identity.nif, "phone", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 5);
                           }}
@@ -896,7 +889,6 @@ export function IdentificationSpreadsheetView({
                           onChange={val => setExistingField(identity.nif, "address", val)}
                           onBlur={() => handleSaveExisting(identity.nif)}
                           onKeyDown={e => {
-                            if (e.key === "Enter") handleSaveExisting(identity.nif);
                             if (e.key === "Escape") cancelEditing(identity.nif);
                             handleGridArrowNavigation(e, identity.nif, 6);
                           }}

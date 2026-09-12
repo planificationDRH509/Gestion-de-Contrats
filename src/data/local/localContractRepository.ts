@@ -19,6 +19,7 @@ import {
   createContractAuditHistory,
   inferAuditAction
 } from "../../lib/contractAudit";
+import { sortContracts } from "../../lib/contractSorting";
 
 function now() {
   return new Date().toISOString();
@@ -26,25 +27,6 @@ function now() {
 
 function matchesQuery(contract: Contract, query: string) {
   return matchesContractSearch(contract, query);
-}
-
-function sortContracts(contracts: Contract[], sort?: ContractListParams["sort"]) {
-  const sorted = [...contracts];
-  switch (sort) {
-    case "createdAt_asc":
-      return sorted.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    case "name_asc":
-      return sorted.sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
-      );
-    case "name_desc":
-      return sorted.sort((a, b) =>
-        `${b.lastName} ${b.firstName}`.localeCompare(`${a.lastName} ${a.firstName}`)
-      );
-    case "createdAt_desc":
-    default:
-      return sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
 }
 
 function withTags(contract: Contract, db: LocalDb): Contract {

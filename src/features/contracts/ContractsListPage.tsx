@@ -12,7 +12,7 @@ import {
   useUpdateContractComment
 } from "./contractsApi";
 import { useAppUsers } from "../auth/usersApi";
-import { Contract, ContractDateFilterMode, ContractStatus, Dossier, Tag } from "../../data/types";
+import { Contract, ContractDateFilterMode, ContractSort, ContractStatus, Dossier, Tag } from "../../data/types";
 import { Pagination } from "../../app/components/Pagination";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
 import { formatCurrency } from "../../lib/format";
@@ -54,6 +54,7 @@ import {
   getInstitutionCommuneOptions,
   getInstitutionDepartmentOptions
 } from "./institutionLocationFilters";
+import { sortContracts } from "../../lib/contractSorting";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -123,9 +124,7 @@ export function ContractsListPage() {
   const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc">(
-    "createdAt_desc"
-  );
+  const [sort, setSort] = useState<ContractSort>("createdAt_desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(readContractsPageSize);
   const [selected, setSelected] = useState<string[]>([]);
@@ -412,10 +411,21 @@ export function ContractsListPage() {
     setSelected(Array.from(next));
   }
 
-  function handlePrint(ids: string[]) {
+  async function handlePrint(ids: string[]) {
     if (ids.length === 0) return;
-    printJob.mutate({ workspaceId, ids });
-    navigate(`/app/contrats/print?ids=${ids.join(",")}`);
+    let orderedIds = ids;
+    if (ids.length > 1) {
+      const selectedIdSet = new Set(ids);
+      const visibleSelection = items.filter((contract) => selectedIdSet.has(contract.id));
+      orderedIds = visibleSelection.length === ids.length
+        ? visibleSelection.map((contract) => contract.id)
+        : sortContracts(
+            await getDataProvider().contracts.getByIds(ids, workspaceId),
+            sort
+          ).map((contract) => contract.id);
+    }
+    printJob.mutate({ workspaceId, ids: orderedIds });
+    navigate(`/app/contrats/print?ids=${orderedIds.join(",")}`);
   }
 
   function formatPrintHistoryLine(entry: PrintHistoryEntry) {
@@ -2090,12 +2100,14 @@ export function ContractsListPage() {
                           { id: "createdAt_desc", label: "Plus récents", icon: "calendar_today" },
                           { id: "createdAt_asc", label: "Plus anciens", icon: "history" },
                           { id: "name_asc", label: "Nom A → Z", icon: "sort_by_alpha" },
-                          { id: "name_desc", label: "Nom Z → A", icon: "sort_by_alpha" }
+                          { id: "name_desc", label: "Nom Z → A", icon: "sort_by_alpha" },
+                          { id: "nif_asc", label: "NIF croissant", icon: "pin" },
+                          { id: "nif_desc", label: "NIF décroissant", icon: "pin" }
                         ].map((s) => (
                           <button
                             key={s.id}
                             className="context-menu-item"
-                            onClick={() => { setSort(s.id as any); setContextMenu(null); }}
+                            onClick={() => { setSort(s.id as ContractSort); setContextMenu(null); setPage(1); }}
                             style={{ color: sort === s.id ? "var(--accent)" : "inherit", fontWeight: sort === s.id ? 600 : 400 }}
                           >
                             <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>{s.icon}</span>
@@ -2685,7 +2697,7 @@ export function ContractsListPage() {
                 <button
                   className="icon-btn primary"
                   type="button"
-                  onClick={() => handlePrint(selected)}
+                  onClick={() => void handlePrint(selected)}
                   title="Imprimer tout"
                 >
                   <span className="material-symbols-rounded">print</span>

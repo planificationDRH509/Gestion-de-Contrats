@@ -52,7 +52,7 @@ type ContractDateFilterMode =
 type ContractListPayload = {
   workspaceId: string;
   query?: string;
-  sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc";
+  sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc" | "nif_asc" | "nif_desc";
   page?: number;
   pageSize?: number;
   status?: string;
@@ -410,6 +410,10 @@ function sortContracts(
       return sorted.sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
     case "name_desc":
       return sorted.sort((a, b) => `${b.lastName} ${b.firstName}`.localeCompare(`${a.lastName} ${a.firstName}`));
+    case "nif_asc":
+      return sorted.sort((a, b) => (a.nif ?? "").localeCompare(b.nif ?? "", "fr", { numeric: true }));
+    case "nif_desc":
+      return sorted.sort((a, b) => (b.nif ?? "").localeCompare(a.nif ?? "", "fr", { numeric: true }));
     case "createdAt_desc":
     default:
       return sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

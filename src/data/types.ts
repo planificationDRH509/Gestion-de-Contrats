@@ -164,10 +164,18 @@ export type OutboxItem = {
   syncedAt?: string | null;
 };
 
+export type ContractSort =
+  | "createdAt_desc"
+  | "createdAt_asc"
+  | "name_asc"
+  | "name_desc"
+  | "nif_asc"
+  | "nif_desc";
+
 export type ContractListParams = {
   workspaceId: string;
   query?: string;
-  sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc";
+  sort?: ContractSort;
   page?: number;
   pageSize?: number;
   onlyMine?: boolean;

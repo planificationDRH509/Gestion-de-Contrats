@@ -457,10 +457,15 @@ export function useImportContracts() {
             lastName: row.lastName,
             nif: row.nif,
             ninu: row.ninu,
+            phone: row.phone,
             address: row.address,
             createdBy: responsibleUserId
           });
-        } else if (!existing.ninu && row.ninu) {
+        } else if (
+          (!existing.ninu && row.ninu) ||
+          (!existing.phone && row.phone) ||
+          !existing.address
+        ) {
           applicantInputsByNif.set(nifKey, {
             id: existing.id,
             workspaceId,
@@ -468,9 +473,9 @@ export function useImportContracts() {
             firstName: existing.firstName,
             lastName: existing.lastName,
             nif: existing.nif || existing.id,
-            ninu: row.ninu,
-            phone: existing.phone,
-            address: existing.address,
+            ninu: existing.ninu || row.ninu,
+            phone: existing.phone || row.phone,
+            address: existing.address || row.address,
             createdBy: existing.createdBy
           });
         }

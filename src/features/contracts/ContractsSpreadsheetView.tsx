@@ -44,6 +44,7 @@ import {
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
 import { areSpreadsheetDraftsEqual } from "./contractSpreadsheetDrafts";
+import { getNextSpreadsheetCell } from "../../lib/spreadsheetNavigation";
 
 type SpreadsheetFieldKey =
   | "nif"
@@ -658,32 +659,16 @@ export function ContractsSpreadsheetView({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const newRowPrefix = "newRow_";
-      const existingRowPrefix = "existingRow_";
-
-      if (rowKey.startsWith(newRowPrefix)) {
-        const rowId = rowKey.slice(newRowPrefix.length);
-        // Start the save without awaiting it so data entry can continue immediately.
-        void maybeCreateFromNewRow(rowId);
-
-        const nextEmptyRow = newRowsRef.current.find(
-          (row) => row.id !== rowId && isDraftEmpty(normalizeDraft(row.draft))
-        );
-        if (nextEmptyRow) {
-          window.requestAnimationFrame(() => focusNewRowCell(nextEmptyRow.id, 0));
-        } else {
-          insertNewRowAfter(rowId);
-        }
-      } else if (rowKey.startsWith(existingRowPrefix)) {
-        const contractId = rowKey.slice(existingRowPrefix.length);
-        const currentRowIndex = rowOrder.indexOf(rowKey);
-        const nextRowKey = rowOrder[currentRowIndex + 1];
-        if (nextRowKey) {
-          // Moving focus triggers the cell's existing blur-based save.
-          window.requestAnimationFrame(() => focusGridCell(nextRowKey, 0));
-        } else {
-          queueExistingSave(contractId);
-        }
+      const nextCell = getNextSpreadsheetCell(
+        rowOrder,
+        rowKey,
+        columnIndex,
+        NAVIGABLE_COLUMN_COUNT
+      );
+      if (nextCell) {
+        window.requestAnimationFrame(() => {
+          focusGridCell(nextCell.rowKey, nextCell.columnIndex);
+        });
       }
       return;
     }

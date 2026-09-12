@@ -35,6 +35,7 @@ type UserOption = {
 const BULK_EDIT_FIELDS: { id: ContractImportEditableField; label: string }[] = [
   { id: "gender", label: "Sexe" },
   { id: "address", label: "Adresse" },
+  { id: "phone", label: "Téléphone" },
   { id: "salaryNumber", label: "Salaire" },
   { id: "salaryText", label: "Salaire en lettres" },
   { id: "position", label: "Poste" },
@@ -665,7 +666,8 @@ export function ContractsImportModal({
                     <th>Nom</th>
                     <th>Prénom</th>
                     <th>Sexe</th>
-                    <th>Adresse</th>
+                    <th>Adresse (optionnelle)</th>
+                    <th>Téléphone (optionnel)</th>
                     <th>Salaire</th>
                     <th>Salaire lettres</th>
                     <th>Poste</th>
@@ -749,6 +751,15 @@ export function ContractsImportModal({
                             value={row.address}
                             onChange={(event) => updateEditableRow(row.id, "address", event.target.value)}
                             disabled={row.excluded}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="contracts-import-cell-input"
+                            value={row.phone ?? ""}
+                            onChange={(event) => updateEditableRow(row.id, "phone", event.target.value)}
+                            disabled={row.excluded}
+                            inputMode="tel"
                           />
                         </td>
                         <td>

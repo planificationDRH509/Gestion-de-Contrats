@@ -27,6 +27,7 @@ import {
 } from "../types";
 import { DataProvider } from "../dataProvider";
 import { formatFirstName, formatLastName } from "../../lib/format";
+import { sortContracts } from "../../lib/contractSorting";
 import { getSupabaseClient } from "./supabaseClient";
 import { LocalApplicantRepository } from "../local/localApplicantRepository";
 import { LocalContractRepository } from "../local/localContractRepository";
@@ -646,7 +647,9 @@ class SupabaseContractRepository implements ContractRepository {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     const hasDateFilter = Boolean(params.dateFilterMode && params.dateFilterMode !== "all");
-    const requiresClientFiltering = hasDateFilter || Boolean(params.query?.trim());
+    const requiresIdentitySorting = params.sort?.startsWith("name_") || params.sort?.startsWith("nif_");
+    const requiresClientFiltering =
+      hasDateFilter || Boolean(params.query?.trim()) || requiresIdentitySorting;
 
     let query;
     if (params.tagId) {
@@ -722,13 +725,9 @@ class SupabaseContractRepository implements ContractRepository {
             }
           )
         );
-      if (params.sort === "name_asc") {
-        filteredItems.sort((a,b) => a.lastName.localeCompare(b.lastName));
-      } else if (params.sort === "name_desc") {
-        filteredItems.sort((a,b) => b.lastName.localeCompare(a.lastName));
-      }
+      const sortedItems = sortContracts(filteredItems, params.sort);
       
-      const pagedItems = filteredItems.slice(from, to + 1);
+      const pagedItems = sortedItems.slice(from, to + 1);
 
       return {
         items: pagedItems,
@@ -744,12 +743,7 @@ class SupabaseContractRepository implements ContractRepository {
       throw repositoryError("Impossible de charger les contrats.", error);
     }
     
-    let items = data.map(mapContract);
-    if (params.sort === "name_asc") {
-        items.sort((a,b) => a.lastName.localeCompare(b.lastName));
-    } else if (params.sort === "name_desc") {
-        items.sort((a,b) => b.lastName.localeCompare(a.lastName));
-    }
+    const items = data.map(mapContract);
 
     return {
       items,
