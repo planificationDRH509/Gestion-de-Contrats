@@ -8,7 +8,7 @@ import {
   UpdateContractInput
 } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb, selectDb, type LocalDb } from "./localDb";
+import { loadDb, saveDb, selectDb, flushLocalDbWrites, type LocalDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import { matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
@@ -98,7 +98,7 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
     const start = (page - 1) * pageSize;
 
     return {
-      items: items.slice(start, start + pageSize).map((contract) => withTags(contract, db)),
+      items: (params.all ? items : items.slice(start, start + pageSize)).map((contract) => withTags(contract, db)),
       total,
       page,
       pageSize
@@ -146,7 +146,7 @@ export class LocalContractRepository implements ContractRepository {
       firstName: formatFirstName(input.firstName),
       lastName: formatLastName(input.lastName),
       dossierId: input.dossierId ?? null,
-      id: createId(),
+      id: input.id ?? createId(),
       createdAt: timestamp,
       updatedAt: timestamp,
       auditHistory:
@@ -155,6 +155,7 @@ export class LocalContractRepository implements ContractRepository {
     db.contracts.push(contract);
     saveDb(db);
     queueOutbox(input.workspaceId, "contract.create", contract);
+    await flushLocalDbWrites();
     return contract;
   }
 
@@ -278,6 +279,7 @@ export class LocalContractRepository implements ContractRepository {
 
     const db = loadDb();
     const idSet = new Set(contractIds);
+    const changesToQueue: Array<{ id: string; previousStatus: ContractStatus }> = [];
     let updatedCount = 0;
 
     const timestamp = now();
@@ -286,10 +288,11 @@ export class LocalContractRepository implements ContractRepository {
         contract.workspaceId === workspaceId &&
         !contract.deletedAt &&
         idSet.has(contract.id);
-      if (!shouldUpdate) {
+      if (!shouldUpdate || contract.status === status) {
         return contract;
       }
 
+      changesToQueue.push({ id: contract.id, previousStatus: contract.status });
       updatedCount += 1;
       const changes = buildContractAuditChanges(contract, { status });
       return {
@@ -306,10 +309,18 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
-        contractIds,
-        status
-      });
+      if (shouldQueue) {
+        // One action per contract makes partial batch retries safe.
+        for (const change of changesToQueue) {
+          queueOutbox(workspaceId, "contract.update", {
+            contractIds: [change.id],
+            status,
+            previousStatus: change.previousStatus,
+            changedAt: timestamp
+          });
+        }
+        await flushLocalDbWrites();
+      }
     }
 
     return updatedCount;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import type { AppUser, Contract, Dossier } from "../../data/types";
 import {
   CONTRACT_IMPORT_FIELDS,
@@ -674,7 +674,6 @@ export function ContractsImportModal({
                     <th>Affectation</th>
                     <th>Durée</th>
                     <th>Commentaire</th>
-                    <th>État</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -688,134 +687,139 @@ export function ContractsImportModal({
                           ? "warning"
                           : "";
                     return (
-                      <tr key={row.id} className={stateClass}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            className="checkbox"
-                            checked={selectedRowIdSet.has(row.id)}
-                            onChange={() => toggleRowSelection(row.id)}
-                            aria-label={`Sélectionner la ligne ${row.sourceRowNumber}`}
-                          />
-                        </td>
-                        <td>{row.sourceRowNumber}</td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.nif}
-                            onChange={(event) => updateEditableRow(row.id, "nif", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.ninu}
-                            onChange={(event) => updateEditableRow(row.id, "ninu", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.lastName}
-                            onChange={(event) => updateEditableRow(row.id, "lastName", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.firstName}
-                            onChange={(event) => updateEditableRow(row.id, "firstName", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="contracts-import-cell-input"
-                            value={row.gender}
-                            onChange={(event) => updateEditableRow(row.id, "gender", event.target.value)}
-                            disabled={row.excluded}
-                          >
-                            <option value={row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : ""}>
-                              {row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : "Choisir"}
-                            </option>
-                            <option value="Homme">Homme</option>
-                            <option value="Femme">Femme</option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input wide"
-                            value={row.address}
-                            onChange={(event) => updateEditableRow(row.id, "address", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.phone ?? ""}
-                            onChange={(event) => updateEditableRow(row.id, "phone", event.target.value)}
-                            disabled={row.excluded}
-                            inputMode="tel"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input number"
-                            value={row.salaryNumber}
-                            onChange={(event) => updateEditableRow(row.id, "salaryNumber", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input wide"
-                            value={row.salaryText}
-                            onChange={(event) => updateEditableRow(row.id, "salaryText", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input"
-                            value={row.position}
-                            onChange={(event) => updateEditableRow(row.id, "position", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input wide"
-                            value={row.assignment}
-                            onChange={(event) => updateEditableRow(row.id, "assignment", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input number"
-                            value={row.durationMonths}
-                            onChange={(event) => updateEditableRow(row.id, "durationMonths", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="contracts-import-cell-input wide"
-                            value={row.commentaire}
-                            onChange={(event) => updateEditableRow(row.id, "commentaire", event.target.value)}
-                            disabled={row.excluded}
-                          />
-                        </td>
-                        <td className="contracts-import-row-state">
-                          {row.excluded
-                            ? "Retirée"
-                            : validation?.errors.concat(validation.warnings).join(" ") || "Valide"}
-                        </td>
-                      </tr>
+                      <Fragment key={row.id}>
+                        <tr className={`contracts-import-data-row ${stateClass}`}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              className="checkbox"
+                              checked={selectedRowIdSet.has(row.id)}
+                              onChange={() => toggleRowSelection(row.id)}
+                              aria-label={`Sélectionner la ligne ${row.sourceRowNumber}`}
+                            />
+                          </td>
+                          <td>{row.sourceRowNumber}</td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.nif}
+                              onChange={(event) => updateEditableRow(row.id, "nif", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.ninu}
+                              onChange={(event) => updateEditableRow(row.id, "ninu", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.lastName}
+                              onChange={(event) => updateEditableRow(row.id, "lastName", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.firstName}
+                              onChange={(event) => updateEditableRow(row.id, "firstName", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <select
+                              className="contracts-import-cell-input"
+                              value={row.gender}
+                              onChange={(event) => updateEditableRow(row.id, "gender", event.target.value)}
+                              disabled={row.excluded}
+                            >
+                              <option value={row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : ""}>
+                                {row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : "Choisir"}
+                              </option>
+                              <option value="Homme">Homme</option>
+                              <option value="Femme">Femme</option>
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input wide"
+                              value={row.address}
+                              onChange={(event) => updateEditableRow(row.id, "address", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.phone ?? ""}
+                              onChange={(event) => updateEditableRow(row.id, "phone", event.target.value)}
+                              disabled={row.excluded}
+                              inputMode="tel"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input number"
+                              value={row.salaryNumber}
+                              onChange={(event) => updateEditableRow(row.id, "salaryNumber", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input wide"
+                              value={row.salaryText}
+                              onChange={(event) => updateEditableRow(row.id, "salaryText", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              value={row.position}
+                              onChange={(event) => updateEditableRow(row.id, "position", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input wide"
+                              value={row.assignment}
+                              onChange={(event) => updateEditableRow(row.id, "assignment", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input number"
+                              value={row.durationMonths}
+                              onChange={(event) => updateEditableRow(row.id, "durationMonths", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="contracts-import-cell-input wide"
+                              value={row.commentaire}
+                              onChange={(event) => updateEditableRow(row.id, "commentaire", event.target.value)}
+                              disabled={row.excluded}
+                            />
+                          </td>
+                        </tr>
+                        <tr className={stateClass}>
+                          <td colSpan={15} className="contracts-import-row-state">
+                            <strong>État de la ligne {row.sourceRowNumber} : </strong>
+                            {row.excluded
+                              ? "Retirée"
+                              : validation?.errors.concat(validation.warnings).join(" ") || "Valide"}
+                          </td>
+                        </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>

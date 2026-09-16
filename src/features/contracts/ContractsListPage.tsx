@@ -739,13 +739,13 @@ export function ContractsListPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      await changeContractsStatus.mutateAsync({
+      const updatedCount = await changeContractsStatus.mutateAsync({
         workspaceId,
         contractIds: ids,
         status: newStatus
       });
       const label = getContractStatusLabel(newStatus);
-      setActionMessage(`${ids.length} contrat(s) passé(s) à l'état "${label}".`);
+      setActionMessage(`${updatedCount} contrat(s) passé(s) à l'état "${label}".${navigator.onLine ? "" : " Changement enregistré sur cet appareil ; synchronisation au retour de la connexion."}`);
     } catch (error) {
       console.error(error);
       setActionError("Impossible de modifier l'état des contrats sélectionnés.");

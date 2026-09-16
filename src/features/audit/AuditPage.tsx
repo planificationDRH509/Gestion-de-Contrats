@@ -79,7 +79,7 @@ export function AuditPage() {
   const { data, isLoading } = useContractsList({
     workspaceId,
     page: 1,
-    pageSize: 5_000,
+    all: true,
     sort: "createdAt_desc"
   });
   const { data: users = [] } = useAppUsers();

@@ -178,6 +178,8 @@ export type ContractListParams = {
   sort?: ContractSort;
   page?: number;
   pageSize?: number;
+  /** Load every matching contract for statistics and exports. */
+  all?: boolean;
   onlyMine?: boolean;
   userId?: string;
   status?: ContractStatus;
@@ -209,7 +211,7 @@ export type ContractListResult = {
 export type CreateContractInput = Omit<
   Contract,
   "id" | "createdAt" | "updatedAt" | "deletedAt"
->;
+> & { id?: string };
 
 export type UpdateContractInput = Partial<CreateContractInput> & { id: string };
 

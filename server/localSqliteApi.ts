@@ -55,6 +55,7 @@ type ContractListPayload = {
   sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc" | "nif_asc" | "nif_desc";
   page?: number;
   pageSize?: number;
+  all?: boolean;
   status?: string;
   dossierId?: string | null;
   dateFilterMode?: ContractDateFilterMode;
@@ -2033,7 +2034,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const total = items.length;
     items = sortContracts(items, payload.sort);
     const start = (page - 1) * pageSize;
-    const paged = items.slice(start, start + pageSize);
+    const paged = payload.all ? items : items.slice(start, start + pageSize);
 
     sendJson(res, 200, {
       items: paged,

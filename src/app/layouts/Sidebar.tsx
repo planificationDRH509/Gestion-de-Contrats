@@ -164,12 +164,16 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
             <strong>
               {syncState.isSyncing
                 ? "Synchronisation…"
-                : syncState.pendingCount > 0
+                : syncState.lastError
+                  ? "Synchronisation à vérifier"
+                  : syncState.pendingCount > 0
                   ? `${syncState.pendingCount} modification${syncState.pendingCount > 1 ? "s" : ""} en attente`
                   : "Disponible hors ligne"}
             </strong>
-            <small>
-              {syncState.lastSyncedAt
+            <small style={syncState.lastError ? { whiteSpace: "normal" } : undefined}>
+              {syncState.lastError
+                ? syncState.lastError
+                : syncState.lastSyncedAt
                 ? `Mis à jour ${new Date(syncState.lastSyncedAt).toLocaleString("fr-HT", { dateStyle: "short", timeStyle: "short" })}`
                 : "Cliquez pour télécharger les données"}
             </small>

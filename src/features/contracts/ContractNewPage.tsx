@@ -527,7 +527,9 @@ export function ContractNewPage() {
     }
 
     if (mode === "save") {
-      setSuccessMessage("Contrat enregistré. Prêt pour une nouvelle saisie.");
+      setSuccessMessage(navigator.onLine
+        ? "Contrat enregistré. Prêt pour une nouvelle saisie."
+        : "Contrat enregistré sur cet appareil, disponible pour impression. Synchronisation au retour de la connexion.");
       setSelectedTags([]);
       reset(defaultValues);
       requestAnimationFrame(() => setFocus("nif"));

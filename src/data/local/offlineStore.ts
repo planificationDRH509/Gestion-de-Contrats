@@ -24,7 +24,8 @@ export function isOfflineFailure(error: unknown): boolean {
   if (error instanceof TypeError) {
     return true;
   }
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  const message = error && typeof error === "object" && "message" in error
+    ? String(error.message).toLowerCase() : "";
   if (/failed to fetch|network|fetch|load failed|internet|offline/.test(message)) {
     return true;
   }
@@ -35,8 +36,14 @@ export function isOfflineFailure(error: unknown): boolean {
   return cause !== undefined && cause !== error ? isOfflineFailure(cause) : false;
 }
 
+function hasPendingApplicant(db: ReturnType<typeof loadDb>, applicant: Applicant) {
+  return db.outbox.some((item) => !item.syncedAt && item.workspaceId === applicant.workspaceId &&
+    item.type.startsWith("applicant.") && (item.payload.id === applicant.id || item.payload.nif === applicant.nif));
+}
+
 export function cacheApplicant(applicant: Applicant) {
   const db = loadDb();
+  if (hasPendingApplicant(db, applicant)) return;
   const index = db.applicants.findIndex((item) => item.id === applicant.id);
   if (index >= 0) {
     db.applicants[index] = applicant;
@@ -51,6 +58,7 @@ export function cacheApplicants(applicants: Applicant[]) {
   const db = loadDb();
   const byId = new Map(db.applicants.map((applicant, index) => [applicant.id, index]));
   for (const applicant of applicants) {
+    if (hasPendingApplicant(db, applicant)) continue;
     const index = byId.get(applicant.id);
     if (index === undefined) {
       db.applicants.push(applicant);
@@ -87,11 +95,14 @@ export function cacheContracts(contracts: Contract[]) {
   if (contracts.length === 0) return;
   const db = loadDb();
   const byId = new Map(db.contracts.map((contract, index) => [contract.id, index]));
+  const pendingIds = getPendingContractIds();
   const tagById = new Map(db.tags.map((tag, index) => [tag.id, index]));
   for (const contract of contracts) {
+    if (pendingIds.has(contract.id)) continue;
     const index = byId.get(contract.id);
     if (index === undefined) {
       db.contracts.push(contract);
+      byId.set(contract.id, db.contracts.length - 1);
     } else {
       db.contracts[index] = contract;
     }
@@ -260,6 +271,9 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
         );
       });
 
+  if (!input.id && existing && normalizedNif && existing.nif !== normalizedNif) {
+    throw new Error("Ce NINU appartient déjà à une autre personne avec un NIF différent.");
+  }
   const nextId = normalizedNif || existing?.id || input.id || createId();
   const duplicate = db.applicants.find(
     (applicant) =>

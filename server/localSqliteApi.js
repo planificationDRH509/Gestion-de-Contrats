@@ -1357,7 +1357,7 @@ function handleApiRequest(req, res) {
                     total = items.length;
                     items = sortContracts(items, payload_1.sort);
                     start = (page - 1) * pageSize;
-                    paged = items.slice(start, start + pageSize);
+                    paged = payload_1.all ? items : items.slice(start, start + pageSize);
                     sendJson(res, 200, {
                         items: paged,
                         total: total,

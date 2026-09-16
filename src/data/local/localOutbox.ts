@@ -15,7 +15,15 @@ export function queueOutbox(
     payload,
     createdAt: new Date().toISOString()
   };
-  db.outbox.push(item);
+  // A correction replaces the unsent identity at its original position, before
+  // dependent contract creations. A new queue ID protects against in-flight ACKs.
+  const previousIndex = type === "applicant.upsert" ? db.outbox.findIndex((pending) =>
+    !pending.syncedAt && pending.workspaceId === workspaceId && pending.type === type &&
+    ((payload.nif && pending.payload.nif === payload.nif) ||
+      (payload.id && pending.payload.id === payload.id))
+  ) : -1;
+  if (previousIndex >= 0) db.outbox[previousIndex] = item;
+  else db.outbox.push(item);
   saveDb(db);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("contribution-offline-sync"));

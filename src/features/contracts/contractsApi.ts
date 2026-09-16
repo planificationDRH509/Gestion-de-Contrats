@@ -21,7 +21,7 @@ import {
   readCachedContracts,
   readCachedContractsByIds
 } from "../../data/local/localContractRepository";
-import { hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
+import { getWorkspaceSyncMetadata, hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
 
@@ -123,7 +123,9 @@ export function useContractsList(
     queryFn: () => provider.contracts.list(params),
     placeholderData: keepPreviousData,
     initialData: usesSupabase
-      ? () => hasWorkspaceOfflineCache(params.workspaceId) ? readCachedContracts(params) : undefined
+      ? () => (params.all
+        ? Boolean(getWorkspaceSyncMetadata(params.workspaceId).lastFullSyncedAt)
+        : hasWorkspaceOfflineCache(params.workspaceId)) ? readCachedContracts(params) : undefined
       : undefined,
     initialDataUpdatedAt: 0,
     staleTime: 0,
@@ -325,6 +327,7 @@ export function useAssignContractsToDossier() {
 export function useChangeContractsStatus() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       workspaceId,
       contractIds,

@@ -25,4 +25,11 @@ describe("fetchAllPages", () => {
     await expect(fetchAllPages(fetchPage, 10)).resolves.toEqual(rows);
     expect(fetchPage).toHaveBeenCalledTimes(2);
   });
+  it("rejects an incomplete snapshot instead of silently accepting missing rows", async () => {
+    const fetchPage = vi.fn()
+      .mockResolvedValueOnce({ items: [1, 2], total: 3 })
+      .mockResolvedValueOnce({ items: [], total: 3 });
+    await expect(fetchAllPages(fetchPage)).rejects.toThrow("Téléchargement incomplet");
+  });
+
 });

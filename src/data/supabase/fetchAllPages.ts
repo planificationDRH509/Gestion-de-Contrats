@@ -20,7 +20,12 @@ export async function fetchAllPages<T>(
     const page = await fetchPage(items.length, items.length + requestedPageSize - 1);
     items.push(...page.items);
 
-    if (page.items.length === 0) break;
+    if (page.items.length === 0) {
+      if (page.total !== null && items.length < page.total) {
+        throw new Error("Téléchargement incomplet : actualisez les données avant de continuer.");
+      }
+      break;
+    }
     if (page.total !== null && items.length >= page.total) break;
     if (page.total === null && page.items.length < requestedPageSize) break;
   }

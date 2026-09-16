@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getWorkspaceSyncMetadata } from "../../data/local/offlineStore";
 import { useAuth } from "../auth/auth";
 import { useAppUsers } from "../auth/usersApi";
 import { useContractsList } from "../contracts/contractsApi";
@@ -112,6 +113,17 @@ export function StatisticsPage() {
   const { user } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
   const { data: usersData } = useAppUsers();
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  const lastFullSync = getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt;
 
   const [fiscalYear, setFiscalYear] = useState<string>(() => {
     return getStoredFiscalYear();
@@ -128,10 +140,10 @@ export function StatisticsPage() {
   const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  // Fetch all contracts (using a large pageSize for stats)
-  const { data, isLoading } = useContractsList({
+  // Statistics must use the complete dataset in both connectivity modes.
+  const { data, isLoading, isError } = useContractsList({
     workspaceId,
-    pageSize: 5000 // Get up to 5000 contracts for more accurate statistics
+    all: true
   });
   const { data: institutionsData = [] } = useInstitutions(workspaceId);
 
@@ -912,6 +924,14 @@ export function StatisticsPage() {
         )}
       </header>
 
+      {isError && (
+        <p role="alert">L’actualisation des statistiques a échoué. Les données affichées peuvent être anciennes. Réessayez la synchronisation.</p>
+      )}
+      {!online && (
+        <p role="status">{lastFullSync
+          ? `Hors ligne : données de la dernière synchronisation complète du ${new Date(lastFullSync).toLocaleString("fr-FR")}, avec vos modifications locales.`
+          : "Hors ligne : copie locale incomplète. Les statistiques sont partielles ; reconnectez-vous pour terminer la synchronisation."}</p>
+      )}
       {isLoading ? (
         <div className="premium-card" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderColor: 'var(--border)' }}>
           <div className="material-symbols-rounded" style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--accent)', animation: 'spin 1.5s linear infinite' }}>sync</div>

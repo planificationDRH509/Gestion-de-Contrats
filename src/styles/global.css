@@ -2188,9 +2188,15 @@ img {
   color: var(--ink-muted);
 }
 
-.contracts-import-row-state {
-  min-width: 260px;
-  max-width: 340px;
+.contracts-import-preview .contracts-import-data-row td {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+.contracts-import-preview .contracts-import-row-state {
+  padding-top: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--ink-muted);
   font-size: 11px;
   line-height: 1.35;
