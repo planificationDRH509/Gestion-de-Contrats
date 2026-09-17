@@ -1,3 +1,5 @@
+import { assertNoFiscalYearDuplicate } from "../contractIdentity";
+import { getStoredFiscalYear } from "../../features/settings/settingsApi";
 import { ContractRepository } from "../repositories/ContractRepository";
 import {
   Contract,
@@ -139,7 +141,9 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
+    input = { ...input, annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
     const db = loadDb();
+    assertNoFiscalYearDuplicate(input, db.contracts);
     const timestamp = now();
     const contract: Contract = {
       ...input,

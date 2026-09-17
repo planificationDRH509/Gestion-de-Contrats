@@ -1,3 +1,7 @@
+import { outboxKeys } from "../local/outboxDependencies";
+import { setOutboxError } from "../local/localOutbox";
+import { assertNoFiscalYearDuplicate } from "../contractIdentity";
+import { readCachedContracts } from "../local/localContractRepository";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { ContractRepository } from "../repositories/ContractRepository";
 import { DossierRepository } from "../repositories/DossierRepository";
@@ -137,6 +141,7 @@ function mapApplicant(row: any): Applicant {
     address: row.adresse,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
+    remoteUpdatedAt: row.updated_at ?? null,
     deletedAt: row.deleted_at || null,
     createdBy: row.created_by
   };
@@ -164,6 +169,7 @@ function mapContract(row: any): Contract {
     annee_fiscale: row.annee_fiscale || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
+    remoteUpdatedAt: row.updated_at ?? null,
     deletedAt: row.deleted_at || null,
     createdBy: row.created_by,
     commentaire: row.commentaire || null,
@@ -223,7 +229,7 @@ function sameQueuedContract(remote: Contract, local: Contract): boolean {
 }
 
 class SupabaseApplicantRepository implements ApplicantRepository {
-  async syncOffline(input: UpsertApplicantInput): Promise<Applicant> {
+  async syncOffline(input: UpsertApplicantInput & { baseApplicant?: Applicant | null }): Promise<Applicant> {
     const nif = (input.nif || input.id || "").trim();
     if (!nif) throw new Error("NIF obligatoire pour synchroniser le postulant.");
     const matches = await this.findManyByNifOrNinu(input.workspaceId, [nif], input.ninu ? [input.ninu] : []);
@@ -231,13 +237,29 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     const conflict = () => new Error(`Conflit d'identification pour le NIF ${nif} : les informations NIF/NINU ou personnelles diffèrent du serveur. Corrigez la fiche d'identification puis relancez la synchronisation. Les données locales sont conservées.`);
     if (matches.some((applicant) => applicant.nif !== nif)) throw conflict();
     if (existing) {
-      if (existing.deletedAt || existing.firstName !== formatFirstName(input.firstName) ||
-          existing.lastName !== formatLastName(input.lastName) || existing.gender !== input.gender ||
-          (existing.ninu || "") !== (input.ninu || "") || existing.address !== input.address ||
-          (input.phone !== undefined && (existing.phone || "") !== (input.phone?.trim() || ""))) {
-        throw conflict();
+      if (existing.deletedAt) throw conflict();
+      const desired = buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName));
+      const fields = { prenom: "firstName", nom: "lastName", sexe: "gender", ninu: "ninu", telephone: "phone", adresse: "address" } as const;
+      const normalize = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
+      const changes: Record<string, unknown> = {};
+      for (const [column, field] of Object.entries(fields)) {
+        const next = desired[column as keyof typeof desired];
+        // Match online upsert semantics: absent optional values preserve remote data.
+        if (next === undefined || (column !== "telephone" && !next)) continue;
+        if (normalize(next) === normalize(existing[field])) continue;
+        if (!input.baseApplicant || normalize(existing[field]) !== normalize(input.baseApplicant[field])) throw conflict();
+        changes[column] = next;
       }
-      return existing;
+      if (Object.keys(changes).length === 0) return existing;
+      let update = getSupabaseClient().from("identification")
+        .update({ ...changes, updated_at: new Date().toISOString() } as any)
+        .eq("workspace_id", input.workspaceId).eq("nif", nif).is("deleted_at", null);
+      update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
+        : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
+      const { data, error } = await update.select("*").maybeSingle();
+      if (error) throw repositoryError("Impossible de synchroniser la fiche d’identification.", error);
+      if (!data) throw conflict();
+      return mapApplicant(data);
     }
     // Insert only: a concurrent creation is a conflict, never an implicit UPDATE.
     const { data, error } = await getSupabaseClient().from("identification")
@@ -811,6 +833,15 @@ class SupabaseContractRepository implements ContractRepository {
     return data.map(mapContract);
   }
 
+  async checkFiscalYearDuplicate(input: CreateContractInput): Promise<void> {
+    if (!(input.nif || input.applicantId)) return;
+    const { data, error } = await getSupabaseClient().from("contrat")
+      .select("*").eq("workspace_id", input.workspaceId)
+      .eq("nif", input.applicantId || input.nif || "").is("deleted_at", null);
+    if (error || !data) throw repositoryError("Impossible de vérifier les doublons avant synchronisation.", error);
+    assertNoFiscalYearDuplicate(input, data.map(mapContract));
+  }
+
   async create(input: CreateContractInput): Promise<Contract> {
     const created = await this.createMany([input]);
     const contract = created[0];
@@ -932,15 +963,15 @@ class SupabaseContractRepository implements ContractRepository {
       changes: buildContractAuditChanges(existing, { status }),
       at: changedAt
     });
-    const { data, error } = await getSupabaseClient().from("contrat")
-      .update({ status, historique_saisie: serializeContractAudit(auditHistory) } as any)
+    let update = getSupabaseClient().from("contrat")
+      .update({ status, historique_saisie: serializeContractAudit(auditHistory), updated_at: new Date().toISOString() } as any)
       .eq("workspace_id", workspaceId)
       .eq("id_contrat", id)
       .eq("status", previousStatus)
-      .eq("updated_at", existing.updatedAt)
-      .is("deleted_at", null)
-      .select("*, identification(*), contract_tags(tags(*))")
-      .maybeSingle();
+      .is("deleted_at", null);
+    update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
+      : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
+    const { data, error } = await update.select("*, identification(*), contract_tags(tags(*))").maybeSingle();
     if (error) throw repositoryError("Impossible de synchroniser l’état du contrat.", error);
     if (!data) {
       throw new Error(`Conflit d’état pour le contrat ${id} : le contrat a changé pendant la synchronisation. Le changement local est conservé.`);
@@ -1503,10 +1534,16 @@ function syncPendingOutbox() {
     const dossiers = new SupabaseDossierRepository();
     const tags = new SupabaseTagRepository();
 
-    const blockedWorkspaces = new Set<string>();
+    const blockedKeys = new Set<string>();
     for (const queued of getPendingOutbox()) {
       const item = getPendingOutbox().find((current) => current.id === queued.id);
-      if (!item || blockedWorkspaces.has(item.workspaceId)) continue;
+      if (!item) continue;
+      const keys = outboxKeys(item);
+      if (keys.some((key) => blockedKeys.has(key))) {
+        keys.forEach((key) => blockedKeys.add(key));
+        setOutboxError(item.id, "En attente de la résolution d’une action liée à ce contrat.");
+        continue;
+      }
       let syncedContract: Contract | undefined;
       try {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -1526,13 +1563,15 @@ function syncPendingOutbox() {
           const payload = item.payload as unknown as Contract;
           if (getPendingOutbox().some((pending) => pending.workspaceId === item.workspaceId &&
               pending.type === "applicant.upsert" && (pending.payload.nif === payload.nif || pending.payload.id === payload.applicantId))) {
-            blockedWorkspaces.add(item.workspaceId);
+            keys.filter((key) => key.includes(":contract:")).forEach((key) => blockedKeys.add(key));
+            setOutboxError(item.id, "La fiche d’identification doit être synchronisée avant ce contrat.");
             continue;
           }
           const existing = await contracts.getById(payload.id);
           if (existing && !sameQueuedContract(existing, payload)) {
             throw new Error(`Conflit sur le contrat ${payload.id} : une version différente existe sur le serveur. Le contrat local est conservé.`);
           }
+          if (!existing) await contracts.checkFiscalYearDuplicate(payload);
           syncedContract = existing ?? await contracts.create(payload);
         } else if (item.type === "contract.update") {
           const payload = item.payload as Partial<UpdateContractInput> & {
@@ -1545,8 +1584,7 @@ function syncPendingOutbox() {
             dossierId?: string | null;
           };
           if (payload.id) {
-            const contract = await contracts.update(payload as UpdateContractInput);
-            cacheContract(contract);
+            syncedContract = await contracts.update(payload as UpdateContractInput);
           } else if (Array.isArray(payload.contractIds) && payload.status) {
             for (const id of payload.contractIds) {
               syncedContract = await contracts.syncOfflineStatus(
@@ -1602,15 +1640,16 @@ function syncPendingOutbox() {
 
         setWorkspaceSyncMetadata(item.workspaceId, {
           lastSyncedAt: new Date().toISOString(),
-          lastError: null
+          lastError: getPendingOutbox().find((pending) => pending.workspaceId === item.workspaceId && pending.lastError)?.lastError ?? null
         });
         notifySyncState();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
+        setOutboxError(item.id, message);
         setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
         notifySyncState();
         if (isOfflineFailure(error)) return;
-        blockedWorkspaces.add(item.workspaceId);
+        keys.forEach((key) => blockedKeys.add(key));
         console.error("Impossible de synchroniser une action locale.", error);
       }
     }
@@ -1809,7 +1848,7 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
       return applicants;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
-      return this.local.upsertMany(inputs);
+      return inputs.map((input) => upsertApplicantOffline(input));
     }
   }
 
@@ -1903,7 +1942,7 @@ class OfflineFirstContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      if (params.all) {
+      if (params.all && !params.query) {
         // Reconcile deletions and preserve queued changes before calculating totals.
         await syncSupabaseWorkspace(params.workspaceId, { force: true });
         return this.local.list(params);
@@ -1912,9 +1951,17 @@ class OfflineFirstContractRepository implements ContractRepository {
       const remoteResult = await this.remote.list(params);
       cacheContracts(remoteResult.items);
 
-      const pending = getPendingOutbox().some((item) => item.workspaceId === params.workspaceId && item.type.startsWith("contract."));
+      const pending = getPendingOutbox().some((item) => item.workspaceId === params.workspaceId &&
+        (item.type.startsWith("contract.") || item.type === "tag.assign" || item.type === "tag.remove"));
       if (!pending) return remoteResult;
-
+      if (params.all && params.query) {
+        const pendingIds = getPendingContractIds();
+        const local = await this.local.list(params);
+        const byId = new Map(remoteResult.items.filter((item) => !pendingIds.has(item.id)).map((item) => [item.id, item]));
+        local.items.filter((item) => pendingIds.has(item.id)).forEach((item) => byId.set(item.id, item));
+        const items = sortContracts([...byId.values()], params.sort);
+        return { ...remoteResult, items, total: items.length };
+      }
       return this.local.list(params);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
@@ -1955,6 +2002,7 @@ class OfflineFirstContractRepository implements ContractRepository {
 
   async create(input: CreateContractInput): Promise<Contract> {
     input = { ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
+    assertNoFiscalYearDuplicate(input, readCachedContracts({ workspaceId: input.workspaceId, all: true }).items);
     if (getPendingOutbox().some((item) => item.workspaceId === input.workspaceId &&
         item.type === "applicant.upsert" && (item.payload.nif === input.nif || item.payload.id === input.applicantId))) {
       return this.local.create(input);

@@ -23,6 +23,7 @@ import {
 } from "../../data/local/localContractRepository";
 import { getWorkspaceSyncMetadata, hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
 import { getStoredFiscalYear } from "../settings/settingsApi";
+import { identityDigits } from "../../data/contractIdentity";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
@@ -56,28 +57,16 @@ export interface NifLookupResult {
 export async function lookupNif(rawNif: string, workspaceId: string): Promise<NifLookupResult> {
   const nif = rawNif.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d)/, "$1-$2-$3-$4");
   const applicant = await provider.applicants.findByNifOrNinu(workspaceId, nif, null);
-  let contracts: NifContractMatch[] = [];
-  if (applicant) {
-    const matches = await provider.contracts.list({
-      workspaceId,
-      query: nif,
-      page: 1,
-      pageSize: 250,
-      sort: "createdAt_desc"
-    });
-    contracts = matches.items
-      .filter((contract) => contract.nif === nif || contract.applicantId === nif)
-      .map((contract) => ({
-        id_contrat: contract.id,
-        annee_fiscale: getContractFiscalYear(contract),
-        createdAt: contract.createdAt,
-        titre: contract.position,
-        lieu_affectation: contract.assignment,
-        salaire: contract.salaryText,
-        salaire_en_chiffre: contract.salaryNumber,
-        duree_contrat: contract.durationMonths
-      }));
-  }
+  // Contract checks never depend on the identification table being cached.
+  const matches = await provider.contracts.list({ workspaceId, query: nif, all: true, sort: "createdAt_desc" });
+  const matchingContracts = matches.items.filter((contract) =>
+    identityDigits(contract.nif || contract.applicantId) === identityDigits(nif));
+  const contracts: NifContractMatch[] = matchingContracts.map((contract) => ({
+    id_contrat: contract.id, annee_fiscale: getContractFiscalYear(contract), createdAt: contract.createdAt,
+    titre: contract.position, lieu_affectation: contract.assignment, salaire: contract.salaryText,
+    salaire_en_chiffre: contract.salaryNumber, duree_contrat: contract.durationMonths
+  }));
+  const cachedIdentity = matchingContracts[0];
 
   return {
     identification: applicant
@@ -89,7 +78,10 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
           ninu: applicant.ninu ?? null,
           adresse: applicant.address,
         }
-      : null,
+      : cachedIdentity ? {
+          nif, nom: cachedIdentity.lastName, prenom: cachedIdentity.firstName,
+          sexe: cachedIdentity.gender, ninu: cachedIdentity.ninu ?? null, adresse: cachedIdentity.address
+        } : null,
     contracts,
   };
 }
@@ -103,10 +95,11 @@ export function useNifLookupQuery(rawNif: string | null, workspaceId: string) {
     : null;
 
   return useQuery({
-    queryKey: ["nif-lookup", formattedNif],
+    queryKey: ["nif-lookup", workspaceId, formattedNif],
+    networkMode: "always",
     queryFn: () => lookupNif(formattedNif!, workspaceId),
     enabled: isComplete && !!workspaceId,
-    staleTime: 30_000,
+    staleTime: 0,
     retry: false,
   });
 }
@@ -209,6 +202,7 @@ export function useCreateContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -255,6 +249,7 @@ export function useUpdateContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -296,6 +291,7 @@ export function useUpdateContractComment() {
     onSettled: () => {
       // Always refetch after error or success to keep server and client in sync
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
     }
   });
 }
@@ -314,6 +310,7 @@ export function useAssignContractsToDossier() {
     }) => provider.contracts.assignToDossier(workspaceId, contractIds, dossierId),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -339,6 +336,7 @@ export function useChangeContractsStatus() {
     }) => provider.contracts.updateStatus(workspaceId, contractIds, status),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -363,6 +361,7 @@ export function useChangeContractsDuration() {
     }) => provider.contracts.updateDuration(workspaceId, contractIds, durationMonths),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -538,6 +537,7 @@ export function useImportContracts() {
     },
     onSettled: (_contracts, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -572,6 +572,7 @@ export function useDeleteContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]

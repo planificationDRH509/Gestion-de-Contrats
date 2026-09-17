@@ -328,7 +328,12 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     db.applicants.push(applicant);
   }
   saveDb(db);
-  queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
+  const pendingIdentity = db.outbox.find((item) => item.workspaceId === input.workspaceId &&
+    item.type === "applicant.upsert" && (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)));
+  queueOutbox(input.workspaceId, "applicant.upsert", {
+    ...input,
+    baseApplicant: pendingIdentity ? pendingIdentity.payload.baseApplicant ?? null : existing ?? null
+  });
   return applicant;
 }
 
@@ -361,6 +366,9 @@ export function removeOutboxItem(id: string) {
 export function getPendingContractIds(): Set<string> {
   const ids = new Set<string>();
   for (const item of getPendingOutbox()) {
+    if (item.type === "tag.assign" || item.type === "tag.remove") {
+      if (typeof item.payload.contractId === "string") ids.add(item.payload.contractId);
+    }
     if (!item.type.startsWith("contract.")) continue;
     const payload = item.payload as Partial<Contract> & {
       id?: string;

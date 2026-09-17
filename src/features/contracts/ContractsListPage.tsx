@@ -48,6 +48,9 @@ import {
   indexTasksByContractNif,
   normalizeContractNif
 } from "../tasks/taskMentions";
+import { ContractSyncIndicator } from "./ContractSyncIndicator";
+import { getPendingOutbox } from "../../data/local/offlineStore";
+import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { ContractTaskIndicator } from "./ContractTaskIndicator";
 import {
   combineAssignmentAndInstitutionLocationFilters,
@@ -263,6 +266,23 @@ export function ContractsListPage() {
 
   // Prefetch next page for a smoother offline experience
   const queryClient = useQueryClient();
+  const [pendingSync, setPendingSync] = useState(getPendingOutbox);
+  const [syncOnline, setSyncOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const refresh = () => { setPendingSync(getPendingOutbox()); setSyncOnline(navigator.onLine); };
+    window.addEventListener("contribution-offline-sync", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => {
+      window.removeEventListener("contribution-offline-sync", refresh);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+    };
+  }, []);
+  const retryContractSync = async () => {
+    await syncSupabaseOutbox();
+    await queryClient.invalidateQueries({ queryKey: ["contracts"] });
+  };
   useEffect(() => {
     // Prioritize refreshing the visible cached page before using the network
     // for speculative work.
@@ -1687,6 +1707,9 @@ export function ContractsListPage() {
                         ) : null}
 
                         <div className="contracts-badges" style={{ marginTop: "6px" }}>
+                          <ContractSyncIndicator contract={contract} pending={pendingSync} online={syncOnline}
+                            cloudEnabled={(import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase"}
+                            onRetry={retryContractSync} />
                           {contract.dossierId ? (
                             <button
                               type="button"

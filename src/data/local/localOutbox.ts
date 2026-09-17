@@ -26,7 +26,13 @@ export function queueOutbox(
   else db.outbox.push(item);
   saveDb(db);
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("contribution-offline-sync"));
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync", { detail: { queued: true } }));
   }
   return item;
+}
+
+export function setOutboxError(id: string, message: string | null) {
+  const db = loadDb();
+  const item = db.outbox.find((entry) => entry.id === id);
+  if (item) { item.lastError = message; saveDb(db); }
 }

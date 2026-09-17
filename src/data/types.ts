@@ -59,6 +59,8 @@ export type Applicant = {
   address: string;
   createdAt: string;
   updatedAt: string;
+  /** Exact cloud version for conditional writes; null is distinct from createdAt. */
+  remoteUpdatedAt?: string | null;
   deletedAt?: string | null;
   createdBy?: string | null;
 };
@@ -129,6 +131,8 @@ export type Contract = {
   annee_fiscale?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Exact cloud version for conditional writes; null is distinct from createdAt. */
+  remoteUpdatedAt?: string | null;
   deletedAt?: string | null;
   createdBy?: string | null;
   commentaire?: string | null;
@@ -162,6 +166,7 @@ export type OutboxItem = {
   payload: Record<string, unknown>;
   createdAt: string;
   syncedAt?: string | null;
+  lastError?: string | null;
 };
 
 export type ContractSort =

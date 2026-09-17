@@ -9678,3 +9678,14 @@ body,
   color: var(--accent);
   text-decoration: underline;
 }
+
+.contract-sync-indicator { position: relative; display: inline-flex; }
+.contract-sync-indicator > button { padding: 2px 6px; }
+.contract-sync-indicator .material-symbols-rounded { font-size: 17px; }
+.contract-sync-details {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  display: grid; gap: 10px; width: min(290px, 75vw); padding: 14px;
+  white-space: normal; overflow-wrap: anywhere; color: var(--ink);
+  background: var(--surface, #fff); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 6px 24px #0002; font-size: 12px;
+}

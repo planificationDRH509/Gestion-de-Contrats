@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import {
   getSupabaseSyncState,
+  syncSupabaseOutbox,
   syncSupabaseWorkspace
 } from "../../data/supabase/supabaseProvider";
 import { useAuth } from "../../features/auth/auth";
@@ -55,6 +56,13 @@ export function AppLayout() {
       return;
     }
     try {
+      // Upload first; a failure downloading the full snapshot must not hide ACKs.
+      await syncSupabaseOutbox();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contracts"] }),
+        queryClient.invalidateQueries({ queryKey: ["contract"] }),
+        queryClient.invalidateQueries({ queryKey: ["nif-lookup"] })
+      ]);
       const refreshed = await syncSupabaseWorkspace(workspaceId, { force });
       if (refreshed) {
         await Promise.all([
@@ -77,7 +85,19 @@ export function AppLayout() {
       void synchronize(false);
     };
     const handleOffline = () => refreshSyncState();
-    const handleSyncState = () => refreshSyncState();
+    let queuedTimer: number | undefined;
+    const handleSyncState = (event: Event) => {
+      refreshSyncState();
+      if ((event as CustomEvent).detail?.queued && navigator.onLine) {
+        window.clearTimeout(queuedTimer);
+        queuedTimer = window.setTimeout(() => void synchronize(false), 1000);
+      }
+    };
+    // A restored network can still fail its first request (Wi-Fi/auth recovery).
+    const retryTimer = window.setInterval(() => {
+      const state = getSupabaseSyncState(workspaceId);
+      if (navigator.onLine && state.pendingCount > 0 && !state.isSyncing) void synchronize(false);
+    }, 30_000);
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
         void synchronize(false);
@@ -97,6 +117,8 @@ export function AppLayout() {
       : null;
 
     return () => {
+      window.clearInterval(retryTimer);
+      window.clearTimeout(queuedTimer);
       if (initialSyncTimer !== null) window.clearTimeout(initialSyncTimer);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

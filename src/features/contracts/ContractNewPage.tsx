@@ -316,7 +316,7 @@ export function ContractNewPage() {
 
     // Avoid reprocessing the same NIF twice
     const formattedNif = `${nifDigits.slice(0,3)}-${nifDigits.slice(3,6)}-${nifDigits.slice(6,9)}-${nifDigits.slice(9)}`;
-    const lookupKey = `${formattedNif}:${fiscalYear}`;
+    const lookupKey = `${formattedNif}:${fiscalYear}:${nifLookup.contracts.map((contract) => `${contract.id_contrat}:${contract.annee_fiscale}`).join(",")}`;
     if (lastProcessedNif.current === lookupKey) return;
     lastProcessedNif.current = lookupKey;
 
