@@ -4,6 +4,7 @@ type Props = {
   count: number;
   singleContractAvailable?: boolean;
   documentActionsAvailable?: boolean;
+  secondaryOnly?: boolean;
   label?: string;
   can: (permission: AppPermission) => boolean;
   expanded: boolean;
@@ -45,20 +46,20 @@ export function ContractActionsMenu(props: Props) {
     </div>}
     {can("dossiers.manage") && <div className="contract-menu-group" role="group" aria-label="Dossiers">
       <div className="contract-menu-label">Dossiers</div>
-      <Action icon="folder_open" label="Attribuer à un dossier" submenu onClick={props.onDossiers} />
+      {!props.secondaryOnly && <Action icon="folder_open" label="Attribuer à un dossier" submenu onClick={props.onDossiers} />}
       <Action icon="create_new_folder" label="Créer un dossier…" onClick={props.onNewDossier} />
       <Action icon="folder_off" label="Retirer du dossier" onClick={props.onRemoveDossier} />
     </div>}
-    {(can("contracts.change_status") || can("contracts.edit")) && <div className="contract-menu-group" role="group" aria-label="Suivi">
+    {!props.secondaryOnly && (can("contracts.change_status") || can("contracts.edit")) && <div className="contract-menu-group" role="group" aria-label="Suivi">
       <div className="contract-menu-label">Suivi</div>
-      {can("contracts.change_status") && <Action icon="rule" label="Changer l’état" submenu onClick={props.onStatus} />}
+      {!props.secondaryOnly && can("contracts.change_status") && <Action icon="rule" label="Changer l’état" submenu onClick={props.onStatus} />}
       {can("contracts.edit") && <Action icon="label" label="Ajouter un tag" submenu onClick={props.onTags} />}
-      {can("contracts.edit") && props.onDuration && <Action icon="timer" label="Modifier la durée" submenu onClick={props.onDuration} />}
+      {!props.secondaryOnly && can("contracts.edit") && props.onDuration && <Action icon="timer" label="Modifier la durée" submenu onClick={props.onDuration} />}
     </div>}
     <div className="contract-menu-group" role="group" aria-label="Documents">
       <div className="contract-menu-label">Consultation et documents</div>
       {singleAvailable && <Action icon="unfold_more" label={props.expanded ? "Masquer les informations" : "Afficher les informations"} onClick={props.onDetails} />}
-      {props.documentActionsAvailable !== false && can("contracts.print") && <Action icon="print" label={single ? "Imprimer le contrat" : "Imprimer la sélection"} onClick={props.onPrint} />}
+      {!props.secondaryOnly && props.documentActionsAvailable !== false && can("contracts.print") && <Action icon="print" label={single ? "Imprimer le contrat" : "Imprimer la sélection"} onClick={props.onPrint} />}
       {can("contracts.export") && props.onExport && <Action icon="download" label="Exporter vers Excel" submenu onClick={props.onExport} />}
       {singleAvailable && <Action icon="description" label="Lettre d’affectation" onClick={props.onLetter} />}
     </div>

@@ -10006,9 +10006,21 @@ body,
 }
 .selection-actions-compact .selection-actions-row {
   width: auto;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
+.selection-actions-row > * { flex-shrink: 0; }
+.selection-bar-button { white-space: nowrap; gap: 5px; padding: 8px 10px; font-size: 12px; }
+.selection-bar-button .material-symbols-rounded { font-size: 18px; }
+.selection-bar-button .selection-bar-chevron { font-size: 16px; }
+.selection-bar-duration { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 10px; }
+.selection-bar-duration .input { width: 48px; height: 30px; padding: 4px; text-align: center; }
+.selection-bar-duration .icon-btn { width: 28px; height: 30px; }
+.selection-bar-print { width: 36px; height: 36px; }
 .selection-actions-trigger { white-space: nowrap; gap: 6px; }
 .selection-duration-form { display: grid; gap: 12px; padding: 14px; }
 .selection-duration-form > label { font-size: 13px; font-weight: 600; }

@@ -2319,6 +2319,7 @@ export function ContractsListPage() {
                       count={contextTargetIds.length}
                       singleContractAvailable={Boolean(contextContract)}
                       documentActionsAvailable={!isMobile}
+                      secondaryOnly={contextMenu.id === "selection-actions"}
                       label={contextTargetIds.length === 1 && contextContract ? `${contextContract.firstName} ${contextContract.lastName}` : undefined}
                       can={can}
                       expanded={Boolean(contextContract && isExpanded(contextContract.id))}
@@ -2546,8 +2547,23 @@ export function ContractsListPage() {
               </button>
             </div>
             <div className="selection-actions-row">
-              <button className="btn btn-primary selection-actions-trigger" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions"} onClick={event => {
-                if (contextMenu?.id === "selection-actions") setContextMenu(null);
+              {can("dossiers.manage") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Changer le dossier de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "dossiers"} onClick={event => { handleContextFromButton(event, "selection-actions"); setMenuView("dossiers"); }}>
+                <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>Dossier<span className="material-symbols-rounded selection-bar-chevron" aria-hidden="true">expand_more</span>
+              </button>}
+              {can("contracts.change_status") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Changer l’état de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "status"} onClick={event => { handleContextFromButton(event, "selection-actions"); setMenuView("status"); }}>
+                <span className="material-symbols-rounded" aria-hidden="true">rule</span>État<span className="material-symbols-rounded selection-bar-chevron" aria-hidden="true">expand_more</span>
+              </button>}
+              {can("contracts.edit") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Ajouter un tag à la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "tags"} onClick={event => { handleContextFromButton(event, "selection-actions"); setTagSearch(""); setMenuView("tags"); }}>
+                <span className="material-symbols-rounded" aria-hidden="true">label</span>Tags<span className="material-symbols-rounded selection-bar-chevron" aria-hidden="true">expand_more</span>
+              </button>}
+              {can("contracts.edit") && <form className="selection-bar-duration" onSubmit={event => { event.preventDefault(); void handleApplyBulkDuration(); }}>
+                <input className="input" aria-label="Durée de la sélection en mois" type="number" min="1" max="12" required placeholder="—" value={bulkDuration} onChange={event => setBulkDuration(event.target.value ? Number(event.target.value) : "")} />
+                <span>mois</span>
+                <button className="icon-btn" type="submit" title="Appliquer la durée" aria-label="Appliquer la durée" disabled={!bulkDuration || changeContractsDuration.isPending}><span className="material-symbols-rounded" aria-hidden="true">check</span></button>
+              </form>}
+              {!isMobile && can("contracts.print") && <button className="icon-btn selection-bar-print" type="button" title="Imprimer la sélection" aria-label="Imprimer la sélection" onClick={() => { setContextMenu(null); void handlePrint(selected); }}><span className="material-symbols-rounded" aria-hidden="true">print</span></button>}
+              <button className="btn btn-primary selection-actions-trigger" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "main"} onClick={event => {
+                if (contextMenu?.id === "selection-actions" && menuView === "main") setContextMenu(null);
                 else handleContextFromButton(event, "selection-actions");
               }}>
                 Actions<span className="material-symbols-rounded" aria-hidden="true">expand_more</span>
