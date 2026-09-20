@@ -10,6 +10,7 @@ import {
 import { useAuth } from "../../features/auth/auth";
 import { GlobalContractSearch } from "../components/GlobalContractSearch";
 import { SessionLockScreen } from "../../features/auth/SessionLockScreen";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -19,6 +20,7 @@ const MAX_W = 480;
 
 export function AppLayout() {
   const { user, isLocked } = useAuth();
+  const isMobile = useIsMobileViewport();
   const location = useLocation();
   const queryClient = useQueryClient();
   const mainRef = useRef<HTMLDivElement>(null);
@@ -200,7 +202,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <GlobalContractSearch />
+      {!isMobile ? <GlobalContractSearch /> : null}
       {isLocked ? <SessionLockScreen /> : null}
     </div>
   );

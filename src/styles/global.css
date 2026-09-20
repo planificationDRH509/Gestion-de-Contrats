@@ -9986,5 +9986,41 @@ body,
 .list-create-preview strong { overflow-wrap: anywhere; }
 .list-create-preview span, .list-create-preview small { font-size: 12px; color: var(--ink-muted); }
 .list-inline-action { border: 0; padding: 0; background: none; color: var(--accent); text-decoration: underline; font: inherit; cursor: pointer; }
-.selection-actions-row { flex: 1; min-width: 0; flex-wrap: wrap; }
-.selection-actions-row > .btn { flex-shrink: 0; white-space: nowrap; }
+.selection-actions-shell.selection-actions-compact {
+  min-width: 0;
+  width: max-content;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  border-radius: 16px;
+  overflow: visible;
+}
+.selection-actions-compact .selection-actions-head {
+  width: auto;
+  gap: 8px;
+  padding: 0 12px 0 0;
+  border-bottom: 0;
+  border-right: 1px solid var(--border);
+}
+.selection-actions-compact .selection-actions-row {
+  width: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+.selection-actions-trigger { white-space: nowrap; gap: 6px; }
+.selection-duration-form { display: grid; gap: 12px; padding: 14px; }
+.selection-duration-form > label { font-size: 13px; font-weight: 600; }
+.selection-duration-form > div { display: flex; align-items: center; gap: 10px; }
+.selection-duration-form .input { min-width: 0; width: 100%; }
+@media (max-width: 960px) {
+  .selection-actions-shell.selection-actions-compact,
+  .app-shell.sidebar-collapsed .selection-actions-shell.selection-actions-compact {
+    left: 50%;
+    right: auto;
+    max-width: calc(100vw - 20px);
+    transform: translateX(-50%) translateY(24px);
+  }
+  .selection-actions-shell.selection-actions-compact.active { transform: translateX(-50%) translateY(0); }
+}

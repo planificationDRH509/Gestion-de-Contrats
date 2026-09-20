@@ -6,6 +6,7 @@ import { formatCurrency, formatFirstName, formatLastName } from "../../lib/forma
 import { useContractLists, useListOperation } from "./listsApi";
 import { listError, listName, listTotals, sortedMembers, type ContractList, type ListOperation } from "./listModel";
 import { ListAssignmentDialog } from "./ListAssignmentDialog";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 const historyLabels: Record<string, string> = { create: "Création", assign: "Composition modifiée", visa: "Visa modifié", seal: "Scellement", reopen: "Réouverture" };
 export function ListsPage() {
@@ -67,6 +68,7 @@ export function ListsPage() {
 
 function ListDetail({ list, onDeleted }: { list: ContractList; onDeleted: () => void }) {
   const { user, can } = useAuth();
+  const isMobile = useIsMobileViewport();
   const operation = useListOperation();
   const [visa, setVisa] = useState(list.visaNumber ?? "");
   const [adding, setAdding] = useState(false);
@@ -128,7 +130,7 @@ function ListDetail({ list, onDeleted }: { list: ContractList; onDeleted: () => 
       </>}
     </div>}
     <div className="list-members-heading"><h3>Contrats du lot <small>· ordre alphabétique</small></h3>{editable && selected.length > 0 && <div className="list-actions"><button className="btn btn-outline" onClick={() => setMoving(selected)} disabled={operation.isPending}>Changer de liste ({selected.length})</button><button className="btn btn-outline" onClick={() => ask("remove")} disabled={operation.isPending}>Retirer</button></div>}</div>
-    <div className="list-table-scroll"><table className="list-table"><thead><tr>{editable && <th><input aria-label="Sélectionner tous les contrats du lot" type="checkbox" checked={members.length > 0 && selected.length === members.length} onChange={e => setSelected(e.target.checked ? members.map(m => m.id) : [])} /></th>}<th>Nom et prénom</th><th>NIF / Poste</th><th>Salaire mensuel</th></tr></thead><tbody>{members.map(m => <tr key={m.id}>{editable && <td><input type="checkbox" aria-label={`Sélectionner ${m.firstName} ${m.lastName}`} checked={selected.includes(m.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, m.id] : ids.filter(id => id !== m.id))} /></td>}<td><Link to={`/app/contrats/${encodeURIComponent(m.id)}`}>{formatLastName(m.lastName)} {formatFirstName(m.firstName)}</Link></td><td>{m.nif}<small>{m.position}</small></td><td>{formatCurrency(m.salaryNumber)} HTG</td></tr>)}</tbody></table>{!members.length && <p className="list-empty">Cette liste est vide. Ajoutez des contrats pour composer le lot.</p>}</div>
+    <div className="list-table-scroll"><table className="list-table"><thead><tr>{editable && <th><input aria-label="Sélectionner tous les contrats du lot" type="checkbox" checked={members.length > 0 && selected.length === members.length} onChange={e => setSelected(e.target.checked ? members.map(m => m.id) : [])} /></th>}<th>Nom et prénom</th><th>NIF / Poste</th><th>Salaire mensuel</th></tr></thead><tbody>{members.map(m => <tr key={m.id}>{editable && <td><input type="checkbox" aria-label={`Sélectionner ${m.firstName} ${m.lastName}`} checked={selected.includes(m.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, m.id] : ids.filter(id => id !== m.id))} /></td>}<td>{isMobile ? <span>{formatLastName(m.lastName)} {formatFirstName(m.firstName)}</span> : <Link to={`/app/contrats/${encodeURIComponent(m.id)}`}>{formatLastName(m.lastName)} {formatFirstName(m.firstName)}</Link>}</td><td>{m.nif}<small>{m.position}</small></td><td>{formatCurrency(m.salaryNumber)} HTG</td></tr>)}</tbody></table>{!members.length && <p className="list-empty">Cette liste est vide. Ajoutez des contrats pour composer le lot.</p>}</div>
     <details className="list-history"><summary>Historique de la liste</summary>{[...list.history].reverse().map((event, index) => <p key={index}><strong>{historyLabels[event.action] ?? event.action}</strong> · {event.actor} · {new Date(event.at).toLocaleString("fr-FR")}{event.reason && <small>{event.reason}</small>}</p>)}</details>
     {moving && <ListAssignmentDialog contractIds={moving} onClose={() => setMoving(null)} />}
   </section>;

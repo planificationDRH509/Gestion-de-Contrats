@@ -37,6 +37,7 @@ import {
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
 import { getContractFiscalYear, isPastFiscalYear } from "../../lib/contractDateFilters";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 function normalize(str: string): string {
   if (!str) return "";
@@ -51,6 +52,7 @@ export function ContractEditPage() {
   const { user, can } = useAuth();
   const { contractId } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobileViewport();
   const { data, isLoading } = useContract(contractId);
   const updateContract = useUpdateContract();
   const upsertApplicant = useApplicantUpsert();
@@ -371,7 +373,7 @@ export function ContractEditPage() {
       });
 
       clearUnsavedDraft(unsavedDraftKey);
-      navigate(`/app/contrats/${data.id}`);
+      navigate(isMobile ? "/app/contrats" : `/app/contrats/${data.id}`);
     } catch (error) {
       console.error(error);
       setServerError(

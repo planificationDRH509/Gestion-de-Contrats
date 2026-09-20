@@ -3,6 +3,7 @@ import type { AppPermission } from "../auth/permissions";
 type Props = {
   count: number;
   singleContractAvailable?: boolean;
+  documentActionsAvailable?: boolean;
   label?: string;
   can: (permission: AppPermission) => boolean;
   expanded: boolean;
@@ -17,6 +18,8 @@ type Props = {
   onLetter: () => void;
   onDelete: () => void;
   onPrint: () => void;
+  onDuration?: () => void;
+  onExport?: () => void;
 };
 function Action({ icon, label, onClick, danger = false, submenu = false }: {
   icon: string; label: string; onClick: () => void; danger?: boolean; submenu?: boolean;
@@ -50,11 +53,13 @@ export function ContractActionsMenu(props: Props) {
       <div className="contract-menu-label">Suivi</div>
       {can("contracts.change_status") && <Action icon="rule" label="Changer l’état" submenu onClick={props.onStatus} />}
       {can("contracts.edit") && <Action icon="label" label="Ajouter un tag" submenu onClick={props.onTags} />}
+      {can("contracts.edit") && props.onDuration && <Action icon="timer" label="Modifier la durée" submenu onClick={props.onDuration} />}
     </div>}
     <div className="contract-menu-group" role="group" aria-label="Documents">
       <div className="contract-menu-label">Consultation et documents</div>
       {singleAvailable && <Action icon="unfold_more" label={props.expanded ? "Masquer les informations" : "Afficher les informations"} onClick={props.onDetails} />}
-      {can("contracts.print") && <Action icon="print" label={single ? "Imprimer le contrat" : "Imprimer la sélection"} onClick={props.onPrint} />}
+      {props.documentActionsAvailable !== false && can("contracts.print") && <Action icon="print" label={single ? "Imprimer le contrat" : "Imprimer la sélection"} onClick={props.onPrint} />}
+      {can("contracts.export") && props.onExport && <Action icon="download" label="Exporter vers Excel" submenu onClick={props.onExport} />}
       {singleAvailable && <Action icon="description" label="Lettre d’affectation" onClick={props.onLetter} />}
     </div>
     {singleAvailable && can("contracts.delete") && <div className="contract-menu-group"><Action icon="delete" label="Supprimer le contrat…" danger onClick={props.onDelete} /></div>}

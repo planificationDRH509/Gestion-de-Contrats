@@ -10,6 +10,7 @@ import { CONTRACT_AUDIT_FIELD_LABELS } from "../../lib/contractAudit";
 import { useAuth } from "../auth/auth";
 import { useAppUsers } from "../auth/usersApi";
 import { useContractsList } from "../contracts/contractsApi";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 type AuditEvent = {
   id: string;
@@ -75,6 +76,7 @@ function displayActorName(actor: AuditActor, usersById: Map<string, string>) {
 
 export function AuditPage() {
   const { user } = useAuth();
+  const isMobile = useIsMobileViewport();
   const workspaceId = user?.workspaceId ?? "";
   const { data, isLoading } = useContractsList({
     workspaceId,
@@ -247,10 +249,14 @@ export function AuditPage() {
                       <span className="material-symbols-rounded">badge</span>
                       {event.contract.nif || "NIF absent"}
                     </span>
-                    <Link to={`/app/contrats/${event.contract.id}`}>
-                      Contrat {event.contract.id}
-                      <span className="material-symbols-rounded">arrow_forward</span>
-                    </Link>
+                    {isMobile ? (
+                      <span>Contrat {event.contract.id}</span>
+                    ) : (
+                      <Link to={`/app/contrats/${event.contract.id}`}>
+                        Contrat {event.contract.id}
+                        <span className="material-symbols-rounded">arrow_forward</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </article>

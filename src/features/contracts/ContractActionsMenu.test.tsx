@@ -26,4 +26,9 @@ describe('contract selection context menu',()=>{
    expect(screen.queryByRole('group',{name:'Suivi'})).not.toBeInTheDocument();
    expect(screen.getByRole('menuitem',{name:'Afficher les informations'})).toBeInTheDocument();
  });
+ it('removes printing when document actions are unavailable',()=>{
+   const props={count:1,can:()=>true,expanded:false,documentActionsAvailable:false,onClose:vi.fn(),onDetails:vi.fn(),onList:vi.fn(),onDossiers:vi.fn(),onNewDossier:vi.fn(),onRemoveDossier:vi.fn(),onStatus:vi.fn(),onTags:vi.fn(),onLetter:vi.fn(),onDelete:vi.fn(),onPrint:vi.fn()};
+   render(<ContractActionsMenu {...props}/>);
+   expect(screen.queryByRole('menuitem',{name:'Imprimer le contrat'})).not.toBeInTheDocument();
+ });
 });

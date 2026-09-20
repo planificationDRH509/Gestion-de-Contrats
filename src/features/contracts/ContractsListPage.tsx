@@ -63,6 +63,7 @@ import { useContractLists } from "../lists/listsApi";
 import { listError, listName } from "../lists/listModel";
 import { ContractActionsMenu, contractContextTargets } from "./ContractActionsMenu";
 import { ListAssignmentDialog } from "../lists/ListAssignmentDialog";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -94,6 +95,7 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 export function ContractsListPage() {
   const { user, can } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobileViewport();
   const listsQuery = useContractLists();
   const listsByContract = useMemo(() => new Map((listsQuery.data ?? []).flatMap(list => list.members.map(member => [member.id, list] as const))), [listsQuery.data]);
   const [listAssignmentMode, setListAssignmentMode] = useState<"assign" | "create">("assign");
@@ -147,13 +149,11 @@ export function ContractsListPage() {
     y: number;
     scope?: "selection";
   } | null>(null);
-  const [bulkDossierId, setBulkDossierId] = useState("");
-  const [bulkStatus, setBulkStatus] = useState("");
   const [bulkDuration, setBulkDuration] = useState<number | "">("");
   const [pendingAssignIds, setPendingAssignIds] = useState<string[] | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export" | "tags">("main");
+  const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export" | "tags" | "duration">("main");
   const [dossierSubmenu, setDossierSubmenu] = useState<"archived" | "classified" | null>(null);
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
   const [tagSearch, setTagSearch] = useState("");
@@ -462,7 +462,7 @@ export function ContractsListPage() {
   }
 
   async function handlePrint(ids: string[]) {
-    if (ids.length === 0) return;
+    if (isMobile || ids.length === 0) return;
     let orderedIds = ids;
     if (ids.length > 1) {
       const selectedIdSet = new Set(ids);
@@ -765,7 +765,6 @@ export function ContractsListPage() {
   }
 
   async function handleDossierCreated(dossierId: string) {
-    setBulkDossierId(dossierId);
     if (!pendingAssignIds || pendingAssignIds.length === 0) {
       return;
     }
@@ -773,14 +772,6 @@ export function ContractsListPage() {
     setPendingAssignIds(null);
     setActiveView("contracts");
     await assignContracts(ids, dossierId);
-  }
-
-  function handleAssignSelectedToDossier() {
-    if (!bulkDossierId) {
-      setActionError("Choisissez un dossier avant l'affectation.");
-      return;
-    }
-    void assignContracts(selected, bulkDossierId);
   }
 
   async function handleChangeStatus(ids: string[], newStatus: ContractStatus) {
@@ -802,13 +793,6 @@ export function ContractsListPage() {
     }
   }
 
-  function handleApplyBulkStatus() {
-    if (!bulkStatus) return;
-    void handleChangeStatus(selected, bulkStatus as ContractStatus);
-    setBulkStatus("");
-    setSelected([]);
-  }
-
   async function handleApplyBulkDuration() {
     if (!can("contracts.edit")) return;
     if (selected.length === 0 || !bulkDuration) return;
@@ -823,6 +807,7 @@ export function ContractsListPage() {
       setActionMessage(`${selected.length} contrat(s) mis à jour avec une durée de ${bulkDuration} mois.`);
       setBulkDuration("");
       setSelected([]);
+      setContextMenu(null);
     } catch (error) {
       console.error(error);
       setActionError("Impossible de modifier la durée des contrats sélectionnés.");
@@ -868,8 +853,6 @@ export function ContractsListPage() {
             ? 240
             : contractId === "export-trigger"
               ? 170
-            : contractId === "bulk-dossier-trigger"
-              ? 260
             : mode === "status"
               ? 230
               : 360;
@@ -888,9 +871,7 @@ export function ContractsListPage() {
       scope: contractId === "selection-actions" || (mode === "main" && selected.includes(contractId)) ? "selection" : undefined
     });
     setMenuView(
-      contractId === "bulk-dossier-trigger"
-        ? "dossiers"
-        : contractId === "export-trigger"
+      contractId === "export-trigger"
           ? "export"
           : "main"
     );
@@ -1072,13 +1053,6 @@ export function ContractsListPage() {
 
   function handleDossierMenuSelect(dossier: Dossier) {
     if (!contextMenu) return;
-
-    if (contextMenu.id === "bulk-dossier-trigger") {
-      setBulkDossierId(dossier.id);
-      setContextMenu(null);
-      setDossierSubmenu(null);
-      return;
-    }
 
     void handleContextAssignToDossier(dossier.id);
     setDossierSubmenu(null);
@@ -1866,14 +1840,16 @@ export function ContractsListPage() {
                       </div>
                       <div className="contracts-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="icon-actions">
-                          <button
-                            className="icon-btn"
-                            onClick={() => navigate(`/app/contrats/${contract.id}`)}
-                            aria-label="Voir le contrat"
-                            title="Voir"
-                          >
-                            <span className="material-symbols-rounded">visibility</span>
-                          </button>
+                          {!isMobile ? (
+                            <button
+                              className="icon-btn"
+                              onClick={() => navigate(`/app/contrats/${contract.id}`)}
+                              aria-label="Voir le contrat"
+                              title="Voir"
+                            >
+                              <span className="material-symbols-rounded">visibility</span>
+                            </button>
+                          ) : null}
                           {can("contracts.edit") ? (
                             <button
                               className="icon-btn"
@@ -1884,14 +1860,16 @@ export function ContractsListPage() {
                               <span className="material-symbols-rounded">edit</span>
                             </button>
                           ) : null}
-                          <button
-                            className="icon-btn primary"
-                            onClick={() => handlePrint([contract.id])}
-                            aria-label="Imprimer le contrat"
-                            title="Imprimer"
-                          >
-                            <span className="material-symbols-rounded">print</span>
-                          </button>
+                          {!isMobile && can("contracts.print") ? (
+                            <button
+                              className="icon-btn primary"
+                              onClick={() => handlePrint([contract.id])}
+                              aria-label="Imprimer le contrat"
+                              title="Imprimer"
+                            >
+                              <span className="material-symbols-rounded">print</span>
+                            </button>
+                          ) : null}
                           {can("contracts.edit") ? (
                             <button
                               className={`icon-btn comment-trigger ${hasComment ? "has-comment" : ""}`}
@@ -1960,7 +1938,7 @@ export function ContractsListPage() {
                   role="menu"
                 >
                   {menuView !== "main" && !contextMenu.id.endsWith("-trigger") && <button type="button" className="context-menu-item contract-menu-back" onClick={() => { setMenuView("main"); setDossierSubmenu(null); }}><span className="material-symbols-rounded">arrow_back</span>Retour aux actions · {contextTargetIds.length} contrat(s)</button>}
-                  {(contextMenu.id === "filter-trigger" || contextMenu.id === "bulk-status-trigger") ? (
+                  {contextMenu.id === "filter-trigger" ? (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
                         <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>
@@ -1985,21 +1963,16 @@ export function ContractsListPage() {
                             key={st.id}
                             className="context-menu-item"
                             onClick={() => { 
-                              if (contextMenu.id === "filter-trigger") {
-                                setStatusFilter(st.id as ContractStatus); 
-                                setContextMenu(null); setPage(1); 
-                              } else {
-                                setBulkStatus(st.id);
-                                setContextMenu(null);
-                              }
+                              setStatusFilter(st.id as ContractStatus);
+                              setContextMenu(null); setPage(1);
                             }}
                             style={{ 
-                              color: (contextMenu.id === "filter-trigger" ? statusFilter === st.id : bulkStatus === st.id) ? "var(--accent)" : "inherit", 
-                              fontWeight: (contextMenu.id === "filter-trigger" ? statusFilter === st.id : bulkStatus === st.id) ? 600 : 400 
+                              color: (statusFilter === st.id) ? "var(--accent)" : "inherit",
+                              fontWeight: (statusFilter === st.id) ? 600 : 400
                             }}
                           >
                             <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>
-                              {(contextMenu.id === "filter-trigger" ? statusFilter === st.id : bulkStatus === st.id) ? "radio_button_checked" : "radio_button_unchecked"}
+                              {(statusFilter === st.id) ? "radio_button_checked" : "radio_button_unchecked"}
                             </span>
                             {st.label}
                           </button>
@@ -2345,6 +2318,7 @@ export function ContractsListPage() {
                     <ContractActionsMenu
                       count={contextTargetIds.length}
                       singleContractAvailable={Boolean(contextContract)}
+                      documentActionsAvailable={!isMobile}
                       label={contextTargetIds.length === 1 && contextContract ? `${contextContract.firstName} ${contextContract.lastName}` : undefined}
                       can={can}
                       expanded={Boolean(contextContract && isExpanded(contextContract.id))}
@@ -2355,6 +2329,8 @@ export function ContractsListPage() {
                       onNewDossier={() => { setContextMenu(null); requestCreateDossierAndAssign(contextTargetIds); }}
                       onRemoveDossier={() => void handleContextAssignToDossier(null)}
                       onStatus={() => setMenuView("status")}
+                      onDuration={contextMenu.scope === "selection" ? () => { setBulkDuration(""); setMenuView("duration"); } : undefined}
+                      onExport={contextMenu.scope === "selection" ? () => setMenuView("export") : undefined}
                       onTags={() => { setTagSearch(""); setMenuView("tags"); }}
                       onLetter={() => { if (contextContract) handleAssignmentLetter(contextContract); setContextMenu(null); }}
                       onDelete={() => { if (contextContract) void handleDeleteContract(contextContract.id); setContextMenu(null); }}
@@ -2392,6 +2368,15 @@ export function ContractsListPage() {
                         ))}
                       </div>
                     </>
+                  ) : menuView === "duration" ? (
+                    <form className="selection-duration-form" onSubmit={event => { event.preventDefault(); void handleApplyBulkDuration(); }}>
+                      <label htmlFor="selection-duration">Durée de la sélection</label>
+                      <div>
+                        <input id="selection-duration" className="input" type="number" min="1" max="12" required value={bulkDuration} onChange={event => setBulkDuration(event.target.value ? Number(event.target.value) : "")} />
+                        <span>mois</span>
+                      </div>
+                      <button className="btn btn-primary" disabled={!bulkDuration || changeContractsDuration.isPending}>Appliquer la durée</button>
+                    </form>
                   ) : menuView === "export" ? (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
@@ -2453,7 +2438,7 @@ export function ContractsListPage() {
                         className="context-menu-item"
                         style={{ padding: "10px 12px", fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}
                         onClick={() => {
-                          const ids = contextMenu.id === "bulk-dossier-trigger" ? selected : contextTargetIds;
+                          const ids = contextTargetIds;
                           setContextMenu(null);
                           requestCreateDossierAndAssign(ids);
                         }}
@@ -2544,7 +2529,7 @@ export function ContractsListPage() {
       )}
       {listAssignmentIds && <ListAssignmentDialog contractIds={listAssignmentIds} initialMode={listAssignmentMode} onClose={() => setListAssignmentIds(null)} />}
       {/* Floating Selection Actions Bar */}
-      <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
+      <div className={`selection-actions-shell selection-actions-compact ${hasSelection ? "active" : ""}`}>
             <div className="selection-actions-head">
               <div className="helper-text">
                 {selected.length} sélectionné(s)
@@ -2553,155 +2538,24 @@ export function ContractsListPage() {
                 className="icon-btn"
                 style={{ border: "none", background: "transparent", width: "24px", height: "24px" }}
                 type="button"
-                onClick={() => setSelected([])}
+                onClick={() => { setSelected([]); setContextMenu(null); }}
                 title="Tout désélectionner"
+                aria-label="Tout désélectionner"
               >
                 <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>close</span>
               </button>
             </div>
-            <div className="selection-actions-row" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <button className="btn btn-primary" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions"} onClick={event => handleContextFromButton(event, "selection-actions")}><span className="material-symbols-rounded">more_horiz</span>Actions</button>
-              {can("dossiers.manage") ? (
-              <>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
-                <button
-                   className="icon-btn"
-                   type="button"
-                   onClick={(e) => handleContextFromButton(e, "bulk-dossier-trigger")}
-                   title="Attribuer un dossier"
-                   style={{ background: "#fff", border: "1px solid var(--border)" }}
-                >
-                   <span className="material-symbols-rounded">folder_managed</span>
-                </button>
-                <div style={{ fontSize: "12px", fontWeight: 600, maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                   {bulkDossierId ? dossiersById.get(bulkDossierId)?.name : "Choisir dossier"}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "4px" }}>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={handleAssignSelectedToDossier}
-                  disabled={!bulkDossierId}
-                  title="Valider l'affectation"
-                >
-                  <span className="material-symbols-rounded">check</span>
-                </button>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={() => void assignContracts(selected, null)}
-                  title="Retirer du dossier"
-                >
-                  <span className="material-symbols-rounded">folder_off</span>
-                </button>
-              </div>
-
-              <div className="toolbar-divider" />
-              </>
-              ) : null}
-
-              {can("contracts.change_status") ? (
-              <>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>
-                <button
-                   className="icon-btn"
-                   type="button"
-                   onClick={(e) => handleContextFromButton(e, "bulk-status-trigger")}
-                   title="Modifier l'état"
-                   style={{ background: "#fff", border: "1px solid var(--border)" }}
-                >
-                   <span className="material-symbols-rounded">rule</span>
-                </button>
-                <div style={{ fontSize: "12px", fontWeight: 600 }}>
-                   {bulkStatus ? getContractStatusLabel(bulkStatus as ContractStatus) : "Modifier l'état"}
-                </div>
-              </div>
-
-              <button
-                className="icon-btn"
-                type="button"
-                onClick={handleApplyBulkStatus}
-                disabled={!bulkStatus}
-                title="Appliquer l'état"
-              >
-                <span className="material-symbols-rounded">done_all</span>
+            <div className="selection-actions-row">
+              <button className="btn btn-primary selection-actions-trigger" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions"} onClick={event => {
+                if (contextMenu?.id === "selection-actions") setContextMenu(null);
+                else handleContextFromButton(event, "selection-actions");
+              }}>
+                Actions<span className="material-symbols-rounded" aria-hidden="true">expand_more</span>
               </button>
-
-              <div className="toolbar-divider" />
-              </>
-              ) : null}
-
-              {can("contracts.edit") ? (
-              <>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "130px" }}>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={(event) => openTagMenu(event, "bulk-tag-trigger")}
-                  title="Ajouter un tag aux contrats sélectionnés"
-                  aria-label="Ajouter un tag aux contrats sélectionnés"
-                  style={{ background: "#fff", border: "1px solid var(--border)" }}
-                >
-                  <span className="material-symbols-rounded">new_label</span>
-                </button>
-                <div style={{ fontSize: "12px", fontWeight: 600 }}>
-                  Ajouter un tag
-                </div>
-              </div>
-
-              <div className="toolbar-divider" />
-
-              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <input
-                   className="input"
-                   type="number"
-                   min="1"
-                   style={{ width: "60px", height: "30px", fontSize: "12px" }}
-                   placeholder="Mois"
-                   value={bulkDuration}
-                   onChange={(e) => setBulkDuration(e.target.value ? Number(e.target.value) : "")}
-                />
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={() => void handleApplyBulkDuration()}
-                  disabled={!bulkDuration}
-                  title="Appliquer durée"
-                >
-                  <span className="material-symbols-rounded">timer</span>
-                </button>
-              </div>
-
-              <div className="toolbar-divider" />
-              </>
-              ) : null}
-
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
-                <button
-                  className="icon-btn primary"
-                  type="button"
-                  onClick={() => void handlePrint(selected)}
-                  title="Imprimer tout"
-                >
-                  <span className="material-symbols-rounded">print</span>
-                </button>
-                {can("contracts.export") ? (
-                  <button
-                    className="icon-btn"
-                    type="button"
-                    onClick={(event) => handleContextFromButton(event, "export-trigger")}
-                    title="Exporter Excel"
-                  >
-                    <span className="material-symbols-rounded">download_for_offline</span>
-                  </button>
-                ) : null}
-              </div>
             </div>
           </div>
 
-      {printHistoryOpen ? (
+      {!isMobile && printHistoryOpen ? (
         <div className={`print-history-panel ${hasSelection ? "shifted" : ""}`}>
           <div className="print-history-header">
             <div>
@@ -2781,7 +2635,7 @@ export function ContractsListPage() {
         </div>
       ) : null}
 
-      <div className={`print-history-fab ${hasSelection ? "shifted" : ""}`}>
+      {!isMobile ? <div className={`print-history-fab ${hasSelection ? "shifted" : ""}`}>
         <button
           className="icon-btn primary"
           type="button"
@@ -2793,9 +2647,9 @@ export function ContractsListPage() {
             {printHistoryOpen ? "close_fullscreen" : "receipt_long"}
           </span>
         </button>
-      </div>
+      </div> : null}
 
-      {undoAction ? (
+      {!isMobile && undoAction ? (
         <div className={`print-history-undo ${hasSelection ? "shifted" : ""}`}>
           <span>{undoAction.label}</span>
           <button className="print-history-undo-btn" type="button" onClick={handleUndo}>
@@ -2804,7 +2658,7 @@ export function ContractsListPage() {
         </div>
       ) : null}
 
-      {manualEntryOpen ? (
+      {!isMobile && manualEntryOpen ? (
         <div className="print-history-modal">
           <div className="print-history-modal-card">
             <div className="print-history-modal-title">Ajouter à l'historique</div>

@@ -41,6 +41,7 @@ import {
   findFeaturedPositionSalaryItem,
 } from "./positionSalarySuggestions";
 import { isPastFiscalYear } from "../../lib/contractDateFilters";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
 const SHEET_ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200] as const;
@@ -63,6 +64,7 @@ function normalize(str: string): string {
 export function ContractNewPage() {
   const { user, can } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobileViewport();
   const [searchParams] = useSearchParams();
   const createContract = useCreateContract();
   const upsertApplicant = useApplicantUpsert();
@@ -453,6 +455,7 @@ export function ContractNewPage() {
 
   async function persistContract(values: ContractFormSchema, mode: "save" | "print" | "preview") {
     if (!user) return;
+    if (isMobile && mode !== "save") return;
     setServerError(null);
     setSuccessMessage(null);
 
@@ -1086,24 +1089,28 @@ export function ContractNewPage() {
             <span className="material-symbols-rounded icon">save</span>
             Enregistrer
           </button>
-          <button
-            className="btn btn-outline"
-            type="button"
-            onClick={onSubmit("preview")}
-            disabled={isSubmitting || fieldsLockedByNif || nifFetching}
-          >
-            <span className="material-symbols-rounded icon">visibility</span>
-            Aperçu
-          </button>
-          <button
-            className="btn btn-outline"
-            type="button"
-            onClick={onSubmit("print")}
-            disabled={isSubmitting || fieldsLockedByNif || nifFetching}
-          >
-            <span className="material-symbols-rounded icon">print</span>
-            Imprimer
-          </button>
+          {!isMobile ? (
+            <>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={onSubmit("preview")}
+                disabled={isSubmitting || fieldsLockedByNif || nifFetching}
+              >
+                <span className="material-symbols-rounded icon">visibility</span>
+                Aperçu
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={onSubmit("print")}
+                disabled={isSubmitting || fieldsLockedByNif || nifFetching}
+              >
+                <span className="material-symbols-rounded icon">print</span>
+                Imprimer
+              </button>
+            </>
+          ) : null}
         </div>
       </form>
       ) : (

@@ -23,6 +23,7 @@ import { AuditPage } from "../features/audit/AuditPage";
 import { QualityPage } from "../features/quality/QualityPage";
 import { TasksPage } from "../features/tasks/TasksPage";
 import { TrashPage } from "../features/settings/TrashPage";
+import { DesktopOnlyContractFeature } from "../features/contracts/DesktopOnlyContractFeature";
 
 import { ListsPage } from "../features/lists/ListsPage";
 
@@ -44,10 +45,10 @@ export function AppRoutes() {
         <Route path="taches" element={<TasksPage />} />
         <Route path="dossiers" element={<Navigate to="/app/contrats" replace />} />
         <Route path="contrats/nouveau" element={<RequirePermission permission="contracts.create"><ContractNewPage /></RequirePermission>} />
-        <Route path="contrats/preview" element={<RequirePermission permission="contracts.create"><ContractPreviewPage /></RequirePermission>} />
+        <Route path="contrats/preview" element={<RequirePermission permission="contracts.create"><DesktopOnlyContractFeature><ContractPreviewPage /></DesktopOnlyContractFeature></RequirePermission>} />
         <Route path="contrats/:contractId/modifier" element={<RequirePermission permission="contracts.edit"><ContractEditPage /></RequirePermission>} />
-        <Route path="contrats/:contractId" element={<ContractDetailPage />} />
-        <Route path="contrats/print" element={<RequirePermission permission="contracts.print"><ContractsPrintPage /></RequirePermission>} />
+        <Route path="contrats/:contractId" element={<DesktopOnlyContractFeature><ContractDetailPage /></DesktopOnlyContractFeature>} />
+        <Route path="contrats/print" element={<RequirePermission permission="contracts.print"><DesktopOnlyContractFeature><ContractsPrintPage /></DesktopOnlyContractFeature></RequirePermission>} />
         <Route path="statistiques" element={<RequirePermission permission="statistics.view"><StatisticsPage /></RequirePermission>} />
         <Route path="audit" element={<RequirePermission permission="audit.view"><AuditPage /></RequirePermission>} />
         <Route path="controle-qualite" element={<RequirePermission permission="quality.view"><QualityPage /></RequirePermission>} />
