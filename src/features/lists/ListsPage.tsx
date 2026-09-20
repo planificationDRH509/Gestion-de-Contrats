@@ -83,6 +83,8 @@ function ListDetail({ list, onDeleted }: { list: ContractList; onDeleted: () => 
     setConfirm(action);
   }
   const [reason, setReason] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const query = useContractLists();
   const contracts = useContractsList({ workspaceId: user?.workspaceId ?? "", all: true, sort: "name_asc" }, { enabled: adding });
   const membership = useMemo(() => new Map((query.data ?? []).flatMap(l => l.members.map(m => [m.id, l] as const))), [query.data]);
@@ -93,6 +95,21 @@ function ListDetail({ list, onDeleted }: { list: ContractList; onDeleted: () => 
   const members = sortedMembers(list.members);
   const totals = listTotals(list);
   const editable = can("contracts.edit") && !list.sealedAt;
+  async function exportExcel() {
+    if (exporting || !can("contracts.export")) return;
+    setExporting(true); setExportError(null);
+    try {
+      const { downloadListExcel } = await import("./downloadListExcel");
+      await downloadListExcel(async () => {
+        const result = await query.refetch();
+        if (result.error) throw result.error;
+        const current = result.data?.find(item => item.id === list.id && item.workspaceId === user?.workspaceId);
+        if (!current) throw new Error("Cette liste n’est plus disponible. Actualisez la page.");
+        return current;
+      });
+    } catch (error) { setExportError(listError(error)); }
+    finally { setExporting(false); }
+  }
   async function run(input: ListOperation) {
     try {
       await operation.mutateAsync({ listId: list.id, version: list.version, ...input });
@@ -110,9 +127,12 @@ function ListDetail({ list, onDeleted }: { list: ContractList; onDeleted: () => 
     {editable && visa !== (list.visaNumber ?? "") && <p className="helper-text">Enregistrez le visa avant de sceller la liste.</p>}
     {list.sealedAt && <p className="list-notice">Scellée le {new Date(list.sealedAt).toLocaleString("fr-FR")}. La composition, le visa et les informations du contrat sont protégés. Un administrateur peut rouvrir la liste avec un motif.</p>}
     <div className="list-actions">
+      {can("contracts.export") && <button className="btn btn-outline" onClick={() => void exportExcel()} disabled={exporting || !members.length || operation.isPending}><span className="material-symbols-rounded" aria-hidden="true">download</span>{exporting ? "Export en cours…" : "Exporter en Excel"}</button>}
       {editable && <><button className="btn btn-primary" onClick={() => setAdding(!adding)} disabled={operation.isPending}>Ajouter des contrats</button><button className="btn btn-outline" onClick={() => ask("seal")} disabled={!members.length || operation.isPending || visa !== (list.visaNumber ?? "")}>Sceller la liste</button>{!members.length && <button className="btn btn-outline" onClick={() => ask("delete")} disabled={operation.isPending}>Supprimer la liste vide</button>}</>}
       {list.sealedAt && user?.role === "admin" && <button className="btn btn-outline" onClick={() => ask("reopen")} disabled={operation.isPending}>Rouvrir la liste</button>}
     </div>
+    {can("contracts.export") && <p className="helper-text">Format du tableau MSPP. Les champs non renseignés (formation, expérience, tâches, remarques) restent à compléter dans Excel.</p>}
+    {exportError && <p role="alert" className="list-error">{exportError}</p>}
     {operation.error && <p role="alert" className="list-error">{listError(operation.error)}</p>}
     {confirm && <div className="list-confirm" role="region" aria-label="Confirmation">
       <strong>{confirm === "seal" ? "Sceller ce lot ?" : confirm === "reopen" ? "Rouvrir ce lot ?" : confirm === "remove" ? `Retirer ${selected.length} contrat(s) de ce lot ?` : "Supprimer cette liste vide ?"}</strong>

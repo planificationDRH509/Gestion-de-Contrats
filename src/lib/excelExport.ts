@@ -117,8 +117,9 @@ function createZip(files: ZipFile[]) {
   return concatBytes([...localParts, centralDirectory, endRecord]);
 }
 
-function escapeXml(value: string) {
+export function escapeExcelXml(value: string) {
   return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -147,7 +148,7 @@ function sheetXml(rows: ExcelCellValue[][]) {
             return `<c r="${reference}"><v>${cell}</v></c>`;
           }
           const value = cell == null ? "" : String(cell);
-          return `<c r="${reference}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
+          return `<c r="${reference}" t="inlineStr"><is><t>${escapeExcelXml(value)}</t></is></c>`;
         })
         .join("");
       return `<row r="${rowNumber}">${cells}</row>`;
@@ -161,7 +162,7 @@ function sheetXml(rows: ExcelCellValue[][]) {
 }
 
 export function createExcelWorkbookBlob(sheetName: string, rows: ExcelCellValue[][]) {
-  const safeSheetName = escapeXml(sheetName.slice(0, 31) || "Feuille1");
+  const safeSheetName = escapeExcelXml(sheetName.slice(0, 31) || "Feuille1");
   const files: ZipFile[] = [
     {
       name: "[Content_Types].xml",
@@ -202,7 +203,15 @@ export function createExcelWorkbookBlob(sheetName: string, rows: ExcelCellValue[
     }
   ];
 
-  return new Blob([createZip(files)], {
+  return createExcelPackageBlob(files);
+}
+
+/** Package OOXML parts, including styles and drawings, without a heavy browser dependency. */
+export function createExcelPackageBlob(files: { name: string; data: string | Uint8Array }[]) {
+  return new Blob([createZip(files.map(file => ({
+    name: file.name,
+    data: typeof file.data === "string" ? encodeText(file.data) : file.data
+  })))], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
 }
