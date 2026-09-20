@@ -9998,11 +9998,17 @@ body,
   overflow: visible;
 }
 .selection-actions-compact .selection-actions-head {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
   width: auto;
   gap: 8px;
-  padding: 0 12px 0 0;
-  border-bottom: 0;
-  border-right: 1px solid var(--border);
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px #0002;
 }
 .selection-actions-compact .selection-actions-row {
   width: auto;

@@ -41,7 +41,7 @@ export function ContractActionsMenu(props: Props) {
     </div>
     {can("contracts.edit") && <div className="contract-menu-group" role="group" aria-label="Listes">
       <div className="contract-menu-label">Listes de contrats</div>
-      <Action icon="playlist_add" label="Attribuer à une liste…" onClick={() => props.onList("assign")} />
+      {!props.secondaryOnly && <Action icon="playlist_add" label="Attribuer à une liste…" onClick={() => props.onList("assign")} />}
       <Action icon="add_box" label="Créer une liste avec la sélection…" onClick={() => props.onList("create")} />
     </div>}
     {can("dossiers.manage") && <div className="contract-menu-group" role="group" aria-label="Dossiers">
@@ -56,13 +56,13 @@ export function ContractActionsMenu(props: Props) {
       {can("contracts.edit") && <Action icon="label" label="Ajouter un tag" submenu onClick={props.onTags} />}
       {!props.secondaryOnly && can("contracts.edit") && props.onDuration && <Action icon="timer" label="Modifier la durée" submenu onClick={props.onDuration} />}
     </div>}
-    <div className="contract-menu-group" role="group" aria-label="Documents">
+    {(singleAvailable || (!props.secondaryOnly && ((props.documentActionsAvailable !== false && can("contracts.print")) || (can("contracts.export") && props.onExport)))) && <div className="contract-menu-group" role="group" aria-label="Documents">
       <div className="contract-menu-label">Consultation et documents</div>
       {singleAvailable && <Action icon="unfold_more" label={props.expanded ? "Masquer les informations" : "Afficher les informations"} onClick={props.onDetails} />}
       {!props.secondaryOnly && props.documentActionsAvailable !== false && can("contracts.print") && <Action icon="print" label={single ? "Imprimer le contrat" : "Imprimer la sélection"} onClick={props.onPrint} />}
-      {can("contracts.export") && props.onExport && <Action icon="download" label="Exporter vers Excel" submenu onClick={props.onExport} />}
+      {!props.secondaryOnly && can("contracts.export") && props.onExport && <Action icon="download" label="Exporter vers Excel" submenu onClick={props.onExport} />}
       {singleAvailable && <Action icon="description" label="Lettre d’affectation" onClick={props.onLetter} />}
-    </div>
+    </div>}
     {singleAvailable && can("contracts.delete") && <div className="contract-menu-group"><Action icon="delete" label="Supprimer le contrat…" danger onClick={props.onDelete} /></div>}
   </>;
 }

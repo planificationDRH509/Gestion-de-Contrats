@@ -2532,8 +2532,8 @@ export function ContractsListPage() {
       {/* Floating Selection Actions Bar */}
       <div className={`selection-actions-shell selection-actions-compact ${hasSelection ? "active" : ""}`}>
             <div className="selection-actions-head">
-              <div className="helper-text">
-                {selected.length} sélectionné(s)
+              <div className="helper-text" role="status" aria-live="polite">
+                {selected.length} sélectionné{selected.length > 1 ? "s" : ""}
               </div>
               <button
                 className="icon-btn"
@@ -2547,6 +2547,9 @@ export function ContractsListPage() {
               </button>
             </div>
             <div className="selection-actions-row">
+              {can("contracts.edit") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Attribuer la sélection à une liste" aria-haspopup="dialog" onClick={() => { setContextMenu(null); setListAssignmentMode("assign"); setListAssignmentIds([...selected]); }}>
+                <span className="material-symbols-rounded" aria-hidden="true">inventory_2</span>Listes
+              </button>}
               {can("dossiers.manage") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Changer le dossier de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "dossiers"} onClick={event => { handleContextFromButton(event, "selection-actions"); setMenuView("dossiers"); }}>
                 <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>Dossier<span className="material-symbols-rounded selection-bar-chevron" aria-hidden="true">expand_more</span>
               </button>}
@@ -2562,6 +2565,9 @@ export function ContractsListPage() {
                 <button className="icon-btn" type="submit" title="Appliquer la durée" aria-label="Appliquer la durée" disabled={!bulkDuration || changeContractsDuration.isPending}><span className="material-symbols-rounded" aria-hidden="true">check</span></button>
               </form>}
               {!isMobile && can("contracts.print") && <button className="icon-btn selection-bar-print" type="button" title="Imprimer la sélection" aria-label="Imprimer la sélection" onClick={() => { setContextMenu(null); void handlePrint(selected); }}><span className="material-symbols-rounded" aria-hidden="true">print</span></button>}
+              {can("contracts.export") && <button className="btn btn-outline selection-bar-button" type="button" aria-label="Exporter la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "export"} onClick={event => { handleContextFromButton(event, "selection-actions"); setMenuView("export"); }}>
+                <span className="material-symbols-rounded" aria-hidden="true">download</span>Export<span className="material-symbols-rounded selection-bar-chevron" aria-hidden="true">expand_more</span>
+              </button>}
               <button className="btn btn-primary selection-actions-trigger" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions" && menuView === "main"} onClick={event => {
                 if (contextMenu?.id === "selection-actions" && menuView === "main") setContextMenu(null);
                 else handleContextFromButton(event, "selection-actions");
