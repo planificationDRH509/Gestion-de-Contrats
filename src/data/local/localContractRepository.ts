@@ -45,8 +45,9 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 10;
 
-    let items = db.contracts.filter(
-      (contract) => contract.workspaceId === params.workspaceId && !contract.deletedAt
+    let items = db.contracts.filter((contract) =>
+      contract.workspaceId === params.workspaceId &&
+      (params.deletionState === "deleted" ? Boolean(contract.deletedAt) : !contract.deletedAt)
     );
 
     if (params.onlyMine && params.userId) {

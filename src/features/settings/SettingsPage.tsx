@@ -53,6 +53,12 @@ export function SettingsPage() {
               description="Exportez la base SQLite locale en fichier SQL pour sauvegarde."
             />
             <SettingsCard
+              to="/app/parametres/corbeille"
+              icon="delete_sweep"
+              title="Corbeille"
+              description="Consultez les contrats qui ont été supprimés."
+            />
+            <SettingsCard
               to="/app/parametres/utilisateurs"
               icon="group"
               title="Utilisateurs"

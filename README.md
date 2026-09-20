@@ -91,3 +91,19 @@ Dans l'application, ouvrez **Parametres -> Backup SQL** pour telecharger un expo
 - `src/features/contracts` : ecrans, formulaire, impression
 - `src/data` : repositories + providers (local / supabase)
 - `supabase/migrations` : schema SQL + RLS
+
+## Listes de contrats
+
+La page **Listes** du menu latéral permet de créer des lots de durée commune (1 à 12 mois), avec un numéro de visa facultatif. Les contrats sont classés par nom, puis prénom, selon l’ordre alphabétique français. Le nom du lot se recalcule automatiquement : `LOT-<quantité>-<NOM>-<Prénom>`. Une liste vide porte le nom `LOT-0`, avec une référence distincte.
+
+- Un contrat appartient à une seule liste. L’attribution et le déplacement groupés sont atomiques : une incompatibilité annule toute l’opération.
+- Depuis **Contrats**, le clic droit sur une carte sélectionnée ou le bouton **Actions** ouvre les actions de toute la sélection. Le menu permet d’attribuer les contrats à un lot existant ou de créer et remplir un nouveau lot en une seule opération, avec aperçu du nom, du total et saisie du visa facultatif.
+- Le total mensuel additionne les salaires ; le montant total multiplie cette somme par la durée commune.
+- Une liste en préparation n’affiche pas de statut. Une liste **Scellée** porte un badge vert, également affiché sur les cartes des contrats.
+- Le scellement protège la composition, le visa, les montants, la durée et les informations contractuelles et d’identité. Les états de suivi, tags et commentaires restent utilisables.
+- Seul un administrateur peut rouvrir un lot, avec un motif conservé dans son historique. Une liste doit être vide et ouverte pour être supprimée.
+- En mode Supabase, les modifications de listes exigent une connexion et une session applicative valide. Les changements de contrats en attente doivent être synchronisés avant une opération sur les listes. Les listes déjà chargées restent dans le cache de consultation.
+
+Schéma : `supabase/migrations/20260920151424_contract_lists.sql`. Les tables sont protégées par RLS et sans accès direct aux rôles API ; les deux RPC vérifient les sessions opaques de l’application, les rôles et l’espace de travail. Des déclencheurs protègent aussi les contrats modifiés via les écrans existants. Le stockage SQLite applique les mêmes règles métier et inclut les listes dans la sauvegarde SQL.
+
+Vérification : `npm test -- src/features/lists` et `npm run build`. Le script `supabase/tests/contract_lists.sql` teste les RPC et leurs protections dans une transaction annulée, sans conserver les données d’essai.

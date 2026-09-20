@@ -710,15 +710,17 @@ class SupabaseContractRepository implements ContractRepository {
         .from("contrat")
         .select("*, identification!inner(*), contract_tags!inner(tag_id, tags(*))", { count: "exact" })
         .eq("workspace_id", params.workspaceId)
-        .is("deleted_at", null)
         .eq("contract_tags.tag_id", params.tagId);
     } else {
       query = client
         .from("contrat")
         .select("*, identification!inner(*), contract_tags(tags(*))", { count: "exact" })
-        .eq("workspace_id", params.workspaceId)
-        .is("deleted_at", null);
+        .eq("workspace_id", params.workspaceId);
     }
+
+    query = params.deletionState === "deleted"
+      ? query.not("deleted_at", "is", null)
+      : query.is("deleted_at", null);
 
     if (params.onlyMine && params.userId) {
       query = query.eq("created_by", params.userId);
@@ -1942,7 +1944,7 @@ class OfflineFirstContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      if (params.all && !params.query) {
+      if (params.all && !params.query && params.deletionState !== "deleted") {
         // Reconcile deletions and preserve queued changes before calculating totals.
         await syncSupabaseWorkspace(params.workspaceId, { force: true });
         return this.local.list(params);

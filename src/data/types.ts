@@ -179,6 +179,8 @@ export type ContractSort =
 
 export type ContractListParams = {
   workspaceId: string;
+  /** Select active contracts by default, or only soft-deleted contracts for the trash. */
+  deletionState?: "active" | "deleted";
   query?: string;
   sort?: ContractSort;
   page?: number;

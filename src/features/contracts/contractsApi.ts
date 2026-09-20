@@ -202,6 +202,7 @@ export function useCreateContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -249,6 +250,7 @@ export function useUpdateContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({
@@ -291,6 +293,7 @@ export function useUpdateContractComment() {
     onSettled: () => {
       // Always refetch after error or success to keep server and client in sync
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
     }
   });
@@ -310,6 +313,7 @@ export function useAssignContractsToDossier() {
     }) => provider.contracts.assignToDossier(workspaceId, contractIds, dossierId),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -336,6 +340,7 @@ export function useChangeContractsStatus() {
     }) => provider.contracts.updateStatus(workspaceId, contractIds, status),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -361,6 +366,7 @@ export function useChangeContractsDuration() {
     }) => provider.contracts.updateDuration(workspaceId, contractIds, durationMonths),
     onSuccess: (_updatedCount, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -537,6 +543,7 @@ export function useImportContracts() {
     },
     onSettled: (_contracts, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
@@ -572,6 +579,7 @@ export function useDeleteContract() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
       queryClient.invalidateQueries({

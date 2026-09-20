@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 
+import { initializeContractLists, readContractLists, mutateContractList } from "./contractLists";
+
 type RawRecord = Record<string, unknown>;
 
 type AuditValue = string | number | boolean | null;
@@ -51,6 +53,7 @@ type ContractDateFilterMode =
 
 type ContractListPayload = {
   workspaceId: string;
+  deletionState?: "active" | "deleted";
   query?: string;
   sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc" | "nif_asc" | "nif_desc";
   page?: number;
@@ -1000,6 +1003,7 @@ function getDb(): DatabaseSync {
     });
   }
 
+  initializeContractLists(db);
   cachedDb = db;
   return db;
 }
@@ -1035,7 +1039,8 @@ function buildSqlBackupDump(db: DatabaseSync): string {
     sql: string;
   }>;
 
-  for (const row of schemaRows) {
+  // Restore data before enabling write guards (notably sealed contract lists).
+  for (const row of schemaRows.filter((item) => item.type !== "trigger")) {
     const statement = row.sql.trim();
     if (statement.length) {
       lines.push(`${statement};`);
@@ -1082,6 +1087,10 @@ function buildSqlBackupDump(db: DatabaseSync): string {
     }
   }
 
+  for (const row of schemaRows.filter((item) => item.type === "trigger")) {
+    lines.push(`${row.sql.trim()};`);
+  }
+
   lines.push("COMMIT;");
   lines.push("PRAGMA foreign_keys=ON;");
   lines.push("");
@@ -1089,8 +1098,14 @@ function buildSqlBackupDump(db: DatabaseSync): string {
   return lines.join("\n");
 }
 
-function buildContractRows(workspaceId: string): ContractRow[] {
+function buildContractRows(
+  workspaceId: string,
+  deletionState: "active" | "deleted" = "active"
+): ContractRow[] {
   const db = getDb();
+  const deletionClause = deletionState === "deleted"
+    ? "AND c.deleted_at IS NOT NULL"
+    : "AND c.deleted_at IS NULL";
   const rows = db
     .prepare(`
       SELECT
@@ -1119,7 +1134,7 @@ function buildContractRows(workspaceId: string): ContractRow[] {
       FROM contrat c
       INNER JOIN identification i ON i.nif = c.nif
       WHERE c.workspace_id = :workspace_id
-        AND c.deleted_at IS NULL
+        ${deletionClause}
     `)
     .all({ workspace_id: workspaceId }) as ContractRow[];
 
@@ -1218,6 +1233,17 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       updatedAt: asString(row.updated_at),
       deletedAt: asNullableString(row.deleted_at)
     })));
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/lists` && method === "GET") {
+    sendJson(res, 200, readContractLists(db, url.searchParams.get("workspaceId") ?? ""));
+    return;
+  }
+  if (pathname === `${API_PREFIX}/lists` && method === "POST") {
+    const body = await parseBody(req);
+    const id = mutateContractList(db, asString(body.workspaceId), body, operatorFromRequest(req));
+    sendJson(res, 200, id);
     return;
   }
 
@@ -1984,7 +2010,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const page = Math.max(1, asInteger(payload.page, 1));
     const pageSize = Math.max(1, asInteger(payload.pageSize, 10));
 
-    let items = buildContractRows(workspaceId).map(mapContract);
+    let items = buildContractRows(
+      workspaceId,
+      payload.deletionState === "deleted" ? "deleted" : "active"
+    ).map(mapContract);
 
     if (payload.query?.trim()) {
       const q = payload.query.trim();

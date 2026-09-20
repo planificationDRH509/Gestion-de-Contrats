@@ -111,6 +111,7 @@ export function useCreateIdentification() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
     },
   });
 }
@@ -136,6 +137,7 @@ export function useUpdateIdentification() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
     },
   });
 }
@@ -147,6 +149,7 @@ export function useDeleteIdentification() {
       provider.applicants.softDelete(nif, workspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
     },
   });
 }

@@ -69,7 +69,8 @@ export function AppLayout() {
           queryClient.invalidateQueries({ queryKey: ["contracts"] }),
           queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
           queryClient.invalidateQueries({ queryKey: ["identification"] }),
-          queryClient.invalidateQueries({ queryKey: ["tags"] })
+          queryClient.invalidateQueries({ queryKey: ["tags"] }),
+          queryClient.invalidateQueries({ queryKey: ["contract-lists"] })
         ]);
       }
     } catch (error) {

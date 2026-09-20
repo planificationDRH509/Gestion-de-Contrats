@@ -492,6 +492,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      read_contract_lists: {
+        Args: { p_session_token: string; p_workspace_id: string }
+        Returns: Json
+      }
+      mutate_contract_list: {
+        Args: { p_session_token: string; p_workspace_id: string; p_operation: Json }
+        Returns: string
+      }
       change_app_user_password: {
         Args: {
           p_current_password: string

@@ -62,6 +62,7 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
           collapsed={collapsed} 
           end 
         />
+        <NavItem to="/app/listes" icon="inventory_2" label="Listes" collapsed={collapsed} />
         {can("contracts.create") ? (
           <NavItem
             to="/app/contrats/nouveau"

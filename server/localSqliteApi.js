@@ -62,6 +62,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomInt, randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { initializeContractLists, readContractLists, mutateContractList } from "./contractLists";
 var HttpError = /** @class */ (function (_super) {
     __extends(HttpError, _super);
     function HttpError(status, message) {
@@ -720,6 +721,7 @@ function getDb() {
             });
         });
     }
+    initializeContractLists(db);
     cachedDb = db;
     return db;
 }
@@ -733,8 +735,9 @@ function buildSqlBackupDump(db) {
     var schemaRows = db
         .prepare("\n      SELECT type, name, sql\n      FROM sqlite_master\n      WHERE sql IS NOT NULL\n        AND name NOT LIKE 'sqlite_%'\n      ORDER BY\n        CASE type\n          WHEN 'table' THEN 0\n          WHEN 'index' THEN 1\n          WHEN 'trigger' THEN 2\n          WHEN 'view' THEN 3\n          ELSE 4\n        END,\n        name\n    ")
         .all();
-    for (var _i = 0, schemaRows_1 = schemaRows; _i < schemaRows_1.length; _i++) {
-        var row = schemaRows_1[_i];
+    // Restore data before enabling write guards (notably sealed contract lists).
+    for (var _i = 0, _a = schemaRows.filter(function (item) { return item.type !== "trigger"; }); _i < _a.length; _i++) {
+        var row = _a[_i];
         var statement = row.sql.trim();
         if (statement.length) {
             lines.push("".concat(statement, ";"));
@@ -743,8 +746,8 @@ function buildSqlBackupDump(db) {
     var tableRows = db
         .prepare("\n      SELECT name\n      FROM sqlite_master\n      WHERE type = 'table'\n        AND name NOT LIKE 'sqlite_%'\n      ORDER BY name\n    ")
         .all();
-    for (var _a = 0, tableRows_1 = tableRows; _a < tableRows_1.length; _a++) {
-        var tableRow = tableRows_1[_a];
+    for (var _b = 0, tableRows_1 = tableRows; _b < tableRows_1.length; _b++) {
+        var tableRow = tableRows_1[_b];
         var tableName = asString(tableRow.name);
         if (!tableName) {
             continue;
@@ -766,20 +769,28 @@ function buildSqlBackupDump(db) {
                 .map(quoteIdentifier)
                 .join(", "), ") VALUES (").concat(values.join(", "), ");"));
         };
-        for (var _b = 0, rows_1 = rows; _b < rows_1.length; _b++) {
-            var row = rows_1[_b];
+        for (var _c = 0, rows_1 = rows; _c < rows_1.length; _c++) {
+            var row = rows_1[_c];
             _loop_2(row);
         }
+    }
+    for (var _d = 0, _e = schemaRows.filter(function (item) { return item.type === "trigger"; }); _d < _e.length; _d++) {
+        var row = _e[_d];
+        lines.push("".concat(row.sql.trim(), ";"));
     }
     lines.push("COMMIT;");
     lines.push("PRAGMA foreign_keys=ON;");
     lines.push("");
     return lines.join("\n");
 }
-function buildContractRows(workspaceId) {
+function buildContractRows(workspaceId, deletionState) {
+    if (deletionState === void 0) { deletionState = "active"; }
     var db = getDb();
+    var deletionClause = deletionState === "deleted"
+        ? "AND c.deleted_at IS NOT NULL"
+        : "AND c.deleted_at IS NULL";
     var rows = db
-        .prepare("\n      SELECT\n        c.id_contrat,\n        c.workspace_id,\n        c.dossier_id,\n        c.nif,\n        c.status,\n        c.duree_contrat,\n        c.salaire_en_chiffre,\n        c.salaire,\n        c.titre,\n        c.lieu_affectation,\n        c.annee_fiscale,\n        c.created_at,\n        c.updated_at,\n        c.deleted_at,\n        c.historique_saisie,\n        c.commentaire,\n        c.created_by,\n        i.nom,\n        i.prenom,\n        i.sexe,\n        i.ninu,\n        i.adresse\n      FROM contrat c\n      INNER JOIN identification i ON i.nif = c.nif\n      WHERE c.workspace_id = :workspace_id\n        AND c.deleted_at IS NULL\n    ")
+        .prepare("\n      SELECT\n        c.id_contrat,\n        c.workspace_id,\n        c.dossier_id,\n        c.nif,\n        c.status,\n        c.duree_contrat,\n        c.salaire_en_chiffre,\n        c.salaire,\n        c.titre,\n        c.lieu_affectation,\n        c.annee_fiscale,\n        c.created_at,\n        c.updated_at,\n        c.deleted_at,\n        c.historique_saisie,\n        c.commentaire,\n        c.created_by,\n        i.nom,\n        i.prenom,\n        i.sexe,\n        i.ninu,\n        i.adresse\n      FROM contrat c\n      INNER JOIN identification i ON i.nif = c.nif\n      WHERE c.workspace_id = :workspace_id\n        ".concat(deletionClause, "\n    "))
         .all({ workspace_id: workspaceId });
     return rows;
 }
@@ -826,10 +837,10 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
-        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
-        return __generator(this, function (_u) {
-            switch (_u.label) {
+        var db, method, url, pathname, dump, timestamp, filename, rows, body, id, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, salaryText, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextSalaryText, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
+        return __generator(this, function (_v) {
+            switch (_v.label) {
                 case 0:
                     db = getDb();
                     method = ((_d = req.method) !== null && _d !== void 0 ? _d : "GET").toUpperCase();
@@ -867,8 +878,20 @@ function handleApiRequest(req, res) {
                         }); }));
                         return [2 /*return*/];
                     }
+                    if (pathname === "".concat(API_PREFIX, "/lists") && method === "GET") {
+                        sendJson(res, 200, readContractLists(db, (_f = url.searchParams.get("workspaceId")) !== null && _f !== void 0 ? _f : ""));
+                        return [2 /*return*/];
+                    }
+                    if (!(pathname === "".concat(API_PREFIX, "/lists") && method === "POST")) return [3 /*break*/, 2];
+                    return [4 /*yield*/, parseBody(req)];
+                case 1:
+                    body = _v.sent();
+                    id = mutateContractList(db, asString(body.workspaceId), body, operatorFromRequest(req));
+                    sendJson(res, 200, id);
+                    return [2 /*return*/];
+                case 2:
                     if (pathname === "".concat(API_PREFIX, "/tags") && method === "GET") {
-                        workspaceId = ((_f = url.searchParams.get("workspaceId")) === null || _f === void 0 ? void 0 : _f.trim()) || "";
+                        workspaceId = ((_g = url.searchParams.get("workspaceId")) === null || _g === void 0 ? void 0 : _g.trim()) || "";
                         if (!workspaceId) {
                             throw new HttpError(400, "workspaceId est obligatoire.");
                         }
@@ -878,10 +901,10 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, rows.map(mapTag));
                         return [2 /*return*/];
                     }
-                    if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 2];
+                    if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 4];
                     return [4 /*yield*/, parseBody(req)];
-                case 1:
-                    body = _u.sent();
+                case 3:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     name_2 = normalizeTagName(asString(body.name));
                     color = asString(body.color).trim() || tagColor(name_2);
@@ -909,11 +932,11 @@ function handleApiRequest(req, res) {
                     row = db.prepare("SELECT * FROM tags WHERE id = :id").get({ id: id });
                     sendJson(res, 200, mapTag(row));
                     return [2 /*return*/];
-                case 2:
-                    if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 4];
+                case 4:
+                    if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 6];
                     return [4 /*yield*/, parseBody(req)];
-                case 3:
-                    body = _u.sent();
+                case 5:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -936,11 +959,11 @@ function handleApiRequest(req, res) {
                     });
                     sendJson(res, 200, { ok: true });
                     return [2 /*return*/];
-                case 4:
-                    if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 6];
+                case 6:
+                    if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 8];
                     return [4 /*yield*/, parseBody(req)];
-                case 5:
-                    body = _u.sent();
+                case 7:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -954,7 +977,7 @@ function handleApiRequest(req, res) {
                     });
                     sendJson(res, 200, { ok: true });
                     return [2 /*return*/];
-                case 6:
+                case 8:
                     if (pathname === "".concat(API_PREFIX, "/applicants") && method === "GET") {
                         workspaceId = asString(url.searchParams.get("workspaceId"));
                         if (!workspaceId) {
@@ -966,10 +989,10 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, rows.map(mapApplicant));
                         return [2 /*return*/];
                     }
-                    if (!(pathname === "".concat(API_PREFIX, "/applicants/find-many") && method === "POST")) return [3 /*break*/, 8];
+                    if (!(pathname === "".concat(API_PREFIX, "/applicants/find-many") && method === "POST")) return [3 /*break*/, 10];
                     return [4 /*yield*/, parseBody(req)];
-                case 7:
-                    body = _u.sent();
+                case 9:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     nifs = Array.isArray(body.nifs)
                         ? Array.from(new Set(body.nifs.map(asString).map(function (value) { return value.trim(); }).filter(Boolean)))
@@ -1007,11 +1030,11 @@ function handleApiRequest(req, res) {
                         .all(params_1);
                     sendJson(res, 200, rows.map(mapApplicant));
                     return [2 /*return*/];
-                case 8:
-                    if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 10];
+                case 10:
+                    if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 12];
                     return [4 /*yield*/, parseBody(req)];
-                case 9:
-                    body = _u.sent();
+                case 11:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     existingId = asNullableString(body.id);
                     nif = asNullableString(body.nif);
@@ -1036,9 +1059,9 @@ function handleApiRequest(req, res) {
                         .prepare("\n        SELECT *\n        FROM identification\n        WHERE nif = :nif\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ nif: nif });
                     byNinu = ninu
-                        ? ((_g = db
+                        ? ((_h = db
                             .prepare("\n            SELECT *\n            FROM identification\n            WHERE ninu = :ninu\n              AND deleted_at IS NULL\n            LIMIT 1\n          ")
-                            .get({ ninu: ninu })) !== null && _g !== void 0 ? _g : undefined)
+                            .get({ ninu: ninu })) !== null && _h !== void 0 ? _h : undefined)
                         : undefined;
                     if (byNif && byNinu && asString(byNif.nif) !== asString(byNinu.nif)) {
                         throw new HttpError(400, "Conflit: ce NIF et ce NINU appartiennent à deux enregistrements différents.");
@@ -1048,7 +1071,7 @@ function handleApiRequest(req, res) {
                             .prepare("\n            SELECT *\n            FROM identification\n            WHERE nif = :nif\n              AND deleted_at IS NULL\n            LIMIT 1\n          ")
                             .get({ nif: existingId })
                         : undefined;
-                    target = (_h = byExistingId !== null && byExistingId !== void 0 ? byExistingId : byNif) !== null && _h !== void 0 ? _h : byNinu;
+                    target = (_j = byExistingId !== null && byExistingId !== void 0 ? byExistingId : byNif) !== null && _j !== void 0 ? _j : byNinu;
                     if (target) {
                         previousNif = asString(target.nif);
                         if (previousNif !== nif) {
@@ -1091,11 +1114,11 @@ function handleApiRequest(req, res) {
                         .get({ nif: nif });
                     sendJson(res, 200, mapApplicant(saved));
                     return [2 /*return*/];
-                case 10:
-                    if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 12];
+                case 12:
+                    if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 14];
                     return [4 /*yield*/, parseBody(req)];
-                case 11:
-                    body = _u.sent();
+                case 13:
+                    body = _v.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1109,7 +1132,7 @@ function handleApiRequest(req, res) {
                     });
                     sendJson(res, 200, { ok: true });
                     return [2 /*return*/];
-                case 12:
+                case 14:
                     if (pathname === "".concat(API_PREFIX, "/applicants/find") && method === "GET") {
                         workspaceId = asString(url.searchParams.get("workspaceId"));
                         nif = asNullableString(url.searchParams.get("nif"));
@@ -1147,10 +1170,10 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, rows.map(mapDossier));
                         return [2 /*return*/];
                     }
-                    if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 14];
+                    if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 16];
                     return [4 /*yield*/, parseBody(req)];
-                case 13:
-                    body = _u.sent();
+                case 15:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     name_3 = asString(body.name).trim();
                     if (!name_3) {
@@ -1189,11 +1212,11 @@ function handleApiRequest(req, res) {
                         .get({ id: id });
                     sendJson(res, 200, mapDossier(created));
                     return [2 /*return*/];
-                case 14:
-                    if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 16];
+                case 16:
+                    if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 18];
                     return [4 /*yield*/, parseBody(req)];
-                case 15:
-                    body = _u.sent();
+                case 17:
+                    body = _v.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1207,7 +1230,7 @@ function handleApiRequest(req, res) {
                         id: id,
                         workspace_id: workspaceId
                     });
-                    if (((_j = dossierDeletion.changes) !== null && _j !== void 0 ? _j : 0) === 0) {
+                    if (((_k = dossierDeletion.changes) !== null && _k !== void 0 ? _k : 0) === 0) {
                         sendJson(res, 200, 0);
                         return [2 /*return*/];
                     }
@@ -1218,9 +1241,9 @@ function handleApiRequest(req, res) {
                         workspace_id: workspaceId,
                         dossier_id: id
                     });
-                    sendJson(res, 200, (_k = unassigned.changes) !== null && _k !== void 0 ? _k : 0);
+                    sendJson(res, 200, (_l = unassigned.changes) !== null && _l !== void 0 ? _l : 0);
                     return [2 /*return*/];
-                case 16:
+                case 18:
                     dossierByIdMatch = pathname.match(/^\/api\/local\/dossiers\/([^/]+)$/);
                     if (dossierByIdMatch && method === "GET") {
                         id = decodeURIComponent(dossierByIdMatch[1]);
@@ -1230,11 +1253,11 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, row ? mapDossier(row) : null);
                         return [2 /*return*/];
                     }
-                    if (!(dossierByIdMatch && method === "PATCH")) return [3 /*break*/, 18];
+                    if (!(dossierByIdMatch && method === "PATCH")) return [3 /*break*/, 20];
                     id = decodeURIComponent(dossierByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
-                case 17:
-                    body = _u.sent();
+                case 19:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     current = db
                         .prepare("\n        SELECT *\n        FROM dossiers\n        WHERE id = :id\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
@@ -1307,11 +1330,11 @@ function handleApiRequest(req, res) {
                         .get({ id: id });
                     sendJson(res, 200, mapDossier(updated));
                     return [2 /*return*/];
-                case 18:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 20];
+                case 20:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 22];
                     return [4 /*yield*/, parseBody(req)];
-                case 19:
-                    body = _u.sent();
+                case 21:
+                    body = _v.sent();
                     payload_1 = body;
                     workspaceId = asString(payload_1.workspaceId);
                     if (!workspaceId) {
@@ -1319,8 +1342,8 @@ function handleApiRequest(req, res) {
                     }
                     page = Math.max(1, asInteger(payload_1.page, 1));
                     pageSize = Math.max(1, asInteger(payload_1.pageSize, 10));
-                    items = buildContractRows(workspaceId).map(mapContract);
-                    if ((_l = payload_1.query) === null || _l === void 0 ? void 0 : _l.trim()) {
+                    items = buildContractRows(workspaceId, payload_1.deletionState === "deleted" ? "deleted" : "active").map(mapContract);
+                    if ((_m = payload_1.query) === null || _m === void 0 ? void 0 : _m.trim()) {
                         q_1 = payload_1.query.trim();
                         items = items.filter(function (item) { return contractMatchesQuery(item, q_1); });
                     }
@@ -1328,7 +1351,7 @@ function handleApiRequest(req, res) {
                         items = items.filter(function (item) { return item.status === payload_1.status; });
                     }
                     if (payload_1.dossierId !== undefined) {
-                        targetDossier_1 = (_m = payload_1.dossierId) !== null && _m !== void 0 ? _m : null;
+                        targetDossier_1 = (_o = payload_1.dossierId) !== null && _o !== void 0 ? _o : null;
                         items = items.filter(function (item) { var _a; return ((_a = item.dossierId) !== null && _a !== void 0 ? _a : null) === targetDossier_1; });
                     }
                     if (payload_1.tagId) {
@@ -1365,11 +1388,11 @@ function handleApiRequest(req, res) {
                         pageSize: pageSize
                     });
                     return [2 /*return*/];
-                case 20:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 22];
+                case 22:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 24];
                     return [4 /*yield*/, parseBody(req)];
-                case 21:
-                    body = _u.sent();
+                case 23:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     ids = Array.isArray(body.ids) ? body.ids.map(function (item) { return asString(item); }).filter(Boolean) : [];
                     if (!workspaceId) {
@@ -1385,11 +1408,11 @@ function handleApiRequest(req, res) {
                         .filter(function (item) { return idSet_1.has(item.id); });
                     sendJson(res, 200, items);
                     return [2 /*return*/];
-                case 22:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 24];
+                case 24:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 26];
                     return [4 /*yield*/, parseBody(req)];
-                case 23:
-                    body = _u.sent();
+                case 25:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     nif = asNullableString(body.nif);
                     if (!nif) {
@@ -1435,7 +1458,7 @@ function handleApiRequest(req, res) {
                         lieu_affectation: assignment,
                         historique_saisie: JSON.stringify(history_1),
                         commentaire: asNullableString(body.commentaire),
-                        created_by: (_p = (_o = asNullableString(body.createdBy)) !== null && _o !== void 0 ? _o : operator.id) !== null && _p !== void 0 ? _p : null,
+                        created_by: (_q = (_p = asNullableString(body.createdBy)) !== null && _p !== void 0 ? _p : operator.id) !== null && _q !== void 0 ? _q : null,
                         workspace_id: workspaceId,
                         dossier_id: asNullableString(body.dossierId),
                         status: status_1,
@@ -1447,11 +1470,11 @@ function handleApiRequest(req, res) {
                         .get({ id: id });
                     sendJson(res, 200, mapContract(createdRow));
                     return [2 /*return*/];
-                case 24:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 26];
+                case 26:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 28];
                     return [4 /*yield*/, parseBody(req)];
-                case 25:
-                    body = _u.sent();
+                case 27:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1492,15 +1515,15 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_q = result.changes) !== null && _q !== void 0 ? _q : 0);
+                        updatedCount += Number((_r = result.changes) !== null && _r !== void 0 ? _r : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
-                case 26:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 28];
+                case 28:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 30];
                     return [4 /*yield*/, parseBody(req)];
-                case 27:
-                    body = _u.sent();
+                case 29:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1544,15 +1567,15 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_r = result.changes) !== null && _r !== void 0 ? _r : 0);
+                        updatedCount += Number((_s = result.changes) !== null && _s !== void 0 ? _s : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
-                case 28:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 30];
+                case 30:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 32];
                     return [4 /*yield*/, parseBody(req)];
-                case 29:
-                    body = _u.sent();
+                case 31:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1593,15 +1616,15 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_s = result.changes) !== null && _s !== void 0 ? _s : 0);
+                        updatedCount += Number((_t = result.changes) !== null && _t !== void 0 ? _t : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
-                case 30:
-                    if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 32];
+                case 32:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 34];
                     return [4 /*yield*/, parseBody(req)];
-                case 31:
-                    body = _u.sent();
+                case 33:
+                    body = _v.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1623,7 +1646,7 @@ function handleApiRequest(req, res) {
                     });
                     sendJson(res, 200, { ok: true });
                     return [2 /*return*/];
-                case 32:
+                case 34:
                     contractByIdMatch = pathname.match(/^\/api\/local\/contracts\/([^/]+)$/);
                     if (contractByIdMatch && method === "GET") {
                         id = decodeURIComponent(contractByIdMatch[1]);
@@ -1633,18 +1656,18 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, row ? mapContract(row) : null);
                         return [2 /*return*/];
                     }
-                    if (!(contractByIdMatch && method === "PATCH")) return [3 /*break*/, 34];
+                    if (!(contractByIdMatch && method === "PATCH")) return [3 /*break*/, 36];
                     id = decodeURIComponent(contractByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
-                case 33:
-                    body = _u.sent();
+                case 35:
+                    body = _v.sent();
                     current = db
                         .prepare("\n        SELECT *\n        FROM contrat\n        WHERE id_contrat = :id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ id: id });
                     if (!current) {
                         throw new HttpError(404, "Contrat introuvable.");
                     }
-                    nextNif = (_t = asNullableString(body.nif)) !== null && _t !== void 0 ? _t : asString(current.nif);
+                    nextNif = (_u = asNullableString(body.nif)) !== null && _u !== void 0 ? _u : asString(current.nif);
                     if (!nextNif) {
                         throw new HttpError(400, "Le NIF est obligatoire.");
                     }
@@ -1729,11 +1752,11 @@ function handleApiRequest(req, res) {
                         .get({ id: id });
                     sendJson(res, 200, mapContract(updatedRow));
                     return [2 /*return*/];
-                case 34:
-                    if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 36];
+                case 36:
+                    if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 38];
                     return [4 /*yield*/, parseBody(req)];
-                case 35:
-                    body = _u.sent();
+                case 37:
+                    body = _v.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1758,7 +1781,7 @@ function handleApiRequest(req, res) {
                         printedAt: timestamp
                     });
                     return [2 /*return*/];
-                case 36:
+                case 38:
                     if (pathname === "".concat(API_PREFIX, "/autocompletion") && method === "GET") {
                         searchParams = url.searchParams;
                         workspaceId = searchParams.get("workspaceId") || "workspace_default";
@@ -1813,10 +1836,10 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, result_1);
                         return [2 /*return*/];
                     }
-                    if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 38];
+                    if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 40];
                     return [4 /*yield*/, parseBody(req)];
-                case 37:
-                    body = _u.sent();
+                case 39:
+                    body = _v.sent();
                     workspaceId_1 = asString(body.workspaceId) || "workspace_default";
                     data = body.data;
                     if (!data || !workspaceId_1)
@@ -1862,8 +1885,8 @@ function handleApiRequest(req, res) {
                         throw new HttpError(500, "Erreur de sync autocompletion." + err.message);
                     }
                     return [2 /*return*/];
-                case 38:
-                    if (!(pathname === "".concat(API_PREFIX, "/mspp/verify") && method === "GET")) return [3 /*break*/, 44];
+                case 40:
+                    if (!(pathname === "".concat(API_PREFIX, "/mspp/verify") && method === "GET")) return [3 /*break*/, 46];
                     searchParams = url.searchParams;
                     nifParam = searchParams.get("nif");
                     if (!nifParam) {
@@ -1872,9 +1895,9 @@ function handleApiRequest(req, res) {
                         res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
                         return [2 /*return*/];
                     }
-                    _u.label = 39;
-                case 39:
-                    _u.trys.push([39, 42, , 43]);
+                    _v.label = 41;
+                case 41:
+                    _v.trys.push([41, 44, , 45]);
                     rawNif = nifParam.replace(/\D/g, "");
                     nifFormatted = rawNif;
                     if (rawNif.length === 10) {
@@ -1891,11 +1914,11 @@ function handleApiRequest(req, res) {
                                 "User-Agent": "Mozilla/5.0 (compatible)"
                             }
                         })];
-                case 40:
-                    msppRes = _u.sent();
+                case 42:
+                    msppRes = _v.sent();
                     return [4 /*yield*/, msppRes.text()];
-                case 41:
-                    html = _u.sent();
+                case 43:
+                    html = _v.sent();
                     // Convert relative URLs to absolute URLs so CSS and images load correctly
                     html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
                     html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
@@ -1912,15 +1935,15 @@ function handleApiRequest(req, res) {
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.setHeader("Cache-Control", "no-store");
                     res.end(html);
-                    return [3 /*break*/, 43];
-                case 42:
-                    err_1 = _u.sent();
+                    return [3 /*break*/, 45];
+                case 44:
+                    err_1 = _v.sent();
                     res.statusCode = 500;
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));
-                    return [3 /*break*/, 43];
-                case 43: return [2 /*return*/];
-                case 44: throw new HttpError(404, "Route API locale introuvable.");
+                    return [3 /*break*/, 45];
+                case 45: return [2 /*return*/];
+                case 46: throw new HttpError(404, "Route API locale introuvable.");
             }
         });
     });

@@ -93,6 +93,57 @@ describe("LocalContractRepository", () => {
     expect(onlyPrinted.items[0].status).toBe("imprime");
   });
 
+  it("lists only soft-deleted contracts in the trash", async () => {
+    const workspaceId = "workspace_contract_trash";
+    const contracts = new LocalContractRepository();
+    const deleted = await contracts.create({
+      workspaceId,
+      applicantId: null,
+      status: "saisie",
+      gender: "Femme",
+      firstName: "Nadia",
+      lastName: "Joseph",
+      nif: "111-222-333-4",
+      ninu: null,
+      address: "Delmas",
+      position: "Analyste",
+      assignment: "RH",
+      salaryNumber: 30000,
+      salaryText: "trente mille",
+      durationMonths: 12
+    });
+    await contracts.create({
+      workspaceId,
+      applicantId: null,
+      status: "saisie",
+      gender: "Homme",
+      firstName: "Marc",
+      lastName: "Pierre",
+      nif: "555-666-777-8",
+      ninu: null,
+      address: "Pétion-Ville",
+      position: "Technicien",
+      assignment: "Informatique",
+      salaryNumber: 35000,
+      salaryText: "trente-cinq mille",
+      durationMonths: 12
+    });
+
+    await contracts.softDelete(deleted.id, workspaceId);
+
+    const active = await contracts.list({ workspaceId, all: true });
+    const trash = await contracts.list({
+      workspaceId,
+      all: true,
+      deletionState: "deleted"
+    });
+
+    expect(active.items.map((contract) => contract.id)).not.toContain(deleted.id);
+    expect(trash.total).toBe(1);
+    expect(trash.items[0].id).toBe(deleted.id);
+    expect(trash.items[0].deletedAt).toBeTruthy();
+  });
+
   it("searches contracts by name, NIF and NINU", async () => {
     const workspaceId = "workspace_contract_search";
     const contracts = new LocalContractRepository();

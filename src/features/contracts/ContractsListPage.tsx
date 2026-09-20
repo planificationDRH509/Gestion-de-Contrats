@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
@@ -59,6 +59,11 @@ import {
 } from "./institutionLocationFilters";
 import { sortContracts } from "../../lib/contractSorting";
 
+import { useContractLists } from "../lists/listsApi";
+import { listError, listName } from "../lists/listModel";
+import { ContractActionsMenu, contractContextTargets } from "./ContractActionsMenu";
+import { ListAssignmentDialog } from "../lists/ListAssignmentDialog";
+
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
 
@@ -89,6 +94,10 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 export function ContractsListPage() {
   const { user, can } = useAuth();
   const navigate = useNavigate();
+  const listsQuery = useContractLists();
+  const listsByContract = useMemo(() => new Map((listsQuery.data ?? []).flatMap(list => list.members.map(member => [member.id, list] as const))), [listsQuery.data]);
+  const [listAssignmentMode, setListAssignmentMode] = useState<"assign" | "create">("assign");
+  const [listAssignmentIds, setListAssignmentIds] = useState<string[] | null>(null);
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
   const { fiscalYear } = useFiscalYear();
@@ -136,6 +145,7 @@ export function ContractsListPage() {
     id: string;
     x: number;
     y: number;
+    scope?: "selection";
   } | null>(null);
   const [bulkDossierId, setBulkDossierId] = useState("");
   const [bulkStatus, setBulkStatus] = useState("");
@@ -152,6 +162,24 @@ export function ContractsListPage() {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const menu = contextMenuRef.current;
+    if (!contextMenu || !menu) return;
+    const bounds = menu.getBoundingClientRect();
+    const x = Math.max(8, Math.min(contextMenu.x, window.innerWidth - bounds.width - 8));
+    const y = Math.max(8, Math.min(contextMenu.y, window.innerHeight - bounds.height - 8));
+    if (x !== contextMenu.x || y !== contextMenu.y) setContextMenu(current => current ? { ...current, x, y } : null);
+    const first = menu.querySelector<HTMLElement>(menuView === "tags" ? "input" : "button:not(:disabled)");
+    if (!menu.contains(document.activeElement)) first?.focus();
+  }, [contextMenu, menuView, menuMode]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!actionMessage) return;
@@ -332,10 +360,12 @@ export function ContractsListPage() {
   const handleCommentInput = useCallback((contractId: string, value: string) => {
     setCommentDraft(prev => ({ ...prev, [contractId]: value }));
   }, []);
+  const contextTargetIds = contextMenu
+    ? contractContextTargets(contextMenu.id, selected, contextMenu.scope === "selection") : [];
   const contextContract = contextMenu
-    ? items.find((contract) => contract.id === contextMenu.id) ?? null
+    ? items.find((contract) => contract.id === (contextTargetIds.length === 1 ? contextTargetIds[0] : contextMenu.id)) ?? null
     : null;
-  const isBulkTagContext = contextMenu?.id === "bulk-tag-trigger";
+  const isBulkTagContext = contextMenu?.id === "bulk-tag-trigger" || contextMenu?.scope === "selection";
   const contextTagTargetIds = isBulkTagContext
     ? selected
     : contextContract
@@ -807,7 +837,8 @@ export function ContractsListPage() {
     setContextMenu({
       id: contractId,
       x: event.clientX,
-      y: event.clientY
+      y: event.clientY,
+      scope: selected.includes(contractId) ? "selection" : undefined
     });
     setMenuMode("main");
     setMenuView("main");
@@ -816,9 +847,9 @@ export function ContractsListPage() {
 
   async function handleContextAssignToDossier(dossierId: string | null) {
     if (!contextMenu) return;
-    const contractId = contextMenu.id;
+    const ids = contextTargetIds;
     setContextMenu(null);
-    await assignContracts([contractId], dossierId);
+    await assignContracts(ids, dossierId);
   }
 
   function handleContextFromButton(
@@ -853,7 +884,8 @@ export function ContractsListPage() {
     setContextMenu({
       id: contractId,
       x: Math.min(window.innerWidth - 260, Math.max(padding, rect.left - 160)),
-      y: Math.max(padding, y)
+      y: Math.max(padding, y),
+      scope: contractId === "selection-actions" || (mode === "main" && selected.includes(contractId)) ? "selection" : undefined
     });
     setMenuView(
       contractId === "bulk-dossier-trigger"
@@ -1358,6 +1390,7 @@ export function ContractsListPage() {
 
   return (
     <div className="page-container contracts-page">
+      {listsQuery.isError && <p className="list-notice" role="status">Listes non actualisées : {listError(listsQuery.error)} <button className="btn btn-outline" onClick={() => void listsQuery.refetch()}>Réessayer</button></p>}
       <header className="section-header contracts-page-header">
         <div className="list-page-heading">
           <div>
@@ -1764,6 +1797,19 @@ export function ContractsListPage() {
                             {getContractStatusLabel(contract.status)}
                           </button>
                           
+                          {listsByContract.has(contract.id) ? (
+                            <button type="button" className={`badge list-contract-badge ${listsByContract.get(contract.id)!.sealedAt ? "list-sealed" : ""}`}
+                              title="Ouvrir la liste" onClick={event => { event.stopPropagation(); navigate(`/app/listes?liste=${listsByContract.get(contract.id)!.id}`); }}>
+                              <span className="material-symbols-rounded">{listsByContract.get(contract.id)!.sealedAt ? "lock" : "inventory_2"}</span>
+                              {listName(listsByContract.get(contract.id)!)}
+                            </button>
+                          ) : null}
+                          {can("contracts.edit") && <button type="button" className="badge list-contract-badge"
+                            title={listsByContract.get(contract.id)?.sealedAt ? "Rouvrez la liste pour déplacer ce contrat" : "Attribuer ou changer de liste"}
+                            disabled={Boolean(listsByContract.get(contract.id)?.sealedAt) || listsQuery.isPending || listsQuery.isError}
+                            onClick={event => { event.stopPropagation(); setListAssignmentMode("assign"); setListAssignmentIds([contract.id]); }}>
+                            <span className="material-symbols-rounded">playlist_add</span>{listsByContract.has(contract.id) ? "Changer" : "Liste"}
+                          </button>}
                           {contract.tags && contract.tags.length > 0 && (
                             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginLeft: "4px" }}>
                               {contract.tags.map(tag => (
@@ -1880,7 +1926,20 @@ export function ContractsListPage() {
               {contextMenu && (
                 <div
                   ref={contextMenuRef}
-                  className="context-menu"
+                  className="context-menu contracts-context-menu"
+                  aria-label={contextMenu.scope === "selection" ? `Actions sur ${selected.length} contrats sélectionnés` : "Actions du contrat"}
+                  onKeyDown={event => {
+                    if (event.key === "Escape") { event.preventDefault(); setContextMenu(null); return; }
+                    if (event.key === "Tab") { setContextMenu(null); return; }
+                    if ((event.target as HTMLElement).matches("input, textarea, select")) return;
+                    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+                    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) && buttons.length) {
+                      event.preventDefault();
+                      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length;
+                      buttons[next].focus();
+                    }
+                  }}
                   style={{ 
                     top: contextMenu.y, 
                     left: contextMenu.x, 
@@ -1890,14 +1949,17 @@ export function ContractsListPage() {
                         : menuView === "tags"
                           ? "300px"
                         : menuMode === "main"
-                          ? "240px"
-                          : "200px",
+                          ? "310px"
+                          : "240px",
                     animation: "menu-in 0.15s ease-out",
-                    zIndex: 1000,
-                    overflow: "hidden"
+                    zIndex: 1300,
+                    maxWidth: "calc(100vw - 16px)",
+                    maxHeight: "calc(100dvh - 16px)",
+                    overflowY: "auto"
                   }}
                   role="menu"
                 >
+                  {menuView !== "main" && !contextMenu.id.endsWith("-trigger") && <button type="button" className="context-menu-item contract-menu-back" onClick={() => { setMenuView("main"); setDossierSubmenu(null); }}><span className="material-symbols-rounded">arrow_back</span>Retour aux actions · {contextTargetIds.length} contrat(s)</button>}
                   {(contextMenu.id === "filter-trigger" || contextMenu.id === "bulk-status-trigger") ? (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
@@ -2269,7 +2331,7 @@ export function ContractsListPage() {
                             className="context-menu-item"
                             style={{ padding: "6px 8px", fontSize: "12px", borderRadius: "4px", gap: "6px" }}
                             onClick={() => {
-                              void handleChangeStatus([contextMenu.id], st.id as ContractStatus);
+                              void handleChangeStatus(contextTargetIds, st.id as ContractStatus);
                               setContextMenu(null);
                             }}
                           >
@@ -2280,112 +2342,24 @@ export function ContractsListPage() {
                       </div>
                     </>
                   ) : menuView === "main" ? (
-                    <>
-                      <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--panel-muted)" }}>
-                        <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--ink-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>Actions</div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="context-menu-item"
-                        style={{ padding: "10px 12px", fontSize: "13px" }}
-                        onClick={() => {
-                          if (!contextContract) return;
-                          toggleExpanded(contextContract.id);
-                          setContextMenu(null);
-                        }}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>unfold_more</span>
-                        {contextContract && isExpanded(contextContract.id)
-                          ? "Masquer les informations"
-                          : "Afficher toutes les informations"}
-                      </button>
-
-                      {can("contracts.change_status") ? (
-                        <button
-                          type="button"
-                          className="context-menu-item"
-                          style={{ padding: "10px 12px", fontSize: "13px" }}
-                          onClick={() => setMenuView("status")}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>rule</span>
-                          Changer l'état
-                          <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
-                        </button>
-                      ) : null}
-
-                      {can("dossiers.manage") ? (
-                        <button
-                          type="button"
-                          className="context-menu-item"
-                          style={{ padding: "10px 12px", fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}
-                          onClick={() => setMenuView("dossiers")}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder_shared</span>
-                          Dossiers
-                          <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.5 }}>chevron_right</span>
-                        </button>
-                      ) : null}
-
-                      {can("dossiers.manage") ? (
-                      <div style={{ display: "flex", gap: "1px", background: "var(--border)", marginTop: "4px" }}>
-                        <button
-                          type="button"
-                          className="context-menu-item"
-                          style={{ fontSize: "11px", flex: 1, padding: "8px", justifyContent: "center", background: "#fff", borderRadius: 0 }}
-                          onClick={() => void handleContextAssignToDossier(null)}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>folder_off</span>
-                          Retirer
-                        </button>
-                        <button
-                          type="button"
-                          className="context-menu-item"
-                          style={{ fontSize: "11px", flex: 1, padding: "8px", justifyContent: "center", background: "#fff", borderRadius: 0 }}
-                          onClick={() => {
-                            const id = contextMenu.id;
-                            setContextMenu(null);
-                            requestCreateDossierAndAssign([id]);
-                          }}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>create_new_folder</span>
-                          Nouveau
-                        </button>
-                      </div>
-                      ) : null}
-
-                      <div className="context-menu-divider" style={{ height: "1px", background: "var(--border)", margin: "6px 0" }}></div>
-
-                      <button
-                        type="button"
-                        className="context-menu-item"
-                        style={{ padding: "10px 12px", fontSize: "13px" }}
-                        onClick={() => {
-                          if (!contextContract) return;
-                          setContextMenu(null);
-                          handleAssignmentLetter(contextContract);
-                        }}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>description</span>
-                        Lettre d'affectation
-                      </button>
-
-                      {can("contracts.delete") ? (
-                        <button
-                          type="button"
-                          className="context-menu-item"
-                          style={{ padding: "10px 12px", fontSize: "13px", color: "#b91c1c", fontWeight: 600 }}
-                          onClick={() => {
-                            const id = contextMenu.id;
-                            setContextMenu(null);
-                            void handleDeleteContract(id);
-                          }}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>delete</span>
-                          Supprimer
-                        </button>
-                      ) : null}
-                    </>
+                    <ContractActionsMenu
+                      count={contextTargetIds.length}
+                      singleContractAvailable={Boolean(contextContract)}
+                      label={contextTargetIds.length === 1 && contextContract ? `${contextContract.firstName} ${contextContract.lastName}` : undefined}
+                      can={can}
+                      expanded={Boolean(contextContract && isExpanded(contextContract.id))}
+                      onClose={() => setContextMenu(null)}
+                      onDetails={() => { if (contextContract) toggleExpanded(contextContract.id); setContextMenu(null); }}
+                      onList={mode => { setListAssignmentMode(mode); setListAssignmentIds(contextTargetIds); setContextMenu(null); }}
+                      onDossiers={() => setMenuView("dossiers")}
+                      onNewDossier={() => { setContextMenu(null); requestCreateDossierAndAssign(contextTargetIds); }}
+                      onRemoveDossier={() => void handleContextAssignToDossier(null)}
+                      onStatus={() => setMenuView("status")}
+                      onTags={() => { setTagSearch(""); setMenuView("tags"); }}
+                      onLetter={() => { if (contextContract) handleAssignmentLetter(contextContract); setContextMenu(null); }}
+                      onDelete={() => { if (contextContract) void handleDeleteContract(contextContract.id); setContextMenu(null); }}
+                      onPrint={() => { void handlePrint(contextTargetIds); setContextMenu(null); }}
+                    />
                   ) : menuView === "status" ? (
                     <>
                       <div className="context-menu-header-main" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "8px", background: "var(--panel-muted)" }}>
@@ -2407,7 +2381,7 @@ export function ContractsListPage() {
                             className="context-menu-item"
                             style={{ padding: "6px 8px", fontSize: "12px", borderRadius: "4px", gap: "6px" }}
                             onClick={() => {
-                              void handleChangeStatus([contextMenu.id], st.id as ContractStatus);
+                              void handleChangeStatus(contextTargetIds, st.id as ContractStatus);
                               setContextMenu(null);
                               setMenuView("main");
                             }}
@@ -2479,9 +2453,9 @@ export function ContractsListPage() {
                         className="context-menu-item"
                         style={{ padding: "10px 12px", fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}
                         onClick={() => {
-                          const id = contextMenu.id;
+                          const ids = contextMenu.id === "bulk-dossier-trigger" ? selected : contextTargetIds;
                           setContextMenu(null);
-                          requestCreateDossierAndAssign([id]);
+                          requestCreateDossierAndAssign(ids);
                         }}
                       >
                         <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>create_new_folder</span>
@@ -2538,21 +2512,7 @@ export function ContractsListPage() {
                             {dossierSubmenu ? (
                               <div
                                 className="context-menu dossier-submenu"
-                                style={{
-                                  position: "fixed",
-                                  left: contextMenu ? Math.min(window.innerWidth - 230, contextMenu.x + 248) : 0,
-                                  top: contextMenu
-                                    ? Math.min(
-                                        window.innerHeight - 190,
-                                        contextMenu.y + (dossierSubmenu === "archived" ? 86 : 120)
-                                      )
-                                    : 0,
-                                  minWidth: "210px",
-                                  maxHeight: "180px",
-                                  overflowY: "auto",
-                                  padding: "4px",
-                                  zIndex: 5
-                                }}
+                                style={{ position: "static", width: "100%", maxHeight: "180px", overflowY: "auto", padding: "4px", boxShadow: "none" }}
                               >
                                 {(dossierSubmenu === "archived"
                                   ? dossierGroups.archived
@@ -2582,6 +2542,7 @@ export function ContractsListPage() {
           ) : null}
         </div>
       )}
+      {listAssignmentIds && <ListAssignmentDialog contractIds={listAssignmentIds} initialMode={listAssignmentMode} onClose={() => setListAssignmentIds(null)} />}
       {/* Floating Selection Actions Bar */}
       <div className={`selection-actions-shell ${hasSelection ? "active" : ""}`}>
             <div className="selection-actions-head">
@@ -2599,6 +2560,7 @@ export function ContractsListPage() {
               </button>
             </div>
             <div className="selection-actions-row" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button className="btn btn-primary" type="button" aria-label="Actions de la sélection" aria-haspopup="menu" aria-expanded={contextMenu?.id === "selection-actions"} onClick={event => handleContextFromButton(event, "selection-actions")}><span className="material-symbols-rounded">more_horiz</span>Actions</button>
               {can("dossiers.manage") ? (
               <>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--panel-muted)", padding: "4px", borderRadius: "10px", minWidth: "150px" }}>

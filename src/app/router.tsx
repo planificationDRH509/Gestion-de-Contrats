@@ -22,6 +22,9 @@ import { RequirePermission } from "../features/auth/RequirePermission";
 import { AuditPage } from "../features/audit/AuditPage";
 import { QualityPage } from "../features/quality/QualityPage";
 import { TasksPage } from "../features/tasks/TasksPage";
+import { TrashPage } from "../features/settings/TrashPage";
+
+import { ListsPage } from "../features/lists/ListsPage";
 
 export function AppRoutes() {
   return (
@@ -37,6 +40,7 @@ export function AppRoutes() {
         }
       >
         <Route path="contrats" element={<ContractsListPage />} />
+        <Route path="listes" element={<ListsPage />} />
         <Route path="taches" element={<TasksPage />} />
         <Route path="dossiers" element={<Navigate to="/app/contrats" replace />} />
         <Route path="contrats/nouveau" element={<RequirePermission permission="contracts.create"><ContractNewPage /></RequirePermission>} />
@@ -56,6 +60,7 @@ export function AppRoutes() {
         <Route path="parametres/utilisateurs" element={<RequirePermission permission="users.manage"><UserManagementPage /></RequirePermission>} />
         <Route path="parametres/affichage" element={<RequirePermission permission="settings.manage"><DisplaySettingsPage /></RequirePermission>} />
         <Route path="parametres/general" element={<RequirePermission permission="settings.manage"><GeneralSettingsPage /></RequirePermission>} />
+        <Route path="parametres/corbeille" element={<RequirePermission permission="settings.manage"><TrashPage /></RequirePermission>} />
       </Route>
       <Route path="*" element={<Navigate to="/app/contrats" replace />} />
     </Routes>
