@@ -85,6 +85,7 @@ import {
 import { buildApplicantInsertPayload } from "./applicantPayload";
 import { createId } from "../../lib/uuid";
 import { fetchAllPages } from "./fetchAllPages";
+import { downloadContractLists, syncQueuedList } from "./listSync";
 
 function repositoryError(message: string, cause?: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -1549,7 +1550,9 @@ function syncPendingOutbox() {
       let syncedContract: Contract | undefined;
       try {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
-        if (item.type === "applicant.upsert") {
+        if (item.type === "list.operation") {
+          await syncQueuedList(item);
+        } else if (item.type === "applicant.upsert") {
           const payload = item.payload as unknown as UpsertApplicantInput;
           const applicant = await applicants.syncOffline(payload);
           if (payload.id && payload.id !== applicant.id) {
@@ -1728,6 +1731,7 @@ export function syncSupabaseWorkspace(
       });
 
       replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
+      await downloadContractLists(workspaceId);
       const syncedAt = new Date().toISOString();
       setWorkspaceSyncMetadata(workspaceId, {
         lastSyncedAt: syncedAt,

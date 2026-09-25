@@ -16,6 +16,7 @@ import {
   normalizeOptionalText
 } from "../../lib/dossier";
 import { get, set } from "idb-keyval";
+import type { ContractList } from "../../features/lists/listModel";
 
 export type LocalSyncMetadata = {
   lastSyncedAt?: string | null;
@@ -24,6 +25,8 @@ export type LocalSyncMetadata = {
 };
 
 export type LocalDb = {
+  contractLists: ContractList[];
+  cachedListWorkspaces: string[];
   workspaces: Workspace[];
   applicants: Applicant[];
   dossiers: Dossier[];
@@ -108,6 +111,8 @@ function seedDatabase(): LocalDb {
 
   return {
     workspaces: [workspace, workspaceMouvement, workspaceAvantages],
+    contractLists: [],
+    cachedListWorkspaces: [],
     applicants: [applicant],
     dossiers: [],
     contracts: [contract],
@@ -122,6 +127,8 @@ function seedDatabase(): LocalDb {
 function normalizeDb(value: LocalDb): LocalDb {
   return {
     ...value,
+    contractLists: Array.isArray(value.contractLists) ? value.contractLists : [],
+    cachedListWorkspaces: Array.isArray(value.cachedListWorkspaces) ? value.cachedListWorkspaces : [],
     workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
     applicants: Array.isArray(value.applicants)
       ? value.applicants.map((applicant) => ({

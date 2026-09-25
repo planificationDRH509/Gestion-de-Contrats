@@ -22,6 +22,7 @@ import {
   inferAuditAction
 } from "../../lib/contractAudit";
 import { sortContracts } from "../../lib/contractSorting";
+import { updateListedContract } from "./localListRepository";
 
 function now() {
   return new Date().toISOString();
@@ -201,6 +202,7 @@ export class LocalContractRepository implements ContractRepository {
         at: timestamp
       })
     };
+    updateListedContract(db, previous, updated);
     db.contracts[contractIndex] = updated;
     saveDb(db);
     queueOutbox(updated.workspaceId, "contract.update", updated);
@@ -365,6 +367,7 @@ export class LocalContractRepository implements ContractRepository {
 
       updatedCount += 1;
       const changes = buildContractAuditChanges(contract, { durationMonths });
+      if (shouldQueue) updateListedContract(db, contract, { ...contract, durationMonths });
       return {
         ...contract,
         durationMonths,
@@ -402,6 +405,7 @@ export class LocalContractRepository implements ContractRepository {
     }
     const timestamp = now();
     const previous = db.contracts[contractIndex];
+    if (shouldQueue) updateListedContract(db, previous, { ...previous, deletedAt: timestamp });
     db.contracts[contractIndex] = {
       ...previous,
       deletedAt: timestamp,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -19,6 +19,7 @@ beforeEach(() => {
     {id:'c2',firstName:'Ana',lastName:'Étienne',nif:'222',salaryNumber:200,durationMonths:6,position:'Médecin'}
   ]}];
 });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 describe('ListsPage', () => {
   it('shows the automatic lot name, alphabetical contents and duration totals', () => {
     mount(); expect(screen.getByRole('heading',{name:'LOT-2-ÉTIENNE-Ana'})).toBeInTheDocument();
@@ -88,5 +89,14 @@ describe('ListsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('La liste a changé pendant l’export.');
     await user.click(screen.getByRole('button',{name:'Exporter en Excel'}));
     expect(mocks.exportExcel).toHaveBeenCalledTimes(2); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+  it('allows list creation and export offline', () => {
+    vi.stubEnv('VITE_DATA_PROVIDER', 'supabase');
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mount();
+    expect(screen.getByRole('heading', { name: 'LOT-2-ÉTIENNE-Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Nouvelle liste/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Exporter en Excel' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

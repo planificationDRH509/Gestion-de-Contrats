@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ListAssignmentDialog } from "./ListAssignmentDialog";
@@ -14,6 +14,7 @@ beforeEach(()=>{
   cleanup(); mocks.lists=[]; mocks.contracts[1].durationMonths=6; mocks.close.mockReset(); mocks.mutate.mockReset().mockResolvedValue('new');
   HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
 });
+afterEach(()=>{vi.unstubAllEnvs();vi.restoreAllMocks();});
 describe('selection list dialog',()=>{
   it('reports unavailable selected contracts instead of waiting indefinitely',()=>{
     render(<ListAssignmentDialog contractIds={['c1','c2','missing']} initialMode="create" onClose={mocks.close}/>);
@@ -52,5 +53,13 @@ describe('selection list dialog',()=>{
     view.rerender(<ListAssignmentDialog contractIds={['c1','c2']} initialMode="create" onClose={mocks.close}/>);
     await userEvent.click(screen.getByRole('button',{name:'Créer et attribuer'}));
     expect(mocks.close).not.toHaveBeenCalled();
+  });
+  it('allows creating a list from cached contracts offline',()=>{
+    vi.stubEnv('VITE_DATA_PROVIDER','supabase');
+    vi.spyOn(navigator,'onLine','get').mockReturnValue(false);
+    render(<ListAssignmentDialog contractIds={['c1','c2']} initialMode="create" onClose={mocks.close}/>);
+    expect(screen.getByText('LOT-2-ÉTIENNE-Ana')).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Créer et attribuer'})).toBeEnabled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
   });
 });

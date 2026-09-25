@@ -146,11 +146,12 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
           <span className="material-symbols-rounded">cloud_off</span>
           <span>
             Hors ligne · {syncState.cached.contracts} contrats et {syncState.cached.applicants} fiches disponibles
+            {syncState.pendingCount > 0 ? ` · ${syncState.pendingCount} modification${syncState.pendingCount > 1 ? "s" : ""} en attente` : ""}
           </span>
         </div>
       )}
 
-      {mode === "supabase" && !collapsed && (
+      {mode === "supabase" && !collapsed && isOnline && (
         <button
           type="button"
           className="offline-sync-card"

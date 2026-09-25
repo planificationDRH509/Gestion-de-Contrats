@@ -12,6 +12,7 @@ import { createId } from "../../lib/uuid";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
+import { updateListedContract } from "./localListRepository";
 
 function now() {
   return new Date().toISOString();
@@ -306,6 +307,16 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     createdBy: input.createdBy
   };
 
+  if (existing) {
+    db.contracts = db.contracts.map(contract => {
+      if (contract.workspaceId !== input.workspaceId || !(contract.applicantId === existing.id || (existing.nif && contract.nif === existing.nif))) return contract;
+      const next = { ...contract, applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
+        firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address };
+      updateListedContract(db, contract, next);
+      return next;
+    });
+  }
+
   const index = db.applicants.findIndex((item) => item.id === applicant.id);
   if (existing && existing.id !== applicant.id) {
     const oldIndex = db.applicants.findIndex((item) => item.id === existing.id);
@@ -328,7 +339,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     db.applicants.push(applicant);
   }
   saveDb(db);
-  const pendingIdentity = db.outbox.find((item) => item.workspaceId === input.workspaceId &&
+  const pendingIdentity = !db.outbox.some(item => item.type === "list.operation" && item.workspaceId === input.workspaceId) && db.outbox.find((item) => item.workspaceId === input.workspaceId &&
     item.type === "applicant.upsert" && (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)));
   queueOutbox(input.workspaceId, "applicant.upsert", {
     ...input,
@@ -343,6 +354,10 @@ export function deleteApplicantOffline(id: string, workspaceId: string) {
     (applicant) => applicant.id === id && applicant.workspaceId === workspaceId
   );
   if (index === -1) return;
+  if (db.contractLists.some(list => list.workspaceId === workspaceId && list.sealedAt &&
+      list.members.some(member => member.nif === db.applicants[index].nif))) {
+    throw new Error("Cette personne appartient à une liste scellée. Faites rouvrir la liste avant de modifier son identité.");
+  }
   const timestamp = now();
   db.applicants[index] = {
     ...db.applicants[index],
@@ -369,7 +384,7 @@ export function getPendingContractIds(): Set<string> {
     if (item.type === "tag.assign" || item.type === "tag.remove") {
       if (typeof item.payload.contractId === "string") ids.add(item.payload.contractId);
     }
-    if (!item.type.startsWith("contract.")) continue;
+    if (!item.type.startsWith("contract.") && item.type !== "list.operation") continue;
     const payload = item.payload as Partial<Contract> & {
       id?: string;
       contractIds?: string[];
@@ -459,13 +474,15 @@ export function replaceWorkspaceCache(
       nif?: string;
       contractId?: string;
       contractIds?: string[];
+      applicantIds?: string[];
       tagId?: string;
     };
     if (item.type.startsWith("applicant.")) {
       if (payload.id) pendingApplicantIds.add(payload.id);
       if (payload.nif) pendingApplicantIds.add(payload.nif);
     }
-    if (item.type.startsWith("contract.")) {
+    if (item.type === "list.operation") payload.applicantIds?.forEach(id => pendingApplicantIds.add(id));
+    if (item.type.startsWith("contract.") || item.type === "list.operation") {
       if (payload.id) pendingContractIds.add(payload.id);
       payload.contractIds?.forEach((id) => pendingContractIds.add(id));
     }

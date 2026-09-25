@@ -63,6 +63,7 @@ export function AppLayout() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["contracts"] }),
         queryClient.invalidateQueries({ queryKey: ["contract"] }),
+        queryClient.invalidateQueries({ queryKey: ["contract-lists"] }),
         queryClient.invalidateQueries({ queryKey: ["nif-lookup"] })
       ]);
       const refreshed = await syncSupabaseWorkspace(workspaceId, { force });

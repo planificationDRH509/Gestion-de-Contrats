@@ -22,7 +22,9 @@ import { DossiersInlinePanel } from "../dossiers/DossiersInlinePanel";
 import { useAssignTagToContract, useCreateTag, useTags } from "./tagsApi";
 import { useAddresses, usePositions, useInstitutions } from "../settings/suggestionsApi";
 import {
+  getContractFiscalYear,
   getCurrentFiscalYearStart,
+  getFiscalYearForDate,
   getTodayDateInputValue,
   isPastFiscalYear
 } from "../../lib/contractDateFilters";
@@ -104,6 +106,7 @@ export function ContractsListPage() {
   const userId = user?.id ?? "";
   const { fiscalYear } = useFiscalYear();
   const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
+  const currentFiscalYear = getFiscalYearForDate(new Date());
 
   const [printHistoryOpen, setPrintHistoryOpen] = useState(false);
   const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>(() =>
@@ -1646,6 +1649,7 @@ export function ContractsListPage() {
                   </div>
                   {items.map((contract) => {
                     const hasComment = Boolean(contract.commentaire?.trim());
+                    const contractFiscalYear = getContractFiscalYear(contract);
                     const contractNif =
                       contract.nif?.trim() || contract.applicantId?.trim() || "";
                     const linkedTasks = contractNif
@@ -1714,6 +1718,11 @@ export function ContractsListPage() {
                         ) : null}
 
                         <div className="contracts-badges" style={{ marginTop: "6px" }}>
+                          {contractFiscalYear !== currentFiscalYear ? (
+                            <span className="contract-list-fiscal-year" title={`Année fiscale ${contractFiscalYear}`} aria-label={`Année fiscale ${contractFiscalYear}`}>
+                              {contractFiscalYear}
+                            </span>
+                          ) : null}
                           <ContractSyncIndicator contract={contract} pending={pendingSync} online={syncOnline}
                             cloudEnabled={(import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase"}
                             onRetry={retryContractSync} />

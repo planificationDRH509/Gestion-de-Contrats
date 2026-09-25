@@ -17,7 +17,7 @@ export function queueOutbox(
   };
   // A correction replaces the unsent identity at its original position, before
   // dependent contract creations. A new queue ID protects against in-flight ACKs.
-  const previousIndex = type === "applicant.upsert" ? db.outbox.findIndex((pending) =>
+  const previousIndex = type === "applicant.upsert" && !db.outbox.some(item => item.workspaceId === workspaceId && item.type === "list.operation") ? db.outbox.findIndex((pending) =>
     !pending.syncedAt && pending.workspaceId === workspaceId && pending.type === type &&
     ((payload.nif && pending.payload.nif === payload.nif) ||
       (payload.id && pending.payload.id === payload.id))

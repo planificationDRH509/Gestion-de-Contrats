@@ -162,7 +162,8 @@ export type OutboxItem = {
     | "dossier.delete"
     | "tag.create"
     | "tag.assign"
-    | "tag.remove";
+    | "tag.remove"
+    | "list.operation";
   payload: Record<string, unknown>;
   createdAt: string;
   syncedAt?: string | null;

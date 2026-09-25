@@ -492,6 +492,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      sync_contract_list: {
+        Args: { p_session_token: string; p_workspace_id: string; p_request_id: string; p_operation: Json; p_expected_lists: Json; p_expected_memberships: Json }
+        Returns: string
+      }
       read_contract_lists: {
         Args: { p_session_token: string; p_workspace_id: string }
         Returns: Json

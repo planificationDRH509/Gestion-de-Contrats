@@ -7,6 +7,11 @@ export function outboxKeys(item: OutboxItem): string[] {
     if (typeof id === "string" && id) keys.add(`${item.workspaceId}:${kind}:${id}`);
   };
   const p = item.payload;
+  if (item.type === "list.operation") {
+    add("lists", "all");
+    if (Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
+    if (Array.isArray(p.applicantIds)) p.applicantIds.forEach(id => add("applicant", id));
+  }
   if (item.type.startsWith("applicant.")) {
     add("applicant", p.id); add("applicant", p.nif);
   }

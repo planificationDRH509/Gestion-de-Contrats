@@ -102,8 +102,10 @@ La page **Listes** du menu latéral permet de créer des lots de durée commune 
 - Une liste en préparation n’affiche pas de statut. Une liste **Scellée** porte un badge vert, également affiché sur les cartes des contrats.
 - Le scellement protège la composition, le visa, les montants, la durée et les informations contractuelles et d’identité. Les états de suivi, tags et commentaires restent utilisables.
 - Seul un administrateur peut rouvrir un lot, avec un motif conservé dans son historique. Une liste doit être vide et ouverte pour être supprimée.
-- En mode Supabase, les modifications de listes exigent une connexion et une session applicative valide. Les changements de contrats en attente doivent être synchronisés avant une opération sur les listes. Les listes déjà chargées restent dans le cache de consultation.
+- En mode Supabase, les listes sont téléchargées avec le cache hors ligne. Création, attribution, visa, scellement, réouverture et suppression sont enregistrés durablement sur l’appareil puis synchronisés dans l’ordre au retour du réseau, avec le compte ayant effectué les changements. Les exports Excel utilisent les contrats téléchargés. Une modification concurrente du même lot bloque sa synchronisation et conserve la copie locale ; les tentatives répétées ne créent pas de doublons.
 
 Schéma : `supabase/migrations/20260920151424_contract_lists.sql`. Les tables sont protégées par RLS et sans accès direct aux rôles API ; les deux RPC vérifient les sessions opaques de l’application, les rôles et l’espace de travail. Des déclencheurs protègent aussi les contrats modifiés via les écrans existants. Le stockage SQLite applique les mêmes règles métier et inclut les listes dans la sauvegarde SQL.
 
-Vérification : `npm test -- src/features/lists` et `npm run build`. Le script `supabase/tests/contract_lists.sql` teste les RPC et leurs protections dans une transaction annulée, sans conserver les données d’essai.
+La migration `supabase/migrations/20260925014004_offline_contract_lists.sql` ajoute la reprise idempotente des opérations hors ligne et la détection des conflits.
+
+Vérification : `npm test` et `npm run build`. Les scripts `supabase/tests/contract_lists.sql` et `supabase/tests/offline_contract_lists.sql` testent les RPC et leurs protections dans des transactions annulées, sans conserver les données d’essai.

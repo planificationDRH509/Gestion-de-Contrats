@@ -1808,6 +1808,20 @@ img {
   flex-wrap: wrap;
 }
 
+.contract-list-fiscal-year {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-muted);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .contract-tag-add {
   min-height: 22px;
   gap: 3px;

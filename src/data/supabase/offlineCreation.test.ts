@@ -3,9 +3,10 @@ import type { CreateContractInput, UpsertApplicantInput } from "../types";
 import { createSupabaseProvider, syncSupabaseOutbox, getSupabaseSyncState } from "./supabaseProvider";
 import { cacheApplicant, cacheContracts, getPendingOutbox, isOfflineFailure, replaceWorkspaceCache, upsertApplicantOffline } from "../local/offlineStore";
 import { LocalContractRepository } from "../local/localContractRepository";
+import { mutateContractListOffline } from "../local/localListRepository";
 
-const mock = vi.hoisted(() => ({ from: vi.fn() }));
-vi.mock("./supabaseClient", () => ({ getSupabaseClient: () => ({ from: mock.from }) }));
+const mock = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock("./supabaseClient", () => ({ getSupabaseClient: () => ({ from: mock.from, rpc: mock.rpc }) }));
 const applicant: UpsertApplicantInput = {
   workspaceId: "workspace_default", gender: "Homme", firstName: "Jean", lastName: "LOUIS",
   nif: "123-456-789-0", ninu: null, address: "Delmas"
@@ -37,10 +38,38 @@ function contractRow(id: string) {
 beforeEach(() => {
   localStorage.clear();
   mock.from.mockReset();
+  mock.rpc.mockReset().mockResolvedValue({ data: null, error: null });
   online(true);
 });
 
 describe("offline contract creation and replay", () => {
+  it("uploads an offline contract before the list that contains it", async () => {
+    online(false);
+    const user = { id: "offline-author", username: "author", name: "Author", role: "admin" as const,
+      workspaceId: input.workspaceId, taskSessionToken: "test-session" };
+    localStorage.setItem("contribution_auth", JSON.stringify(user));
+    const created = await new LocalContractRepository().create(input);
+    const listId = await mutateContractListOffline(user, { action: "create", durationMonths: 12, contractIds: [created.id] });
+    expect(getPendingOutbox().map(item => item.type)).toEqual(["contract.create", "list.operation"]);
+    online(true);
+    mock.from.mockReturnValue(reply(contractRow(created.id)));
+    await syncSupabaseOutbox();
+    expect(mock.rpc).toHaveBeenCalledWith("sync_contract_list", expect.objectContaining({
+      p_session_token: "test-session", p_operation: expect.objectContaining({ createId: listId, contractIds: [created.id] })
+    }));
+    expect(mock.from.mock.invocationCallOrder[0]).toBeLessThan(mock.rpc.mock.invocationCallOrder[0]);
+    expect(getPendingOutbox()).toHaveLength(0);
+  });
+
+  it("keeps a queued list when another user has signed in", async () => {
+    const user = { id: "original-author", username: "author", name: "Author", role: "admin" as const, workspaceId: input.workspaceId };
+    await mutateContractListOffline(user, { action: "create", durationMonths: 6 });
+    localStorage.setItem("contribution_auth", JSON.stringify({ ...user, id: "other-user", taskSessionToken: "other-session" }));
+    await syncSupabaseOutbox();
+    expect(mock.rpc).not.toHaveBeenCalled();
+    expect(getPendingOutbox()).toHaveLength(1);
+    expect(getPendingOutbox()[0].lastError).toMatch(/compte/);
+  });
   it("creates identity and printable contract without making a network request", async () => {
     online(false);
     const provider = createSupabaseProvider();

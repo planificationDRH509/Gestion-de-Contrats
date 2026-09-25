@@ -11,6 +11,7 @@ import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 const historyLabels: Record<string, string> = { create: "Création", assign: "Composition modifiée", visa: "Visa modifié", seal: "Scellement", reopen: "Réouverture" };
 export function ListsPage() {
   const { can } = useAuth();
+  const offline = import.meta.env.VITE_DATA_PROVIDER === "supabase" && !navigator.onLine;
   const query = useContractLists();
   const operation = useListOperation();
   const [params, setParams] = useSearchParams();
@@ -49,12 +50,11 @@ export function ListsPage() {
       <button className="btn btn-outline" type="button" onClick={() => setCreating(false)} disabled={operation.isPending}>Annuler</button>
     </form>}
     {(query.error || operation.error) && <div className="list-error" role="alert">{listError(operation.error ?? query.error)} <button className="btn btn-outline" onClick={() => void query.refetch()}>Actualiser</button></div>}
-    {(import.meta.env.VITE_DATA_PROVIDER === "supabase") && !navigator.onLine && <p className="list-notice">Hors ligne : les listes en cache restent consultables. Reconnectez-vous pour modifier leur composition.</p>}
     <div className="list-workspace">
       <section className="list-browser" aria-label="Toutes les listes">
         <label className="list-field"><input aria-label="Rechercher une liste" className="input" placeholder="Nom, visa, personne, NIF…" value={search} onChange={e => setSearch(e.target.value)} /></label>
         <select className="select" aria-label="État des listes" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">Toutes les listes</option><option value="open">En préparation</option><option value="sealed">Scellées</option></select>
-        {query.isPending ? <p>Chargement des listes…</p> : filtered.length === 0 ? <div className="card list-empty"><span className="material-symbols-rounded">inventory_2</span><p>{lists.length ? "Aucune liste ne correspond à la recherche." : "Créez votre première liste, puis ajoutez des contrats de même durée."}</p></div> : filtered.map(l => <button key={l.id} className={`list-summary ${selectedId === l.id ? "is-selected" : ""}`} onClick={() => setParams({ liste: l.id })}>
+        {query.isPending ? <p>Chargement des listes…</p> : filtered.length === 0 ? <div className="card list-empty"><span className="material-symbols-rounded">inventory_2</span><p>{lists.length ? "Aucune liste ne correspond à la recherche." : offline ? "Aucune liste disponible hors ligne." : "Créez votre première liste, puis ajoutez des contrats de même durée."}</p></div> : filtered.map(l => <button key={l.id} className={`list-summary ${selectedId === l.id ? "is-selected" : ""}`} onClick={() => setParams({ liste: l.id })}>
           <span className="list-summary-top"><span className="material-symbols-rounded">{l.sealedAt ? "lock" : "inventory_2"}</span>{l.sealedAt && <span className="badge list-sealed">Scellée</span>}</span>
           <strong>{listName(l)}</strong><span>{l.members.length} contrat(s) · {l.durationMonths} mois</span>
           <b>{formatCurrency(listTotals(l).total)} HTG</b>
