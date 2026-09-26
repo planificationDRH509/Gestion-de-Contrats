@@ -8,7 +8,11 @@ export function readSalaryGridCache(): SalaryGridEntry[] | undefined {
     if (!raw) return salaryGridRemote ? undefined : seed;
     const value: unknown = JSON.parse(raw);
     if (!Array.isArray(value) || !value.every(e => e && typeof e.id === 'string' && typeof e.masculine === 'string' && typeof e.feminine === 'string' && typeof e.category === 'string' && Array.isArray(e.salaries) && Array.isArray(e.aliases))) return undefined;
-    return value;
+    const legacy = value as (SalaryGridEntry & { effectiveDate?: string | null })[];
+    if (!legacy.some(entry => 'effectiveDate' in entry)) return legacy;
+    const entries = legacy.map(({ effectiveDate: _unused, ...entry }) => entry);
+    cacheSalaryGrid(entries);
+    return entries;
   } catch { return undefined; }
 }
 export function cacheSalaryGrid(entries: SalaryGridEntry[]) {

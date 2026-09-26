@@ -25,6 +25,7 @@ import { getWorkspaceSyncMetadata, hasWorkspaceOfflineCache } from "../../data/l
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { identityDigits } from "../../data/contractIdentity";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
+import { listContractsPinnedFirst } from "./pinnedContractOrdering";
 
 // ── NIF Lookup ────────────────────────────────────────────────────────────────
 
@@ -113,15 +114,16 @@ export function useContractsList(
 ) {
   return useQuery({
     queryKey: ["contracts", params],
-    queryFn: () => provider.contracts.list(params),
-    placeholderData: keepPreviousData,
-    initialData: usesSupabase
+    queryFn: () => listContractsPinnedFirst((listParams) => provider.contracts.list(listParams), params),
+    placeholderData: params.pinnedIds?.length ? undefined : keepPreviousData,
+    initialData: usesSupabase && !params.pinnedIds?.length
       ? () => (params.all
         ? Boolean(getWorkspaceSyncMetadata(params.workspaceId).lastFullSyncedAt)
         : hasWorkspaceOfflineCache(params.workspaceId)) ? readCachedContracts(params) : undefined
       : undefined,
     initialDataUpdatedAt: 0,
     staleTime: 0,
+    networkMode: "always",
     refetchOnMount: "always",
     refetchOnReconnect: "always",
     refetchOnWindowFocus: true,

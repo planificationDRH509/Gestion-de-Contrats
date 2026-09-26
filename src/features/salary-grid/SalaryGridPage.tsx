@@ -27,7 +27,7 @@ export function SalaryGridPage() {
     } catch (e) { setFailure(e instanceof Error ? e.message : (e as {message?:string}).message ?? 'Enregistrement impossible.'); }
   }
   return <section className="salary-grid-page">
-    <div className="salary-grid-heading"><h1>Grille Salariale</h1>{can('settings.manage') && <button className="btn btn-primary" onClick={() => edit({id:crypto.randomUUID(), masculine:'',feminine:'',category:'Personnel administratif',salaries:[],aliases:[],effectiveDate:new Date().toISOString().slice(0,10),source:'',sourceRows:[],notes:'',active:true,version:0})}>Ajouter un titre</button>}</div>
+    <div className="salary-grid-heading"><h1>Grille Salariale</h1>{can('settings.manage') && <button className="btn btn-primary" onClick={() => edit({id:crypto.randomUUID(), masculine:'',feminine:'',category:'Personnel administratif',salaries:[],aliases:[],source:'',sourceRows:[],notes:'',active:true,version:0})}>Ajouter un titre</button>}</div>
     <div className="salary-grid-toolbar">
       <input className="input" aria-label="Rechercher un titre" placeholder="Rechercher un titre" value={search} onChange={e => setSearch(e.target.value)} />
       <select className="input" aria-label="Type de personnel" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tous les types</option>{categories.map(c => <option key={c}>{c}</option>)}</select>
@@ -35,9 +35,9 @@ export function SalaryGridPage() {
     </div>
     {isLoading && <p role="status">Chargement…</p>}
     {error && <div role="alert">Grille indisponible. <button className="btn" onClick={() => void refetch()}>Réessayer</button></div>}
-    <div className="salary-grid-table"><table><thead><tr><th>Titre masculin</th><th>Titre féminin</th><th>Type de personnel</th><th>Salaires (HTG)</th><th>Date d’effet</th><th>Statut</th>{can('settings.manage') && <th aria-label="Actions" />}</tr></thead><tbody>
-      {rows.map(entry => <tr key={entry.id} className={entry.active ? '' : 'salary-grid-inactive'}><td>{entry.masculine}</td><td>{entry.feminine}</td><td>{entry.category}</td><td className="salary-grid-money">{entry.salaries.map(s => s.toLocaleString('fr-HT')).join(' / ')}</td><td>{entry.effectiveDate ? entry.effectiveDate.split('-').reverse().join('/') : '—'}</td><td>{entry.active ? 'Actif' : 'À valider / inactif'}</td>{can('settings.manage') && <td><button className="btn" aria-label={`Modifier ${entry.masculine}`} onClick={() => edit(entry)}>Modifier</button></td>}</tr>)}
-      {!isLoading && !rows.length && <tr><td colSpan={7}>Aucun titre</td></tr>}
+    <div className="salary-grid-table"><table><thead><tr><th>Titre masculin</th><th>Titre féminin</th><th>Type de personnel</th><th>Salaires (HTG)</th><th>Statut</th>{can('settings.manage') && <th aria-label="Actions" />}</tr></thead><tbody>
+      {rows.map(entry => <tr key={entry.id} className={entry.active ? '' : 'salary-grid-inactive'}><td>{entry.masculine}</td><td>{entry.feminine}</td><td>{entry.category}</td><td className="salary-grid-money">{entry.salaries.map(s => s.toLocaleString('fr-HT')).join(' / ')}</td><td>{entry.active ? 'Actif' : 'À valider / inactif'}</td>{can('settings.manage') && <td><button className="btn" aria-label={`Modifier ${entry.masculine}`} onClick={() => edit(entry)}>Modifier</button></td>}</tr>)}
+      {!isLoading && !rows.length && <tr><td colSpan={can('settings.manage') ? 6 : 5}>Aucun titre</td></tr>}
     </tbody></table></div>
     {editing && <div className="salary-grid-overlay"><form className="salary-grid-editor" role="dialog" aria-modal="true" aria-labelledby="salary-grid-edit-title" onSubmit={submit} onKeyDown={event => { if(event.key==='Escape' && !saving) setEditing(null); }}>
       <h2 id="salary-grid-edit-title">{editing.version ? 'Modifier le titre' : 'Ajouter un titre'}</h2>
@@ -46,7 +46,6 @@ export function SalaryGridPage() {
       <label>Type de personnel<input required className="input" list="salary-categories" value={editing.category} onChange={e => setEditing({...editing,category:e.target.value})} /></label>
       <datalist id="salary-categories">{categories.map(c => <option key={c} value={c} />)}</datalist>
       <label>Salaires autorisés (HTG)<input required className="input" placeholder="37200; 41700" value={amounts} onChange={e => setAmounts(e.target.value)} /></label>
-      <label>Date d’effet<input className="input" type="date" required={editing.active} value={editing.effectiveDate ?? ''} onChange={e => setEditing({...editing,effectiveDate:e.target.value || null})} /></label>
       <label>Autres écritures<textarea className="input" value={editing.aliases.join('\n')} onChange={e => setEditing({...editing,aliases:e.target.value.split('\n')})} /></label>
       <label>Source<input className="input" value={editing.source} onChange={e => setEditing({...editing,source:e.target.value})} /></label>
       <label>Observations<textarea className="input" value={editing.notes} onChange={e => setEditing({...editing,notes:e.target.value})} /></label>

@@ -840,10 +840,10 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, dump, timestamp, filename, rows, body, id, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
-        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
-        return __generator(this, function (_v) {
-            switch (_v.label) {
+        var db, method, url, pathname, dump, timestamp, filename, rows, body, id, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, included_1, excluded_1, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+        return __generator(this, function (_x) {
+            switch (_x.label) {
                 case 0:
                     db = getDb();
                     method = ((_d = req.method) !== null && _d !== void 0 ? _d : "GET").toUpperCase();
@@ -888,7 +888,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/lists") && method === "POST")) return [3 /*break*/, 2];
                     return [4 /*yield*/, parseBody(req)];
                 case 1:
-                    body = _v.sent();
+                    body = _x.sent();
                     id = mutateContractList(db, asString(body.workspaceId), body, operatorFromRequest(req));
                     sendJson(res, 200, id);
                     return [2 /*return*/];
@@ -907,7 +907,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 4];
                     return [4 /*yield*/, parseBody(req)];
                 case 3:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     name_2 = normalizeTagName(asString(body.name));
                     color = asString(body.color).trim() || tagColor(name_2);
@@ -939,7 +939,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 6];
                     return [4 /*yield*/, parseBody(req)];
                 case 5:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -966,7 +966,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 8];
                     return [4 /*yield*/, parseBody(req)];
                 case 7:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -995,7 +995,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/find-many") && method === "POST")) return [3 /*break*/, 10];
                     return [4 /*yield*/, parseBody(req)];
                 case 9:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     nifs = Array.isArray(body.nifs)
                         ? Array.from(new Set(body.nifs.map(asString).map(function (value) { return value.trim(); }).filter(Boolean)))
@@ -1037,7 +1037,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 12];
                     return [4 /*yield*/, parseBody(req)];
                 case 11:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     existingId = asNullableString(body.id);
                     nif = asNullableString(body.nif);
@@ -1121,7 +1121,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 14];
                     return [4 /*yield*/, parseBody(req)];
                 case 13:
-                    body = _v.sent();
+                    body = _x.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1176,7 +1176,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 16];
                     return [4 /*yield*/, parseBody(req)];
                 case 15:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     name_3 = asString(body.name).trim();
                     if (!name_3) {
@@ -1219,7 +1219,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 18];
                     return [4 /*yield*/, parseBody(req)];
                 case 17:
-                    body = _v.sent();
+                    body = _x.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1260,7 +1260,7 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(dossierByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 19:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     current = db
                         .prepare("\n        SELECT *\n        FROM dossiers\n        WHERE id = :id\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
@@ -1337,7 +1337,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 22];
                     return [4 /*yield*/, parseBody(req)];
                 case 21:
-                    body = _v.sent();
+                    body = _x.sent();
                     payload_1 = body;
                     workspaceId = asString(payload_1.workspaceId);
                     if (!workspaceId) {
@@ -1346,7 +1346,18 @@ function handleApiRequest(req, res) {
                     page = Math.max(1, asInteger(payload_1.page, 1));
                     pageSize = Math.max(1, asInteger(payload_1.pageSize, 10));
                     items = buildContractRows(workspaceId, payload_1.deletionState === "deleted" ? "deleted" : "active").map(mapContract);
-                    if ((_m = payload_1.query) === null || _m === void 0 ? void 0 : _m.trim()) {
+                    if (payload_1.includeIds) {
+                        included_1 = new Set(payload_1.includeIds);
+                        items = items.filter(function (item) { return included_1.has(item.id); });
+                    }
+                    if ((_m = payload_1.excludeIds) === null || _m === void 0 ? void 0 : _m.length) {
+                        excluded_1 = new Set(payload_1.excludeIds);
+                        items = items.filter(function (item) { return !excluded_1.has(item.id); });
+                    }
+                    if (payload_1.onlyMine && payload_1.userId) {
+                        items = items.filter(function (item) { return item.createdBy === payload_1.userId; });
+                    }
+                    if ((_o = payload_1.query) === null || _o === void 0 ? void 0 : _o.trim()) {
                         q_1 = payload_1.query.trim();
                         items = items.filter(function (item) { return contractMatchesQuery(item, q_1); });
                     }
@@ -1354,7 +1365,7 @@ function handleApiRequest(req, res) {
                         items = items.filter(function (item) { return item.status === payload_1.status; });
                     }
                     if (payload_1.dossierId !== undefined) {
-                        targetDossier_1 = (_o = payload_1.dossierId) !== null && _o !== void 0 ? _o : null;
+                        targetDossier_1 = (_p = payload_1.dossierId) !== null && _p !== void 0 ? _p : null;
                         items = items.filter(function (item) { var _a; return ((_a = item.dossierId) !== null && _a !== void 0 ? _a : null) === targetDossier_1; });
                     }
                     if (payload_1.tagId) {
@@ -1382,7 +1393,7 @@ function handleApiRequest(req, res) {
                     }
                     total = items.length;
                     items = sortContracts(items, payload_1.sort);
-                    start = (page - 1) * pageSize;
+                    start = (_q = payload_1.offset) !== null && _q !== void 0 ? _q : (page - 1) * pageSize;
                     paged = payload_1.all ? items : items.slice(start, start + pageSize);
                     sendJson(res, 200, {
                         items: paged,
@@ -1395,7 +1406,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 24];
                     return [4 /*yield*/, parseBody(req)];
                 case 23:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     ids = Array.isArray(body.ids) ? body.ids.map(function (item) { return asString(item); }).filter(Boolean) : [];
                     if (!workspaceId) {
@@ -1415,7 +1426,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 26];
                     return [4 /*yield*/, parseBody(req)];
                 case 25:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     nif = asNullableString(body.nif);
                     if (!nif) {
@@ -1459,7 +1470,7 @@ function handleApiRequest(req, res) {
                         lieu_affectation: assignment,
                         historique_saisie: JSON.stringify(history_1),
                         commentaire: asNullableString(body.commentaire),
-                        created_by: (_q = (_p = asNullableString(body.createdBy)) !== null && _p !== void 0 ? _p : operator.id) !== null && _q !== void 0 ? _q : null,
+                        created_by: (_s = (_r = asNullableString(body.createdBy)) !== null && _r !== void 0 ? _r : operator.id) !== null && _s !== void 0 ? _s : null,
                         workspace_id: workspaceId,
                         dossier_id: asNullableString(body.dossierId),
                         status: status_1,
@@ -1475,7 +1486,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 28];
                     return [4 /*yield*/, parseBody(req)];
                 case 27:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1516,7 +1527,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_r = result.changes) !== null && _r !== void 0 ? _r : 0);
+                        updatedCount += Number((_t = result.changes) !== null && _t !== void 0 ? _t : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1524,7 +1535,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 30];
                     return [4 /*yield*/, parseBody(req)];
                 case 29:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1568,7 +1579,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_s = result.changes) !== null && _s !== void 0 ? _s : 0);
+                        updatedCount += Number((_u = result.changes) !== null && _u !== void 0 ? _u : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1576,7 +1587,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 32];
                     return [4 /*yield*/, parseBody(req)];
                 case 31:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1617,7 +1628,7 @@ function handleApiRequest(req, res) {
                             id_contrat: contractId,
                             workspace_id: workspaceId
                         });
-                        updatedCount += Number((_t = result.changes) !== null && _t !== void 0 ? _t : 0);
+                        updatedCount += Number((_v = result.changes) !== null && _v !== void 0 ? _v : 0);
                     }
                     sendJson(res, 200, updatedCount);
                     return [2 /*return*/];
@@ -1625,7 +1636,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 34];
                     return [4 /*yield*/, parseBody(req)];
                 case 33:
-                    body = _v.sent();
+                    body = _x.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1661,14 +1672,14 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(contractByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 35:
-                    body = _v.sent();
+                    body = _x.sent();
                     current = db
                         .prepare("\n        SELECT *\n        FROM contrat\n        WHERE id_contrat = :id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ id: id });
                     if (!current) {
                         throw new HttpError(404, "Contrat introuvable.");
                     }
-                    nextNif = (_u = asNullableString(body.nif)) !== null && _u !== void 0 ? _u : asString(current.nif);
+                    nextNif = (_w = asNullableString(body.nif)) !== null && _w !== void 0 ? _w : asString(current.nif);
                     if (!nextNif) {
                         throw new HttpError(400, "Le NIF est obligatoire.");
                     }
@@ -1752,7 +1763,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 38];
                     return [4 /*yield*/, parseBody(req)];
                 case 37:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1835,7 +1846,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 40];
                     return [4 /*yield*/, parseBody(req)];
                 case 39:
-                    body = _v.sent();
+                    body = _x.sent();
                     workspaceId_1 = asString(body.workspaceId) || "workspace_default";
                     data = body.data;
                     if (!data || !workspaceId_1)
@@ -1891,9 +1902,9 @@ function handleApiRequest(req, res) {
                         res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
                         return [2 /*return*/];
                     }
-                    _v.label = 41;
+                    _x.label = 41;
                 case 41:
-                    _v.trys.push([41, 44, , 45]);
+                    _x.trys.push([41, 44, , 45]);
                     rawNif = nifParam.replace(/\D/g, "");
                     nifFormatted = rawNif;
                     if (rawNif.length === 10) {
@@ -1911,10 +1922,10 @@ function handleApiRequest(req, res) {
                             }
                         })];
                 case 42:
-                    msppRes = _v.sent();
+                    msppRes = _x.sent();
                     return [4 /*yield*/, msppRes.text()];
                 case 43:
-                    html = _v.sent();
+                    html = _x.sent();
                     // Convert relative URLs to absolute URLs so CSS and images load correctly
                     html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
                     html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
@@ -1933,7 +1944,7 @@ function handleApiRequest(req, res) {
                     res.end(html);
                     return [3 /*break*/, 45];
                 case 44:
-                    err_1 = _v.sent();
+                    err_1 = _x.sent();
                     res.statusCode = 500;
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));

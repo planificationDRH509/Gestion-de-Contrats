@@ -20,8 +20,9 @@ begin
   if not rejected then raise exception 'Invalid session accepted'; end if;
   result := public.read_salary_grid(current_setting('test.salary_reader'));
   if jsonb_array_length(result) <> 141 then raise exception 'Unexpected seed count'; end if;
+  if exists(select 1 from jsonb_array_elements(result) e where e ? 'effectiveDate') then raise exception 'Effective date still returned'; end if;
   if exists(select 1 from jsonb_array_elements(result) e where e->>'category' in ('Personnel policier','Personnel enseignant')) then raise exception 'Excluded category imported'; end if;
-  payload := jsonb_build_object('id','salary-grid-test','masculine','Test infirmier','feminine','Test infirmière','category','Personnel médical','salaries',jsonb_build_array(37200),'aliases','[]'::jsonb,'effectiveDate','2022-04-01','source','test','sourceRows','[]'::jsonb,'notes','','active',true,'version',0);
+  payload := jsonb_build_object('id','salary-grid-test','masculine','Test infirmier','feminine','Test infirmière','category','Personnel médical','salaries',jsonb_build_array(37200),'aliases','[]'::jsonb,'source','test','sourceRows','[]'::jsonb,'notes','','active',true,'version',0);
   rejected := false;
   begin perform public.save_salary_grid_entry(current_setting('test.salary_reader'),payload); exception when others then rejected := sqlerrm like 'Modification réservée%'; end;
   if not rejected then raise exception 'Reader write accepted'; end if;

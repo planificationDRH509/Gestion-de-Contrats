@@ -1,0 +1,27 @@
+.person-attachments-dialog { border: 1px solid var(--border, #ddd); border-radius: 20px; padding: 0; width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); color: var(--ink); background: var(--surface-card, white); box-shadow: 0 24px 80px #0003; }
+.person-attachments-dialog::backdrop { background: #10182880; backdrop-filter: blur(3px); }
+.attachments-panel { padding: 24px; }
+.attachments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.attachments-header h2 { margin: 0 0 6px; font-size: 20px; }
+.attachments-person, .attachments-empty { color: var(--ink-muted); }
+.attachments-list { margin: 22px 0; display: grid; gap: 10px; max-height: 36dvh; overflow-y: auto; }
+.attachments-empty { text-align: center; padding: 18px 0; }
+.attachment-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--border, #ddd); border-radius: 12px; padding: 12px; }
+.attachment-type { color: var(--accent); }
+.attachment-details { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.attachment-details strong { font-size: 14px; overflow-wrap: anywhere; }
+.attachment-details > span { color: var(--ink-muted); font-size: 12px; overflow-wrap: anywhere; }
+.attachment-actions { display: flex; gap: 4px; }
+.attachment-actions a { text-decoration: none; }
+.attachment-delete { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.attachment-delete > span { flex: 1; }
+.attachments-tabs { display: flex; gap: 4px; padding: 4px; background: var(--surface-hover, #f1f3f6); border-radius: 12px; }
+.attachments-tabs button { flex: 1; border: 0; background: transparent; color: var(--ink-muted); border-radius: 9px; padding: 10px 6px; font: inherit; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+.attachments-tabs button[aria-pressed=true] { background: var(--surface-card, white); color: var(--ink); box-shadow: 0 1px 4px #0002; }
+.attachments-tabs .material-symbols-rounded { font-size: 19px; }
+.attachments-form fieldset { margin: 16px 0; padding: 0; border: 0; display: grid; gap: 14px; min-width: 0; }
+.attachments-form label { display: grid; gap: 7px; font-size: 13px; font-weight: 500; }
+.attachment-file-picker input { width: 100%; padding: 14px; border: 1px dashed var(--border, #ccc); border-radius: 10px; font: inherit; box-sizing: border-box; }
+.attachment-submit { width: 100%; justify-content: center; }
+.attachments-error { color: var(--danger, #c53030); margin-top: 12px; font-size: 14px; }
+@media (max-width: 480px) { .attachments-panel { padding: 18px; } .attachments-tabs button { font-size: 12px; } }

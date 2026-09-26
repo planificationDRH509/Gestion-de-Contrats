@@ -1,6 +1,6 @@
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { readSalaryGridCache } from "../salary-grid/salaryGridCache";
-import { genderedTitle, matchingEntries, type SalaryGridEntry } from "../salary-grid/salaryGrid";
+import { contractTitleWithoutGrade, genderedTitle, matchingEntries, type SalaryGridEntry } from "../salary-grid/salaryGrid";
 import { Contract } from "../../data/types";
 import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import {
@@ -647,12 +647,12 @@ export function buildTemplateVariables(contract: Contract, salaryGrid: SalaryGri
   const assignmentMatch = findSuggestion(contract.assignment, "institution", suggestions.institutions);
   const addressMatch = findSuggestion(contract.address, "address", suggestions.addresses);
 
-  const positionLabel = stripSuggestionPrefix(
+  const positionLabel = contractTitleWithoutGrade(stripSuggestionPrefix(
     matchingEntries(salaryGrid, contract.position).length
       ? genderedTitle(salaryGrid, contract.position, contract.gender)
       : isFeminine && positionMatch?.labelFeminine ? positionMatch.labelFeminine : contract.position,
     "position"
-  );
+  ));
   const assignmentLabel = stripSuggestionPrefix(
     isFeminine && assignmentMatch?.labelFeminine ? assignmentMatch.labelFeminine : contract.assignment,
     "institution"

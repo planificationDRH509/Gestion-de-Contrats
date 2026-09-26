@@ -191,6 +191,12 @@ export type ContractListParams = {
   sort?: ContractSort;
   page?: number;
   pageSize?: number;
+  /** Absolute offset for composed pages, independent of page/pageSize. */
+  offset?: number;
+  includeIds?: string[];
+  excludeIds?: string[];
+  /** Personal priority order; composed by the contract list query. */
+  pinnedIds?: string[];
   /** Load every matching contract for statistics and exports. */
   all?: boolean;
   onlyMine?: boolean;

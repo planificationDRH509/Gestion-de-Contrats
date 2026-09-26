@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import seed from './salaryGridSeed.json';
-import { approvedSalaries, genderedTitle, gridPositions, matchingEntries, salaryOutsideGrid, validateGridEntry } from './salaryGrid';
+import { approvedSalaries, contractTitleWithoutGrade, genderedTitle, gridPositions, matchingEntries, salaryOutsideGrid, validateGridEntry } from './salaryGrid';
 
 describe('salary reference', () => {
   it('uses April 2022 salaries and excludes teachers and police', () => {
@@ -28,12 +28,19 @@ describe('salary reference', () => {
     expect(genderedTitle(seed, 'Pharmacien','Femme')).toBe('Pharmacienne');
     expect(genderedTitle(seed, 'Pharmacienne','Homme')).toBe('Pharmacien');
     expect(genderedTitle(seed, 'Infirmière de ligne','Homme')).toBe('Infirmier de ligne');
+    expect(gridPositions(seed).some(e => e.label === 'Opérateur informatique 3')).toBe(true);
     expect(genderedTitle(seed, 'Titre libre','Femme')).toBe('Titre libre');
     expect(gridPositions(seed,'Femme').some(e => e.label==='Pharmacienne')).toBe(true);
   });
   it('does not approve undated handwritten amounts', () => {
     expect(matchingEntries(seed, 'Magasinière')).toEqual([]);
     expect(salaryOutsideGrid(seed, 'Magasinier',26850)).toBe(true);
+  });
+  it('omits grade numbers only from document titles', () => {
+    expect(contractTitleWithoutGrade('Secrétaire de Direction 1')).toBe('Secrétaire de Direction');
+    expect(contractTitleWithoutGrade('Économiste S.3')).toBe('Économiste Senior');
+    expect(contractTitleWithoutGrade('Comptable J.2')).toBe('Comptable Junior');
+    expect(contractTitleWithoutGrade('Médecin Généraliste')).toBe('Médecin Généraliste');
   });
   it('reflects edits, deactivation and additional approved salaries immediately', () => {
     const entry=seed.find(e => e.masculine==='Pharmacien')!;
@@ -42,6 +49,6 @@ describe('salary reference', () => {
     expect(salaryOutsideGrid(updated,'Pharmacien',42000)).toBe(false);
     expect(approvedSalaries([{...entry,active:false}],'Pharmacien')).toEqual([]);
     expect(() => validateGridEntry({...entry,salaries:[0]})).toThrow();
-    expect(() => validateGridEntry({...entry,effectiveDate:null})).toThrow();
+    expect(validateGridEntry({...entry,active:true})).toMatchObject({active:true});
   });
 });

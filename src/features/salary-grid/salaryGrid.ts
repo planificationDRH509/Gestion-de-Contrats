@@ -8,7 +8,6 @@ export type SalaryGridEntry = {
   category: string;
   salaries: number[];
   aliases: string[];
-  effectiveDate: string | null;
   source: string;
   sourceRows: number[];
   notes: string;
@@ -16,6 +15,10 @@ export type SalaryGridEntry = {
   version: number;
 };
 export const normalizeTitle = (value: string) => normalizeSuggestionGrammarValue(stripSuggestionPrefix(value, 'position').replace(/[-‐‑–]/g, ' ').replace(/\./g, ''));
+export const contractTitleWithoutGrade = (title: string) => title.trim()
+  .replace(/\s+S\.[1-4]$/i, ' Senior')
+  .replace(/\s+J\.[1-4]$/i, ' Junior')
+  .replace(/\s+(?:[1-4]|\([1-4]\))$/, '');
 export function matchingEntries(entries: SalaryGridEntry[], title: string) {
   const key = normalizeTitle(title);
   return key ? entries.filter(e => e.active && [e.masculine, e.feminine, ...e.aliases].some(v => normalizeTitle(v) === key)) : [];
@@ -41,6 +44,5 @@ export function gridPositions(entries: SalaryGridEntry[], gender = ''): Position
 export function validateGridEntry(entry: SalaryGridEntry) {
   if (!entry.masculine.trim() || !entry.feminine.trim() || !entry.category.trim()) throw new Error('Renseignez les deux titres et le type de personnel.');
   if (!entry.salaries.length || entry.salaries.some(s => !Number.isFinite(s) || s <= 0 || Math.abs(s * 100 - Math.round(s * 100)) > 0.00001)) throw new Error('Renseignez des salaires positifs, avec deux décimales au maximum.');
-  if (entry.active && !entry.effectiveDate) throw new Error('Une date d’effet est nécessaire pour activer ce titre.');
   return entry;
 }

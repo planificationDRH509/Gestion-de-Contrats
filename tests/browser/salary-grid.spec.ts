@@ -27,8 +27,12 @@ test('edits the grid, adapts gender and marks unapproved salaries in both entry 
   await page.getByRole('link',{name:'Grille Salariale'}).click();
   await expect(page).toHaveURL(/\/app\/parametres\/grille-salariale$/);
   await expect(page.getByRole('heading',{name:'Grille Salariale',exact:true})).toBeVisible();
+  await expect(page.getByText('Date d’effet')).toHaveCount(0);
+  await page.getByRole('textbox',{name:'Rechercher un titre'}).fill('Opérateur informatique');
+  await expect(page.locator('tbody')).toContainText('Opérateur informatique 3');
   await page.getByRole('textbox',{name:'Rechercher un titre'}).fill('Pharmacien');
   await page.getByRole('button',{name:'Modifier Pharmacien',exact:true}).click();
+  await expect(page.getByRole('dialog').getByText('Date d’effet')).toHaveCount(0);
   await page.getByLabel('Salaires autorisés (HTG)').fill('41000; 42000');
   await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

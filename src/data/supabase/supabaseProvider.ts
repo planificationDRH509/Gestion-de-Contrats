@@ -706,7 +706,7 @@ class SupabaseContractRepository implements ContractRepository {
     const client = getSupabaseClient();
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 10;
-    const from = (page - 1) * pageSize;
+    const from = params.offset ?? (page - 1) * pageSize;
     const to = from + pageSize - 1;
     const hasDateFilter = Boolean(params.dateFilterMode && params.dateFilterMode !== "all");
     const requiresIdentitySorting = params.sort?.startsWith("name_") || params.sort?.startsWith("nif_");
@@ -730,6 +730,16 @@ class SupabaseContractRepository implements ContractRepository {
     query = params.deletionState === "deleted"
       ? query.not("deleted_at", "is", null)
       : query.is("deleted_at", null);
+
+    if (params.includeIds) {
+      if (params.includeIds.length === 0) {
+        return { items: [], total: 0, page, pageSize };
+      }
+      query = query.in("id_contrat", params.includeIds);
+    }
+    for (const id of params.excludeIds ?? []) {
+      query = query.neq("id_contrat", id);
+    }
 
     if (params.onlyMine && params.userId) {
       query = query.eq("created_by", params.userId);
@@ -1988,7 +1998,7 @@ class OfflineFirstContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      if (params.all && !params.query && params.deletionState !== "deleted") {
+      if (params.all && !params.includeIds && !params.query && params.deletionState !== "deleted") {
         // Reconcile deletions and preserve queued changes before calculating totals.
         await syncSupabaseWorkspace(params.workspaceId, { verify: true });
         return this.local.list(params);

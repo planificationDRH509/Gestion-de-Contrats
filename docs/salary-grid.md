@@ -11,12 +11,12 @@ Source: `Grille_salariale_Haiti_mai_2022.xlsx`, column F (April 2022), not colum
 split, abbreviations receive explicit aliases, and repeated titles retain each
 printed salary. Catch-all descriptions and “Salaire Minimum” are not job titles.
 136 active titles were imported. Five undated handwritten entries are inactive
-until reviewed, dated and activated. Source row numbers and uncertainty notes are
-preserved. Dates are not a claim that this is a newer national schedule than 2022.
+until reviewed and activated. Source row numbers and uncertainty notes are
+preserved. The source does not establish a newer national schedule than 2022.
 
-The manager edits masculine/feminine titles, category, approved amounts, aliases,
-effective date and active status. Renaming a title retains its previous spellings
-as aliases. Forms, spreadsheet entry, import previews and the contract list flag
+The manager edits masculine/feminine titles, category, approved amounts, aliases
+and active status. Renaming a title retains its previous spellings as aliases.
+Forms, spreadsheet entry, import previews and the contract list flag
 positive amounts outside the approved values in red without blocking an override.
 Contract entry never learns an override as an approved salary. Unknown titles also
 remain unapproved. Gender normalization applies in entry, documents and export.

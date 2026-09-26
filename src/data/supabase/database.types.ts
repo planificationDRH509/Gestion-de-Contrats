@@ -489,6 +489,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      manage_person_attachments: { Args: { p_session_token: string; p_contract_id: string; p_action: string; p_document?: Json }; Returns: Json }
       read_salary_grid: { Args: { p_session_token: string }; Returns: Json }
       save_salary_grid_entry: { Args: { p_session_token: string; p_entry: Json }; Returns: Json }
       read_pinned_contracts: {

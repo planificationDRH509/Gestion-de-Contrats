@@ -52,6 +52,15 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
       (params.deletionState === "deleted" ? Boolean(contract.deletedAt) : !contract.deletedAt)
     );
 
+    if (params.includeIds) {
+      const included = new Set(params.includeIds);
+      items = items.filter((contract) => included.has(contract.id));
+    }
+    if (params.excludeIds?.length) {
+      const excluded = new Set(params.excludeIds);
+      items = items.filter((contract) => !excluded.has(contract.id));
+    }
+
     if (params.onlyMine && params.userId) {
       items = items.filter((contract) => contract.createdBy === params.userId);
     }
@@ -100,7 +109,7 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
 
     const total = items.length;
     items = sortContracts(items, params.sort);
-    const start = (page - 1) * pageSize;
+    const start = params.offset ?? (page - 1) * pageSize;
 
     return {
       items: (params.all ? items : items.slice(start, start + pageSize)).map((contract) => withTags(contract, db)),

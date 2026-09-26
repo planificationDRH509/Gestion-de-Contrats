@@ -60,7 +60,12 @@ type ContractListPayload = {
   sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc" | "nif_asc" | "nif_desc";
   page?: number;
   pageSize?: number;
+  offset?: number;
+  includeIds?: string[];
+  excludeIds?: string[];
   all?: boolean;
+  onlyMine?: boolean;
+  userId?: string;
   status?: string;
   dossierId?: string | null;
   dateFilterMode?: ContractDateFilterMode;
@@ -2015,6 +2020,18 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       payload.deletionState === "deleted" ? "deleted" : "active"
     ).map(mapContract);
 
+    if (payload.includeIds) {
+      const included = new Set(payload.includeIds);
+      items = items.filter((item) => included.has(item.id));
+    }
+    if (payload.excludeIds?.length) {
+      const excluded = new Set(payload.excludeIds);
+      items = items.filter((item) => !excluded.has(item.id));
+    }
+    if (payload.onlyMine && payload.userId) {
+      items = items.filter((item) => item.createdBy === payload.userId);
+    }
+
     if (payload.query?.trim()) {
       const q = payload.query.trim();
       items = items.filter((item) => contractMatchesQuery(item, q));
@@ -2062,7 +2079,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     const total = items.length;
     items = sortContracts(items, payload.sort);
-    const start = (page - 1) * pageSize;
+    const start = payload.offset ?? (page - 1) * pageSize;
     const paged = payload.all ? items : items.slice(start, start + pageSize);
 
     sendJson(res, 200, {

@@ -41,6 +41,7 @@ import {
   savePrintHistory
 } from "../../lib/printHistory";
 import { createId } from "../../lib/uuid";
+import { PersonAttachmentsDialog } from "../attachments/PersonAttachmentsDialog";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { ContractsImportModal } from "./ContractsImportModal";
 import { TagBadge } from "./TagBadge";
@@ -55,6 +56,7 @@ import {
 } from "../tasks/taskMentions";
 import { ContractSyncIndicator } from "./ContractSyncIndicator";
 import { usePinnedContracts } from "./pinnedContracts";
+import { listContractsPinnedFirst } from "./pinnedContractOrdering";
 import { getPendingOutbox } from "../../data/local/offlineStore";
 import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { ContractTaskIndicator } from "./ContractTaskIndicator";
@@ -264,6 +266,7 @@ export function ContractsListPage() {
     sort,
     page,
     pageSize,
+    pinnedIds: pinnedContracts.ids,
     onlyMine: !showAll,
     userId,
     status: statusFilter !== "all" ? statusFilter : undefined,
@@ -284,6 +287,7 @@ export function ContractsListPage() {
     effectiveAssignments,
     page,
     pageSize,
+    pinnedContracts.ids,
     query,
     selectedPositions,
     showAll,
@@ -327,7 +331,9 @@ export function ContractsListPage() {
       const nextPageParams = { ...queryParams, page: page + 1 };
       queryClient.prefetchQuery({
         queryKey: ["contracts", nextPageParams],
-        queryFn: () => getDataProvider().contracts.list(nextPageParams),
+        queryFn: () => listContractsPinnedFirst(
+          (listParams) => getDataProvider().contracts.list(listParams), nextPageParams
+        ),
       });
     }
   }, [data, isFetching, page, queryParams, queryClient]);
@@ -337,6 +343,7 @@ export function ContractsListPage() {
   const changeContractsStatus = useChangeContractsStatus();
   const changeContractsDuration = useChangeContractsDuration();
   const deleteContract = useDeleteContract();
+  const [attachmentContract, setAttachmentContract] = useState<Contract | null>(null);
   const updateContractComment = useUpdateContractComment();
   const createTag = useCreateTag();
   const assignTag = useAssignTagToContract();
@@ -1868,6 +1875,9 @@ export function ContractsListPage() {
                       </div>
                       <div className="contracts-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="icon-actions">
+                          <button type="button" className="icon-btn" aria-label="Pièces jointes" title="Pièces jointes" onClick={() => setAttachmentContract(contract)}>
+                            <span className="material-symbols-rounded">attach_file</span>
+                          </button>
                           {!isMobile ? (
                             <button
                               className="icon-btn"
@@ -2777,6 +2787,7 @@ export function ContractsListPage() {
         </div>
       ) : null}
 
+      {attachmentContract && <PersonAttachmentsDialog contract={attachmentContract} onClose={() => setAttachmentContract(null)} />}
       <ContractCommentModal
         isOpen={Boolean(activeCommentContract)}
         contractLabel={

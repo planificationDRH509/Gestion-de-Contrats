@@ -48,6 +48,15 @@ describe("reference contract template", () => {
     expect(buildTemplateVariables({...contract, position: "Pharmacien", gender: "Femme"}, salaryGrid).position).toBe("Pharmacienne");
     expect(buildTemplateVariables({...contract, position: "Pharmacienne", gender: "Homme"}, salaryGrid).position).toBe("Pharmacien");
   });
+  it("keeps salary grades in the grid but omits their numbers in contracts", () => {
+    const numbered = buildTemplateVariables({...contract, position: "Secrétaire de Direction 1"}, salaryGrid);
+    expect(numbered.position).toBe("Secrétaire de Direction");
+    expect(numbered.position_prefixed).not.toMatch(/\b1\b/);
+    const html = renderTemplate(getDefaultTemplate("contract").html, numbered);
+    expect(html).toContain("Secrétaire de Direction");
+    expect(html).not.toContain("Secrétaire de Direction 1");
+    expect(buildTemplateVariables({...contract, position: "Économiste S.3"}, salaryGrid).position).toBe("Économiste Senior");
+  });
   beforeEach(() => {
     localStorage.clear();
   });
