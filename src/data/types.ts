@@ -163,11 +163,15 @@ export type OutboxItem = {
     | "tag.create"
     | "tag.assign"
     | "tag.remove"
-    | "list.operation";
+    | "list.operation"
+    | "print.create";
   payload: Record<string, unknown>;
   createdAt: string;
   syncedAt?: string | null;
   lastError?: string | null;
+  sequence?: number;
+  actorId?: string;
+  conflict?: { fields: string[]; remote: Record<string, unknown> };
 };
 
 export type ContractSort =

@@ -8,7 +8,7 @@ import {
   type AppPermission,
   type AppRole
 } from "./permissions";
-import { clearPrivateTaskOfflineData } from "../tasks/privateTaskOffline";
+import { clearPrivateTaskOfflineData, preparePrivateTaskSession } from "../tasks/privateTaskOffline";
 import {
   clearOfflineUnlockCredential,
   isNetworkAuthenticationError,
@@ -38,7 +38,7 @@ type AuthContextValue = {
   activateTaskSession: (
     password: string
   ) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   can: (permission: AppPermission) => boolean;
 };
 
@@ -249,6 +249,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: normalizeAppRole((data as { role?: unknown }).role, data.username),
           taskSessionToken
         };
+        const previous = loadStoredAuthSession();
+        if (previous?.id === sessionUser.id && previous.taskSessionToken) await preparePrivateTaskSession(previous.id, previous.taskSessionToken);
         setUser(sessionUser);
         saveSession(sessionUser);
         await saveOfflineUnlockCredential(sessionUser.id, password);
@@ -307,6 +309,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
+        if (user.taskSessionToken) await preparePrivateTaskSession(user.id, user.taskSessionToken);
         const nextUser = { ...user, taskSessionToken: taskSession.data };
         setUser(nextUser);
         saveSession(nextUser);
@@ -342,6 +345,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
+        if (user.taskSessionToken) await preparePrivateTaskSession(user.id, user.taskSessionToken);
         const result = await supabase.rpc("change_app_user_password", {
           p_session_token: verificationSession.data,
           p_current_password: currentPassword,
@@ -434,6 +438,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
+        if (user.taskSessionToken) await preparePrivateTaskSession(user.id, user.taskSessionToken);
         const nextUser = {
           ...user,
           taskSessionToken: taskSession.data
@@ -444,7 +449,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await queryClient.invalidateQueries({ queryKey: ["task_recipients", user.id] });
         return { success: true };
       },
-      logout: () => {
+      logout: async () => {
+        if (user?.taskSessionToken) await clearPrivateTaskOfflineData(user.id, user.taskSessionToken);
         if (user?.taskSessionToken) {
           void getSupabaseClient().rpc("revoke_task_session", {
             p_session_token: user.taskSessionToken
@@ -453,7 +459,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         queryClient.removeQueries({ queryKey: ["private_tasks"] });
         queryClient.removeQueries({ queryKey: ["task_recipients"] });
         if (user?.id) {
-          void clearPrivateTaskOfflineData(user.id);
           clearOfflineUnlockCredential(user.id);
         }
         setUser(null);

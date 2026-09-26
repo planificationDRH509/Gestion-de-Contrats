@@ -1,3 +1,4 @@
+import { flushPrivateTaskOutbox } from "./privateTaskSync";
 import {
   useMutation,
   useQuery,
@@ -15,13 +16,11 @@ import { readCachedContracts } from "../../data/local/localContractRepository";
 import { isOfflineFailure } from "../../data/local/offlineStore";
 import { useAuth } from "../auth/auth";
 import {
-  completePrivateTaskOfflineOperation,
   queueOfflineTaskCreation,
   queueOfflineTaskDeletion,
   queueOfflineTaskStatus,
   readCachedPrivateTasks,
   readCachedTaskRecipients,
-  readPrivateTaskOfflineState,
   replaceCachedPrivateTasks,
   replaceCachedTaskRecipients
 } from "./privateTaskOffline";
@@ -118,80 +117,6 @@ async function fetchRemoteTasks(sessionToken: string) {
   );
   if (error) throw error;
   return ((data ?? []) as PrivateTaskRow[]).map(mapTask);
-}
-
-async function flushPrivateTaskOutbox(user: {
-  id: string;
-  taskSessionToken: string;
-}) {
-  if (isOffline()) return 0;
-  let flushedCount = 0;
-
-  while (true) {
-    const state = await readPrivateTaskOfflineState(user.id, user.taskSessionToken);
-    const operation = state.outbox[0];
-    if (!operation) return flushedCount;
-
-    if (operation.type === "create") {
-      const { data, error } = await getSupabaseClient().rpc(
-        "create_private_task",
-        {
-          p_session_token: user.taskSessionToken,
-          p_content: operation.content,
-          p_assignee_id: operation.assigneeId
-        }
-      );
-      if (error) throw error;
-
-      await completePrivateTaskOfflineOperation(
-        user.id,
-        user.taskSessionToken,
-        operation.id,
-        operation.tempTaskId && data
-          ? { tempTaskId: operation.tempTaskId, remoteTaskId: data }
-          : undefined
-      );
-      if (operation.tempTaskId && data && operation.status !== "todo") {
-        await queueOfflineTaskStatus(
-          user.id,
-          user.taskSessionToken,
-          data,
-          operation.status
-        );
-      }
-      flushedCount += 1;
-      continue;
-    }
-
-    if (operation.type === "status") {
-      const { data, error } = await getSupabaseClient().rpc(
-        "set_private_task_status",
-        {
-          p_session_token: user.taskSessionToken,
-          p_task_id: operation.taskId,
-          p_status: operation.status
-        }
-      );
-      if (error) throw error;
-      if (!data) throw new Error("Tâche introuvable.");
-    } else {
-      const { error } = await getSupabaseClient().rpc(
-        "delete_private_task",
-        {
-          p_session_token: user.taskSessionToken,
-          p_task_id: operation.taskId
-        }
-      );
-      if (error) throw error;
-    }
-
-    await completePrivateTaskOfflineOperation(
-      user.id,
-      user.taskSessionToken,
-      operation.id
-    );
-    flushedCount += 1;
-  }
 }
 
 export function getTaskErrorMessage(error: unknown) {
@@ -345,37 +270,14 @@ export function useCreatePrivateTask() {
       assigneeId: string | null;
     }) => {
       const currentUser = requireTaskUser(user);
-      if (isOffline()) {
-        return queueOfflineTaskCreation(currentUser.taskSessionToken, {
-          userId: currentUser.id,
-          userName: currentUser.name,
-          username: currentUser.username,
-          content,
-          assigneeId
-        });
+      const queued = await queueOfflineTaskCreation(currentUser.taskSessionToken, {
+        userId: currentUser.id, userName: currentUser.name, username: currentUser.username, content, assigneeId
+      });
+      if (!isOffline()) {
+        try { await flushPrivateTaskOutbox(currentUser); return { ...queued, queued: false }; }
+        catch (error) { if (!isOfflineFailure(error)) throw error; }
       }
-
-      try {
-        const { data, error } = await getSupabaseClient().rpc(
-          "create_private_task",
-          {
-            p_session_token: currentUser.taskSessionToken,
-            p_content: content,
-            p_assignee_id: assigneeId
-          }
-        );
-        if (error) throw error;
-        return { id: data, queued: false };
-      } catch (error) {
-        if (!isOfflineFailure(error)) throw error;
-        return queueOfflineTaskCreation(currentUser.taskSessionToken, {
-          userId: currentUser.id,
-          userName: currentUser.name,
-          username: currentUser.username,
-          content,
-          assigneeId
-        });
-      }
+      return queued;
     },
     onSuccess: async (result) => {
       if (result.queued && user?.id && user.taskSessionToken) {
@@ -404,38 +306,12 @@ export function useSetTaskStatus() {
       status: TaskStatus;
     }) => {
       const currentUser = requireTaskUser(user);
-      if (isOffline() || taskId.startsWith("offline-task-")) {
-        await queueOfflineTaskStatus(
-          currentUser.id,
-          currentUser.taskSessionToken,
-          taskId,
-          status
-        );
-        return true;
+      await queueOfflineTaskStatus(currentUser.id, currentUser.taskSessionToken, taskId, status);
+      if (!isOffline()) {
+        try { await flushPrivateTaskOutbox(currentUser); }
+        catch (error) { if (!isOfflineFailure(error)) throw error; }
       }
-
-      try {
-        const { data, error } = await getSupabaseClient().rpc(
-          "set_private_task_status",
-          {
-            p_session_token: currentUser.taskSessionToken,
-            p_task_id: taskId,
-            p_status: status
-          }
-        );
-        if (error) throw error;
-        if (!data) throw new Error("Tâche introuvable.");
-        return data;
-      } catch (error) {
-        if (!isOfflineFailure(error)) throw error;
-        await queueOfflineTaskStatus(
-          currentUser.id,
-          currentUser.taskSessionToken,
-          taskId,
-          status
-        );
-        return true;
-      }
+      return true;
     },
     onMutate: async ({ taskId, status }) => {
       const queryKey = ["private_tasks", user?.id] as const;
@@ -477,35 +353,12 @@ export function useDeletePrivateTask() {
   return useMutation({
     mutationFn: async (taskId: string) => {
       const currentUser = requireTaskUser(user);
-      if (isOffline() || taskId.startsWith("offline-task-")) {
-        await queueOfflineTaskDeletion(
-          currentUser.id,
-          currentUser.taskSessionToken,
-          taskId
-        );
-        return true;
+      await queueOfflineTaskDeletion(currentUser.id, currentUser.taskSessionToken, taskId);
+      if (!isOffline()) {
+        try { await flushPrivateTaskOutbox(currentUser); }
+        catch (error) { if (!isOfflineFailure(error)) throw error; }
       }
-
-      try {
-        const { data, error } = await getSupabaseClient().rpc(
-          "delete_private_task",
-          {
-            p_session_token: currentUser.taskSessionToken,
-            p_task_id: taskId
-          }
-        );
-        if (error) throw error;
-        if (!data) throw new Error("Tâche introuvable.");
-        return data;
-      } catch (error) {
-        if (!isOfflineFailure(error)) throw error;
-        await queueOfflineTaskDeletion(
-          currentUser.id,
-          currentUser.taskSessionToken,
-          taskId
-        );
-        return true;
-      }
+      return true;
     },
     onSuccess: async () => {
       if (user?.id && user.taskSessionToken && isOffline()) {

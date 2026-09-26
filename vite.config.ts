@@ -11,7 +11,9 @@ export default defineConfig({
     localSqliteApiPlugin(),
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // Let a new version take over when the app is opened again, without
+      // interrupting someone who is currently working.
+      registerType: "prompt",
       includeAssets: ["icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
         name: "PLANIFICATION",

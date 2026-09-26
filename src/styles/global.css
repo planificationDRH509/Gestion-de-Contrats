@@ -944,7 +944,6 @@ img {
 
 .offline-sync-card:disabled {
   cursor: default;
-  opacity: 0.78;
 }
 
 .offline-sync-card > .material-symbols-rounded {
@@ -1807,6 +1806,26 @@ img {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.contract-pin-button {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.contract-pin-button .material-symbols-rounded { font-size: 18px; }
+.contract-pin-button:hover,
+.contract-pin-button:focus-visible,
+.contract-pin-button.is-pinned { color: var(--accent); border-color: var(--accent); }
+.contract-pin-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.contract-pin-button:disabled { cursor: wait; opacity: .6; }
 
 .contract-list-fiscal-year {
   display: inline-flex;
@@ -5966,19 +5985,6 @@ button {
   gap: 10px;
 }
 
-.contracts-refresh-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--ink-muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.contracts-refresh-status .material-symbols-rounded {
-  font-size: 15px;
-}
-
 .contracts-page-header {
   align-items: stretch;
   flex-direction: column;
@@ -9704,6 +9710,9 @@ body,
   border-radius: 10px; box-shadow: 0 6px 24px #0002; font-size: 12px;
 }
 
+.contract-sync-details label { display: grid; gap: 6px; min-width: 0; }
+.contract-sync-details select { width: 100%; min-width: 0; }
+
 /* Contract lists */
 .lists-page { max-width: 1600px; }
 .list-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
@@ -9772,8 +9781,7 @@ body,
 }
 
 .trash-header-actions,
-.trash-toolbar,
-.trash-refresh-status {
+.trash-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -9796,8 +9804,7 @@ body,
   font-size: 20px;
 }
 
-.trash-count span,
-.trash-refresh-status {
+.trash-count span {
   color: var(--ink-muted);
   font-size: 12px;
 }
@@ -9818,10 +9825,6 @@ body,
   width: min(100%, 560px);
   max-width: none;
   background: var(--panel);
-}
-
-.trash-refresh-status .material-symbols-rounded {
-  font-size: 17px;
 }
 
 .trash-list {

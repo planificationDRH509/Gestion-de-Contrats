@@ -22,12 +22,9 @@ export function isOfflineFailure(error: unknown): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return true;
   }
-  if (error instanceof TypeError) {
-    return true;
-  }
   const message = error && typeof error === "object" && "message" in error
     ? String(error.message).toLowerCase() : "";
-  if (/failed to fetch|network|fetch|load failed|internet|offline/.test(message)) {
+  if (/failed to fetch|fetch failed|network(?:error| request| still| connection)|load failed|internet|offline|connection.*(?:lost|refused|reset)/.test(message)) {
     return true;
   }
   const cause =
@@ -145,6 +142,7 @@ export function cacheDossiers(dossiers: Dossier[]) {
   const db = loadDb();
   const byId = new Map(db.dossiers.map((dossier, index) => [dossier.id, index]));
   for (const dossier of dossiers) {
+    if (db.outbox.some(item => !item.syncedAt && item.type.startsWith("dossier.") && item.payload.id === dossier.id)) continue;
     const index = byId.get(dossier.id);
     if (index === undefined) {
       db.dossiers.push(dossier);
@@ -406,6 +404,7 @@ export function getPendingOutboxCount(workspaceId?: string): number {
 export function setWorkspaceSyncMetadata(
   workspaceId: string,
   metadata: {
+    remoteRevision?: string | null;
     lastSyncedAt?: string | null;
     lastFullSyncedAt?: string | null;
     lastError?: string | null;

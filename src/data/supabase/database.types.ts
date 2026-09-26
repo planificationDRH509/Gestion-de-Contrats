@@ -492,6 +492,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      read_pinned_contracts: {
+        Args: { p_session_token: string }
+        Returns: string[]
+      }
+      set_pinned_contract: {
+        Args: { p_session_token: string; p_contract_id: string; p_pinned: boolean }
+        Returns: string[]
+      }
+      sync_private_task: {
+        Args: { p_session_token: string; p_request_id: string; p_operation: Json }
+        Returns: string
+      }
+      get_offline_workspace_revision: {
+        Args: { p_session_token: string; p_workspace_id: string }
+        Returns: string
+      }
+
       sync_contract_list: {
         Args: { p_session_token: string; p_workspace_id: string; p_request_id: string; p_operation: Json; p_expected_lists: Json; p_expected_memberships: Json }
         Returns: string

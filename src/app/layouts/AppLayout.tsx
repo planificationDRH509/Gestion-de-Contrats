@@ -11,6 +11,7 @@ import { useAuth } from "../../features/auth/auth";
 import { GlobalContractSearch } from "../components/GlobalContractSearch";
 import { SessionLockScreen } from "../../features/auth/SessionLockScreen";
 import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
+import { flushPrivateTaskOutbox } from "../../features/tasks/privateTaskSync";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 const SIDEBAR_W_KEY = "sidebar-width";
@@ -46,6 +47,23 @@ export function AppLayout() {
   const [isResizing, setIsResizing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncState, setSyncState] = useState(() => getSupabaseSyncState(workspaceId));
+
+  useEffect(() => {
+    if (!isSupabase || !user?.taskSessionToken || isLocked) return;
+    const currentUser = { id: user.id, taskSessionToken: user.taskSessionToken };
+    const flush = async () => {
+      if (!navigator.onLine) return;
+      try {
+        if (await flushPrivateTaskOutbox(currentUser)) {
+          await queryClient.invalidateQueries({ queryKey: ["private_tasks", currentUser.id] });
+        }
+      } catch (error) { console.error("Synchronisation des tâches impossible.", error); }
+    };
+    const timer = window.setInterval(() => void flush(), 30_000);
+    window.addEventListener("online", flush);
+    void flush();
+    return () => { window.clearInterval(timer); window.removeEventListener("online", flush); };
+  }, [isSupabase, isLocked, user?.id, user?.taskSessionToken, queryClient]);
 
   const refreshSyncState = useCallback(() => {
     setIsOnline(navigator.onLine);

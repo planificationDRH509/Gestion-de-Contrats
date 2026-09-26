@@ -25,4 +25,14 @@ async function bootstrap() {
   );
 }
 
-void bootstrap();
+void bootstrap().catch(error => {
+  const root = document.getElementById("root");
+  if (!root) return;
+  const message = document.createElement("p");
+  message.setAttribute("role", "alert");
+  message.textContent = error instanceof Error ? error.message : "Impossible d’ouvrir le stockage local.";
+  const retry = document.createElement("button");
+  retry.textContent = "Réessayer";
+  retry.onclick = () => window.location.reload();
+  root.replaceChildren(message, retry);
+});

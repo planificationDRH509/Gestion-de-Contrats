@@ -1,3 +1,4 @@
+import { sealLocalValue, openLocalValue } from "../data/local/deviceVault";
 import { del, get, set } from "idb-keyval";
 import type { Persister } from "@tanstack/react-query-persist-client";
 
@@ -8,10 +9,14 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 export function createIDBPersister(idbKey: string = "react-query-cache"): Persister {
   return {
     persistClient: async (client) => {
-      await set(idbKey, client);
+      await set(idbKey, await sealLocalValue(client));
     },
     restoreClient: async () => {
-      return await get(idbKey);
+      const value = await get(idbKey);
+      if (!value) return undefined;
+      const client = await openLocalValue<import("@tanstack/react-query-persist-client").PersistedClient>(value);
+      if (!value.encrypted) await set(idbKey, await sealLocalValue(client));
+      return client;
     },
     removeClient: async () => {
       await del(idbKey);

@@ -31,7 +31,7 @@ export function TrashPage() {
   const { user } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
   const [query, setQuery] = useState("");
-  const { data, isLoading, isError, isFetching, refetch } = useContractsList(
+  const { data, isLoading, isError, refetch } = useContractsList(
     {
       workspaceId,
       all: true,
@@ -95,12 +95,6 @@ export function TrashPage() {
               placeholder="Rechercher par nom, NIF, poste ou affectation…"
             />
           </label>
-          {isFetching && !isLoading ? (
-            <span className="trash-refresh-status" role="status">
-              <span className="material-symbols-rounded is-spinning">sync</span>
-              Actualisation…
-            </span>
-          ) : null}
         </div>
 
         {isLoading ? (

@@ -10,6 +10,8 @@ export function queueOutbox(
   const db = loadDb();
   const item: OutboxItem = {
     id: createId(),
+    sequence: Math.max(0, ...db.outbox.map(item => item.sequence ?? 0)) + 1,
+    actorId: (() => { try { return JSON.parse(localStorage.getItem("contribution_auth") ?? "null")?.id; } catch { return undefined; } })(),
     workspaceId,
     type,
     payload,
@@ -22,7 +24,11 @@ export function queueOutbox(
     ((payload.nif && pending.payload.nif === payload.nif) ||
       (payload.id && pending.payload.id === payload.id))
   ) : -1;
-  if (previousIndex >= 0) db.outbox[previousIndex] = item;
+  if (previousIndex >= 0) {
+    item.createdAt = db.outbox[previousIndex].createdAt;
+    item.sequence = db.outbox[previousIndex].sequence;
+    db.outbox[previousIndex] = item;
+  }
   else db.outbox.push(item);
   saveDb(db);
   if (typeof window !== "undefined") {
@@ -31,8 +37,8 @@ export function queueOutbox(
   return item;
 }
 
-export function setOutboxError(id: string, message: string | null) {
+export function setOutboxError(id: string, message: string | null, conflict?: OutboxItem["conflict"]) {
   const db = loadDb();
   const item = db.outbox.find((entry) => entry.id === id);
-  if (item) { item.lastError = message; saveDb(db); }
+  if (item) { item.lastError = message; item.conflict = conflict; saveDb(db); }
 }

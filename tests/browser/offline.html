@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>Offline browser verification</title><pre id="result">RUNNING</pre>
+<script type="module">
+import { set, get } from 'idb-keyval';
+import { initializeLocalDb, loadDb, saveDb, flushLocalDbWrites } from '/src/data/local/localDb.ts';
+import { readRecords } from '/src/data/local/recordStore.ts';
+import { queueOfflineTaskCreation, readPrivateTaskOfflineState, preparePrivateTaskSession } from '/src/features/tasks/privateTaskOffline.ts';
+const result = document.querySelector('#result');
+if (new URL(location.href).searchParams.has('worker')) {
+  let staged;
+  addEventListener('message', async event => {
+    if (event.origin !== location.origin) return;
+    try {
+      const { action, id } = event.data;
+      if (action === 'init') await initializeLocalDb();
+      if (action === 'stage') {
+        staged = loadDb();
+        staged.workspaces.push({ id, name: id, createdAt: '2026-01-01', updatedAt: '2026-01-01' });
+      }
+      if (action === 'commit') { saveDb(staged); await flushLocalDbWrites(); }
+      event.source.postMessage({ request: event.data.request, ok: true }, location.origin);
+    } catch (error) { event.source.postMessage({ request: event.data.request, error: String(error) }, location.origin); }
+  });
+} else {
+  const check = (value, message) => { if (!value) throw new Error(message); };
+  let request = 0;
+  const call = (frame, data) => new Promise((resolve, reject) => {
+    const id = ++request;
+    const listener = event => {
+      if (event.source !== frame.contentWindow || event.data.request !== id) return;
+      removeEventListener('message', listener);
+      event.data.error ? reject(new Error(event.data.error)) : resolve(event.data);
+    };
+    addEventListener('message', listener);
+    frame.contentWindow.postMessage({ ...data, request: id }, location.origin);
+  });
+  try {
+    const started = performance.now();
+    const initial = { workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [], contractTags: [], printJobs: [], outbox: [], syncMetadata: {}, contractLists: [], cachedListWorkspaces: [] };
+    initial.workspaces = Array.from({ length: 5207 }, (_, i) => ({ id: `fixture-${i}`, name: `Secret ${i}`, createdAt: '2026-01-01', updatedAt: '2026-01-01' }));
+    await set('contribution_offline_database_v2', initial);
+    const frames = await Promise.all([1,2].map(() => new Promise(resolve => {
+      const frame = document.createElement('iframe'); frame.hidden = true;
+      frame.onload = () => resolve(frame); frame.src = '?worker=1'; document.body.append(frame);
+    })));
+    await Promise.all(frames.map(frame => call(frame, { action: 'init' })));
+    check((await readRecords()).workspaces.length === 5207, 'Legacy migration lost records');
+    check(await get('contribution_offline_database_v2') === undefined, 'Plaintext legacy snapshot was retained');
+    await Promise.all(frames.map((frame, i) => call(frame, { action: 'stage', id: `tab-${i}` })));
+    await Promise.all(frames.map(frame => call(frame, { action: 'commit' })));
+    check((await readRecords()).workspaces.length === 5209, 'Concurrent tabs lost records');
+    await queueOfflineTaskCreation('old-token', { userId: 'browser-test', userName: 'Test', username: 'test', content: 'Must survive', assigneeId: null });
+    await preparePrivateTaskSession('browser-test', 'old-token');
+    check((await readPrivateTaskOfflineState('browser-test', 'new-token')).outbox.length === 1, 'Token rotation lost tasks');
+    result.textContent = `PASS: migration 5207 records; concurrent contexts; durable encrypted cache; token rotation (${Math.round(performance.now()-started)} ms)`;
+  } catch (error) { result.textContent = `FAIL: ${error.stack}`; }
+}
+</script>

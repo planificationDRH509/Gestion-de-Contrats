@@ -1,7 +1,7 @@
 import { DossierRepository } from "../repositories/DossierRepository";
 import { CreateDossierInput, Dossier, UpdateDossierInput } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb, selectDb } from "./localDb";
+import { flushLocalDbWrites, loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 import {
   normalizeDossierName,
@@ -87,6 +87,7 @@ export class LocalDossierRepository implements DossierRepository {
     if (shouldQueue) {
       queueOutbox(input.workspaceId, "dossier.create", dossier as unknown as Record<string, unknown>);
     }
+    await flushLocalDbWrites();
     return dossier;
   }
 
@@ -155,8 +156,9 @@ export class LocalDossierRepository implements DossierRepository {
     db.dossiers[index] = updated;
     saveDb(db);
     if (shouldQueue) {
-      queueOutbox(input.workspaceId, "dossier.update", input as unknown as Record<string, unknown>);
+      queueOutbox(input.workspaceId, "dossier.update", { ...input, baseDossier: current } as unknown as Record<string, unknown>);
     }
+    await flushLocalDbWrites();
     return updated;
   }
 
@@ -203,6 +205,7 @@ export class LocalDossierRepository implements DossierRepository {
     if (shouldQueue) {
       queueOutbox(workspaceId, "dossier.delete", { id, workspaceId });
     }
+    await flushLocalDbWrites();
     return unassignedCount;
   }
 }

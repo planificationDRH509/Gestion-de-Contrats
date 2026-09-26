@@ -1,3 +1,6 @@
+import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
+import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError } from "../local/localDb";
+import { withBrowserLock } from "../../lib/browserLock";
 import { outboxKeys } from "../local/outboxDependencies";
 import { setOutboxError } from "../local/localOutbox";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
@@ -582,9 +585,17 @@ class SupabaseDossierRepository implements DossierRepository {
     return mapDossier(data);
   }
 
-  async update(input: UpdateDossierInput): Promise<Dossier> {
+  async syncOfflineUpdate(input: UpdateDossierInput & { baseDossier?: Dossier }): Promise<Dossier> {
+    const remote = await this.getById(input.id);
+    if (!remote || remote.deletedAt) throw new Error("Ce dossier a été supprimé du serveur. La modification locale est conservée.");
+    const patch = mergeOfflinePatch<Dossier>(input, input.baseDossier, remote, dossierEditFields);
+    if (!Object.keys(patch).length) return remote;
+    return this.update({ id: input.id, workspaceId: input.workspaceId, ...patch }, remote);
+  }
+
+  async update(input: UpdateDossierInput, expected?: Dossier): Promise<Dossier> {
     const client = getSupabaseClient();
-    const existing = await this.getById(input.id);
+    const existing = expected ?? await this.getById(input.id);
     if (!existing || existing.workspaceId !== input.workspaceId) {
       throw new Error("Dossier introuvable.");
     }
@@ -626,14 +637,11 @@ class SupabaseDossierRepository implements DossierRepository {
           : existing.defaultDurationMonths ?? null
     };
 
-    const { data, error } = await (client
-      .from("dossiers")
-      .update(payload as any) as any)
-      .eq("id", input.id)
-      .eq("workspace_id", input.workspaceId)
-      .is("deleted_at", null)
-      .select("*")
-      .single();
+    let update = client.from("dossiers").update(payload as any).eq("id", input.id)
+      .eq("workspace_id", input.workspaceId).is("deleted_at", null);
+    if (expected) update = update.eq("updated_at", expected.updatedAt);
+    const { data, error } = await update.select("*").maybeSingle();
+    if (!error && !data) throw new Error("Le dossier a changé pendant la synchronisation. Réessayez.");
 
     if (error || !data) {
       throw repositoryError("Impossible de mettre à jour le dossier.", error);
@@ -874,9 +882,17 @@ class SupabaseContractRepository implements ContractRepository {
     return rows.map(mapContract);
   }
 
-  async update(input: UpdateContractInput): Promise<Contract> {
+  async syncOfflineUpdate(input: UpdateContractInput & { baseContract?: Contract }): Promise<Contract> {
+    const remote = await this.getById(input.id);
+    if (!remote || remote.deletedAt) throw new Error("Ce contrat a été supprimé du serveur. La modification locale est conservée.");
+    const patch = mergeOfflinePatch<Contract>(input, input.baseContract, remote, contractEditFields);
+    if (!Object.keys(patch).length) return remote;
+    return this.update({ id: input.id, ...patch }, remote);
+  }
+
+  async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
     const client = getSupabaseClient();
-    const existing = await this.getById(input.id);
+    const existing = expected ?? await this.getById(input.id);
     if (!existing) {
       throw new Error("Contrat introuvable.");
     }
@@ -913,12 +929,12 @@ class SupabaseContractRepository implements ContractRepository {
         });
     payload.historique_saisie = serializeContractAudit(auditHistory);
 
-    const { data, error } = await (client
-      .from("contrat")
-      .update(payload as any) as any)
-      .eq("id_contrat", input.id)
-      .select("*, identification(*), contract_tags(tags(*))")
-      .single();
+    let update = client.from("contrat").update(payload as any)
+      .eq("id_contrat", input.id).eq("workspace_id", existing.workspaceId).is("deleted_at", null);
+    if (expected) update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
+      : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
+    const { data, error } = await update.select("*, identification(*), contract_tags(tags(*))").maybeSingle();
+    if (!error && !data) throw new Error("Le contrat a changé pendant la synchronisation. Réessayez.");
 
     if (error || !data) {
       throw repositoryError("Impossible de mettre à jour le contrat.", error);
@@ -959,7 +975,9 @@ class SupabaseContractRepository implements ContractRepository {
     // A lost response may mean this exact transition already reached the server.
     if (existing.status === status) return existing;
     if (!previousStatus || existing.status !== previousStatus) {
-      throw new Error(`Conflit d’état pour le contrat ${id} : état serveur « ${existing.status} », état local « ${status} ». Vérifiez le contrat avant de relancer la synchronisation. Le changement local est conservé.`);
+      const conflict = new OfflineConflict(["status"], existing as unknown as Record<string, unknown>);
+      conflict.message = `Conflit d’état pour le contrat ${id} : état serveur « ${existing.status} », état local « ${status} ». Le changement local est conservé.`;
+      throw conflict;
     }
     const auditHistory = appendContractAuditEntry(existing.auditHistory, {
       action: "status",
@@ -1020,14 +1038,18 @@ class SupabaseContractRepository implements ContractRepository {
     );
   }
 
-  async softDelete(id: string, workspaceId: string): Promise<void> {
+  async softDelete(id: string, workspaceId: string, base?: Contract): Promise<void> {
     const client = getSupabaseClient();
     const existing = await this.getById(id);
+    if (!existing || existing.deletedAt) return;
+    if (base && contractEditFields.some(field => (existing[field] ?? null) !== (base[field] ?? null))) {
+      throw new OfflineConflict(["deletedAt"], existing as unknown as Record<string, unknown>);
+    }
     const auditHistory = appendContractAuditEntry(existing?.auditHistory, {
       action: "deletion",
       changes: []
     });
-    const { error } = await client
+    let deletion = client
       .from("contrat")
       .update({
         deleted_at: new Date().toISOString(),
@@ -1035,6 +1057,10 @@ class SupabaseContractRepository implements ContractRepository {
       } as any)
       .eq("id_contrat", id)
       .eq("workspace_id", workspaceId);
+    if (base) deletion = existing.remoteUpdatedAt === null ? deletion.is("updated_at", null)
+      : deletion.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
+    const { data, error } = await deletion.select("id_contrat").maybeSingle();
+    if (!error && !data) throw new Error("Le contrat a changé pendant la suppression. Réessayez.");
     if (error) {
       throw repositoryError("Impossible de supprimer le contrat.", error);
     }
@@ -1081,33 +1107,6 @@ class SupabaseContractRepository implements ContractRepository {
     }));
 
     return contracts.length;
-  }
-}
-
-class SupabasePrintJobRepository implements PrintJobRepository {
-  async create(workspaceId: string, contractIds: string[]): Promise<ContractPrintJob> {
-    const client = getSupabaseClient();
-    const id = crypto.randomUUID();
-    const { data, error } = await (client
-      .from("contract_print_jobs")
-      .insert({ 
-        id, 
-        workspace_id: workspaceId, 
-        contract_ids_json: JSON.stringify(contractIds) 
-      } as any) as any)
-      .select("*")
-      .single();
-    if (error || !data) {
-      throw repositoryError("Impossible de créer l'historique d'impression.", error);
-    }
-    const ids = typeof data.contract_ids_json === 'string' ? JSON.parse(data.contract_ids_json) : [];
-    return {
-      id: data.id,
-      workspaceId: data.workspace_id,
-      contractIds: ids,
-      createdAt: data.created_at,
-      printedAt: data.printed_at
-    };
   }
 }
 
@@ -1468,16 +1467,8 @@ class OfflineFirstAutocompleteRepository implements AutocompleteRepository {
 
 class OfflineFirstPrintJobRepository implements PrintJobRepository {
   private readonly local = new LocalPrintJobRepository();
-  private readonly remote = new SupabasePrintJobRepository();
-
   async create(workspaceId: string, contractIds: string[]): Promise<ContractPrintJob> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      return await this.remote.create(workspaceId, contractIds);
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.create(workspaceId, contractIds);
-    }
+    return this.local.create(workspaceId, contractIds);
   }
 }
 
@@ -1486,6 +1477,7 @@ export type SupabaseSyncState = {
   isSyncing: boolean;
   pendingCount: number;
   lastSyncedAt: string | null;
+  lastFullSyncedAt?: string | null;
   lastError: string | null;
   cached: ReturnType<typeof getWorkspaceCacheCounts>;
 };
@@ -1518,7 +1510,8 @@ export function getSupabaseSyncState(workspaceId: string): SupabaseSyncState {
     isSyncing: activeSyncOperations > 0,
     pendingCount: getPendingOutboxCount(workspaceId),
     lastSyncedAt: metadata.lastSyncedAt ?? null,
-    lastError: metadata.lastError ?? null,
+    lastError: getLocalStorageError() ?? metadata.lastError ?? null,
+    lastFullSyncedAt: metadata.lastFullSyncedAt ?? null,
     cached: getWorkspaceCacheCounts(workspaceId)
   };
 }
@@ -1527,7 +1520,8 @@ function syncPendingOutbox() {
   if (outboxSyncPromise) return outboxSyncPromise;
   let didBegin = false;
 
-  outboxSyncPromise = (async () => {
+  outboxSyncPromise = withBrowserLock("outbox-sync", async () => {
+    await refreshLocalDb();
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     beginSyncOperation();
     didBegin = true;
@@ -1548,9 +1542,20 @@ function syncPendingOutbox() {
         continue;
       }
       let syncedContract: Contract | undefined;
+      let syncedDossier: Dossier | undefined;
+      let syncedApplicant: Applicant | undefined;
       try {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
-        if (item.type === "list.operation") {
+        const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
+        if (item.actorId && item.actorId !== actor?.id) throw new Error("Reconnectez le compte ayant effectué cette modification pour la synchroniser.");
+        if (item.type === "print.create") {
+          const job = item.payload as unknown as ContractPrintJob;
+          const { error } = await getSupabaseClient().from("contract_print_jobs").upsert({
+            id: job.id, workspace_id: job.workspaceId, contract_ids_json: JSON.stringify(job.contractIds),
+            created_at: job.createdAt, printed_at: job.printedAt
+          } as any, { onConflict: "id", ignoreDuplicates: true });
+          if (error) throw error;
+        } else if (item.type === "list.operation") {
           await syncQueuedList(item);
         } else if (item.type === "applicant.upsert") {
           const payload = item.payload as unknown as UpsertApplicantInput;
@@ -1558,7 +1563,7 @@ function syncPendingOutbox() {
           if (payload.id && payload.id !== applicant.id) {
             replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
           }
-          cacheApplicant(applicant);
+          syncedApplicant = applicant;
         } else if (item.type === "applicant.delete") {
           const payload = item.payload as { id?: string };
           if (payload.id) {
@@ -1589,7 +1594,7 @@ function syncPendingOutbox() {
             dossierId?: string | null;
           };
           if (payload.id) {
-            syncedContract = await contracts.update(payload as UpdateContractInput);
+            syncedContract = await contracts.syncOfflineUpdate(payload as UpdateContractInput);
           } else if (Array.isArray(payload.contractIds) && payload.status) {
             for (const id of payload.contractIds) {
               syncedContract = await contracts.syncOfflineStatus(
@@ -1602,9 +1607,13 @@ function syncPendingOutbox() {
             await contracts.assignToDossier(item.workspaceId, payload.contractIds, payload.dossierId ?? null);
           }
         } else if (item.type === "contract.delete") {
-          const payload = item.payload as { id?: string };
+          const payload = item.payload as { id?: string; baseContract?: Contract };
           if (payload.id) {
-            await contracts.softDelete(payload.id, item.workspaceId);
+            if (!payload.baseContract) {
+              const remote = await contracts.getById(payload.id);
+              if (remote) throw new OfflineConflict(["deletedAt"], remote as unknown as Record<string, unknown>);
+            }
+            await contracts.softDelete(payload.id, item.workspaceId, payload.baseContract);
           }
         } else if (item.type === "dossier.create") {
           const payload = item.payload as unknown as CreateDossierInput & { id?: string };
@@ -1612,11 +1621,11 @@ function syncPendingOutbox() {
           if (payload.id && payload.id !== dossier.id) {
             replaceLocalDossierId(item.workspaceId, payload.id, dossier);
           }
-          cacheDossier(dossier);
+          syncedDossier = dossier;
         } else if (item.type === "dossier.update") {
           const payload = item.payload as unknown as UpdateDossierInput;
-          const dossier = await dossiers.update(payload);
-          cacheDossier(dossier);
+          const dossier = await dossiers.syncOfflineUpdate(payload);
+          syncedDossier = dossier;
         } else if (item.type === "dossier.delete") {
           const payload = item.payload as { id?: string; workspaceId?: string };
           if (payload.id) {
@@ -1642,15 +1651,18 @@ function syncPendingOutbox() {
         }
         removeOutboxItem(item.id);
         if (syncedContract) cacheContract(syncedContract);
+        if (syncedDossier) cacheDossier(syncedDossier);
+        if (syncedApplicant) cacheApplicant(syncedApplicant);
 
         setWorkspaceSyncMetadata(item.workspaceId, {
           lastSyncedAt: new Date().toISOString(),
           lastError: getPendingOutbox().find((pending) => pending.workspaceId === item.workspaceId && pending.lastError)?.lastError ?? null
         });
+        await flushLocalDbWrites();
         notifySyncState();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
-        setOutboxError(item.id, message);
+        setOutboxError(item.id, message, error instanceof OfflineConflict ? { fields: error.fields, remote: error.remote } : undefined);
         setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
         notifySyncState();
         if (isOfflineFailure(error)) return;
@@ -1658,7 +1670,7 @@ function syncPendingOutbox() {
         console.error("Impossible de synchroniser une action locale.", error);
       }
     }
-  })().finally(() => {
+  }).finally(() => {
     outboxSyncPromise = null;
     if (didBegin) endSyncOperation();
   });
@@ -1676,7 +1688,7 @@ export function syncSupabaseOutbox() {
  */
 export function syncSupabaseWorkspace(
   workspaceId: string,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; verify?: boolean } = {}
 ): Promise<boolean> {
   if (!workspaceId || (typeof navigator !== "undefined" && !navigator.onLine)) {
     return Promise.resolve(false);
@@ -1691,6 +1703,7 @@ export function syncSupabaseWorkspace(
   const hasPendingChanges = getPendingOutboxCount(workspaceId) > 0;
   if (
     !options.force &&
+    !options.verify &&
     !hasPendingChanges &&
     Number.isFinite(lastFullSync) &&
     Date.now() - lastFullSync < WORKSPACE_SYNC_MIN_INTERVAL_MS
@@ -1703,6 +1716,25 @@ export function syncSupabaseWorkspace(
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       await syncPendingOutbox();
+
+      const session = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
+      let remoteRevision: string | null = null;
+      if (session?.taskSessionToken && session.workspaceId === workspaceId) {
+        const revision = await getSupabaseClient().rpc("get_offline_workspace_revision", {
+          p_session_token: session.taskSessionToken, p_workspace_id: workspaceId
+        });
+        if (revision.error) {
+          // Older deployments can still download complete snapshots.
+          if (!/PGRST202|42883/.test(revision.error.code ?? "")) throw revision.error;
+        } else if (typeof revision.data === "string") remoteRevision = revision.data;
+      }
+      const currentMetadata = getWorkspaceSyncMetadata(workspaceId);
+      if (!options.force && remoteRevision && currentMetadata.lastFullSyncedAt && currentMetadata.remoteRevision === remoteRevision) {
+        setWorkspaceSyncMetadata(workspaceId, { lastSyncedAt: new Date().toISOString(),
+          lastError: getPendingOutbox().find(item => item.workspaceId === workspaceId && item.lastError)?.lastError ?? null });
+        await flushLocalDbWrites();
+        return false;
+      }
 
       const applicantsRepo = new SupabaseApplicantRepository();
       const contractsRepo = new SupabaseContractRepository();
@@ -1736,8 +1768,10 @@ export function syncSupabaseWorkspace(
       setWorkspaceSyncMetadata(workspaceId, {
         lastSyncedAt: syncedAt,
         lastFullSyncedAt: syncedAt,
+        remoteRevision,
         lastError: getPendingOutboxCount(workspaceId) > 0 ? getWorkspaceSyncMetadata(workspaceId).lastError : null
       });
+      await flushLocalDbWrites();
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
@@ -1817,7 +1851,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
     if (getPendingOutbox().some((item) => item.workspaceId === input.workspaceId && item.type === "applicant.upsert" &&
         (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)))) {
-      return upsertApplicantOffline(input);
+      const result = upsertApplicantOffline(input);
+      await flushLocalDbWrites();
+      return result;
     }
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
@@ -1830,7 +1866,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
       return applicant;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
-      return upsertApplicantOffline(input);
+      const result = upsertApplicantOffline(input);
+      await flushLocalDbWrites();
+      return result;
     }
   }
 
@@ -1854,7 +1892,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
       return applicants;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
-      return inputs.map((input) => upsertApplicantOffline(input));
+      const result = inputs.map((input) => upsertApplicantOffline(input));
+      await flushLocalDbWrites();
+      return result;
     }
   }
 
@@ -1867,6 +1907,7 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       deleteApplicantOffline(id, workspaceId);
+      await flushLocalDbWrites();
     }
   }
 }
@@ -1950,7 +1991,7 @@ class OfflineFirstContractRepository implements ContractRepository {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       if (params.all && !params.query && params.deletionState !== "deleted") {
         // Reconcile deletions and preserve queued changes before calculating totals.
-        await syncSupabaseWorkspace(params.workspaceId, { force: true });
+        await syncSupabaseWorkspace(params.workspaceId, { verify: true });
         return this.local.list(params);
       }
       await syncPendingOutbox();

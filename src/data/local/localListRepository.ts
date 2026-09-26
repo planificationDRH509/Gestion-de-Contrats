@@ -141,7 +141,7 @@ export async function mutateContractListOffline(user: AuthUser, operation: ListO
     actorId: user.id, operation: { ...operation, ...(operation.action === "create" ? { createId: id! } : {}) },
     expectedLists, expectedMemberships, contractIds: [...affectedContracts], applicantIds: [...applicantIds]
   };
-  const item: OutboxItem = { id: createId(), workspaceId: user.workspaceId, type: "list.operation", payload, createdAt: at };
+  const item: OutboxItem = { id: createId(), workspaceId: user.workspaceId, type: "list.operation", payload, createdAt: at, actorId: user.id, sequence: Math.max(0, ...db.outbox.map(item => item.sequence ?? 0)) + 1 };
   db.contractLists = [...db.contractLists.filter(list => list.workspaceId !== user.workspaceId), ...lists];
   if (!db.cachedListWorkspaces.includes(user.workspaceId)) db.cachedListWorkspaces.push(user.workspaceId);
   db.outbox.push(item);

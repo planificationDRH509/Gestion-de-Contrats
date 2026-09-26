@@ -138,6 +138,16 @@ function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, 
 
 function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, syncState: SupabaseSyncState, onSync: () => void, onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSyncing, setShowSyncing] = useState(false);
+
+  useEffect(() => {
+    if (!syncState.isSyncing) {
+      setShowSyncing(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowSyncing(true), 500);
+    return () => window.clearTimeout(timer);
+  }, [syncState.isSyncing]);
 
   return (
     <div className="sidebar-footer">
@@ -159,18 +169,18 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
           disabled={!isOnline || syncState.isSyncing}
           title={syncState.lastError ?? "Actualiser les données disponibles hors ligne"}
         >
-          <span className={`material-symbols-rounded${syncState.isSyncing ? " is-spinning" : ""}`}>
-            {syncState.isSyncing ? "sync" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
+          <span className={`material-symbols-rounded${showSyncing ? " is-spinning" : ""}`}>
+            {showSyncing ? "sync" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
           </span>
           <span className="offline-sync-copy">
             <strong>
-              {syncState.isSyncing
+              {showSyncing
                 ? "Synchronisation…"
                 : syncState.lastError
                   ? "Synchronisation à vérifier"
                   : syncState.pendingCount > 0
                   ? `${syncState.pendingCount} modification${syncState.pendingCount > 1 ? "s" : ""} en attente`
-                  : "Disponible hors ligne"}
+                  : syncState.lastFullSyncedAt ? "Disponible hors ligne" : "Télécharger hors ligne"}
             </strong>
             <small style={syncState.lastError ? { whiteSpace: "normal" } : undefined}>
               {syncState.lastError

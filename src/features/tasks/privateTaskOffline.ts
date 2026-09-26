@@ -1,11 +1,12 @@
-import { del, get, set } from "idb-keyval";
+import { get, update } from "idb-keyval";
+import { withBrowserLock } from "../../lib/browserLock";
 import type {
   PersonalTask,
   TaskRecipient,
   TaskStatus
 } from "../../data/types";
 
-export type PrivateTaskOfflineOperation =
+export type PrivateTaskOfflineOperation = { sent?: boolean } & (
   | {
       id: string;
       type: "create";
@@ -27,7 +28,7 @@ export type PrivateTaskOfflineOperation =
       type: "delete";
       taskId: string;
       createdAt: string;
-    };
+    });
 
 export type PrivateTaskOfflineState = {
   version: 1;
@@ -38,9 +39,10 @@ export type PrivateTaskOfflineState = {
 };
 
 type EncryptedTaskEnvelope = {
-  version: 1;
+  version: 1 | 2;
   iv: Uint8Array;
   ciphertext: ArrayBuffer;
+  revision?: string;
 };
 
 type OfflineCreateInput = {
@@ -87,6 +89,15 @@ async function deriveEncryptionKey(sessionToken: string) {
   );
 }
 
+async function deviceKey(userId: string): Promise<CryptoKey> {
+  const keyId = `private-task-key:${userId}`;
+  const existing = await get<CryptoKey>(keyId);
+  if (existing) return existing;
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  await update<CryptoKey>(keyId, current => current ?? key);
+  return (await get<CryptoKey>(keyId))!;
+}
+
 async function readState(
   userId: string,
   sessionToken: string
@@ -95,7 +106,7 @@ async function readState(
   if (!envelope) return emptyState();
 
   try {
-    const key = await deriveEncryptionKey(sessionToken);
+    const key = envelope.version === 2 ? await deviceKey(userId) : await deriveEncryptionKey(sessionToken);
     const plaintext = await globalThis.crypto.subtle.decrypt(
       { name: "AES-GCM", iv: new Uint8Array(envelope.iv).buffer },
       key,
@@ -103,34 +114,35 @@ async function readState(
     );
     const parsed = JSON.parse(textDecoder.decode(plaintext)) as PrivateTaskOfflineState;
     if (parsed?.version !== 1 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.outbox)) {
-      return emptyState();
+      throw new Error("Cache de tâches invalide.");
     }
     return {
       ...parsed,
       recipients: Array.isArray(parsed.recipients) ? parsed.recipients : []
     };
   } catch {
-    // A cache encrypted by an older/expired session cannot be reused.
-    return emptyState();
+    throw new Error("Impossible de déchiffrer les tâches conservées sur cet appareil. Le cache a été préservé.");
   }
 }
 
 async function writeState(
   userId: string,
-  sessionToken: string,
-  state: PrivateTaskOfflineState
+  _sessionToken: string,
+  state: PrivateTaskOfflineState,
+  expected?: EncryptedTaskEnvelope
 ) {
-  const key = await deriveEncryptionKey(sessionToken);
+  const key = await deviceKey(userId);
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await globalThis.crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
     textEncoder.encode(JSON.stringify(state))
   );
-  await set(storageKey(userId), {
-    version: 1,
-    iv,
-    ciphertext
+  await update<EncryptedTaskEnvelope>(storageKey(userId), current => {
+    if (Boolean(current) !== Boolean(expected) || current?.revision !== expected?.revision) {
+      throw new Error("Les tâches ont changé dans un autre onglet. Réessayez.");
+    }
+    return { version: 2, iv, ciphertext, revision: crypto.randomUUID() };
   });
 }
 
@@ -140,11 +152,14 @@ async function transact<T>(
   mutator: (state: PrivateTaskOfflineState) => T | Promise<T>
 ): Promise<T> {
   let result!: T;
-  const transaction = transactionQueue.then(async () => {
+  const transaction = transactionQueue.then(() => withBrowserLock(`private-tasks:${userId}`, async () => {
+    const expected = await get<EncryptedTaskEnvelope>(storageKey(userId));
     const state = await readState(userId, sessionToken);
+    const before = JSON.stringify(state);
     result = await mutator(state);
-    await writeState(userId, sessionToken, state);
-  });
+    if (expected?.version === 2 && before === JSON.stringify(state)) return;
+    await writeState(userId, sessionToken, state, expected);
+  }));
   transactionQueue = transaction.catch(() => undefined);
   await transaction;
   return result;
@@ -256,7 +271,8 @@ export async function queueOfflineTaskStatus(
         : task
     );
 
-    if (taskId.startsWith("offline-task-")) {
+    const creation = state.outbox.find(operation => operation.type === "create" && operation.tempTaskId === taskId);
+    if (taskId.startsWith("offline-task-") && !creation?.sent) {
       state.outbox = state.outbox.map((operation) =>
         operation.type === "create" && operation.tempTaskId === taskId
           ? { ...operation, status }
@@ -266,7 +282,7 @@ export async function queueOfflineTaskStatus(
     }
 
     state.outbox = state.outbox.filter(
-      (operation) => !(operation.type === "status" && operation.taskId === taskId)
+      (operation) => operation.sent || !(operation.type === "status" && operation.taskId === taskId)
     );
     state.outbox.push({
       id: createOfflineId("task-operation"),
@@ -286,7 +302,8 @@ export async function queueOfflineTaskDeletion(
   await transact(userId, sessionToken, (state) => {
     state.tasks = state.tasks.filter((task) => task.id !== taskId);
 
-    if (taskId.startsWith("offline-task-")) {
+    const creation = state.outbox.find(operation => operation.type === "create" && operation.tempTaskId === taskId);
+    if (taskId.startsWith("offline-task-") && !creation?.sent) {
       state.outbox = state.outbox.filter((operation) => {
         if (operation.type === "create") return operation.tempTaskId !== taskId;
         return !("taskId" in operation) || operation.taskId !== taskId;
@@ -295,7 +312,7 @@ export async function queueOfflineTaskDeletion(
     }
 
     state.outbox = state.outbox.filter(
-      (operation) => !("taskId" in operation) || operation.taskId !== taskId
+      (operation) => operation.sent || !("taskId" in operation) || operation.taskId !== taskId
     );
     state.outbox.push({
       id: createOfflineId("task-operation"),
@@ -303,6 +320,15 @@ export async function queueOfflineTaskDeletion(
       taskId,
       createdAt: new Date().toISOString()
     });
+  });
+}
+
+/** Freeze the request before sending: a lost response must replay the exact payload. */
+export async function claimPrivateTaskOperation(userId: string, token: string) {
+  return transact(userId, token, state => {
+    const operation = state.outbox[0];
+    if (operation) operation.sent = true;
+    return operation;
   });
 }
 
@@ -335,6 +361,15 @@ export async function completePrivateTaskOfflineOperation(
   });
 }
 
-export async function clearPrivateTaskOfflineData(userId: string) {
-  await del(storageKey(userId));
+/** Migrate before replacing a session token; never discard an unreadable outbox. */
+export async function preparePrivateTaskSession(userId: string, previousToken: string) {
+  await transact(userId, previousToken, () => undefined);
+}
+
+export async function clearPrivateTaskOfflineData(userId: string, sessionToken?: string) {
+  if (!sessionToken) return; // Unknown credentials must never authorize destructive cleanup.
+  await transact(userId, sessionToken, (state) => {
+    state.recipients = [];
+    if (!state.outbox.length) state.tasks = [];
+  });
 }

@@ -166,6 +166,38 @@ describe("offline contract creation and replay", () => {
 });
 
 describe("offline status changes", () => {
+  it("uploads only fields changed offline and checks the remote version", async () => {
+    const provider = createSupabaseProvider();
+    const row = { ...contractRow("editable"), updated_at: "2026-09-16T10:00:00Z" };
+    mock.from.mockReturnValue(reply(row));
+    const original = (await provider.contracts.getById("editable"))!;
+    online(false);
+    await provider.contracts.update({ ...original, commentaire: "Local note" });
+    online(true);
+    const current = { ...row, salaire_en_chiffre: 45000, updated_at: "2026-09-17T10:00:00Z" };
+    const update = reply({ ...current, commentaire: "Local note" });
+    mock.from.mockReset().mockReturnValueOnce(reply(current)).mockReturnValueOnce(update);
+    await syncSupabaseOutbox();
+    expect(update.update.mock.calls[0][0]).toMatchObject({ commentaire: "Local note" });
+    expect(update.update.mock.calls[0][0]).not.toHaveProperty("salaire_en_chiffre");
+    expect(update.eq).toHaveBeenCalledWith("updated_at", current.updated_at);
+    expect(getPendingOutbox()).toEqual([]);
+  });
+
+  it("retains conflicting salary edits for explicit resolution", async () => {
+    const provider = createSupabaseProvider();
+    const row = contractRow("editable");
+    mock.from.mockReturnValue(reply(row));
+    await provider.contracts.getById("editable");
+    online(false);
+    await provider.contracts.update({ id: "editable", salaryNumber: 35000 });
+    online(true);
+    const read = reply({ ...row, salaire_en_chiffre: 45000 });
+    mock.from.mockReset().mockReturnValue(read);
+    await syncSupabaseOutbox();
+    expect(read.update).not.toHaveBeenCalled();
+    expect(getPendingOutbox()[0].conflict).toMatchObject({ fields: ["salaryNumber"], remote: { salaryNumber: 45000 } });
+  });
   function seed(id = "existing") {
     cacheContracts([{ ...input, id, createdAt: "2026-09-16T10:00:00Z", updatedAt: "2026-09-16T10:00:00Z" }]);
     return id;

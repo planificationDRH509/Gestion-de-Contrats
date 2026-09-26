@@ -1,7 +1,8 @@
 import { PrintJobRepository } from "../repositories/PrintJobRepository";
 import { ContractPrintJob } from "../types";
+import { queueOutbox } from "./localOutbox";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { flushLocalDbWrites, loadDb, saveDb } from "./localDb";
 
 function now() {
   return new Date().toISOString();
@@ -19,6 +20,8 @@ export class LocalPrintJobRepository implements PrintJobRepository {
     };
     db.printJobs.push(job);
     saveDb(db);
+    queueOutbox(workspaceId, "print.create", job);
+    await flushLocalDbWrites();
     return job;
   }
 }

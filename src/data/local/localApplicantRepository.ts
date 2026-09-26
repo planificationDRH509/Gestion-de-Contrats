@@ -1,7 +1,7 @@
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb, selectDb } from "./localDb";
+import { flushLocalDbWrites, loadDb, saveDb, selectDb } from "./localDb";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { queueOutbox } from "./localOutbox";
 
@@ -116,6 +116,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
       }
       saveDb(db);
       queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
+      await flushLocalDbWrites();
       return updated;
     }
 
@@ -136,6 +137,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
     db.applicants.push(created);
     saveDb(db);
     queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
+    await flushLocalDbWrites();
     return created;
   }
 
@@ -165,5 +167,6 @@ export class LocalApplicantRepository implements ApplicantRepository {
     };
     saveDb(db);
     if (shouldQueue) queueOutbox(workspaceId, "applicant.delete", { id });
+    await flushLocalDbWrites();
   }
 }

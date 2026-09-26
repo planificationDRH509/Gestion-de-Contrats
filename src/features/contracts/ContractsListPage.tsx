@@ -51,6 +51,7 @@ import {
   normalizeContractNif
 } from "../tasks/taskMentions";
 import { ContractSyncIndicator } from "./ContractSyncIndicator";
+import { usePinnedContracts } from "./pinnedContracts";
 import { getPendingOutbox } from "../../data/local/offlineStore";
 import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { ContractTaskIndicator } from "./ContractTaskIndicator";
@@ -104,6 +105,7 @@ export function ContractsListPage() {
   const [listAssignmentIds, setListAssignmentIds] = useState<string[] | null>(null);
   const workspaceId = user?.workspaceId ?? "";
   const userId = user?.id ?? "";
+  const pinnedContracts = usePinnedContracts();
   const { fiscalYear } = useFiscalYear();
   const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
   const currentFiscalYear = getFiscalYearForDate(new Date());
@@ -1357,6 +1359,7 @@ export function ContractsListPage() {
     setActionMessage(null);
     try {
       await deleteContract.mutateAsync({ id: contractId, workspaceId });
+      pinnedContracts.forget(contractId);
       setSelected((prev) => prev.filter((id) => id !== contractId));
       setActionMessage("Contrat supprimé.");
     } catch (error) {
@@ -1374,12 +1377,6 @@ export function ContractsListPage() {
             <span className="page-eyebrow">Gestion RH</span>
             <div className="contracts-title-line">
               <h1 className="section-title">Contrats</h1>
-              {activeView === "contracts" && isFetching && !isLoading ? (
-                <span className="contracts-refresh-status" role="status">
-                  <span className="material-symbols-rounded is-spinning">sync</span>
-                  Actualisation…
-                </span>
-              ) : null}
             </div>
           </div>
           {can("contracts.create") ? (
@@ -1723,6 +1720,24 @@ export function ContractsListPage() {
                               {contractFiscalYear}
                             </span>
                           ) : null}
+                          <button
+                            type="button"
+                            className={`contract-pin-button ${pinnedContracts.ids.includes(contract.id) ? "is-pinned" : ""}`}
+                            aria-label={`${pinnedContracts.ids.includes(contract.id) ? "Désépingler" : "Épingler"} le contrat de ${contract.firstName} ${contract.lastName}`}
+                            aria-pressed={pinnedContracts.ids.includes(contract.id)}
+                            title={pinnedContracts.ids.includes(contract.id) ? "Désépingler" : "Épingler"}
+                            disabled={pinnedContracts.isPending}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void pinnedContracts.toggle(contract.id).catch(error => {
+                                setActionError(error instanceof Error ? error.message : "Épinglage impossible.");
+                              });
+                            }}
+                          >
+                            <span className="material-symbols-rounded" aria-hidden="true">
+                              {pinnedContracts.ids.includes(contract.id) ? "radio_button_checked" : "radio_button_unchecked"}
+                            </span>
+                          </button>
                           <ContractSyncIndicator contract={contract} pending={pendingSync} online={syncOnline}
                             cloudEnabled={(import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase"}
                             onRetry={retryContractSync} />

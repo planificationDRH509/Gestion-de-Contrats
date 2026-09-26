@@ -205,7 +205,8 @@ export class LocalContractRepository implements ContractRepository {
     updateListedContract(db, previous, updated);
     db.contracts[contractIndex] = updated;
     saveDb(db);
-    queueOutbox(updated.workspaceId, "contract.update", updated);
+    queueOutbox(updated.workspaceId, "contract.update", { ...input, baseContract: previous });
+    await flushLocalDbWrites();
     return updated;
   }
 
@@ -228,6 +229,7 @@ export class LocalContractRepository implements ContractRepository {
     }
 
     const db = loadDb();
+    const previousContracts = db.contracts.filter(c => c.workspaceId === workspaceId && !c.deletedAt && contractIds.includes(c.id));
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 
@@ -257,12 +259,12 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
-        contractIds,
-        dossierId
+      if (shouldQueue) for (const before of previousContracts) queueOutbox(workspaceId, "contract.update", {
+        id: before.id, dossierId, baseContract: before
       });
     }
 
+    await flushLocalDbWrites();
     return updatedCount;
   }
 
@@ -330,6 +332,7 @@ export class LocalContractRepository implements ContractRepository {
       }
     }
 
+    await flushLocalDbWrites();
     return updatedCount;
   }
 
@@ -352,6 +355,7 @@ export class LocalContractRepository implements ContractRepository {
     }
 
     const db = loadDb();
+    const previousContracts = db.contracts.filter(c => c.workspaceId === workspaceId && !c.deletedAt && contractIds.includes(c.id));
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 
@@ -382,12 +386,12 @@ export class LocalContractRepository implements ContractRepository {
 
     if (updatedCount > 0) {
       saveDb(db);
-      if (shouldQueue) queueOutbox(workspaceId, "contract.update", {
-        contractIds,
-        durationMonths
+      if (shouldQueue) for (const before of previousContracts) queueOutbox(workspaceId, "contract.update", {
+        id: before.id, durationMonths, baseContract: before
       });
     }
 
+    await flushLocalDbWrites();
     return updatedCount;
   }
 
@@ -417,6 +421,7 @@ export class LocalContractRepository implements ContractRepository {
       })
     };
     saveDb(db);
-    if (shouldQueue) queueOutbox(workspaceId, "contract.delete", { id });
+    if (shouldQueue) queueOutbox(workspaceId, "contract.delete", { id, baseContract: previous });
+    await flushLocalDbWrites();
   }
 }

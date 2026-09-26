@@ -16,7 +16,9 @@ const contract: Contract = { id: "c1", workspaceId: "w", applicantId: "n1", nif:
 const get = (id: string) => readCachedContractLists("w").find(list => list.id === id)!;
 const create = () => mutateContractListOffline(user, { action: "create", durationMonths: 6 });
 beforeEach(() => {
-  localStorage.clear(); sync.replay.mockReset().mockResolvedValue(undefined);
+  localStorage.clear();
+  localStorage.setItem("contribution_auth", JSON.stringify(user));
+  sync.replay.mockReset().mockResolvedValue(undefined);
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
   const db = loadDb();
   db.contracts = [contract, { ...contract, id: "c2", nif: "n2", applicantId: "n2" }, { ...contract, id: "other", durationMonths: 12 }];

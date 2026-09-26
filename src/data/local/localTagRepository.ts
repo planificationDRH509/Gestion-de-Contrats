@@ -1,7 +1,7 @@
 import { CreateTagInput, TagRepository } from "../repositories/TagRepository";
 import { Tag } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb, selectDb } from "./localDb";
+import { flushLocalDbWrites, loadDb, saveDb, selectDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
 
 function now() {
@@ -64,6 +64,7 @@ export class LocalTagRepository implements TagRepository {
     db.tags.push(tag);
     saveDb(db);
     queueOutbox(input.workspaceId, "tag.create", tag);
+    await flushLocalDbWrites();
     return tag;
   }
 
@@ -111,6 +112,7 @@ export class LocalTagRepository implements TagRepository {
     if (shouldQueue) {
       queueOutbox(workspaceId, "tag.assign", { contractId, tagId });
     }
+    await flushLocalDbWrites();
   }
 
   async assignToContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
@@ -147,6 +149,7 @@ export class LocalTagRepository implements TagRepository {
     if (shouldQueue) {
       queueOutbox(workspaceId, "tag.remove", { contractId, tagId });
     }
+    await flushLocalDbWrites();
   }
 
   async removeFromContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
