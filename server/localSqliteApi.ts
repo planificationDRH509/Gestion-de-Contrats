@@ -1,3 +1,4 @@
+import { numberToFrenchWords } from "../src/lib/numberToFrenchWords";
 import fs from "node:fs";
 import path from "node:path";
 import { randomInt, randomUUID } from "node:crypto";
@@ -5,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 
+import { migrateSalaryText } from "./salaryTextMigration";
 import { initializeContractLists, readContractLists, mutateContractList } from "./contractLists";
 
 type RawRecord = Record<string, unknown>;
@@ -78,7 +80,6 @@ type ContractRow = {
   status: string;
   duree_contrat: number;
   salaire_en_chiffre: number;
-  salaire: string;
   titre: string;
   lieu_affectation: string;
   annee_fiscale: string;
@@ -628,7 +629,7 @@ function mapContract(row: ContractRow) {
     position: row.titre,
     assignment: row.lieu_affectation,
     salaryNumber: row.salaire_en_chiffre,
-    salaryText: row.salaire,
+    salaryText: numberToFrenchWords(row.salaire_en_chiffre),
     durationMonths: row.duree_contrat,
     annee_fiscale: row.annee_fiscale,
     createdAt: row.created_at,
@@ -773,7 +774,6 @@ function getDb(): DatabaseSync {
       id_contrat TEXT PRIMARY KEY,
       nif TEXT NOT NULL,
       duree_contrat INTEGER NOT NULL DEFAULT 12,
-      salaire TEXT NOT NULL,
       annee_fiscale TEXT NOT NULL,
       salaire_en_chiffre REAL NOT NULL,
       titre TEXT NOT NULL,
@@ -1003,6 +1003,7 @@ function getDb(): DatabaseSync {
     });
   }
 
+  migrateSalaryText(db, filePath);
   initializeContractLists(db);
   cachedDb = db;
   return db;
@@ -1116,7 +1117,6 @@ function buildContractRows(
         c.status,
         c.duree_contrat,
         c.salaire_en_chiffre,
-        c.salaire,
         c.titre,
         c.lieu_affectation,
         c.annee_fiscale,
@@ -2122,13 +2122,12 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     const durationMonths = Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)));
     const salaryNumber = asNumber(body.salaryNumber, 0);
-    const salaryText = asString(body.salaryText).trim();
     const position = asString(body.position).trim();
     const assignment = asString(body.assignment).trim();
     const status = asString(body.status).trim() || "saisie";
 
-    if (!salaryText || !position || !assignment) {
-      throw new HttpError(400, "Titre, lieu d'affectation et salaire texte sont obligatoires.");
+    if (!position || !assignment) {
+      throw new HttpError(400, "Titre et lieu d'affectation sont obligatoires.");
     }
 
     if (!ALLOWED_STATUSES.has(status)) {
@@ -2153,7 +2152,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         id_contrat,
         nif,
         duree_contrat,
-        salaire,
         annee_fiscale,
         salaire_en_chiffre,
         titre,
@@ -2171,7 +2169,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         :id_contrat,
         :nif,
         :duree_contrat,
-        :salaire,
         :annee_fiscale,
         :salaire_en_chiffre,
         :titre,
@@ -2190,7 +2187,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       id_contrat: id,
       nif,
       duree_contrat: durationMonths,
-      salaire: salaryText,
       annee_fiscale: fiscalYear,
       salaire_en_chiffre: salaryNumber,
       titre: position,
@@ -2215,7 +2211,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.status,
           c.duree_contrat,
           c.salaire_en_chiffre,
-          c.salaire,
           c.titre,
           c.lieu_affectation,
           c.annee_fiscale,
@@ -2493,7 +2488,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.status,
           c.duree_contrat,
           c.salaire_en_chiffre,
-          c.salaire,
           c.titre,
           c.lieu_affectation,
           c.annee_fiscale,
@@ -2573,11 +2567,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         ? asNumber(body.salaryNumber, 0)
         : asNumber(current.salaire_en_chiffre, 0);
 
-    const nextSalaryText =
-      body.salaryText !== undefined
-        ? asString(body.salaryText).trim()
-        : asString(current.salaire);
-
     const nextTitle =
       body.position !== undefined
         ? asString(body.position).trim()
@@ -2588,8 +2577,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         ? asString(body.assignment).trim()
         : asString(current.lieu_affectation);
 
-    if (!nextSalaryText || !nextTitle || !nextAssignment) {
-      throw new HttpError(400, "Titre, lieu d'affectation et salaire texte sont obligatoires.");
+    if (!nextTitle || !nextAssignment) {
+      throw new HttpError(400, "Titre et lieu d'affectation sont obligatoires.");
     }
 
     const nextDossierId =
@@ -2615,7 +2604,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     addChange("status", asString(current.status), nextStatus);
     addChange("durationMonths", asInteger(current.duree_contrat, 12), nextDuration);
     addChange("salaryNumber", asNumber(current.salaire_en_chiffre, 0), nextSalaryNumber);
-    addChange("salaryText", asString(current.salaire), nextSalaryText);
     addChange("position", asString(current.titre), nextTitle);
     addChange("assignment", asString(current.lieu_affectation), nextAssignment);
     addChange(
@@ -2644,7 +2632,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       UPDATE contrat
       SET nif = :nif,
           duree_contrat = :duree_contrat,
-          salaire = :salaire,
           salaire_en_chiffre = :salaire_en_chiffre,
           titre = :titre,
           lieu_affectation = :lieu_affectation,
@@ -2658,7 +2645,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       id_contrat: id,
       nif: nextNif,
       duree_contrat: nextDuration,
-      salaire: nextSalaryText,
       salaire_en_chiffre: nextSalaryNumber,
       titre: nextTitle,
       lieu_affectation: nextAssignment,
@@ -2679,7 +2665,6 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           c.status,
           c.duree_contrat,
           c.salaire_en_chiffre,
-          c.salaire,
           c.titre,
           c.lieu_affectation,
           c.annee_fiscale,

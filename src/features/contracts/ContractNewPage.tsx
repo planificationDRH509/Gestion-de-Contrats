@@ -1,3 +1,5 @@
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
+import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,7 +25,6 @@ import { AutocompleteField, type AutocompleteItem } from "../../app/ui/Autocompl
 
 import {
   useAddresses,
-  usePositions,
   useInstitutions
 } from "../settings/suggestionsApi";
 import {
@@ -118,7 +119,7 @@ export function ContractNewPage() {
   const [msppHtml, setMsppHtml] = useState("");
   const [msppLoading, setMsppLoading] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
-  const { data: allPositions = [] } = usePositions(workspaceId);
+  const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
 
   const defaultDuration = useMemo(() => {
@@ -170,6 +171,13 @@ export function ContractNewPage() {
   const durationValue = watch("durationMonths");
   const addressValue = watch("address");
   const positionValue = watch("position");
+  const allPositions = useMemo(() => gridPositions(salaryGrid, genderValue), [salaryGrid, genderValue]);
+  const salaryMismatch = salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, positionValue || "", parseMoney(salaryNumber || ""));
+  const availableSalaries = approvedSalaries(salaryGrid, positionValue || "");
+  useEffect(() => {
+    const title = genderedTitle(salaryGrid, positionValue || "", genderValue);
+    if (title !== positionValue) setValue("position", title, { shouldDirty: true });
+  }, [salaryGrid, positionValue, genderValue, setValue]);
   const assignmentValue = watch("assignment");
   const nifValue = watch("nif");
 
@@ -433,23 +441,17 @@ export function ContractNewPage() {
         });
     }
   }, [msppModalOpen, nifValue]);
-  const [availableSalaries, setAvailableSalaries] = useState<number[]>([]);
 
   function handlePositionSelect(item: AutocompleteItem) {
     const selectedItem = allPositionItems.find((candidate) => candidate.id === item.id);
     const match = allPositions.find((position) => position.id === selectedItem?.positionId);
     if (match) {
-      const salaries = match.salaries || [];
-      setAvailableSalaries(salaries);
-
       if (selectedItem?.salaryNumber !== undefined) {
         setValue("salaryNumber", selectedItem.salaryNumber.toString(), {
           shouldValidate: true,
           shouldDirty: true,
         });
       }
-    } else {
-      setAvailableSalaries([]);
     }
   }
 
@@ -662,7 +664,6 @@ export function ContractNewPage() {
     reset(defaultValues);
     clearUnsavedDraft(unsavedDraftKey);
     setSelectedTags([]);
-    setAvailableSalaries([]);
     setNifAlert({ type: null, message: "" });
     setFieldsLockedByNif(false);
     setMsppModalOpen(false);
@@ -993,7 +994,7 @@ export function ContractNewPage() {
               items={availableSalaries.map(s => ({ id: s.toString(), label: s.toString() }))}
               placeholder="Salaire HTG *"
               ariaLabel="Salaire en gourdes"
-              hasError={!!errors.salaryNumber}
+              hasError={!!errors.salaryNumber || salaryMismatch}
               name="salaryNumber"
               showAllOnFocus={availableSalaries.length > 1}
             />

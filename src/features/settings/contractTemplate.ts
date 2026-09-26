@@ -1,3 +1,6 @@
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
+import { readSalaryGridCache } from "../salary-grid/salaryGridCache";
+import { genderedTitle, matchingEntries, type SalaryGridEntry } from "../salary-grid/salaryGrid";
 import { Contract } from "../../data/types";
 import { formatCurrency, formatFirstName, formatLastName } from "../../lib/format";
 import {
@@ -580,7 +583,7 @@ export function subscribeTemplate(listener: () => void) {
   return subscribeTemplateByType("contract", listener);
 }
 
-export function buildTemplateVariables(contract: Contract) {
+export function buildTemplateVariables(contract: Contract, salaryGrid: SalaryGridEntry[] = readSalaryGridCache() ?? []) {
   const date = new Date(contract.createdAt);
   const fiscalYear = getContractFiscalYear(contract);
   const endYear = getFiscalYearEndYear(contract);
@@ -645,7 +648,9 @@ export function buildTemplateVariables(contract: Contract) {
   const addressMatch = findSuggestion(contract.address, "address", suggestions.addresses);
 
   const positionLabel = stripSuggestionPrefix(
-    isFeminine && positionMatch?.labelFeminine ? positionMatch.labelFeminine : contract.position,
+    matchingEntries(salaryGrid, contract.position).length
+      ? genderedTitle(salaryGrid, contract.position, contract.gender)
+      : isFeminine && positionMatch?.labelFeminine ? positionMatch.labelFeminine : contract.position,
     "position"
   );
   const assignmentLabel = stripSuggestionPrefix(
@@ -699,7 +704,7 @@ export function buildTemplateVariables(contract: Contract) {
     address_prefixed: addressPrefixed,
     salary_number: formatCurrency(contract.salaryNumber),
     salary_number_raw: contract.salaryNumber.toString(),
-    salary_text: contract.salaryText,
+    salary_text: numberToFrenchWords(contract.salaryNumber),
     duration_months: contract.durationMonths.toString(),
     duration_months_padded: contract.durationMonths.toString().padStart(2, "0"),
     duration_months_text: numToLetters[contract.durationMonths] ?? contract.durationMonths.toString(),

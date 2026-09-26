@@ -68,7 +68,7 @@ function underMillion(n: number): string {
   if (n < 1000) return underThousand(n);
   const thousands = Math.floor(n / 1000);
   const rest = n % 1000;
-  const thousandWord = thousands === 1 ? "mille" : `${underThousand(thousands)} mille`;
+  const thousandWord = thousands === 1 ? "mille" : `${underThousand(thousands).replace(/(vingt|cent)s$/, "$1")} mille`;
   if (rest === 0) return thousandWord;
   return `${thousandWord} ${underThousand(rest)}`;
 }
@@ -93,12 +93,12 @@ function underTrillion(n: number): string {
 
 export function numberToFrenchWords(value: number): string {
   if (!Number.isFinite(value)) return "";
-  const rounded = Math.round(value * 100) / 100;
+  const rounded = Math.round(Math.abs(value) * 100) / 100;
   const integerPart = Math.floor(rounded);
   const centPart = Math.round((rounded - integerPart) * 100);
 
   const integerWords = underTrillion(Math.abs(integerPart));
-  const sign = integerPart < 0 ? "moins " : "";
+  const sign = value < 0 && rounded > 0 ? "moins " : "";
   let result = `${sign}${integerWords}`.trim();
 
   if (centPart > 0) {

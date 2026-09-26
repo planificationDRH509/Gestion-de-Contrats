@@ -21,10 +21,10 @@ begin
   insert into public.identification(nif,nom,prenom,sexe,adresse,workspace_id) values
     (w||'-n1','LOUIS','Louvens','Homme','Test',w),
     (w||'-n2','ÉTIENNE','Ana','Femme','Test',w);
-  insert into public.contrat(id_contrat,nif,duree_contrat,salaire,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id) values
-    (w||'-c1',w||'-n1',6,'Cent','2025-2026',100,'Test','Test',w),
-    (w||'-c2',w||'-n2',6,'Deux cents','2025-2026',200,'Test','Test',w),
-    (w||'-c3',w||'-n1',12,'Trois cents','2026-2027',300,'Test','Test',w);
+  insert into public.contrat(id_contrat,nif,duree_contrat,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id) values
+    (w||'-c1',w||'-n1',6,'2025-2026',100,'Test','Test',w),
+    (w||'-c2',w||'-n2',6,'2025-2026',200,'Test','Test',w),
+    (w||'-c3',w||'-n1',12,'2026-2027',300,'Test','Test',w);
 
   -- Use the actual API role: the RPC validates the opaque application session.
   set local role anon;

@@ -462,8 +462,8 @@ export function filterInstitutions(addressValue: string, query: string): Institu
   return relevant;
 }
 
-/** Automagically insert un-recognized inputs into the suggestions to learn from the user's input  */
-export async function learnSuggestions(address?: string, position?: string, assignment?: string, salaryNumber: number = 0) {
+/** Learn addresses and institutions only; salary references require explicit grid edits. */
+export async function learnSuggestions(address?: string, _position?: string, assignment?: string, _salaryNumber: number = 0) {
   const provider = import.meta.env.VITE_DATA_PROVIDER ?? "local";
   
   try {
@@ -477,17 +477,6 @@ export async function learnSuggestions(address?: string, position?: string, assi
         const items = await repo.getAddresses(workspaceId);
         if (!items.some(i => i.label.toLowerCase() === address.trim().toLowerCase())) {
           await repo.addAddress(workspaceId, address.trim());
-        }
-      }
-      if (position) {
-        const items = await repo.getPositions(workspaceId);
-        const existing = items.find(i => i.label.toLowerCase() === position.trim().toLowerCase());
-        if (!existing) {
-          await repo.addPosition(workspaceId, position.trim(), salaryNumber > 0 ? [salaryNumber] : []);
-        } else if (salaryNumber > 0 && !existing.salaries.includes(salaryNumber)) {
-          // If we have a new salary for an existing position, learn it too (up to 3)
-          const newSalaries = [...existing.salaries, salaryNumber].slice(0, 3);
-          await repo.updatePosition(existing.id, existing.label, newSalaries);
         }
       }
       if (assignment) {
@@ -514,20 +503,6 @@ export async function learnSuggestions(address?: string, position?: string, assi
       changed = true;
     }
   }
-  // ... (rest is same)
-  if (position) {
-    const nPos = normalize(position);
-    const existing = db.positions.find((p) => normalize(p.label) === nPos);
-    if (!existing) {
-      const maxOrder = db.positions.reduce((m, p) => Math.max(m, p.order), -1);
-      db.positions.push({ id: sugId(), label: position.trim(), salaries: salaryNumber > 0 ? [salaryNumber] : [], order: maxOrder + 1 });
-      changed = true;
-    } else if (salaryNumber > 0 && !existing.salaries.includes(salaryNumber)) {
-      existing.salaries = [...existing.salaries, salaryNumber].slice(0, 3);
-      changed = true;
-    }
-  }
-
   if (assignment) {
     const nAssig = normalize(assignment);
     if (!db.institutions.some((i) => normalize(i.label) === nAssig)) {

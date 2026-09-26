@@ -1,3 +1,4 @@
+import "./AutocompleteField.css";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   getPinnedChoices,
@@ -389,9 +390,10 @@ export function AutocompleteField({
           name={name}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          aria-invalid={hasError || undefined}
           style={{
             ...style,
-            ...(hasError ? { borderColor: "red" } : {}),
+            ...(hasError ? { borderColor: "#dc2626", color: "#dc2626", backgroundColor: "rgba(220, 38, 38, 0.06)" } : {}),
           }}
           onFocus={() => {
             setOpen(true);
@@ -422,9 +424,10 @@ export function AutocompleteField({
           name={name}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          aria-invalid={hasError || undefined}
           style={{
             ...style,
-            ...(hasError ? { borderColor: "red" } : {}),
+            ...(hasError ? { borderColor: "#dc2626", color: "#dc2626", backgroundColor: "rgba(220, 38, 38, 0.06)" } : {}),
           }}
           onFocus={() => {
             setOpen(true);

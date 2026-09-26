@@ -1,3 +1,4 @@
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
 import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError } from "../local/localDb";
 import { withBrowserLock } from "../../lib/browserLock";
@@ -168,7 +169,7 @@ function mapContract(row: any): Contract {
     position: row.titre,
     assignment: row.lieu_affectation,
     salaryNumber: row.salaire_en_chiffre,
-    salaryText: row.salaire,
+    salaryText: numberToFrenchWords(Number(row.salaire_en_chiffre)),
     durationMonths: row.duree_contrat,
     annee_fiscale: row.annee_fiscale || null,
     createdAt: row.created_at,
@@ -227,7 +228,7 @@ function mapDossier(row: any): Dossier {
 // Only acknowledge a replay when the persisted contract values agree.
 function sameQueuedContract(remote: Contract, local: Contract): boolean {
   const fields = ["workspaceId", "applicantId", "dossierId", "status", "position",
-    "assignment", "salaryNumber", "salaryText", "durationMonths", "annee_fiscale",
+    "assignment", "salaryNumber", "durationMonths", "annee_fiscale",
     "commentaire", "createdBy"] as const;
   return !remote.deletedAt && fields.every((field) => (remote[field] || null) === (local[field] || null));
 }
@@ -693,7 +694,6 @@ class SupabaseContractRepository implements ContractRepository {
       titre: input.position,
       lieu_affectation: input.assignment,
       salaire_en_chiffre: input.salaryNumber,
-      salaire: input.salaryText,
       duree_contrat: input.durationMonths || 12,
       commentaire: input.commentaire || null,
       annee_fiscale: input.annee_fiscale || getStoredFiscalYear(),
@@ -901,7 +901,6 @@ class SupabaseContractRepository implements ContractRepository {
     if (input.position !== undefined) payload.titre = input.position;
     if (input.assignment !== undefined) payload.lieu_affectation = input.assignment;
     if (input.salaryNumber !== undefined) payload.salaire_en_chiffre = input.salaryNumber;
-    if (input.salaryText !== undefined) payload.salaire = input.salaryText;
     if (input.durationMonths !== undefined) payload.duree_contrat = input.durationMonths;
     if (input.dossierId !== undefined) payload.dossier_id = input.dossierId;
     if (input.applicantId !== undefined || input.nif !== undefined) {

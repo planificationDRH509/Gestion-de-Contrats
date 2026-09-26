@@ -23,8 +23,8 @@ begin
     contract_id := w || '-c' || i;
     insert into public.identification(nif,nom,prenom,sexe,adresse,workspace_id)
       values(w||'-n'||i,'TEST','Pin','Homme','Test',w);
-    insert into public.contrat(id_contrat,nif,duree_contrat,salaire,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id)
-      values(contract_id,w||'-n'||i,6,'Cent','2025-2026',100,'Test','Test',w);
+    insert into public.contrat(id_contrat,nif,duree_contrat,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id)
+      values(contract_id,w||'-n'||i,6,'2025-2026',100,'Test','Test',w);
   end loop;
 
   set local role anon;

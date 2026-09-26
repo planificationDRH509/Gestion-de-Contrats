@@ -1,5 +1,6 @@
 import { sealLocalValue, openLocalValue } from "./deviceVault";
 import type { LocalDb } from "./localDb";
+import { compactContractRecord } from "./derivedContractStorage";
 
 type Row = { key: string; value: unknown; revision?: string };
 type Change = { key: string; before: unknown; after: unknown };
@@ -23,7 +24,8 @@ export function flattenDatabase(db: LocalDb): Map<string, unknown> {
     } else if (Array.isArray(values)) {
       values.forEach(value => {
         const id = typeof value === "string" ? value : "id" in value ? value.id : `${value.contractId}:${value.tagId}`;
-        rows.set(`${table}:${id}`, value);
+        const key = `${table}:${id}`;
+        rows.set(key, compactContractRecord(key, value));
       });
     }
   }
@@ -85,13 +87,24 @@ export async function readRecords(): Promise<LocalDb | undefined> {
   if (!rows.some(row => row.key === "ready")) return undefined;
   const decrypted = await Promise.all(rows.filter(row => row.key !== "ready").map(async row =>
     [row.key, await openLocalValue(row.value)] as const));
-  return inflateDatabase(new Map(decrypted));
+  const previous = new Map(decrypted);
+  const compact = new Map(decrypted.map(([key, value]) => [key, compactContractRecord(key, value)]));
+  if ([...previous].some(([key, value]) => !equal(value, compact.get(key)))) {
+    // Migrate legacy rows atomically, preserving concurrent edits and the outbox.
+    const merged = await writeRows(previous, compact);
+    merged.forEach((value, key) => value === undefined ? compact.delete(key) : compact.set(key, value));
+  }
+  return inflateDatabase(compact);
 }
 
 /** Data and outbox changes commit atomically; only changed records are rewritten. */
 export async function writeRecords(before: LocalDb | null, after: LocalDb): Promise<Map<string, unknown>> {
   const previous = before ? flattenDatabase(before) : new Map<string, unknown>();
   const next = flattenDatabase(after);
+  return writeRows(previous, next);
+}
+
+async function writeRows(previous: Map<string, unknown>, next: Map<string, unknown>): Promise<Map<string, unknown>> {
   const changes: Change[] = [...new Set([...previous.keys(), ...next.keys()])]
     .filter(key => !equal(previous.get(key), next.get(key)))
     .map(key => ({ key, before: previous.get(key), after: next.get(key) }));
@@ -100,7 +113,8 @@ export async function writeRecords(before: LocalDb | null, after: LocalDb): Prom
     const current = new Map((await getRows(changes.map(change => change.key))).map(row => [row.key, row]));
     const merged = new Map<string, unknown>();
     const prepared = await Promise.all(changes.map(async change => {
-      const value = mergeRecord(change.before, change.after, await openLocalValue(current.get(change.key)?.value));
+      const value = compactContractRecord(change.key,
+        mergeRecord(change.before, change.after, await openLocalValue(current.get(change.key)?.value)));
       merged.set(change.key, value);
       return { key: change.key, value: value === undefined ? undefined : await sealLocalValue(value), revision: crypto.randomUUID() };
     }));

@@ -1,3 +1,4 @@
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
   Applicant,
   Contract,
@@ -538,6 +539,7 @@ export function buildOfflineContract(input: CreateContractInput): Contract {
   const timestamp = now();
   return {
     ...input,
+    salaryText: numberToFrenchWords(input.salaryNumber),
     firstName: formatFirstName(input.firstName),
     lastName: formatLastName(input.lastName),
     dossierId: input.dossierId ?? null,

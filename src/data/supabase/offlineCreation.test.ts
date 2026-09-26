@@ -92,11 +92,19 @@ describe("offline contract creation and replay", () => {
     const provider = createSupabaseProvider();
     const created = await provider.contracts.create(input);
     expect(failed.insert.mock.calls[0][0][0].id_contrat).toBe(created.id);
+    expect(failed.insert.mock.calls[0][0][0]).not.toHaveProperty("salaire");
     const remote = reply(contractRow(created.id));
     mock.from.mockReturnValue(remote);
     await syncSupabaseOutbox();
     expect(remote.insert).not.toHaveBeenCalled();
     expect(getPendingOutbox()).toHaveLength(0);
+  });
+
+  it("reads a numeric-only cloud row and reconstructs the printable salary", async () => {
+    const { salaire: _legacy, ...row } = contractRow("numeric-only");
+    mock.from.mockReturnValue(reply({ ...row, salaire_en_chiffre: 45000.25 }));
+    const contract = await createSupabaseProvider().contracts.getById("numeric-only");
+    expect(contract?.salaryText).toBe("QUARANTE CINQ MILLE ET VINGT CINQ CENTIMES");
   });
 
   it("retains a conflicting UUID locally and never overwrites the server", async () => {
@@ -199,7 +207,7 @@ describe("offline status changes", () => {
     expect(getPendingOutbox()[0].conflict).toMatchObject({ fields: ["salaryNumber"], remote: { salaryNumber: 45000 } });
   });
   function seed(id = "existing") {
-    cacheContracts([{ ...input, id, createdAt: "2026-09-16T10:00:00Z", updatedAt: "2026-09-16T10:00:00Z" }]);
+    cacheContracts([{ ...input, salaryText: "TRENTE MILLE", id, createdAt: "2026-09-16T10:00:00Z", updatedAt: "2026-09-16T10:00:00Z" }]);
     return id;
   }
 

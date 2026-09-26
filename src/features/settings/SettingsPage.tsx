@@ -20,6 +20,11 @@ export function SettingsPage() {
           title="Mot de passe"
           description="Modifiez le mot de passe de votre compte connecté."
         />
+        <SettingsCard
+          to="/app/parametres/grille-salariale"
+          icon="payments"
+          title="Grille Salariale"
+        />
         {can("settings.manage") ? (
           <>
             <SettingsCard
@@ -83,7 +88,7 @@ export function SettingsPage() {
   );
 }
 
-function SettingsCard({ to, icon, title, description }: { to: string, icon: string, title: string, description: string }) {
+function SettingsCard({ to, icon, title, description }: { to: string, icon: string, title: string, description?: string }) {
   return (
     <Link to={to} className="settings-card">
       <div className="settings-card-icon">
@@ -91,7 +96,7 @@ function SettingsCard({ to, icon, title, description }: { to: string, icon: stri
       </div>
       <div className="settings-card-copy">
         <h3>{title}</h3>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       <span className="material-symbols-rounded settings-card-arrow">arrow_forward</span>
     </Link>

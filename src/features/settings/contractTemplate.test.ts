@@ -1,3 +1,4 @@
+import salaryGrid from "../salary-grid/salaryGridSeed.json";
 import { beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -36,6 +37,17 @@ const contract: Contract = {
 };
 
 describe("reference contract template", () => {
+  it("renders the salary from the numeric amount even when legacy text is missing or stale", () => {
+    for (const salaryText of ["", "ANCIEN MONTANT"]) {
+      const variables = buildTemplateVariables({ ...contract, salaryNumber: 45000.25, salaryText });
+      expect(variables.salary_text).toBe("QUARANTE CINQ MILLE ET VINGT CINQ CENTIMES");
+      expect(renderTemplate(getDefaultTemplate("contract").html, variables)).toContain(variables.salary_text);
+    }
+  });
+  it("uses the grid for feminine and masculine titles in documents", () => {
+    expect(buildTemplateVariables({...contract, position: "Pharmacien", gender: "Femme"}, salaryGrid).position).toBe("Pharmacienne");
+    expect(buildTemplateVariables({...contract, position: "Pharmacienne", gender: "Homme"}, salaryGrid).position).toBe("Pharmacien");
+  });
   beforeEach(() => {
     localStorage.clear();
   });

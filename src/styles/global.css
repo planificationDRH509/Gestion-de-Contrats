@@ -1809,21 +1809,29 @@ img {
 
 .contract-pin-button {
   display: inline-grid;
-  width: 26px;
-  height: 26px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--panel);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--ink-muted);
+  opacity: .55;
   cursor: pointer;
+  transition: transform .16s ease, color .16s ease, opacity .16s ease, filter .16s ease;
 }
 
-.contract-pin-button .material-symbols-rounded { font-size: 18px; }
-.contract-pin-button:hover,
-.contract-pin-button:focus-visible,
-.contract-pin-button.is-pinned { color: var(--accent); border-color: var(--accent); }
+.contract-pin-button .material-symbols-rounded { font-size: 19px; }
+.contract-pin-button.is-pinned { color: var(--accent); opacity: 1; }
+.contract-pin-button.is-pinned .material-symbols-rounded { font-variation-settings: "FILL" 1; }
+.contract-pin-button:hover:not(:disabled) {
+  color: var(--accent);
+  opacity: 1;
+  transform: translateY(-2px) scale(1.1);
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / .18));
+}
 .contract-pin-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .contract-pin-button:disabled { cursor: wait; opacity: .6; }
 

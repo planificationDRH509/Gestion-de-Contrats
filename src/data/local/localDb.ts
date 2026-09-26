@@ -180,6 +180,7 @@ function normalizeDb(value: LocalDb): LocalDb {
     contracts: Array.isArray(value.contracts)
       ? value.contracts.map((contract) => ({
           ...contract,
+          salaryText: numberToFrenchWords(contract.salaryNumber),
           dossierId: contract.dossierId ?? null,
           durationMonths: contract.durationMonths ?? 12,
           tags: Array.isArray(contract.tags)
@@ -258,7 +259,7 @@ function queueIndexedDbWrite(db: LocalDb): Promise<void> {
       try {
         if (typeof indexedDB === "undefined") {
           if (import.meta.env.MODE !== "test") throw new Error("Le stockage sécurisé de cet appareil est indisponible.");
-          localStorage.setItem(DB_KEY, JSON.stringify(snapshot));
+          localStorage.setItem(DB_KEY, JSON.stringify(inflateDatabase(flattenDatabase(snapshot))));
         } else {
           const merged = await writeRecords(persistedDb, snapshot);
           const rows = flattenDatabase(snapshot);

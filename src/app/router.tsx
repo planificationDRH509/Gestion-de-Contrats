@@ -1,3 +1,4 @@
+import { SalaryGridPage } from "../features/salary-grid/SalaryGridPage";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { LoginPage } from "../features/auth/LoginPage";
@@ -41,6 +42,7 @@ export function AppRoutes() {
         }
       >
         <Route path="contrats" element={<ContractsListPage />} />
+        <Route path="grille-salariale" element={<Navigate to="/app/parametres/grille-salariale" replace />} />
         <Route path="listes" element={<ListsPage />} />
         <Route path="taches" element={<TasksPage />} />
         <Route path="dossiers" element={<Navigate to="/app/contrats" replace />} />
@@ -54,6 +56,7 @@ export function AppRoutes() {
         <Route path="controle-qualite" element={<RequirePermission permission="quality.view"><QualityPage /></RequirePermission>} />
         <Route path="identification" element={<RequirePermission permission="identification.manage"><IdentificationPage /></RequirePermission>} />
         <Route path="parametres" element={<SettingsPage />} />
+        <Route path="parametres/grille-salariale" element={<SalaryGridPage />} />
         <Route path="parametres/mot-de-passe" element={<PasswordSettingsPage />} />
         <Route path="parametres/draft-html" element={<RequirePermission permission="settings.manage"><DraftHtmlPage /></RequirePermission>} />
         <Route path="parametres/suggestions" element={<RequirePermission permission="settings.manage"><SuggestionsSettingsPage /></RequirePermission>} />

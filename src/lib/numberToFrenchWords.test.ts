@@ -19,4 +19,12 @@ describe("numberToFrenchWords", () => {
       "CENT VINGT TROIS ET QUARANTE CINQ CENTIMES"
     );
   });
+
+  it("handles agreement before mille and rounding to centimes", () => {
+    expect(numberToFrenchWords(80000)).toBe("QUATRE VINGT MILLE");
+    expect(numberToFrenchWords(200000)).toBe("DEUX CENT MILLE");
+    expect(numberToFrenchWords(200)).toBe("DEUX CENTS");
+    expect(numberToFrenchWords(99.999)).toBe("CENT");
+    expect(numberToFrenchWords(-123.45)).toBe("MOINS CENT VINGT TROIS ET QUARANTE CINQ CENTIMES");
+  });
 });

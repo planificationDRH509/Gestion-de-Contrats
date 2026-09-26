@@ -26,7 +26,7 @@ export function initializeContractLists(db: DatabaseSync) {
           NEW.duree_contrat IS NOT l.duration_months OR
           (l.sealed_at IS NOT NULL AND (
             NEW.deleted_at IS NOT OLD.deleted_at OR NEW.nif IS NOT OLD.nif OR
-            NEW.salaire_en_chiffre IS NOT OLD.salaire_en_chiffre OR NEW.salaire IS NOT OLD.salaire OR
+            NEW.salaire_en_chiffre IS NOT OLD.salaire_en_chiffre OR
             NEW.titre IS NOT OLD.titre OR NEW.lieu_affectation IS NOT OLD.lieu_affectation OR
             NEW.annee_fiscale IS NOT OLD.annee_fiscale
           ))

@@ -1,3 +1,4 @@
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
 import { ContractRepository } from "../repositories/ContractRepository";
@@ -149,6 +150,7 @@ export class LocalContractRepository implements ContractRepository {
     const timestamp = now();
     const contract: Contract = {
       ...input,
+      salaryText: numberToFrenchWords(input.salaryNumber),
       firstName: formatFirstName(input.firstName),
       lastName: formatLastName(input.lastName),
       dossierId: input.dossierId ?? null,
@@ -183,6 +185,7 @@ export class LocalContractRepository implements ContractRepository {
     const timestamp = now();
     const nextValues: Partial<Contract> = {
       ...input,
+      salaryText: numberToFrenchWords(input.salaryNumber ?? previous.salaryNumber),
       firstName: input.firstName ? formatFirstName(input.firstName) : previous.firstName,
       lastName: input.lastName ? formatLastName(input.lastName) : previous.lastName,
       dossierId:

@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { clear } from "idb-keyval";
 import { readRecords, writeRecords } from "./recordStore";
 import type { LocalDb } from "./localDb";
+import { openLocalValue, sealLocalValue } from "./deviceVault";
 
 const empty = (): LocalDb => ({ applicants: [], contracts: [], dossiers: [], tags: [], contractTags: [],
   contractLists: [], cachedListWorkspaces: [], workspaces: [], printJobs: [], outbox: [], syncMetadata: {} });
@@ -80,4 +81,33 @@ it("aborts data and outbox together when storage rejects a write", async () => {
   await expect(writeRecords(initial, next)).rejects.toThrow();
   expect((await readRecords())?.outbox).toEqual([]);
   expect((await readRecords())?.workspaces).toEqual([]);
+});
+
+it("migrates legacy salaries and queued base versions without losing amounts or audit history", async () => {
+  const connection = await rawDatabase();
+  const legacy = { id: "c", salaryNumber: 45000.25, salaryText: "ancien texte",
+    auditHistory: { entries: [{ changes: [{ field: "salaryText", previousValue: "historique" }] }] } };
+  const rows = [
+    { key: "ready", value: true },
+    { key: "contracts:c", value: await sealLocalValue(legacy) },
+    { key: "outbox:q", value: await sealLocalValue({ id: "q", createdAt: "1", type: "contract.update",
+      payload: { id: "c", salaryNumber: 50000, salaryText: "cinquante mille", baseContract: legacy } }) }
+  ];
+  await new Promise<void>((resolve, reject) => {
+    const tx = connection.transaction("records", "readwrite");
+    rows.forEach(row => tx.objectStore("records").put(row));
+    tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+  });
+  const migrated = await readRecords();
+  expect(migrated?.contracts[0]).toMatchObject({ salaryNumber: 45000.25, auditHistory: legacy.auditHistory });
+  expect(migrated?.contracts[0]).not.toHaveProperty("salaryText");
+  expect(migrated?.outbox[0].payload).not.toHaveProperty("salaryText");
+  expect(migrated?.outbox[0].payload.baseContract).not.toHaveProperty("salaryText");
+  const raw = await new Promise<any>(resolve => {
+    const request = connection.transaction("records").objectStore("records").get("contracts:c");
+    request.onsuccess = () => resolve(request.result);
+  });
+  expect(await openLocalValue(raw.value)).not.toHaveProperty("salaryText");
+  expect(await readRecords()).toEqual(migrated);
+  connection.close();
 });

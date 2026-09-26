@@ -177,7 +177,6 @@ export type Database = {
           id_contrat: string
           lieu_affectation: string
           nif: string
-          salaire: string
           salaire_en_chiffre: number
           status: string
           titre: string
@@ -196,7 +195,6 @@ export type Database = {
           id_contrat: string
           lieu_affectation: string
           nif: string
-          salaire: string
           salaire_en_chiffre: number
           status?: string
           titre: string
@@ -215,7 +213,6 @@ export type Database = {
           id_contrat?: string
           lieu_affectation?: string
           nif?: string
-          salaire?: string
           salaire_en_chiffre?: number
           status?: string
           titre?: string
@@ -492,6 +489,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      read_salary_grid: { Args: { p_session_token: string }; Returns: Json }
+      save_salary_grid_entry: { Args: { p_session_token: string; p_entry: Json }; Returns: Json }
       read_pinned_contracts: {
         Args: { p_session_token: string }
         Returns: string[]

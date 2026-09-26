@@ -489,7 +489,6 @@ function buildRowDraft(
   const gender = normalizeGender(getMappedValue(row, mapping, "gender"));
   const salaryNumber = parseImportMoney(getMappedValue(row, mapping, "salaryNumber"));
   const durationMonths = parseDurationMonths(getMappedValue(row, mapping, "durationMonths"));
-  const salaryTextValue = getMappedValue(row, mapping, "salaryText");
   const commentaire = getMappedValue(row, mapping, "commentaire");
 
   if (!nif) errors.push("Le NIF doit contenir 10 chiffres.");
@@ -520,7 +519,7 @@ function buildRowDraft(
       position,
       assignment,
       salaryNumber,
-      salaryText: salaryTextValue || numberToFrenchWords(salaryNumber),
+      salaryText: numberToFrenchWords(salaryNumber),
       durationMonths,
       commentaire: commentaire || null
     },
@@ -541,7 +540,6 @@ function buildDraftFromEditableRow(row: ContractImportEditableRow) {
   const gender = normalizeGender(row.gender);
   const salaryNumber = parseImportMoney(row.salaryNumber);
   const durationMonths = parseDurationMonths(row.durationMonths);
-  const salaryTextValue = row.salaryText.trim();
   const commentaire = row.commentaire.trim();
 
   if (!nif) errors.push("Le NIF doit contenir 10 chiffres.");
@@ -572,7 +570,7 @@ function buildDraftFromEditableRow(row: ContractImportEditableRow) {
       position,
       assignment,
       salaryNumber,
-      salaryText: salaryTextValue || numberToFrenchWords(salaryNumber),
+      salaryText: numberToFrenchWords(salaryNumber),
       durationMonths,
       commentaire: commentaire || null
     },
@@ -587,7 +585,6 @@ export function buildImportEditableRows(
   return table.rows.map((row, index) => {
     const salaryNumber = getMappedValue(row, mapping, "salaryNumber");
     const parsedSalary = parseImportMoney(salaryNumber);
-    const salaryText = getMappedValue(row, mapping, "salaryText");
     const durationMonths = getMappedValue(row, mapping, "durationMonths");
     const normalizedNif = normalizeNif(getMappedValue(row, mapping, "nif"));
     const normalizedGender = normalizeGender(getMappedValue(row, mapping, "gender"));
@@ -604,7 +601,7 @@ export function buildImportEditableRows(
       address: getMappedValue(row, mapping, "address") || DEFAULT_IMPORT_ADDRESS,
       phone: getMappedValue(row, mapping, "phone"),
       salaryNumber,
-      salaryText: salaryText || (parsedSalary ? numberToFrenchWords(parsedSalary) : ""),
+      salaryText: parsedSalary ? numberToFrenchWords(parsedSalary) : "",
       position: getMappedValue(row, mapping, "position"),
       assignment: getMappedValue(row, mapping, "assignment"),
       durationMonths: durationMonths || "12",

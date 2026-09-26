@@ -3,6 +3,7 @@ import type { DatabaseSync as SqliteDatabase } from "node:sqlite";
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initializeContractLists, mutateContractList, readContractLists } from "../../../server/contractLists";
+import { migrateSalaryText } from "../../../server/salaryTextMigration";
 import { listName, listTotals, sortedMembers, type ContractList } from "./listModel";
 
 let db: SqliteDatabase;
@@ -23,10 +24,16 @@ beforeEach(() => {
     CREATE TABLE contrat(id_contrat TEXT PRIMARY KEY,workspace_id TEXT, nif TEXT REFERENCES identification(nif), duree_contrat INTEGER, salaire_en_chiffre REAL,salaire TEXT,titre TEXT,lieu_affectation TEXT,annee_fiscale TEXT, deleted_at TEXT, status TEXT);
     INSERT INTO contrat VALUES('c1','w','n1',6,100.10,'Cent','Poste','Lieu','2025-2026',NULL,'saisie'),('c2','w','n2',6,200.20,'Deux cents','Poste','Lieu','2025-2026',NULL,'saisie'),('c3','w','n3',12,300,'Trois cents','Poste','Lieu','2025-2026',NULL,'saisie');
   `);
+  migrateSalaryText(db);
   initializeContractLists(db);
 });
 afterEach(() => db.close());
 describe("contract lists", () => {
+  it("removes the legacy text without changing amounts and can migrate twice", () => {
+    expect(db.prepare("PRAGMA table_info(contrat)").all().map(c => c.name)).not.toContain("salaire");
+    expect(db.prepare("SELECT salaire_en_chiffre FROM contrat WHERE id_contrat='c1'").get()?.salaire_en_chiffre).toBe(100.10);
+    expect(() => migrateSalaryText(db)).not.toThrow();
+  });
   it("creates and populates a lot atomically from the selection", () => {
     const source=create(); assign(source,['c1']);
     const id=act({action:'create',durationMonths:6,visaNumber:'V-NEW',contractIds:['c1','c2']}) as string;

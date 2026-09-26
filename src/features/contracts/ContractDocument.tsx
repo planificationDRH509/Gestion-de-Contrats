@@ -1,3 +1,4 @@
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { useEffect, useMemo, useState } from "react";
 import { Contract } from "../../data/types";
 import {
@@ -16,6 +17,7 @@ export function ContractDocument({
   contract: Contract;
   pageSelection?: ContractPageSelection;
 }) {
+  const { entries: salaryGrid } = useSalaryGrid();
   const [template, setTemplate] = useState(() => loadTemplate());
 
   useEffect(() => {
@@ -23,9 +25,9 @@ export function ContractDocument({
   }, []);
 
   const html = useMemo(() => {
-    const variables = buildTemplateVariables(contract);
+    const variables = buildTemplateVariables(contract, salaryGrid);
     return renderTemplate(template.html, variables as Record<string, string>);
-  }, [contract, template.html]);
+  }, [contract, template.html, salaryGrid]);
 
   return (
     <div

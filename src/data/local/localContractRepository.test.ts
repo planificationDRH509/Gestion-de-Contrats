@@ -44,6 +44,14 @@ describe("LocalContractRepository", () => {
     const list = await contracts.list({ workspaceId: workspace.id, query: "Jean" });
     expect(list.total).toBe(1);
     expect(list.items[0].id).toBe(created.id);
+    expect(created.salaryText).toBe("TRENTE MILLE");
+    const updated = await contracts.update({ id: created.id, salaryNumber: 45000.25 });
+    expect(updated.salaryText).toBe("QUARANTE CINQ MILLE ET VINGT CINQ CENTIMES");
+    expect((await contracts.getById(created.id))?.salaryText).toBe(updated.salaryText);
+    const stored = JSON.parse(localStorage.getItem("contribution_local_db")!);
+    expect(stored.contracts.find((c: { id: string }) => c.id === created.id)).not.toHaveProperty("salaryText");
+    expect(stored.outbox.find((q: { type: string }) => q.type === "contract.create").payload).not.toHaveProperty("salaryText");
+    expect(updated.auditHistory?.entries.at(-1)?.changes.map(change => change.field)).toEqual(["salaryNumber"]);
   });
 
   it("filters contracts by status", async () => {

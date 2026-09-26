@@ -1,3 +1,5 @@
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
+import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Contract, Gender } from "../../data/types";
@@ -18,7 +20,6 @@ import {
 import {
   useAddresses,
   useInstitutions,
-  usePositions
 } from "../settings/suggestionsApi";
 import {
   useApplicantUpsert,
@@ -198,7 +199,7 @@ function isDraftEmpty(draft: SpreadsheetDraft): boolean {
 }
 
 function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
-  const salaryText = draft.salaryText.trim() || computeSalaryText(draft.salaryNumber);
+  const salaryText = computeSalaryText(draft.salaryNumber);
   return {
     nif: formatNifInput(draft.nif),
     firstName: formatFirstName(draft.firstName),
@@ -263,7 +264,8 @@ export function ContractsSpreadsheetView({
   const upsertApplicant = useApplicantUpsert();
   const deleteContract = useDeleteContract();
   const { data: allAddresses = [] } = useAddresses(workspaceId);
-  const { data: allPositions = [] } = usePositions(workspaceId);
+  const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
+  const allPositions = useMemo(() => gridPositions(salaryGrid), [salaryGrid]);
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
   const isMedicalPosition = (pos: string) => /infirmi|medecin|médecin|pharmacien|sage-femme|laboratoire/i.test(pos || "");
   const unsavedDraftKey = useMemo(
@@ -513,6 +515,11 @@ export function ContractsSpreadsheetView({
     [allPositions]
   );
 
+  const femininePositionItems = useMemo(
+    () => buildPositionSalaryItems(gridPositions(salaryGrid, "Femme")),
+    [salaryGrid]
+  );
+
   const featuredPosition = useMemo(() => {
     return findFeaturedPositionSalaryItem(
       positionItems,
@@ -749,6 +756,7 @@ export function ContractsSpreadsheetView({
         (next[key] as string) = value;
       }
 
+      if (key === "gender" || key === "position") next.position = genderedTitle(salaryGrid, next.position, next.gender);
       return { ...prev, [contractId]: next };
     });
 
@@ -774,6 +782,7 @@ export function ContractsSpreadsheetView({
         } else if (key !== "salaryText") {
           (next[key] as string) = value;
         }
+        if (key === "gender" || key === "position") next.position = genderedTitle(salaryGrid, next.position, next.gender);
         return {
           ...row,
           draft: next
@@ -1002,7 +1011,7 @@ export function ContractsSpreadsheetView({
         nif: editedDraft.nif || null,
         ninu: editedDraft.ninu || null,
         address: editedDraft.address,
-        position: editedDraft.position,
+        position: genderedTitle(salaryGrid, editedDraft.position, editedDraft.gender),
         assignment: editedDraft.assignment,
         salaryNumber: salaryNumberValue,
         salaryText: editedDraft.salaryText,
@@ -1131,7 +1140,7 @@ export function ContractsSpreadsheetView({
         nif: candidate.nif || null,
         ninu: candidate.ninu || null,
         address: candidate.address,
-        position: candidate.position,
+        position: genderedTitle(salaryGrid, candidate.position, candidate.gender),
         assignment: candidate.assignment,
         salaryNumber: salaryNumberValue,
         salaryText: candidate.salaryText,
@@ -1742,7 +1751,7 @@ export function ContractsSpreadsheetView({
                       onChange={(value) => setNewField(row.id, "position", value)}
                       onSelect={(item) => applyNewPositionSelection(row.id, item)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 6)}
-                      items={positionItems}
+                      items={row.draft.gender === "Femme" ? femininePositionItems : positionItems}
                       placeholder="Poste"
                       featuredItem={featuredPosition}
                       pinCategory="position"
@@ -1765,11 +1774,12 @@ export function ContractsSpreadsheetView({
                       dataSheetCol={8}
                       className="input contracts-sheet-input"
                       value={row.draft.salaryNumber}
+                      hasError={salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, row.draft.position, parseMoney(row.draft.salaryNumber))}
                       placeholder="Ex: 45000"
                       onChange={(value) => setNewField(row.id, "salaryNumber", value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
-                      items={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).map(s => ({ id: s.toString(), label: s.toString() }))}
-                      showAllOnFocus={(allPositions.find(p => p.label === row.draft.position)?.salaries || []).length > 1}
+                      items={approvedSalaries(salaryGrid, row.draft.position).map(s => ({ id: s.toString(), label: s.toString() }))}
+                      showAllOnFocus={approvedSalaries(salaryGrid, row.draft.position).length > 1}
                     />
                     <input
                       data-sheet-row={rowKey}
@@ -1952,7 +1962,7 @@ export function ContractsSpreadsheetView({
                       onSelect={(item) => applyPositionSelection(contract.id, item)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 6)}
                       onBlur={() => queueExistingSave(contract.id)}
-                      items={positionItems}
+                      items={draft.gender === "Femme" ? femininePositionItems : positionItems}
                       featuredItem={featuredPosition}
                       pinCategory="position"
                     />
@@ -1974,14 +1984,15 @@ export function ContractsSpreadsheetView({
                       dataSheetCol={8}
                       className="input contracts-sheet-input"
                       value={draft.salaryNumber}
+                      hasError={salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, draft.position, parseMoney(draft.salaryNumber))}
                       placeholder="Ex: 45000"
                       onChange={(value) =>
                         setExistingField(contract.id, "salaryNumber", value)
                       }
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
                       onBlur={() => queueExistingSave(contract.id)}
-                      items={(allPositions.find(p => p.label === draft.position)?.salaries || []).map(s => ({ id: s.toString(), label: s.toString() }))}
-                      showAllOnFocus={(allPositions.find(p => p.label === draft.position)?.salaries || []).length > 1}
+                      items={approvedSalaries(salaryGrid, draft.position).map(s => ({ id: s.toString(), label: s.toString() }))}
+                      showAllOnFocus={approvedSalaries(salaryGrid, draft.position).length > 1}
                     />
                     <input
                       data-sheet-row={rowKey}

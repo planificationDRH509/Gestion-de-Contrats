@@ -125,6 +125,7 @@ export type Contract = {
   position: string;
   assignment: string;
   salaryNumber: number;
+  /** Derived from salaryNumber; never persisted as contract data. */
   salaryText: string;
   durationMonths: number;
   /** Fiscal year stored on the contract, for example "2025-2026". */
@@ -222,8 +223,8 @@ export type ContractListResult = {
 
 export type CreateContractInput = Omit<
   Contract,
-  "id" | "createdAt" | "updatedAt" | "deletedAt"
-> & { id?: string };
+  "id" | "createdAt" | "updatedAt" | "deletedAt" | "salaryText"
+> & { id?: string; salaryText?: string };
 
 export type UpdateContractInput = Partial<CreateContractInput> & { id: string };
 

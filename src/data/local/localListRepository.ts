@@ -54,7 +54,7 @@ export function updateListedContract(db: LocalDb, previous: Contract, next: Cont
     if (next.durationMonths !== list.durationMonths || next.workspaceId !== previous.workspaceId) {
       throw new Error("Retirez le contrat de sa liste avant de modifier sa durée.");
     }
-    const protectedFields = ["firstName", "lastName", "nif", "ninu", "gender", "address", "salaryNumber", "salaryText", "position", "assignment", "annee_fiscale", "deletedAt"] as const;
+    const protectedFields = ["firstName", "lastName", "nif", "ninu", "gender", "address", "salaryNumber", "position", "assignment", "annee_fiscale", "deletedAt"] as const;
     if (list.sealedAt && protectedFields.some(key => (previous[key] ?? null) !== (next[key] ?? null))) {
       throw new Error("Faites rouvrir la liste scellée avant de modifier ce contrat.");
     }

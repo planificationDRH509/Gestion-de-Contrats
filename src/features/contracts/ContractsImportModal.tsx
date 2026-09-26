@@ -1,3 +1,6 @@
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
+import { genderedTitle, salaryOutsideGrid } from "../salary-grid/salaryGrid";
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { Fragment, useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import type { AppUser, Contract, Dossier } from "../../data/types";
 import {
@@ -7,6 +10,7 @@ import {
   getImportFieldLabel,
   inferImportMapping,
   parsePastedContractTable,
+  parseImportMoney,
   validateImportMapping,
   validateImportEditableRows,
   type ContractImportEditableField,
@@ -37,7 +41,6 @@ const BULK_EDIT_FIELDS: { id: ContractImportEditableField; label: string }[] = [
   { id: "address", label: "Adresse" },
   { id: "phone", label: "Téléphone" },
   { id: "salaryNumber", label: "Salaire" },
-  { id: "salaryText", label: "Salaire en lettres" },
   { id: "position", label: "Poste" },
   { id: "assignment", label: "Affectation" },
   { id: "durationMonths", label: "Durée" },
@@ -69,6 +72,7 @@ export function ContractsImportModal({
   onClose,
   onImported
 }: ContractsImportModalProps) {
+  const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
   const [clipboardText, setClipboardText] = useState("");
   const [mapping, setMapping] = useState<ContractImportMapping>([]);
   const [editableRows, setEditableRows] = useState<ContractImportEditableRow[]>([]);
@@ -415,7 +419,7 @@ export function ContractsImportModal({
         dossierId: selectedDossierId,
         responsibleUserId,
         fiscalYear,
-        rows: selectedValidRows.map((row) => row.values!),
+        rows: selectedValidRows.map((row) => ({ ...row.values!, position: genderedTitle(salaryGrid, row.values!.position, row.values!.gender) })),
         onProgress: setImportProgress
       });
       onImported(createdContracts.length);
@@ -679,6 +683,8 @@ export function ContractsImportModal({
                 <tbody>
                   {visibleEditableRows.map((row) => {
                     const validation = validationById.get(row.id);
+                    const parsedSalary = parseImportMoney(row.salaryNumber);
+                    const outsideGrid = salaryGridData !== undefined && parsedSalary !== null && salaryOutsideGrid(salaryGrid, row.position, parsedSalary);
                     const stateClass = row.excluded
                       ? "excluded"
                       : validation?.errors.length
@@ -766,6 +772,8 @@ export function ContractsImportModal({
                             <input
                               className="contracts-import-cell-input number"
                               value={row.salaryNumber}
+                              aria-invalid={outsideGrid || undefined}
+                              style={outsideGrid ? {color:"#dc2626", background:"rgba(220,38,38,.08)", borderColor:"#dc2626"} : undefined}
                               onChange={(event) => updateEditableRow(row.id, "salaryNumber", event.target.value)}
                               disabled={row.excluded}
                             />
@@ -773,8 +781,8 @@ export function ContractsImportModal({
                           <td>
                             <input
                               className="contracts-import-cell-input wide"
-                              value={row.salaryText}
-                              onChange={(event) => updateEditableRow(row.id, "salaryText", event.target.value)}
+                              value={row.salaryNumber ? numberToFrenchWords(parseImportMoney(row.salaryNumber) ?? NaN) : ""}
+                              readOnly
                               disabled={row.excluded}
                             />
                           </td>

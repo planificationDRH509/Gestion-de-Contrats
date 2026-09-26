@@ -1,3 +1,5 @@
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
+import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +22,6 @@ import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import {
   useAddresses,
-  usePositions,
   useInstitutions
 } from "../settings/suggestionsApi";
 import {
@@ -77,7 +78,7 @@ export function ContractEditPage() {
   const [msppHtml, setMsppHtml] = useState("");
   const [msppLoading, setMsppLoading] = useState(false);
   const { data: allAddresses = [] } = useAddresses(workspaceId);
-  const { data: allPositions = [] } = usePositions(workspaceId);
+  const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
   const { data: allInstitutions = [] } = useInstitutions(workspaceId);
 
   const defaultValues = useMemo<ContractFormSchema>(
@@ -121,6 +122,13 @@ export function ContractEditPage() {
   const genderValue = watch("gender");
   const addressValue = watch("address");
   const positionValue = watch("position");
+  const allPositions = useMemo(() => gridPositions(salaryGrid, genderValue), [salaryGrid, genderValue]);
+  const salaryMismatch = salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, positionValue || "", parseMoney(salaryNumber || ""));
+  const availableSalaries = approvedSalaries(salaryGrid, positionValue || "");
+  useEffect(() => {
+    const title = genderedTitle(salaryGrid, positionValue || "", genderValue);
+    if (title !== positionValue) setValue("position", title, { shouldDirty: true });
+  }, [salaryGrid, positionValue, genderValue, setValue]);
   const assignmentValue = watch("assignment");
   const nifValue = watch("nif");
 
@@ -257,23 +265,16 @@ export function ContractEditPage() {
     }
   }, [msppModalOpen, nifValue]);
 
-  const [availableSalaries, setAvailableSalaries] = useState<number[]>([]);
-
   function handlePositionSelect(item: AutocompleteItem) {
     const selectedItem = allPositionItems.find((candidate) => candidate.id === item.id);
     const match = allPositions.find((position) => position.id === selectedItem?.positionId);
     if (match) {
-      const salaries = match.salaries || [];
-      setAvailableSalaries(salaries);
-
       if (selectedItem?.salaryNumber !== undefined) {
         setValue("salaryNumber", selectedItem.salaryNumber.toString(), {
           shouldValidate: true,
           shouldDirty: true,
         });
       }
-    } else {
-      setAvailableSalaries([]);
     }
   }
 
@@ -611,7 +612,7 @@ export function ContractEditPage() {
               }}
               items={availableSalaries.map(s => ({ id: s.toString(), label: s.toString() }))}
               placeholder="Ex: 45000"
-              hasError={!!errors.salaryNumber}
+              hasError={!!errors.salaryNumber || salaryMismatch}
               name="salaryNumber"
               showAllOnFocus={availableSalaries.length > 1}
             />

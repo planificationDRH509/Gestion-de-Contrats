@@ -16,8 +16,8 @@ begin
   insert into public.app_task_sessions(user_id,token_hash) values
     (actor,extensions.digest(token,'sha256')),(reader_id,extensions.digest(reader_token,'sha256'));
   insert into public.identification(nif,nom,prenom,sexe,adresse,workspace_id) values(w||'-n','LOUIS','Ana','Femme','Test',w);
-  insert into public.contrat(id_contrat,nif,duree_contrat,salaire,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id)
-    values(w||'-c',w||'-n',6,'Cent','2025-2026',100,'Test','Test',w);
+  insert into public.contrat(id_contrat,nif,duree_contrat,annee_fiscale,salaire_en_chiffre,titre,lieu_affectation,workspace_id)
+    values(w||'-c',w||'-n',6,'2025-2026',100,'Test','Test',w);
   op := jsonb_build_object('action','create','createId',lot,'durationMonths',6,'contractIds',jsonb_build_array(w||'-c'));
   expected := jsonb_build_object(lot::text,null);
   memberships := jsonb_build_object(w||'-c',null);

@@ -219,7 +219,7 @@ export function buildContractAuditChanges(
   next: Partial<Contract>
 ): ContractAuditChange[] {
   return TRACKED_FIELDS.flatMap((field) => {
-    if (!(field in next)) return [];
+    if (field === "salaryText" || !(field in next)) return [];
     const previousValue = normalizeValue(previous[field]);
     const newValue = normalizeValue(next[field]);
     if (previousValue === newValue) return [];

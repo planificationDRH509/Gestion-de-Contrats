@@ -1,3 +1,6 @@
+import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
+import { useSalaryGrid } from "../salary-grid/salaryGridApi";
+import { salaryOutsideGrid, genderedTitle, gridPositions } from "../salary-grid/salaryGrid";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,7 +23,7 @@ import { getDataProvider } from "../../data/dataProvider";
 import { useDossierContractMetrics, useDossiersList } from "../dossiers/dossiersApi";
 import { DossiersInlinePanel } from "../dossiers/DossiersInlinePanel";
 import { useAssignTagToContract, useCreateTag, useTags } from "./tagsApi";
-import { useAddresses, usePositions, useInstitutions } from "../settings/suggestionsApi";
+import { useAddresses, useInstitutions } from "../settings/suggestionsApi";
 import {
   getContractFiscalYear,
   getCurrentFiscalYearStart,
@@ -97,6 +100,7 @@ const STATUS_MENU_OPTIONS: { id: ContractStatus; label: string }[] = [
 
 export function ContractsListPage() {
   const { user, can } = useAuth();
+  const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
   const navigate = useNavigate();
   const isMobile = useIsMobileViewport();
   const listsQuery = useContractLists();
@@ -230,7 +234,7 @@ export function ContractsListPage() {
     localStorage.setItem("contracts_page_size", String(nextPageSize));
   }
 
-  const { data: positionsData = [] } = usePositions(workspaceId);
+  const positionsData = useMemo(() => gridPositions(salaryGrid), [salaryGrid]);
   const { data: institutionsData = [] } = useInstitutions(workspaceId);
   const { data: addressesData = [] } = useAddresses(workspaceId);
 
@@ -624,11 +628,11 @@ export function ContractsListPage() {
         contract.ninu ?? "",
         exportWithPrepositions
           ? applySuggestionPrefix(
-              contract.position,
+              genderedTitle(salaryGrid, contract.position, contract.gender),
               "position",
               positionPrefixes.get(normalizeSuggestionGrammarValue(contract.position))
             )
-          : contract.position,
+          : genderedTitle(salaryGrid, contract.position, contract.gender),
         exportWithPrepositions
           ? applySuggestionPrefix(
               contract.assignment,
@@ -637,7 +641,7 @@ export function ContractsListPage() {
             )
           : contract.assignment,
         contract.salaryNumber,
-        contract.salaryText,
+        numberToFrenchWords(contract.salaryNumber),
         contract.durationMonths,
         exportWithPrepositions
           ? applySuggestionPrefix(
@@ -654,7 +658,7 @@ export function ContractsListPage() {
     const provider = getDataProvider();
     const [contracts, positions, institutions, addresses] = await Promise.all([
       provider.contracts.getByIds(selected, workspaceId),
-      provider.suggestions.getPositions(workspaceId),
+      Promise.resolve(gridPositions(salaryGrid)),
       provider.suggestions.getInstitutions(workspaceId),
       provider.suggestions.getAddresses(workspaceId)
     ]);
@@ -1245,7 +1249,7 @@ export function ContractsListPage() {
     const title = contract.gender === "Femme" ? "Madame" : "Monsieur";
     const nif = contract.nif ? `NIF: ${contract.nif}` : "";
     const ninu = contract.ninu ? `NINU: ${contract.ninu}` : "";
-    const salary = `${formatCurrency(contract.salaryNumber)} (${contract.salaryText})`;
+    const salary = `${formatCurrency(contract.salaryNumber)} (${numberToFrenchWords(contract.salaryNumber)})`;
     const address = contract.address || "—";
     const dateLabel = new Date().toLocaleDateString("fr-FR");
 
@@ -1709,7 +1713,7 @@ export function ContractsListPage() {
                               data-tooltip={`Poste: ${contract.position || "—"} · Affectation: ${contract.assignment || "—"}`}
                               tabIndex={0}
                             >
-                              Salaire: <strong>{formatCurrency(contract.salaryNumber)}</strong>
+                              Salaire: <strong style={salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, contract.position, contract.salaryNumber) ? { color: "#dc2626" } : undefined}>{formatCurrency(contract.salaryNumber)}</strong>
                             </span>
                           </div>
                         ) : null}
@@ -1735,7 +1739,7 @@ export function ContractsListPage() {
                             }}
                           >
                             <span className="material-symbols-rounded" aria-hidden="true">
-                              {pinnedContracts.ids.includes(contract.id) ? "radio_button_checked" : "radio_button_unchecked"}
+                              push_pin
                             </span>
                           </button>
                           <ContractSyncIndicator contract={contract} pending={pendingSync} online={syncOnline}
