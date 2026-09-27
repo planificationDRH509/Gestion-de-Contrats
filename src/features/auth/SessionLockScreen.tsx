@@ -21,11 +21,16 @@ export function SessionLockScreen() {
 
     setIsSubmitting(true);
     setError(null);
-    const result = await unlock(password);
-    setIsSubmitting(false);
-    if (!result.success) {
+    try {
+      const result = await unlock(password);
+      if (result.success) return;
       setError(result.error ?? "Impossible de déverrouiller la session.");
       setPassword("");
+    } catch {
+      setError("Impossible de déverrouiller la session.");
+      setPassword("");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 

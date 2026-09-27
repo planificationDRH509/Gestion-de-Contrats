@@ -286,31 +286,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return unlockLocally();
         }
 
-        let taskSession;
+        let taskSessionToken: string | undefined;
         try {
-          taskSession = await getSupabaseClient().rpc("create_task_session", {
+          const taskSession = await getSupabaseClient().rpc("create_task_session", {
             p_user_id: user.id,
             p_password: password
           });
+          if (!taskSession.error && typeof taskSession.data === "string") {
+            taskSessionToken = taskSession.data;
+          } else if (isNetworkAuthenticationError(taskSession.error)) {
+            return unlockLocally();
+          } else if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(taskSession.error?.message ?? "")) {
+            return { success: false, error: "Mot de passe incorrect." };
+          }
         } catch (error) {
           if (isNetworkAuthenticationError(error)) return unlockLocally();
-          return { success: false, error: "Impossible de déverrouiller la session." };
-        }
-        if (taskSession.error || typeof taskSession.data !== "string") {
-          const message = taskSession.error?.message ?? "";
-          if (isNetworkAuthenticationError(taskSession.error)) {
-            return unlockLocally();
-          }
-          return {
-            success: false,
-            error: /TASK_SESSION_INVALID_CREDENTIALS/i.test(message)
-              ? "Mot de passe incorrect."
-              : message || "Impossible de déverrouiller la session."
-          };
         }
 
-        if (user.taskSessionToken) await preparePrivateTaskSession(user.id, user.taskSessionToken);
-        const nextUser = { ...user, taskSessionToken: taskSession.data };
+        // The private task RPC is optional during login. Verify the account
+        // directly when that RPC is unavailable so the lock screen follows
+        // the same rule as the main login form.
+        if (!taskSessionToken) {
+          try {
+            const { data, error } = await getSupabaseClient()
+              .from("app_users")
+              .select("id")
+              .eq("id", user.id)
+              .eq("password", password)
+              .maybeSingle();
+            if (isNetworkAuthenticationError(error)) return unlockLocally();
+            if (error) {
+              return { success: false, error: "Impossible de vérifier le mot de passe." };
+            }
+            if (!data) return { success: false, error: "Mot de passe incorrect." };
+          } catch (error) {
+            if (isNetworkAuthenticationError(error)) return unlockLocally();
+            return { success: false, error: "Impossible de vérifier le mot de passe." };
+          }
+        }
+
+        if (taskSessionToken && user.taskSessionToken) {
+          try {
+            await preparePrivateTaskSession(user.id, user.taskSessionToken);
+          } catch (error) {
+            // Keep the old token so an unreadable private task cache is not
+            // replaced by a token that cannot decrypt it.
+            console.warn("Private task cache could not be prepared:", error);
+            taskSessionToken = undefined;
+          }
+        }
+        const nextUser = taskSessionToken
+          ? { ...user, taskSessionToken }
+          : user;
         setUser(nextUser);
         saveSession(nextUser);
         await saveOfflineUnlockCredential(user.id, password);
@@ -450,7 +477,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: true };
       },
       logout: async () => {
-        if (user?.taskSessionToken) await clearPrivateTaskOfflineData(user.id, user.taskSessionToken);
+        if (user?.taskSessionToken) {
+          try {
+            await clearPrivateTaskOfflineData(user.id, user.taskSessionToken);
+          } catch (error) {
+            // An unreadable task cache must not prevent switching accounts.
+            console.warn("Private task cache could not be cleared:", error);
+          }
+        }
         if (user?.taskSessionToken) {
           void getSupabaseClient().rpc("revoke_task_session", {
             p_session_token: user.taskSessionToken

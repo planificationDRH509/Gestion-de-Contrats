@@ -47,4 +47,17 @@ describe("SessionLockScreen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Mot de passe incorrect.");
     expect(screen.getByLabelText("Mot de passe")).toHaveValue("");
   });
+
+  it("permet de réessayer si le déverrouillage échoue de manière inattendue", async () => {
+    unlock.mockRejectedValueOnce(new Error("Erreur inattendue"));
+    render(<SessionLockScreen />);
+
+    fireEvent.change(screen.getByLabelText("Mot de passe"), {
+      target: { value: "mot-de-passe" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Déverrouiller/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Impossible de déverrouiller la session.");
+    expect(screen.getByRole("button", { name: /Déverrouiller/ })).toBeEnabled();
+  });
 });
