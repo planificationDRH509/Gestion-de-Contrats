@@ -1587,6 +1587,7 @@ export function ContractsListPage() {
                 selectedValues={selectedAssignments}
                 onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
                 placeholder="Toutes les institutions"
+                searchable
               />
               <MultiSelectDropdown
                 label="Département"
@@ -1601,6 +1602,7 @@ export function ContractsListPage() {
                 selectedValues={selectedCommunes}
                 onChange={(values) => { setSelectedCommunes(values); setPage(1); }}
                 placeholder="Toutes les communes"
+                searchable
               />
               <MultiSelectDropdown
                 label="Fonction (Poste)"
@@ -1608,6 +1610,7 @@ export function ContractsListPage() {
                 selectedValues={selectedPositions}
                 onChange={(values) => { setSelectedPositions(values); setPage(1); }}
                 placeholder="Toutes les fonctions"
+                searchable
               />
             </div>
           )}

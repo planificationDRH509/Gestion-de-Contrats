@@ -6,11 +6,31 @@ export interface MultiSelectDropdownProps {
   selectedValues: string[];
   onChange: (values: string[]) => void;
   placeholder: string;
+  searchable?: boolean;
 }
 
-export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder }: MultiSelectDropdownProps) {
+function normalizeSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('fr')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const visibleOptions = useMemo(() => {
+    const tokens = searchable ? normalizeSearch(searchQuery).split(/\s+/).filter(Boolean) : [];
+    if (tokens.length === 0) return options;
+    return options.filter(option => {
+      const normalizedOption = normalizeSearch(option);
+      return tokens.every(token => normalizedOption.includes(token));
+    });
+  }, [options, searchQuery, searchable]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -50,7 +70,8 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
       <label style={{ fontSize: '13px', color: 'var(--ink-muted)', fontWeight: 600 }}>{label}</label>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { setSearchQuery(''); setIsOpen(!isOpen); }}
+        aria-expanded={isOpen}
         className="accent-select"
         style={{
           display: 'flex',
@@ -83,7 +104,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
       {isOpen && (
         <div style={{
           position: 'absolute',
-          top: '46px',
+          top: 'calc(100% + 8px)',
           left: 0,
           zIndex: 999,
           width: '280px',
@@ -98,8 +119,31 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           gap: '8px',
           animation: 'slideUpAndFade 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
+          {searchable && (
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <span
+                className="material-symbols-rounded"
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px', color: 'var(--ink-muted)', pointerEvents: 'none' }}
+              >
+                search
+              </span>
+              <input
+                type="search"
+                className="input"
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Rechercher…"
+                aria-label={`Rechercher dans ${label}`}
+                autoComplete="off"
+                autoFocus
+                style={{ height: '36px', minHeight: '36px', padding: '6px 10px 6px 34px', borderRadius: '10px', fontSize: '13px' }}
+              />
+            </div>
+          )}
+
           {/* Quick Select Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <button 
               type="button" 
               onClick={selectAll} 
@@ -117,8 +161,11 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           </div>
 
           {/* Options List */}
-          <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, paddingRight: '4px' }}>
-            {options.map(option => {
+          <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minHeight: 0, paddingRight: '4px' }}>
+            {visibleOptions.length === 0 && searchable && (
+              <div role="status" style={{ padding: '8px 10px', color: 'var(--ink-muted)', fontSize: '13px' }}>Aucun résultat</div>
+            )}
+            {visibleOptions.map(option => {
               const isSelected = selectedValues.includes(option);
               return (
                 <label 

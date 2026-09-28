@@ -1,0 +1,6310 @@
+{
+  "status": "applied",
+  "date": "2026-09-28",
+  "scope": "Department/commune metadata only; no name, type, contract, or institution merge changes.",
+  "summary": {
+    "totalInstitutions": 286,
+    "beforeDepartments": 29,
+    "beforeCommunes": 19,
+    "proposedChanges": 214,
+    "proposedCommunes": 178,
+    "departmentOnly": 36,
+    "remainingWithoutCommune": 89,
+    "afterDepartments": 238,
+    "afterCommunes": 197
+  },
+  "changes": [
+    {
+      "id": "e8d715e6-37be-4056-9547-6c2405250fea",
+      "label": "Bureau Central",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Bureau Central",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 2,
+      "basis": "department_only"
+    },
+    {
+      "id": "ba67bb17-c209-453f-9254-2735693ef7f5",
+      "label": "Bureau Communal Sanitaire de Pétion-Ville",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Bureau Communal Sanitaire de Pétion-Ville",
+          "commune": "Pétion-Ville",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 4,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "4a51d8ba-4d82-4ad9-953b-d66a483fecb3",
+      "label": "Bureau de l'UAS des Gonaïves",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Bureau de l'UAS des Gonaïves",
+          "department": "Artibonite",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 5,
+      "basis": "department_only"
+    },
+    {
+      "id": "5f29cce4-bf97-46a9-a192-b5e7133f80ac",
+      "label": "Bureau de la Commune Sanitaire de Carrefour",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Bureau de la Commune Sanitaire de Carrefour",
+          "commune": "Carrefour",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 6,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "ea969848-457a-4185-ba69-8c3ae780fc68",
+      "label": "Bureau de la Commune Sanitaire de Port-au-Prince",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Port-au-Prince"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Bureau de la Commune Sanitaire de Port-au-Prince",
+          "commune": "Port-au-Prince",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 7,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "7f9db047-dd33-428a-8cd9-3203afaf1aa7",
+      "label": "Bureau Départemental du Centre",
+      "version": 3,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": "Centre",
+        "commune": null
+      },
+      "after": {
+        "department": "Centre",
+        "commune": "Hinche"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 11
+        }
+      ],
+      "note": null,
+      "index": 8,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e1c4a1d8-0741-489e-9735-97e03996ddfa",
+      "label": "Bureau du Département Sanitaire de l'Ouest",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Bureau du Département Sanitaire de l'Ouest",
+          "department": "Ouest",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 10,
+      "basis": "department_only"
+    },
+    {
+      "id": "871a08fa-f533-4781-9b5f-86ab3c930e04",
+      "label": "Bureau du Ministre",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Bureau du Ministre",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 11,
+      "basis": "department_only"
+    },
+    {
+      "id": "0e7661e1-cc31-4950-8ee7-ed8b11d87385",
+      "label": "Bureau Secrétairerie d'État à la Population",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Bureau Secrétairerie d'État à la Population",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 12,
+      "basis": "department_only"
+    },
+    {
+      "id": "b93a34c9-3678-441f-af81-eeedb3c19918",
+      "label": "Centre Bon Samaritain des Roseaux",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=930",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=930",
+          "label": "Dispensaire Bon Samaritain des Roseaux",
+          "department": "Grand-Anse",
+          "commune": "Roseaux",
+          "id": "930"
+        }
+      ],
+      "note": null,
+      "index": 13,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bbc5169b-2f3c-4d0c-98a9-9d048b659160",
+      "label": "Centre Communautaire de Santé de Duchity",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Pestel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=941",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=941",
+          "label": "SSPE de Duchity",
+          "department": "Grand-Anse",
+          "commune": "Pestel",
+          "id": "941"
+        }
+      ],
+      "note": null,
+      "index": 14,
+      "basis": "public_facility"
+    },
+    {
+      "id": "de77f69a-dd38-41de-8129-69d8350844d5",
+      "label": "Centre Communautaire de Santé de Golbotine",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 15,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5789aa3c-67d1-4a30-bd57-3525d2f129ca",
+      "label": "Centre Communautaire de Santé Sainte-Hélène d'Anse-d'Hainault",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Anse-d’Hainault"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=913",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=913",
+          "label": "Dispensaire de Sainte Hélène",
+          "department": "Grand-Anse",
+          "commune": "Anse-d'Hainault",
+          "id": "913"
+        }
+      ],
+      "note": null,
+      "index": 16,
+      "basis": "public_facility"
+    },
+    {
+      "id": "895876bd-5484-4774-bc10-db80fdcbdb91",
+      "label": "Centre d'Approvisionnement en Intrants du Département Sanitaire de la Grand'Anse",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Centre d'Approvisionnement en Intrants du Département Sanitaire de la Grand'Anse",
+          "department": "Grand’Anse",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 18,
+      "basis": "department_only"
+    },
+    {
+      "id": "2633a115-13d2-4f2d-9806-f34dd3a2cc90",
+      "label": "Centre d'Information et de Formation en Administration de la Santé",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Centre d'Information et de Formation en Administration de la Santé",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 19,
+      "basis": "department_only"
+    },
+    {
+      "id": "85991ca8-863d-452a-b1b6-db93b3edb838",
+      "label": "Centre de Diagnostic Intégral de Raboteau",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Gonaïves"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=612",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=612",
+          "label": "Centre de Santé Raboteau",
+          "department": "Artibonite",
+          "commune": "Gonaives",
+          "id": "612"
+        }
+      ],
+      "note": null,
+      "index": 20,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2ff4f329-dd14-4890-9198-c22cf133aadc",
+      "label": "Centre de Santé Bérée de Drouin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Grande-Saline"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=729",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=729",
+          "label": "Centre de Santé Drouin",
+          "department": "Artibonite",
+          "commune": "Grande Saline",
+          "id": "729"
+        }
+      ],
+      "note": null,
+      "index": 22,
+      "basis": "public_facility"
+    },
+    {
+      "id": "ba13909c-2279-4e18-afa7-cc0b2195ad32",
+      "label": "Centre de Santé d'Arniquet",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Arniquet"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=858",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=858",
+          "label": "Centre de Sante d'Arniquet",
+          "department": "Sud",
+          "commune": "Arniquet",
+          "id": "858"
+        }
+      ],
+      "note": null,
+      "index": 27,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e7049c01-4bb0-48f9-8e6d-1fd3a8a1b1c7",
+      "label": "Centre de Santé Dano de Grand-Goâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Grand-Goâve"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé Dano de Grand-Goâve",
+          "commune": "Grand-Goâve",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 28,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "dc1b7be2-be60-43a7-baa3-6f44638d6228",
+      "label": "Centre de Santé de Bainet",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Bainet"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=421",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=421",
+          "label": "CAL de Bainet",
+          "department": "Sud-Est",
+          "commune": "Bainet",
+          "id": "421"
+        }
+      ],
+      "note": null,
+      "index": 29,
+      "basis": "public_facility"
+    },
+    {
+      "id": "ef8da8a7-ddb1-477e-9428-ee81a21bf714",
+      "label": "Centre de Santé de Bainet à Lits de Bainet",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Bainet"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=421",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=421",
+          "label": "CAL de Bainet",
+          "department": "Sud-Est",
+          "commune": "Bainet",
+          "id": "421"
+        }
+      ],
+      "note": null,
+      "index": 30,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b97720c7-35c0-425e-958c-6ebc6e91dffc",
+      "label": "Centre de Santé de Baradères",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Baradères"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1062",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1062",
+          "label": "Baradères",
+          "department": "Nippes",
+          "commune": "Baraderes",
+          "id": "1062"
+        }
+      ],
+      "note": null,
+      "index": 32,
+      "basis": "public_facility"
+    },
+    {
+      "id": "152edbbf-5db5-4ec5-8402-cbaac10b2249",
+      "label": "Centre de Santé de Bariadelle",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Dame-Marie"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=918",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=918",
+          "label": "Dispensaire Sainte Anne de Bariadelle",
+          "department": "Grand-Anse",
+          "commune": "Dame-Marie",
+          "id": "918"
+        }
+      ],
+      "note": null,
+      "index": 33,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b93eee69-9e15-45a4-a5d2-50f9f2d90fb6",
+      "label": "Centre de Santé de Bayonnais",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Gonaïves"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=622",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=622",
+          "label": "CCS Bayonnais",
+          "department": "Artibonite",
+          "commune": "Gonaives",
+          "id": "622"
+        }
+      ],
+      "note": null,
+      "index": 35,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b75f3e35-6308-44a9-8bc0-394b0affdd87",
+      "label": "Centre de Santé de Beauchamps",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "Port-de-Paix"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=957",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=957",
+          "label": "Dispensaire Beauchamp",
+          "department": "Nord-Ouest",
+          "commune": "Port-de-Paix",
+          "id": "957"
+        }
+      ],
+      "note": null,
+      "index": 36,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bbaa45e1-2d53-4a65-b91d-1ac9521279c9",
+      "label": "Centre de Santé de Béthanie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Port-au-Prince"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=51",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=51",
+          "label": "Centre de santé Béthanie",
+          "department": "Ouest",
+          "commune": "Port-Au-Prince",
+          "id": "51"
+        }
+      ],
+      "note": null,
+      "index": 37,
+      "basis": "public_facility"
+    },
+    {
+      "id": "4c3ec72e-9678-48e5-a173-102b449a242b",
+      "label": "Centre de Santé de Bonbon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Bonbon"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=904",
+      "evidence": [
+        {
+          "kind": "municipal_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=904",
+          "label": "Chemen La Vi de Bonbon",
+          "department": "Grand-Anse",
+          "commune": "Bonbon"
+        }
+      ],
+      "note": null,
+      "index": 39,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "184aed4a-2287-440b-b135-5f435996e154",
+      "label": "Centre de Santé de Borgne",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Borgne"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=547",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=547",
+          "label": "Alliance Santé Borgne",
+          "department": "Nord",
+          "commune": "Borgne",
+          "id": "547"
+        }
+      ],
+      "note": null,
+      "index": 40,
+      "basis": "public_facility"
+    },
+    {
+      "id": "8d8e6b25-bb8b-492d-a93c-357491e15f61",
+      "label": "Centre de Santé de Bossous Lachapelle",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "La Chapelle"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 5
+        }
+      ],
+      "note": null,
+      "index": 41,
+      "basis": "public_facility"
+    },
+    {
+      "id": "fff2f27c-032c-4ea9-9423-34005e2dcb79",
+      "label": "Centre de Santé de Brostage",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Dondon"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 42,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2eec0747-d3cd-4d0e-8c8f-57d7debb83d4",
+      "label": "Centre de Santé de Cahesse Caracol",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Caracol"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Cahesse Caracol",
+          "commune": "Caracol",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf"
+        }
+      ],
+      "note": "Le nom enregistré précise Caracol; le centre de Cahesse est cité à Caracol dans la liste de vaccination 2021.",
+      "index": 44,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "fe352ac9-c980-4f9e-9455-a55feb9a2856",
+      "label": "Centre de Santé de Camp-Perrin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Camp-Perrin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+          "label": "Hopital Ste Anne de Camp Perrin",
+          "department": "Sud",
+          "commune": "Camp-Perrin",
+          "id": "840"
+        }
+      ],
+      "note": null,
+      "index": 45,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5ca3c25c-0cf4-4468-9bc0-f7c4ecd56033",
+      "label": "Centre de Santé de Cape Rouge",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Cayes-Jacmel"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 89,
+          "label": "Disp. de Cap Rouge",
+          "department": "Sud-Est",
+          "commune": "Cayes-Jacmel",
+          "code": "213303"
+        }
+      ],
+      "note": null,
+      "index": 46,
+      "basis": "public_facility"
+    },
+    {
+      "id": "06538a8f-7580-4b78-ab17-d03ea25b6dc9",
+      "label": "Centre de Santé de Carcasse",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Les Irois"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 48,
+      "basis": "public_facility"
+    },
+    {
+      "id": "44ced076-d112-4719-9687-24e92590dc44",
+      "label": "Centre de Santé de Carpentier",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-Salut"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=854",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=854",
+          "label": "Dispensaire de Carpentier",
+          "department": "Sud",
+          "commune": "Port-Salut",
+          "id": "854"
+        }
+      ],
+      "note": null,
+      "index": 49,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c8c5de23-672c-42b4-affe-03a0d6ad737c",
+      "label": "Centre de Santé de Carradeux",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Tabarre"
+      },
+      "source_url": "https://faes.gouv.ht/2024/05/07/distributions-de-plats-chauds-du-lundi-6-au-vendredi-10-mai-2024-dans-la-zone-metropolitaine-de-port-au-prince-par-le-faes-dans-le-cadre-du-programme-kore-pep/",
+      "evidence": [
+        {
+          "kind": "locality",
+          "url": "https://faes.gouv.ht/2024/05/07/distributions-de-plats-chauds-du-lundi-6-au-vendredi-10-mai-2024-dans-la-zone-metropolitaine-de-port-au-prince-par-le-faes-dans-le-cadre-du-programme-kore-pep/",
+          "locality": "Carradeux",
+          "commune": "Tabarre"
+        }
+      ],
+      "note": "Carradeux est un quartier de Tabarre; la commune est également explicitée par les publications gouvernementales.",
+      "index": 50,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bb51f80a-8ef8-4d2e-b4c8-d3e11221f824",
+      "label": "Centre de Santé de Carrefour",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=138",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=138",
+          "label": "Centre Hospitalier de Carrefour",
+          "department": "Ouest",
+          "commune": "Carrefour",
+          "id": "138"
+        }
+      ],
+      "note": null,
+      "index": 51,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1e7335d2-8363-430d-8bc0-01274d99e5c0",
+      "label": "Centre de Santé de Carrefour Charles",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=927",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=927",
+          "label": "Centre de Santé de Carrefour Charles",
+          "department": "Grand-Anse",
+          "commune": "Roseaux",
+          "id": "927"
+        }
+      ],
+      "note": null,
+      "index": 52,
+      "basis": "public_facility"
+    },
+    {
+      "id": "53f83cca-a422-4ecc-b468-011f25eb9bc1",
+      "label": "Centre de Santé de Carrefour Joute",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Saint-Jean-du-Sud"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=855",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=855",
+          "label": "Dispensaire de Carrefour Joute",
+          "department": "Sud",
+          "commune": "Saint-Jean",
+          "id": "855"
+        }
+      ],
+      "note": null,
+      "index": 53,
+      "basis": "public_facility"
+    },
+    {
+      "id": "3c1ce23b-cb7f-44cf-969e-faf45bd8ecf1",
+      "label": "Centre de Santé de Cavaillon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Cavaillon"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=874",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=874",
+          "label": "CS Cavaillon",
+          "department": "Sud",
+          "commune": "Cavaillon",
+          "id": "874"
+        }
+      ],
+      "note": null,
+      "index": 55,
+      "basis": "public_facility"
+    },
+    {
+      "id": "f3d15abd-278d-4077-a276-a8948f286b03",
+      "label": "Centre de Santé de Cayes-Jacmel",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Cayes-Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=411",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=411",
+          "label": "Hopital Communautaire de Reference de Cayes Jacmel",
+          "department": "Sud-Est",
+          "commune": "Cayes-Jacmel",
+          "id": "411"
+        }
+      ],
+      "note": null,
+      "index": 56,
+      "basis": "public_facility"
+    },
+    {
+      "id": "a8365a87-38d8-4feb-a675-b61518b299ef",
+      "label": "Centre de Santé de Cazale",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Cabaret"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 84,
+          "label": "Centre de santé de Cazale",
+          "department": "Ouest",
+          "commune": "Cabaret",
+          "code": "142413"
+        }
+      ],
+      "note": null,
+      "index": 57,
+      "basis": "public_facility"
+    },
+    {
+      "id": "96285f01-655c-4627-b0af-5077a7babe49",
+      "label": "Centre de Santé de Chambellan",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Chambellan"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=909",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=909",
+          "label": "CS de Chambellan",
+          "department": "Grand-Anse",
+          "commune": "Chambellan",
+          "id": "909"
+        }
+      ],
+      "note": null,
+      "index": 58,
+      "basis": "public_facility"
+    },
+    {
+      "id": "80d54a07-4a10-4d4d-98de-0cbdf5476473",
+      "label": "Centre de Santé de Chantal",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Chantal"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=835",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=835",
+          "label": "Dispensaire MIC (Immaculée Conception)de Chantal",
+          "department": "Sud",
+          "commune": "Chantal",
+          "id": "835"
+        }
+      ],
+      "note": null,
+      "index": 59,
+      "basis": "public_facility"
+    },
+    {
+      "id": "60620352-9d50-4ef8-81a7-529d876b9060",
+      "label": "Centre de Santé de Chardonette",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Corail"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 60,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d036a16c-1206-4761-8ad3-926d57cd0c59",
+      "label": "Centre de Santé de Chardonière",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Chardonnières"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Chardonière",
+          "commune": "Chardonnières",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 61,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "b1617594-1006-4648-a0c9-d1335a6ecd5b",
+      "label": "Centre de Santé de Charpentier",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=826",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=826",
+          "label": "Centre de Santé Sacré-Cœur Charpentier",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "826"
+        }
+      ],
+      "note": "Le centre de Charpentier (Les Cayes) est distinct du dispensaire de Carpentier (Port-Salut). Les deux noms sont conservés.",
+      "index": 62,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d40ee6f9-06ac-492b-b027-fd09054aa379",
+      "label": "Centre de Santé de Colette",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=821",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=821",
+          "label": "Centre de Santé Colette",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "821"
+        }
+      ],
+      "note": null,
+      "index": 63,
+      "basis": "public_facility"
+    },
+    {
+      "id": "aaadf902-088c-43b6-a6bd-2de0ea59aa27",
+      "label": "Centre de Santé de Cornillon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Cornillon"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=332",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=332",
+          "label": "Centre De Sante De Cornillon",
+          "department": "Ouest",
+          "commune": "Cornillon",
+          "id": "332"
+        }
+      ],
+      "note": null,
+      "index": 64,
+      "basis": "public_facility"
+    },
+    {
+      "id": "17c5909c-6bb6-455f-92e5-fdd2de8fdc63",
+      "label": "Centre de Santé de Côtes-de-Fer",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Côtes-de-Fer"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=435",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=435",
+          "label": "CS St Joseph de Cotes-de-Fer",
+          "department": "Sud-Est",
+          "commune": "Cotes-de-Fer",
+          "id": "435"
+        }
+      ],
+      "note": "Le centre communal de Côtes-de-Fer est retenu; les dispensaires homonymes du Nord-Ouest sont distincts.",
+      "index": 65,
+      "basis": "public_facility"
+    },
+    {
+      "id": "009d024f-3c0a-494f-869d-7bdd2a6457ae",
+      "label": "Centre de Santé de Cyvadier",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=391",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=391",
+          "label": "Dispensaire Cyvadier",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "391"
+        }
+      ],
+      "note": null,
+      "index": 66,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e88e9ff3-0d28-4cc0-9ef5-8f831f9f3917",
+      "label": "Centre de Santé de Danda",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Terrier-Rouge"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=599",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=599",
+          "label": "Dispensaire Bienfaisance de Danda",
+          "department": "Nord-Est",
+          "commune": "Terrier-Rouge",
+          "id": "599"
+        }
+      ],
+      "note": null,
+      "index": 67,
+      "basis": "public_facility"
+    },
+    {
+      "id": "ce792e0a-08ec-4d76-8c47-1e7f2906f2c3",
+      "label": "Centre de Santé de Dangriyen de la Gonâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Centre de Santé de Dangriyen de la Gonâve",
+          "department": "Ouest",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 68,
+      "basis": "department_only"
+    },
+    {
+      "id": "4eab6fdf-894b-4061-bf23-7caa28bcbb1c",
+      "label": "Centre de Santé de Delmas 75",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Delmas 75",
+          "commune": "Delmas",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 70,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "20fefd1a-d28f-4ca2-bc48-4f3750f33ea5",
+      "label": "Centre de Santé de Derac",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Fort-Liberté"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=570",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=570",
+          "label": "Centre Sante Communautaire de Derac",
+          "department": "Nord-Est",
+          "commune": "Fort-Libert!",
+          "id": "570"
+        }
+      ],
+      "note": null,
+      "index": 71,
+      "basis": "public_facility"
+    },
+    {
+      "id": "dd4dbb64-52f0-49ae-b2fc-624e5ad1d12c",
+      "label": "Centre de Santé de Derrière-Fort",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 5
+        }
+      ],
+      "note": null,
+      "index": 72,
+      "basis": "public_facility"
+    },
+    {
+      "id": "949ac11c-d62c-4eee-98f1-18fbb33914c0",
+      "label": "Centre de Santé de Desdunes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Desdunes"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Desdunes",
+          "commune": "Desdunes",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 73,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "7a73b62f-7e07-4cd7-8959-a12bfdf278ba",
+      "label": "Centre de Santé de Dondon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Dondon"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=535",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=535",
+          "label": "CSL de Dondon",
+          "department": "Nord",
+          "commune": "Dondon",
+          "id": "535"
+        }
+      ],
+      "note": null,
+      "index": 74,
+      "basis": "public_facility"
+    },
+    {
+      "id": "04fcf86d-f04c-46e4-90f1-5db0a483f6d9",
+      "label": "Centre de Santé de Duchity",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Pestel"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 59,
+          "label": "SSPE de Duchity",
+          "department": "Grand’Anse",
+          "commune": "Pestel",
+          "code": "834503"
+        }
+      ],
+      "note": null,
+      "index": 76,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bbd0dad1-38a7-4dba-b56c-21d6677be05b",
+      "label": "Centre de Santé de Dumont",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-Salut"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=853",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=853",
+          "label": "Dispensaire de Dumont",
+          "department": "Sud",
+          "commune": "Port-Salut",
+          "id": "853"
+        }
+      ],
+      "note": null,
+      "index": 77,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2b93cd46-5449-411e-bca3-40caa42baf65",
+      "label": "Centre de Santé de Ferme Leblanc",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Torbeck"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=834",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=834",
+          "label": "Dispensaire de Ferme Leblanc",
+          "department": "Sud",
+          "commune": "Torbeck",
+          "id": "834"
+        }
+      ],
+      "note": null,
+      "index": 78,
+      "basis": "public_facility"
+    },
+    {
+      "id": "438ca548-6268-4743-aae5-fbc28cfc437b",
+      "label": "Centre de Santé de Galiphete",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Grande-Rivière-du-Nord"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 79,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b248fe64-5b97-49c6-9842-95ae0b54b88a",
+      "label": "Centre de Santé de Gatineau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/2021%20-%20SE%2019.-%20Rapport%20du_R%C3%A9seau_DSGA.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/2021%20-%20SE%2019.-%20Rapport%20du_R%C3%A9seau_DSGA.pdf",
+          "pdfPage": 23,
+          "label": "Centre de Santé de Gatineau",
+          "commune": "Jérémie"
+        }
+      ],
+      "note": null,
+      "index": 80,
+      "basis": "public_facility"
+    },
+    {
+      "id": "9f27cdc5-97a1-4c79-b4ba-3505e4dd292c",
+      "label": "Centre de Santé de Gebeau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=893",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=893",
+          "label": "Centre Médico-Social de Gebeau",
+          "department": "Grand-Anse",
+          "commune": "Jérémie",
+          "id": "893"
+        }
+      ],
+      "note": null,
+      "index": 81,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c0db52c6-94fa-445c-91e5-f6518363dbd9",
+      "label": "Centre de Santé de Golbotine",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 82,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1907d843-8466-4300-ae1c-c3301a3d13e8",
+      "label": "Centre de Santé de Jalousie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=177",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=177",
+          "label": "Jean Mossanto Petit de Jalousie",
+          "department": "Ouest",
+          "commune": "Petion-Ville",
+          "id": "177"
+        }
+      ],
+      "note": null,
+      "index": 84,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c8164beb-f759-4974-9d79-f339cfcc835b",
+      "label": "Centre de Santé de Jérémie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Jérémie",
+          "commune": "Jérémie",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 85,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "bdfa1536-c56c-4b1f-a058-b4f8e879e1b2",
+      "label": "Centre de Santé de Kenscoff",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Kenscoff"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=211",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=211",
+          "label": "Centre de Santé de Kenscoff",
+          "department": "Ouest",
+          "commune": "Kenscoff",
+          "id": "211"
+        }
+      ],
+      "note": null,
+      "index": 87,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2da8011f-3a8b-4194-a12a-cd33cc49b9b5",
+      "label": "Centre de Santé de l'Île de la Tortue",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "La Tortue"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de l'Île de la Tortue",
+          "commune": "La Tortue",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 88,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "c708f2bb-0d60-4d34-8f5b-6dab12ec5592",
+      "label": "Centre de Santé de l'Île-à-Vache",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Île-à-Vache"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=848",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=848",
+          "label": "Centre de Santé de l'Ile à Vache de Mme Bernard",
+          "department": "Sud",
+          "commune": "!le-!-Vache",
+          "id": "848"
+        }
+      ],
+      "note": null,
+      "index": 89,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b011f4ef-ba15-4939-8dad-e826294aa1a4",
+      "label": "Centre de Santé de la Cahouane",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Tiburon"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 90,
+      "basis": "public_facility"
+    },
+    {
+      "id": "f2331091-8a6d-4ff7-9e2d-735c7bb124ce",
+      "label": "Centre de Santé de la Croix-des-Bouquets",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Croix-des-Bouquets"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=297",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=297",
+          "label": "Cs De Sante Et D'Entrainement De La Croix Des Bouquets",
+          "department": "Ouest",
+          "commune": "Croix-des-Bouquets",
+          "id": "297"
+        }
+      ],
+      "note": null,
+      "index": 92,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c107a41e-2d3b-435e-8935-681ceae06223",
+      "label": "Centre de Santé de la Source de la Gonâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Centre de Santé de la Source de la Gonâve",
+          "department": "Ouest",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 94,
+      "basis": "department_only"
+    },
+    {
+      "id": "56403f1b-7e4d-47a8-aa47-6b19f3fb112e",
+      "label": "Centre de Santé de Laborde",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=824",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=824",
+          "label": "Centre de Santé Jean XXIII de Laborde",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "824"
+        }
+      ],
+      "note": null,
+      "index": 95,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6719319e-bf35-4b0e-9259-8454172be533",
+      "label": "Centre de Santé de Lafond",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=392",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=392",
+          "label": "CSL Lafond",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "392"
+        }
+      ],
+      "note": null,
+      "index": 96,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6f77875d-fa32-4fd2-a289-959373083ff6",
+      "label": "Centre de Santé de Laurent",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=3184",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=3184",
+          "label": "DISPENSAIRE LAURENT",
+          "department": "Sud",
+          "commune": "Cayes",
+          "id": "3184"
+        }
+      ],
+      "note": null,
+      "index": 97,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1cc44f67-bcb2-4fc3-9863-f720a820b948",
+      "label": "Centre de Santé de Lavanneau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=387",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=387",
+          "label": "Dispensaire la Vanneau",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "387"
+        }
+      ],
+      "note": null,
+      "index": 98,
+      "basis": "public_facility"
+    },
+    {
+      "id": "0d9f08a5-bba4-4779-b25c-fff633bcc10c",
+      "label": "Centre de Santé de Léon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 58,
+          "label": "Siloé de Léon",
+          "department": "Grand’Anse",
+          "commune": "Jérémie",
+          "code": "811205"
+        }
+      ],
+      "note": null,
+      "index": 100,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e675cc2f-01f4-4114-a330-5e6237d50c11",
+      "label": "Centre de Santé de Mackandal",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=901",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=901",
+          "label": "Centre communautaire de Santé de Mackandal",
+          "department": "Grand-Anse",
+          "commune": "Jérémie",
+          "id": "901"
+        }
+      ],
+      "note": null,
+      "index": 103,
+      "basis": "public_facility"
+    },
+    {
+      "id": "df01f0a2-d2e4-4e2e-8587-a21cad83c290",
+      "label": "Centre de Santé de Madame Bernard",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Île-à-Vache"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=848",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=848",
+          "label": "Centre de Santé de l'Ile à Vache de Mme Bernard",
+          "department": "Sud",
+          "commune": "!le-!-Vache",
+          "id": "848"
+        }
+      ],
+      "note": null,
+      "index": 104,
+      "basis": "public_facility"
+    },
+    {
+      "id": "26b9809d-9d65-465b-866e-559898b39c03",
+      "label": "Centre de Santé de Mandou",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Anse-d’Hainault"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=916",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=916",
+          "label": "SSPE de Mandou",
+          "department": "Grand-Anse",
+          "commune": "Anse-d'Hainault",
+          "id": "916"
+        }
+      ],
+      "note": null,
+      "index": 106,
+      "basis": "public_facility"
+    },
+    {
+      "id": "594fb074-db99-4bb5-8347-2a39b4be18cb",
+      "label": "Centre de Santé de Maniche",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Maniche"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 86,
+          "label": "Maniche",
+          "department": "Sud",
+          "commune": "Maniche",
+          "code": "715101"
+        }
+      ],
+      "note": null,
+      "index": 107,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b10f3d59-f238-438d-8923-222b34d7d4fd",
+      "label": "Centre de Santé de Mare Sucrin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Anse-à-Galets"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 84,
+          "label": "Dispensaire Marsucrin",
+          "department": "Ouest",
+          "commune": "Anse-à-Galets",
+          "code": "151204"
+        }
+      ],
+      "note": null,
+      "index": 109,
+      "basis": "public_facility"
+    },
+    {
+      "id": "31495f68-bb0d-44cd-9e54-56dc9b050b21",
+      "label": "Centre de Santé de Marfranc",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Marfranc"
+      },
+      "source_url": "https://www.ute.gouv.ht/wp-content/uploads/2024/10/pges-mini-reseau-marfranc.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_change",
+          "url": "https://www.ute.gouv.ht/wp-content/uploads/2024/10/pges-mini-reseau-marfranc.pdf",
+          "pdfPage": 31,
+          "commune": "Marfranc"
+        }
+      ],
+      "note": "La carte sanitaire conserve Jérémie; le référentiel administratif IHSI 2024 et l’UTE identifient désormais la commune de Marfranc.",
+      "index": 110,
+      "basis": "public_facility"
+    },
+    {
+      "id": "4aabc7e5-d798-45c4-a021-ac910df05b24",
+      "label": "Centre de Santé de Marigot",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Marigot"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=407",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=407",
+          "label": "CS de Marigot",
+          "department": "Sud-Est",
+          "commune": "Marigot",
+          "id": "407"
+        }
+      ],
+      "note": null,
+      "index": 111,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bcef6513-29d6-439d-8148-2435a9b7dfd8",
+      "label": "Centre de Santé de Mersan",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Camp-Perrin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=842",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=842",
+          "label": "Dispensaire de Mersan",
+          "department": "Sud",
+          "commune": "Camp-Perrin",
+          "id": "842"
+        }
+      ],
+      "note": null,
+      "index": 113,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2d191c03-2acb-44e1-af57-91258d495797",
+      "label": "Centre de Santé de Montagne Bellevue",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=384",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=384",
+          "label": "Dispensaire Bellevue la Montagne",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "384"
+        }
+      ],
+      "note": null,
+      "index": 114,
+      "basis": "public_facility"
+    },
+    {
+      "id": "cd4d8e8d-1a5f-4316-82b6-e328e6dd3ddb",
+      "label": "Centre de Santé de Montagne la Croix",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=385",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=385",
+          "label": "Dispensaire la Montagne la croix",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "385"
+        }
+      ],
+      "note": null,
+      "index": 115,
+      "basis": "public_facility"
+    },
+    {
+      "id": "0543b3cb-3ead-43f9-9519-eb07a6ba4f9f",
+      "label": "Centre de Santé de Petit-Trou-de-Nippes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Petit-Trou-de-Nippes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1063",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1063",
+          "label": "CAL de Petit Trou",
+          "department": "Nippes",
+          "commune": "Petit-Trou",
+          "id": "1063"
+        }
+      ],
+      "note": null,
+      "index": 118,
+      "basis": "public_facility"
+    },
+    {
+      "id": "0d10b090-5131-4a1d-96a1-b39b3aae228f",
+      "label": "Centre de Santé de Petite Place Cazeau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=82",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=82",
+          "label": "Centre Medico Social de Petit Place Cazeau (Maternité Sonud)",
+          "department": "Ouest",
+          "commune": "Delmas",
+          "id": "82"
+        }
+      ],
+      "note": null,
+      "index": 119,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bc7654a5-468c-4ca7-b030-024574a04570",
+      "label": "Centre de Santé de Phaeton",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Terrier-Rouge"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=596",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=596",
+          "label": "Centre Sante Communautaire de Phaeton",
+          "department": "Nord-Est",
+          "commune": "Terrier-Rouge",
+          "id": "596"
+        }
+      ],
+      "note": null,
+      "index": 121,
+      "basis": "public_facility"
+    },
+    {
+      "id": "0108fd3a-22e4-4443-8eef-1dbd54398be7",
+      "label": "Centre de Santé de Picmy",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Anse-à-Galets"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "locality",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 40,
+          "locality": "Picmy",
+          "commune": "Anse-à-Galets"
+        }
+      ],
+      "note": "Picmy est la 5e section de la commune d’Anse-à-Galets; le rattachement territorial est indiqué par le répertoire national.",
+      "index": 122,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e6f996bb-1258-4c71-bbc8-7faaceb0cc5b",
+      "label": "Centre de Santé de Plaisance-du-Sud",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Plaisance-du-Sud"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Plaisance-du-Sud",
+          "commune": "Plaisance-du-Sud",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 124,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "ada00535-3e3c-4eb5-8351-452fad3d2f07",
+      "label": "Centre de Santé de Pont-Gaudin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Gonaïves"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=613",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=613",
+          "label": "Centre de Sante de Pont Gaudin",
+          "department": "Artibonite",
+          "commune": "Gonaives",
+          "id": "613"
+        }
+      ],
+      "note": null,
+      "index": 125,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1d12e27f-ce4e-4de6-ab0a-b97976e53a75",
+      "label": "Centre de Santé de Port-à-Piment",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-à-Piment"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+          "label": "Hopital de Port à Piment",
+          "department": "Sud",
+          "commune": "Port-!-Piment",
+          "id": "884"
+        }
+      ],
+      "note": null,
+      "index": 126,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1266e06e-8f14-468e-9bf8-5b75218b8d08",
+      "label": "Centre de Santé de Poteau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Gonaïves"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 48,
+          "label": "Poteaux",
+          "department": "Artibonite",
+          "commune": "Gonaïves",
+          "code": "511410"
+        }
+      ],
+      "note": null,
+      "index": 128,
+      "basis": "public_facility"
+    },
+    {
+      "id": "397c7bce-65ee-4fc2-9e3c-712f34b97221",
+      "label": "Centre de Santé de Premier Échelon de Saint-Marc",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Saint-Marc"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé de Premier Échelon de Saint-Marc",
+          "commune": "Saint-Marc",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 129,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "ccd31e27-4ed6-459c-8e75-23db530ea707",
+      "label": "Centre de Santé de Quartier Morin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Quartier-Morin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=486",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=486",
+          "label": "Centre de Sante Quartier Morin",
+          "department": "Nord",
+          "commune": "Quartier-Morin",
+          "id": "486"
+        }
+      ],
+      "note": null,
+      "index": 130,
+      "basis": "public_facility"
+    },
+    {
+      "id": "106d4732-6808-4960-883c-f3739344f58c",
+      "label": "Centre de Santé de Quatre Chemins",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=820",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=820",
+          "label": "Centre de Sante Quatre Chemins",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "820"
+        }
+      ],
+      "note": null,
+      "index": 131,
+      "basis": "public_facility"
+    },
+    {
+      "id": "a3760184-1fce-4815-8fa3-442f39191748",
+      "label": "Centre de Santé de Saint-Jean du Sud",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Saint-Jean-du-Sud"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=856",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=856",
+          "label": "Centre de Sante de Saint Jean du Sud",
+          "department": "Sud",
+          "commune": "Saint-Jean",
+          "id": "856"
+        }
+      ],
+      "note": null,
+      "index": 132,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c40ccdb9-18ac-4e92-b0dd-63095713f022",
+      "label": "Centre de Santé de Saint-Joseph de La Vallée",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "La Vallée-de-Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=416",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=416",
+          "label": "Dispensaire Hopital St Joseph de la Vallée",
+          "department": "Sud-Est",
+          "commune": "La Vallée",
+          "id": "416"
+        }
+      ],
+      "note": null,
+      "index": 133,
+      "basis": "public_facility"
+    },
+    {
+      "id": "20e49e52-a62d-4c23-802a-650580118dc3",
+      "label": "Centre de Santé de Saint-Michel-de-l'Attalaye",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Saint-Michel-de-l’Attalaye"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=739",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=739",
+          "label": "Centre de communautaire de Santé Saint Michel de l’Attalaye",
+          "department": "Artibonite",
+          "commune": "Saint-Michel",
+          "id": "739"
+        }
+      ],
+      "note": null,
+      "index": 135,
+      "basis": "public_facility"
+    },
+    {
+      "id": "bacfc0cb-454b-4971-a6fc-02cd4dd14ec0",
+      "label": "Centre de Santé de Saint-Pierre Desdunes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Desdunes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=732",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=732",
+          "label": "Dispensaire Hopital St Pierre de Desdunes",
+          "department": "Artibonite",
+          "commune": "Desdunes",
+          "id": "732"
+        }
+      ],
+      "note": null,
+      "index": 136,
+      "basis": "public_facility"
+    },
+    {
+      "id": "dba65283-7cf9-4e82-9562-6633aa03f02f",
+      "label": "Centre de Santé de Sainte-Hélène de Jérémie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=895",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=895",
+          "label": "Centre de Santé Ste Hélène Immaculé Conception",
+          "department": "Grand-Anse",
+          "commune": "Jérémie",
+          "id": "895"
+        }
+      ],
+      "note": null,
+      "index": 137,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6ea51642-e151-4b86-ae59-0c73ee3d976c",
+      "label": "Centre de Santé de Seguin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Marigot"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=409",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=409",
+          "label": "Dispensaire Seguin",
+          "department": "Sud-Est",
+          "commune": "Marigot",
+          "id": "409"
+        }
+      ],
+      "note": null,
+      "index": 138,
+      "basis": "public_facility"
+    },
+    {
+      "id": "ce1f8839-f282-4081-bfb2-a1e71135743a",
+      "label": "Centre de Santé de Solino",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Port-au-Prince"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=31",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=31",
+          "label": "Complexe Medico Social De Solino/Centre De Sante Comm Social De Solino",
+          "department": "Ouest",
+          "commune": "Port-Au-Prince",
+          "id": "31"
+        }
+      ],
+      "note": null,
+      "index": 139,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5f7f772d-c90d-4f1b-805f-eb1d0751bccf",
+      "label": "Centre de Santé de Tabarre",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Tabarre"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=2098",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=2098",
+          "label": "Centre Hospitalier De Tabarre",
+          "department": "Ouest",
+          "commune": "Tabarre",
+          "id": "2098"
+        }
+      ],
+      "note": null,
+      "index": 140,
+      "basis": "public_facility"
+    },
+    {
+      "id": "192da02c-393c-4bb9-b727-b4ca181b1771",
+      "label": "Centre de Santé de Tamarin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pointe-à-Raquette"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=382",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=382",
+          "label": "Dispensaire de Tamarin",
+          "department": "Ouest",
+          "commune": "Pointe-a-Raquettes",
+          "id": "382"
+        }
+      ],
+      "note": null,
+      "index": 141,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e77195eb-1861-4292-9173-84f343f95916",
+      "label": "Centre de Santé de Thiotte",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Thiotte"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=454",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=454",
+          "label": "Centre de Sante de Thiotte",
+          "department": "Sud-Est",
+          "commune": "Thiotte",
+          "id": "454"
+        }
+      ],
+      "note": null,
+      "index": 143,
+      "basis": "public_facility"
+    },
+    {
+      "id": "3fdd7b62-9b56-4ce7-9fd5-39f941c7f18b",
+      "label": "Centre de Santé de Thomassin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=182",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=182",
+          "label": "Centre Medico social Thomassin 25",
+          "department": "Ouest",
+          "commune": "Petion-Ville",
+          "id": "182"
+        }
+      ],
+      "note": null,
+      "index": 144,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5638b70b-fc98-46ea-a56b-6efd839b5d87",
+      "label": "Centre de Santé de Ti Palmiste",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pointe-à-Raquette"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=380",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=380",
+          "label": "Centre World Vision ti Palmiste",
+          "department": "Ouest",
+          "commune": "Pointe-a-Raquettes",
+          "id": "380"
+        }
+      ],
+      "note": null,
+      "index": 147,
+      "basis": "public_facility"
+    },
+    {
+      "id": "abb7379d-8c43-40c6-8247-5f59583f7eec",
+      "label": "Centre de Santé de Tiburon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Tiburon"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "public_report",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6
+        }
+      ],
+      "note": null,
+      "index": 148,
+      "basis": "public_facility"
+    },
+    {
+      "id": "516cfcb3-3da4-4cb2-ae01-1823f55b5c70",
+      "label": "Centre de Santé de Torbeck",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Torbeck"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=829",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=829",
+          "label": "Centre de Santé de Torbeck",
+          "department": "Sud",
+          "commune": "Torbeck",
+          "id": "829"
+        }
+      ],
+      "note": null,
+      "index": 149,
+      "basis": "public_facility"
+    },
+    {
+      "id": "84bebc69-8cf7-4d2e-ae9d-7514495204c7",
+      "label": "Centre de Santé de Tozia",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Pestel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=942",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=942",
+          "label": "Centre de Santé de Tozia",
+          "department": "Grand-Anse",
+          "commune": "Pestel",
+          "id": "942"
+        }
+      ],
+      "note": null,
+      "index": 150,
+      "basis": "public_facility"
+    },
+    {
+      "id": "76f8f687-3429-49d7-802c-820ccf1326fe",
+      "label": "Centre de Santé de Trou Louijeune",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Anse-à-Galets"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 84,
+          "label": "Dispensaire Trou Louis Jeune",
+          "department": "Ouest",
+          "commune": "Anse-à-Galets",
+          "code": "151407"
+        }
+      ],
+      "note": null,
+      "index": 151,
+      "basis": "public_facility"
+    },
+    {
+      "id": "cc2de033-e771-40b0-bc7f-38105b5da54c",
+      "label": "Centre de Santé de Trou Louis Jeune",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Anse-à-Galets"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 84,
+          "label": "Dispensaire Trou Louis Jeune",
+          "department": "Ouest",
+          "commune": "Anse-à-Galets",
+          "code": "151407"
+        }
+      ],
+      "note": null,
+      "index": 152,
+      "basis": "public_facility"
+    },
+    {
+      "id": "32566231-5686-402d-b9d5-63a29b0158b4",
+      "label": "Centre de Santé des Anglais",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Anglais"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=888",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=888",
+          "label": "Centre de Sante Les Anglais",
+          "department": "Sud",
+          "commune": "Les Anglais",
+          "id": "888"
+        }
+      ],
+      "note": null,
+      "index": 156,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6f4ed25f-8875-4006-8ff7-52d7e7c76695",
+      "label": "Centre de Santé des Coteaux",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Coteaux"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=882",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=882",
+          "label": "Centre de Santé des Coteaux",
+          "department": "Sud",
+          "commune": "Coteaux",
+          "id": "882"
+        }
+      ],
+      "note": null,
+      "index": 157,
+      "basis": "public_facility"
+    },
+    {
+      "id": "df33656d-e468-4527-a26d-10c1cfc14e7a",
+      "label": "Centre de Santé des Roseaux",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "locality",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6,
+          "label": "Roseaux/Roseaux",
+          "department": "Grand’Anse",
+          "commune": "Roseaux"
+        }
+      ],
+      "note": null,
+      "index": 158,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "f3e072f0-3dc9-4493-be15-a2f99f7814a2",
+      "label": "Centre de Santé des Trois Rivières",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "Port-de-Paix"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=947",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=947",
+          "label": "Centre de Sante Communautaire Trois Rivières",
+          "department": "Nord-Ouest",
+          "commune": "Port-de-Paix",
+          "id": "947"
+        }
+      ],
+      "note": null,
+      "index": 159,
+      "basis": "public_facility"
+    },
+    {
+      "id": "277a1373-6ab4-44be-aa77-b247483fc9fa",
+      "label": "Centre de Santé Dr Lutz de Trou-de-Sable",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Gonaïves"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre de Santé Dr Lutz de Trou-de-Sable",
+          "commune": "Gonaïves",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 160,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "158e21d1-58e0-4ea9-8aef-a21d08bcfd22",
+      "label": "Centre de Santé Grande Rivière du Nord",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Grande-Rivière-du-Nord"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=529",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=529",
+          "label": "CAL Grande Rivière du Nord",
+          "department": "Nord",
+          "commune": "Grande-Riviere",
+          "id": "529"
+        }
+      ],
+      "note": null,
+      "index": 161,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5415b130-84eb-4de8-9e1b-ee6e68050c2f",
+      "label": "Centre de Santé Immaculée des Roseaux",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Roseaux"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+      "evidence": [
+        {
+          "kind": "locality",
+          "url": "https://mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf",
+          "pdfPage": 6,
+          "label": "Roseaux/Roseaux",
+          "department": "Grand’Anse",
+          "commune": "Roseaux"
+        }
+      ],
+      "note": null,
+      "index": 162,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "1245bdde-3a12-4af1-99aa-4b5f1b95904a",
+      "label": "Centre de Santé Jean XXIII de Laborde",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=824",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=824",
+          "label": "Centre de Santé Jean XXIII de Laborde",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "824"
+        }
+      ],
+      "note": null,
+      "index": 163,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6b5902d7-cc9a-44a8-82bd-0fbd3b9a605b",
+      "label": "Centre de Santé Léon Coicou",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Abricots"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=902",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=902",
+          "label": "CS Léon Coicou d’Anse du Clerc",
+          "department": "Grand-Anse",
+          "commune": "Abricots",
+          "id": "902"
+        }
+      ],
+      "note": null,
+      "index": 165,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2a1032f7-3908-4159-957b-ca858b69f105",
+      "label": "Centre de Santé Morne à Chandelle",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "locality",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 40,
+          "locality": "14e section Morne Chandelle",
+          "commune": "Carrefour",
+          "department": "Ouest"
+        }
+      ],
+      "note": null,
+      "index": 167,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "e8713a5b-9870-4a23-a669-ede24a8ce007",
+      "label": "Centre de Santé Notre-Dame de Chansolme",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "Chansolme"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=977",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=977",
+          "label": "Chansolme",
+          "department": "Nord-Ouest",
+          "commune": "Chansolme",
+          "id": "977"
+        }
+      ],
+      "note": null,
+      "index": 168,
+      "basis": "public_facility"
+    },
+    {
+      "id": "fa7897de-4eba-43df-949e-64f1ee7b6912",
+      "label": "Centre de Santé Notre-Dame du Cap de Pétion-Ville",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 78,
+          "label": "Centre de santé Notre Dame du Cap",
+          "department": "Ouest",
+          "commune": "Pétion-ville",
+          "code": "114114"
+        }
+      ],
+      "note": null,
+      "index": 170,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c5eaca02-2094-4b49-a88e-9c339439b047",
+      "label": "Centre de Santé Saint-Paul de Delmas 32",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 75,
+          "label": "Centre de santé St Paul",
+          "department": "Ouest",
+          "commune": "Delmas",
+          "code": "112127"
+        }
+      ],
+      "note": null,
+      "index": 172,
+      "basis": "public_facility"
+    },
+    {
+      "id": "22d1b0d9-8bfb-450e-9eb1-e1381c91fea1",
+      "label": "Centre de Santé Sainte-Agnès de Beaumont",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Beaumont"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=933",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=933",
+          "label": "Centre de Santé Saite Agnès de Baumond",
+          "department": "Grand-Anse",
+          "commune": "Beaumont",
+          "id": "933"
+        }
+      ],
+      "note": null,
+      "index": 174,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d8876326-04be-4be0-9ae9-00b140cb63bb",
+      "label": "Centre de Santé Sainte-Anne de Camp-Perrin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Camp-Perrin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+          "label": "Hopital Ste Anne de Camp Perrin",
+          "department": "Sud",
+          "commune": "Camp-Perrin",
+          "id": "840"
+        }
+      ],
+      "note": null,
+      "index": 176,
+      "basis": "public_facility"
+    },
+    {
+      "id": "36f8446f-80f4-4e15-80c7-4ba93d38c4d0",
+      "label": "Centre Haïtiano-Arabe Plan International (CHAPI)",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Cité Soleil"
+      },
+      "source_url": "https://www.msf.fr/actualites/haiti-la-population-civile-paie-au-prix-fort-la-flambee-de-violence-a-port-au-prince",
+      "evidence": [
+        {
+          "kind": "operator",
+          "url": "https://www.msf.fr/actualites/haiti-la-population-civile-paie-au-prix-fort-la-flambee-de-violence-a-port-au-prince",
+          "commune": "Cité Soleil"
+        }
+      ],
+      "note": null,
+      "index": 177,
+      "basis": "public_facility"
+    },
+    {
+      "id": "db8e04ef-8a39-4f03-bb69-fc19fc47c1ae",
+      "label": "Centre Hospitalier de Kenscoff",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Kenscoff"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=211",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=211",
+          "label": "Centre de Santé de Kenscoff",
+          "department": "Ouest",
+          "commune": "Kenscoff",
+          "id": "211"
+        }
+      ],
+      "note": null,
+      "index": 178,
+      "basis": "public_facility"
+    },
+    {
+      "id": "aa7b352c-21ea-4961-9322-1e29172e5aa4",
+      "label": "Centre Hospitalier de Port-à-Piment",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-à-Piment"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+          "label": "Hopital de Port à Piment",
+          "department": "Sud",
+          "commune": "Port-!-Piment",
+          "id": "884"
+        }
+      ],
+      "note": null,
+      "index": 179,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b91a3eae-d7bb-44de-b18e-3d5af8a01b94",
+      "label": "Centre Hospitalier Sainte-Catherine Labouré",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Cité Soleil"
+      },
+      "source_url": "https://www.msf.fr/actualites/haiti-a-port-au-prince-deux-hopitaux-dans-la-guerilla-urbaine",
+      "evidence": [
+        {
+          "kind": "operator",
+          "url": "https://www.msf.fr/actualites/haiti-a-port-au-prince-deux-hopitaux-dans-la-guerilla-urbaine",
+          "commune": "Cité Soleil"
+        }
+      ],
+      "note": null,
+      "index": 180,
+      "basis": "public_facility"
+    },
+    {
+      "id": "9b3abddb-4439-46b2-9382-84f5b8f73457",
+      "label": "Centre Materno-Infantil de Léogâne",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Léogâne"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=244",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=244",
+          "label": "Centre materno-infantile",
+          "department": "Ouest",
+          "commune": "Léogane",
+          "id": "244"
+        }
+      ],
+      "note": null,
+      "index": 182,
+      "basis": "public_facility"
+    },
+    {
+      "id": "3232a7a9-2b94-4a6d-9654-cc86888e16cc",
+      "label": "Centre Médico Populaire Bas Fond Philomène",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 75,
+          "label": "CS Bas Fond Philomène Delmas 32",
+          "department": "Ouest",
+          "commune": "Delmas",
+          "code": "112102"
+        }
+      ],
+      "note": null,
+      "index": 184,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c5a3feae-4521-4fc6-97eb-45a5f8905833",
+      "label": "Centre Médico-Social de Dargout (Plaisance-du-Sud)",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Plaisance-du-Sud"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Centre Médico-Social de Dargout (Plaisance-du-Sud)",
+          "commune": "Plaisance-du-Sud",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 186,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "2f62f363-5782-4ee1-9251-e7f1a703d114",
+      "label": "Centre Médico-Social de Gebeau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Jérémie"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=893",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=893",
+          "label": "Centre Médico-Social de Gebeau",
+          "department": "Grand-Anse",
+          "commune": "Jérémie",
+          "id": "893"
+        }
+      ],
+      "note": null,
+      "index": 188,
+      "basis": "public_facility"
+    },
+    {
+      "id": "3f7b5555-d431-437c-841e-5ac210440d92",
+      "label": "Cm.de Santé Montagne Bellevue",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=384",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=384",
+          "label": "Dispensaire Bellevue la Montagne",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "384"
+        }
+      ],
+      "note": null,
+      "index": 192,
+      "basis": "public_facility"
+    },
+    {
+      "id": "2c10bf77-e94e-48b5-9e3e-483fc030a1ad",
+      "label": "Département Sanitaire du Nord",
+      "version": 3,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": "Nord",
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Cap-Haïtien"
+      },
+      "source_url": "https://www.mspp.gouv.ht/site/downloads/Appel%20a%20Candidature%20Nord%20NordEst%20CAN.pdf",
+      "evidence": [
+        {
+          "kind": "public_office_address",
+          "url": "https://www.mspp.gouv.ht/site/downloads/Appel%20a%20Candidature%20Nord%20NordEst%20CAN.pdf",
+          "commune": "Cap-Haïtien"
+        }
+      ],
+      "note": null,
+      "index": 197,
+      "basis": "public_facility"
+    },
+    {
+      "id": "7751f450-bf76-49ad-8a26-cd2f347f9d2b",
+      "label": "Département Sanitaire du Nord-Est",
+      "version": 3,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": "Nord-Est",
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Fort-Liberté"
+      },
+      "source_url": "https://www.mspp.gouv.ht/site/downloads/Appel%20a%20Candidature%20Nord%20NordEst%20CAN.pdf",
+      "evidence": [
+        {
+          "kind": "public_office_address",
+          "url": "https://www.mspp.gouv.ht/site/downloads/Appel%20a%20Candidature%20Nord%20NordEst%20CAN.pdf",
+          "commune": "Fort-Liberté"
+        }
+      ],
+      "note": null,
+      "index": 198,
+      "basis": "public_facility"
+    },
+    {
+      "id": "b792d094-b5e1-4ae3-975e-3c4e71fbdfe7",
+      "label": "Département Sanitaire du Nord-Ouest",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Département Sanitaire du Nord-Ouest",
+          "department": "Nord-Ouest",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 199,
+      "basis": "department_only"
+    },
+    {
+      "id": "4bb3d84c-f339-4e0f-96ee-9c859dc742cf",
+      "label": "Département Sanitaire du Sud",
+      "version": 3,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": "Sud",
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/PROCEDURES%20PIP-MSPP%20FINAL%20juin%202015.compressed.pdf",
+      "evidence": [
+        {
+          "kind": "public_office_address",
+          "url": "https://mspp.gouv.ht/site/downloads/PROCEDURES%20PIP-MSPP%20FINAL%20juin%202015.compressed.pdf",
+          "commune": "Les Cayes"
+        }
+      ],
+      "note": null,
+      "index": 200,
+      "basis": "public_facility"
+    },
+    {
+      "id": "0daf2394-cc50-43a9-89e3-0f9345c26e1c",
+      "label": "Direction de Formation et de Perfectionnement en Sciences de la Santé",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de Formation et de Perfectionnement en Sciences de la Santé",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 201,
+      "basis": "department_only"
+    },
+    {
+      "id": "b48cb25c-6de9-4b90-8711-98b84afca696",
+      "label": "Direction de l'Administration et du Budget",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de l'Administration et du Budget",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 202,
+      "basis": "department_only"
+    },
+    {
+      "id": "2470c0d3-3fa4-48e3-8878-46683cafcb18",
+      "label": "Direction de l'Administration et du Budget (Service Sécurité)",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de l'Administration et du Budget (Service Sécurité)",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 203,
+      "basis": "department_only"
+    },
+    {
+      "id": "38588ebb-9434-415b-bd16-65138a2165f1",
+      "label": "Direction de l'Administration et du Budget (Services Généraux)",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de l'Administration et du Budget (Services Généraux)",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 204,
+      "basis": "department_only"
+    },
+    {
+      "id": "b72c63d9-5dc1-41ce-a162-6dd2b89c0590",
+      "label": "Direction de la Pharmacie, du Médicament et de la Médecine Traditionnelle",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de la Pharmacie, du Médicament et de la Médecine Traditionnelle",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 205,
+      "basis": "department_only"
+    },
+    {
+      "id": "d485aed9-551b-4f27-8f3e-b035bf4d9e4f",
+      "label": "Direction de la Santé et de la Famille",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de la Santé et de la Famille",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 206,
+      "basis": "department_only"
+    },
+    {
+      "id": "a3fbb66c-bccb-46a7-a657-9e8c16e81bac",
+      "label": "Direction de Promotion de la Santé et de Protection de l'Environnement",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction de Promotion de la Santé et de Protection de l'Environnement",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 207,
+      "basis": "department_only"
+    },
+    {
+      "id": "2c62dfd7-288f-4e48-9a96-27604d8e9788",
+      "label": "Direction des Ressources Humaines",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction des Ressources Humaines",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 209,
+      "basis": "department_only"
+    },
+    {
+      "id": "9063181a-04c1-4e7d-b717-d1405fe8dc96",
+      "label": "Direction du Programme Élargi de Vaccination",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Direction du Programme Élargi de Vaccination",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 210,
+      "basis": "department_only"
+    },
+    {
+      "id": "be79741a-e9cd-49a1-9547-cc8d6bcee9b7",
+      "label": "Direction Sanitaire de l'Artibonite",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Direction Sanitaire de l'Artibonite",
+          "department": "Artibonite",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 211,
+      "basis": "department_only"
+    },
+    {
+      "id": "d8e026e0-17e9-4ab5-9c28-70140c7d34ea",
+      "label": "Direction Sanitaire de l'Ouest",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Direction Sanitaire de l'Ouest",
+          "department": "Ouest",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 212,
+      "basis": "department_only"
+    },
+    {
+      "id": "e25f126e-b56a-4bae-b305-8ba7d1d3c25c",
+      "label": "Direction Sanitaire des Nippes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "Direction Sanitaire des Nippes",
+          "department": "Nippes",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 213,
+      "basis": "department_only"
+    },
+    {
+      "id": "f1c8a732-a321-46f9-bdfe-ef28f533882d",
+      "label": "Direction Sanitaire du Sud-Est",
+      "version": 3,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": "Sud-Est",
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://www.mspp.gouv.ht/wp-content/uploads/Le-Ministere-de-la-Sante-Publique-et-de-la-Population-MSPP-informe-tous-les-postulants.pdf",
+      "evidence": [
+        {
+          "kind": "public_office_address",
+          "url": "https://www.mspp.gouv.ht/wp-content/uploads/Le-Ministere-de-la-Sante-Publique-et-de-la-Population-MSPP-informe-tous-les-postulants.pdf",
+          "commune": "Jacmel"
+        }
+      ],
+      "note": null,
+      "index": 214,
+      "basis": "public_facility"
+    },
+    {
+      "id": "86a5a196-8a42-42e5-80c0-b29b74a0c3c8",
+      "label": "Hôpital Bon Samaritain de Barrière-Bleue (Port-de-Paix)",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "Port-de-Paix"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Hôpital Bon Samaritain de Barrière-Bleue (Port-de-Paix)",
+          "commune": "Port-de-Paix",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 216,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "74d2c917-3b12-4955-ba42-3e4df19d650f",
+      "label": "Hôpital Charles Colimon",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "Petite-Rivière-de-l’Artibonite"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=725",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=725",
+          "label": "Hopital Charles Colimon",
+          "department": "Artibonite",
+          "commune": "Petite-Riviere de l'Artibonite",
+          "id": "725"
+        }
+      ],
+      "note": null,
+      "index": 217,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e3028ccf-4102-4896-a8fe-45fdc599a9f8",
+      "label": "Hôpital Communautaire d'Anse-d'Hainault",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Anse-d’Hainault"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+          "label": "HCR (St Jean Baptiste)",
+          "department": "Grand-Anse",
+          "commune": "Anse-d'Hainault",
+          "id": "914"
+        }
+      ],
+      "note": null,
+      "index": 219,
+      "basis": "public_facility"
+    },
+    {
+      "id": "fca62bdf-ade0-4602-825c-6f7ebfc589cf",
+      "label": "Hôpital Communautaire de Dame-Marie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Dame-Marie"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 58,
+          "label": "Hôp. de la Communauté DM",
+          "department": "Grand’Anse",
+          "commune": "Dame-Marie",
+          "code": "822301"
+        }
+      ],
+      "note": null,
+      "index": 220,
+      "basis": "public_facility"
+    },
+    {
+      "id": "3b7c5e78-af53-432a-96c4-7ee851542145",
+      "label": "Hôpital Communautaire de Référence d'Anse-d'Hainault",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Anse-d’Hainault"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+          "label": "HCR (St Jean Baptiste)",
+          "department": "Grand-Anse",
+          "commune": "Anse-d'Hainault",
+          "id": "914"
+        }
+      ],
+      "note": null,
+      "index": 221,
+      "basis": "public_facility"
+    },
+    {
+      "id": "abea295c-1eb0-445b-a777-6d4a89b3ecef",
+      "label": "Hôpital Communautaire de Référence d'Aquin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Aquin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=863",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=863",
+          "label": "HCR d'Aquin (CDI)",
+          "department": "Sud",
+          "commune": "Aquin",
+          "id": "863"
+        }
+      ],
+      "note": null,
+      "index": 222,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d205436d-a0ba-4ff4-a44b-330ae49e0db1",
+      "label": "Hôpital Communautaire de Référence d'Arcachon 32",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=173",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=173",
+          "label": "Centre Hosp. Dr Raoul Pierre Louis",
+          "department": "Ouest",
+          "commune": "Carrefour",
+          "id": "173"
+        }
+      ],
+      "note": null,
+      "index": 223,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c214dc60-20e9-4708-b6a3-ad7ca12b3229",
+      "label": "Hôpital Communautaire de Référence de Corail",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Corail"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 59,
+          "label": "CAL St Pierre de Corail",
+          "department": "Grand’Anse",
+          "commune": "Corail",
+          "code": "831101"
+        }
+      ],
+      "note": null,
+      "index": 224,
+      "basis": "public_facility"
+    },
+    {
+      "id": "303f889b-7401-4c5c-ba6d-122f72852ad1",
+      "label": "Hôpital Communautaire de Référence de Dame-Marie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Dame-Marie"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 58,
+          "label": "Hôp. de la Communauté DM",
+          "department": "Grand’Anse",
+          "commune": "Dame-Marie",
+          "code": "822301"
+        }
+      ],
+      "note": null,
+      "index": 225,
+      "basis": "public_facility"
+    },
+    {
+      "id": "f7b6419f-4bfc-4e87-abcd-79bdc74ea36c",
+      "label": "Hôpital Communautaire de Référence de l'Anse-à-Veau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Anse-à-Veau"
+      },
+      "source_url": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+      "evidence": [
+        {
+          "kind": "explicit_municipality_in_label",
+          "registered_label": "Hôpital Communautaire de Référence de l'Anse-à-Veau",
+          "commune": "Anse-à-Veau",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Le nom enregistré précise la commune; le département est vérifié dans le référentiel administratif."
+        }
+      ],
+      "note": null,
+      "index": 226,
+      "basis": "explicit_municipality_in_label"
+    },
+    {
+      "id": "95974301-3afb-4932-b601-d6d323c9a8d4",
+      "label": "Hôpital Communautaire de Référence de l'Asile",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "L’Asile"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1067",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1067",
+          "label": "HCR de L'Asile",
+          "department": "Nippes",
+          "commune": "L'Asile",
+          "id": "1067"
+        }
+      ],
+      "note": null,
+      "index": 227,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e80c8f56-a17a-450a-b1c3-b8e712012d76",
+      "label": "Hôpital Communautaire de Référence de l'Estère",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": "L’Estère"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=635",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=635",
+          "label": "Hopital Communautaire de Reference de l'Estere",
+          "department": "Artibonite",
+          "commune": "L'Estere",
+          "id": "635"
+        }
+      ],
+      "note": null,
+      "index": 228,
+      "basis": "public_facility"
+    },
+    {
+      "id": "20a56ac6-2b37-4ac2-8550-2af03e32ab29",
+      "label": "Hôpital Communautaire de Référence de Port-Salut",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-Salut"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=851",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=851",
+          "label": "HCR de Port Salut",
+          "department": "Sud",
+          "commune": "Port-Salut",
+          "id": "851"
+        }
+      ],
+      "note": null,
+      "index": 229,
+      "basis": "public_facility"
+    },
+    {
+      "id": "7285d245-5e0e-4db1-8710-07df65ce63ab",
+      "label": "Hôpital Communautaire de Référence de Ti Palmiste",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pointe-à-Raquette"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=380",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=380",
+          "label": "Centre World Vision ti Palmiste",
+          "department": "Ouest",
+          "commune": "Pointe-a-Raquettes",
+          "id": "380"
+        }
+      ],
+      "note": null,
+      "index": 230,
+      "basis": "public_facility"
+    },
+    {
+      "id": "abca4f04-1225-4574-a9ae-732f255f105c",
+      "label": "Hôpital Communautaire de Référence de Trou-du-Nord",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Trou-du-Nord"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=590",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=590",
+          "label": "Hopital Communautaire de Reference Trou du Nord",
+          "department": "Nord-Est",
+          "commune": "Trou-du-Nord",
+          "id": "590"
+        }
+      ],
+      "note": null,
+      "index": 231,
+      "basis": "public_facility"
+    },
+    {
+      "id": "568cdf39-0842-4ea2-813f-39a354c28d31",
+      "label": "Hôpital Communautaire de Référence des Cayes-Jacmel",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Cayes-Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=411",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=411",
+          "label": "Hopital Communautaire de Reference de Cayes Jacmel",
+          "department": "Sud-Est",
+          "commune": "Cayes-Jacmel",
+          "id": "411"
+        }
+      ],
+      "note": null,
+      "index": 232,
+      "basis": "public_facility"
+    },
+    {
+      "id": "55d6b9ad-c93f-4a5a-a759-79f11d601e01",
+      "label": "Hôpital Communautaire de Référence Jules Fleury de l'Anse-à-Veau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Anse-à-Veau"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1060",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1060",
+          "label": "CAL Jules Fleury",
+          "department": "Nippes",
+          "commune": "Anse-!-Veau",
+          "id": "1060"
+        }
+      ],
+      "note": null,
+      "index": 233,
+      "basis": "public_facility"
+    },
+    {
+      "id": "caca2d06-94d3-431b-acad-a9d254a9fb83",
+      "label": "Hôpital Communautaire de Référence Saint-Jean-Baptiste d'Anse-d'Hainault",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Anse-d’Hainault"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=914",
+          "label": "HCR (St Jean Baptiste)",
+          "department": "Grand-Anse",
+          "commune": "Anse-d'Hainault",
+          "id": "914"
+        }
+      ],
+      "note": null,
+      "index": 234,
+      "basis": "public_facility"
+    },
+    {
+      "id": "f273545b-617c-4b0a-b68d-528c3908890f",
+      "label": "Hôpital de Carrefour",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=144",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=144",
+          "label": "Hôpital de carrefour",
+          "department": "Ouest",
+          "commune": "Carrefour",
+          "id": "144"
+        }
+      ],
+      "note": null,
+      "index": 235,
+      "basis": "public_facility"
+    },
+    {
+      "id": "8e0607e0-7947-47a7-95be-25b55ce60c31",
+      "label": "Hôpital de Fermathe",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Kenscoff"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=213",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=213",
+          "label": "Hôpital de Fermathe (mission Bapt)",
+          "department": "Ouest",
+          "commune": "Kenscoff",
+          "id": "213"
+        }
+      ],
+      "note": null,
+      "index": 236,
+      "basis": "public_facility"
+    },
+    {
+      "id": "089bfac8-c1d2-43e2-b28b-9eed8057e5a5",
+      "label": "Hôpital de Fort-Liberté",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Est",
+        "commune": "Fort-Liberté"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=569",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=569",
+          "label": "Hôpital de Fort Liberté",
+          "department": "Nord-Est",
+          "commune": "Fort-Libert!",
+          "id": "569"
+        }
+      ],
+      "note": null,
+      "index": 237,
+      "basis": "public_facility"
+    },
+    {
+      "id": "49b87406-239c-4f99-bb16-7975898d811c",
+      "label": "Hôpital de l'Université d'État d'Haïti (HUEH)",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Port-au-Prince"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=28",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=28",
+          "label": "HUEH",
+          "department": "Ouest",
+          "commune": "Port-Au-Prince",
+          "id": "28"
+        }
+      ],
+      "note": null,
+      "index": 238,
+      "basis": "public_facility"
+    },
+    {
+      "id": "ff921e85-a1ef-4089-83a8-d202380469e5",
+      "label": "Hôpital de la Communauté de Dame-Marie",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Grand’Anse",
+        "commune": "Dame-Marie"
+      },
+      "source_url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+      "evidence": [
+        {
+          "kind": "public_facility_registry",
+          "url": "https://mspp.gouv.ht/sites/default/files/publications/Liste%20des%20Institutions%20Sanitaires%202015.pdf",
+          "pdfPage": 58,
+          "label": "Hôp. de la Communauté DM",
+          "department": "Grand’Anse",
+          "commune": "Dame-Marie",
+          "code": "822301"
+        }
+      ],
+      "note": null,
+      "index": 239,
+      "basis": "public_facility"
+    },
+    {
+      "id": "76cda823-c19d-451b-b718-8b9ce5a70b19",
+      "label": "Hôpital de la Communauté Haïtienne",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=191",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=191",
+          "label": "Hôp. de la communauté haïtienne",
+          "department": "Ouest",
+          "commune": "Petion-Ville",
+          "id": "191"
+        }
+      ],
+      "note": null,
+      "index": 240,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d801be99-9c56-4356-89d5-af1e673474be",
+      "label": "Hôpital de Port-à-Piment",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Port-à-Piment"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=884",
+          "label": "Hopital de Port à Piment",
+          "department": "Sud",
+          "commune": "Port-!-Piment",
+          "id": "884"
+        }
+      ],
+      "note": null,
+      "index": 241,
+      "basis": "public_facility"
+    },
+    {
+      "id": "5c82ba8f-6e16-4a44-9241-f3031aea2e76",
+      "label": "Hôpital Dr Raoul Pierre Louis d'Arcachon 32",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=173",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=173",
+          "label": "Centre Hosp. Dr Raoul Pierre Louis",
+          "department": "Ouest",
+          "commune": "Carrefour",
+          "id": "173"
+        }
+      ],
+      "note": null,
+      "index": 243,
+      "basis": "public_facility"
+    },
+    {
+      "id": "652b8409-af3b-4e7c-897e-bcbfd24aa105",
+      "label": "Hôpital Eliazar Germain de Pétion-Ville",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Pétion-Ville"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=181",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=181",
+          "label": "Hôpital Eliazar Germain",
+          "department": "Ouest",
+          "commune": "Petion-Ville",
+          "id": "181"
+        }
+      ],
+      "note": null,
+      "index": 245,
+      "basis": "public_facility"
+    },
+    {
+      "id": "7545c5bd-192b-437c-8784-0bf128f64d55",
+      "label": "Hôpital Georges Gauvin de Grand-Goâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Grand-Goâve"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=272",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=272",
+          "label": "Hopital Communautaire De Reference Georges Gauvin",
+          "department": "Ouest",
+          "commune": "Grand-Goave",
+          "id": "272"
+        }
+      ],
+      "note": null,
+      "index": 246,
+      "basis": "public_facility"
+    },
+    {
+      "id": "a31df626-f289-44f4-b3fd-68dea3e801cb",
+      "label": "Hôpital Immaculée Conception de Port-de-Paix",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord-Ouest",
+        "commune": "Port-de-Paix"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=952",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=952",
+          "label": "Hopital Immaculee Conception",
+          "department": "Nord-Ouest",
+          "commune": "Port-de-Paix",
+          "id": "952"
+        }
+      ],
+      "note": null,
+      "index": 247,
+      "basis": "public_facility"
+    },
+    {
+      "id": "6faa5db9-952c-4754-af5d-67f3070c6dca",
+      "label": "Hôpital Immaculée Conception des Cayes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Les Cayes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=816",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=816",
+          "label": "Hopital Immaculée Conception des Cayes",
+          "department": "Sud",
+          "commune": "Les Cayes",
+          "id": "816"
+        }
+      ],
+      "note": null,
+      "index": 248,
+      "basis": "public_facility"
+    },
+    {
+      "id": "83f29c9a-8c91-4c06-bb1b-893cc763e320",
+      "label": "Hôpital Jules Fleury de l'Anse-à-Veau",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Anse-à-Veau"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1060",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1060",
+          "label": "CAL Jules Fleury",
+          "department": "Nippes",
+          "commune": "Anse-!-Veau",
+          "id": "1060"
+        }
+      ],
+      "note": null,
+      "index": 249,
+      "basis": "public_facility"
+    },
+    {
+      "id": "1e0c4d01-5ab9-4e84-88a8-994c66271040",
+      "label": "Hôpital Maternité de Carrefour",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Carrefour"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=144",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=144",
+          "label": "Hôpital de carrefour",
+          "department": "Ouest",
+          "commune": "Carrefour",
+          "id": "144"
+        }
+      ],
+      "note": null,
+      "index": 251,
+      "basis": "public_facility"
+    },
+    {
+      "id": "be82b798-37a6-48c8-a79f-2a5a86dd54f4",
+      "label": "Hôpital Notre-Dame de la Nativité de Belladère",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Centre",
+        "commune": "Belladère"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=802",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=802",
+          "label": "Hôpital Notre Dame de la Nativité",
+          "department": "Centre",
+          "commune": "Belladere",
+          "id": "802"
+        }
+      ],
+      "note": null,
+      "index": 252,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e9f05925-dce1-4b0a-bff4-cd3c52845d40",
+      "label": "Hôpital Notre-Dame de Petit-Goâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Petit-Goâve"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=261",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=261",
+          "label": "Hôpital Notre Dame",
+          "department": "Ouest",
+          "commune": "Petit-Goave",
+          "id": "261"
+        }
+      ],
+      "note": null,
+      "index": 253,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d311d596-f0db-4751-8d70-1fa052662996",
+      "label": "Hôpital Petit Trou de Nippes",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Petit-Trou-de-Nippes"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1063",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1063",
+          "label": "CAL de Petit Trou",
+          "department": "Nippes",
+          "commune": "Petit-Trou",
+          "id": "1063"
+        }
+      ],
+      "note": null,
+      "index": 254,
+      "basis": "public_facility"
+    },
+    {
+      "id": "e70c66c1-5223-4003-8137-a85cbd9600b6",
+      "label": "Hôpital Saint-Jean de Limbé",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nord",
+        "commune": "Limbé"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=560",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=560",
+          "label": "Hopital saint Jean de Limbé",
+          "department": "Nord",
+          "commune": "Limb!",
+          "id": "560"
+        }
+      ],
+      "note": null,
+      "index": 257,
+      "basis": "public_facility"
+    },
+    {
+      "id": "94a872e4-daed-4951-8f93-fab12cd34ad5",
+      "label": "Hôpital Saint-Michel de Jacmel",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud-Est",
+        "commune": "Jacmel"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=402",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=402",
+          "label": "Hôpital St Michel",
+          "department": "Sud-Est",
+          "commune": "Jacmel",
+          "id": "402"
+        }
+      ],
+      "note": null,
+      "index": 258,
+      "basis": "public_facility"
+    },
+    {
+      "id": "4e226214-4b92-4569-b8be-333114798e97",
+      "label": "Hôpital Sainte-Anne de Camp-Perrin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": "Camp-Perrin"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=840",
+          "label": "Hopital Ste Anne de Camp Perrin",
+          "department": "Sud",
+          "commune": "Camp-Perrin",
+          "id": "840"
+        }
+      ],
+      "note": null,
+      "index": 260,
+      "basis": "public_facility"
+    },
+    {
+      "id": "4e107606-d50d-404e-bcae-dc77113d1280",
+      "label": "Hôpital Sainte-Thérèse de Hinche",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Centre",
+        "commune": "Hinche"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=749",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=749",
+          "label": "Hôpital Sainte Thérèse",
+          "department": "Centre",
+          "commune": "Hinche",
+          "id": "749"
+        }
+      ],
+      "note": null,
+      "index": 261,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d7e1d95b-024f-4a9d-9bd0-94887d980fda",
+      "label": "Hôpital Sainte-Thérèse de Miragoâne",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Nippes",
+        "commune": "Miragoâne"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=1053",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=1053",
+          "label": "Hôpital Sainte Thérèse",
+          "department": "Nippes",
+          "commune": "Miragoane",
+          "id": "1053"
+        }
+      ],
+      "note": null,
+      "index": 262,
+      "basis": "public_facility"
+    },
+    {
+      "id": "d8047342-fc09-40f4-a2d4-75a7987f76a5",
+      "label": "Hôpital Wesleyen de la Gonâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Anse-à-Galets"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=368",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=368",
+          "label": "Hôpital Wesleyen",
+          "department": "Ouest",
+          "commune": "Anse-a-Galets",
+          "id": "368"
+        }
+      ],
+      "note": null,
+      "index": 267,
+      "basis": "public_facility"
+    },
+    {
+      "id": "42b964c4-c4d4-484d-b636-8bcd30a05ddd",
+      "label": "Maternité Isaïe Jeanty et Léon Audain",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://cartesanitaire.sisnu.net/inst.php?c=80",
+      "evidence": [
+        {
+          "kind": "public_facility",
+          "url": "https://cartesanitaire.sisnu.net/inst.php?c=80",
+          "label": "Maternité Isaïe Jeanty Universitaire",
+          "department": "Ouest",
+          "commune": "Delmas",
+          "id": "80"
+        }
+      ],
+      "note": null,
+      "index": 268,
+      "basis": "public_facility"
+    },
+    {
+      "id": "c67de1a3-7728-4620-8ee4-b7ab97460c41",
+      "label": "SONAPI",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": "Delmas"
+      },
+      "source_url": "https://sonapi.gouv.ht/about/",
+      "evidence": [
+        {
+          "kind": "public_office_address",
+          "url": "https://sonapi.gouv.ht/about/",
+          "address": "Blvd des industries Parc Industriel Métropolitain, Delmas, Ouest HT 6120, HAITI",
+          "commune": "Delmas",
+          "department": "Ouest"
+        }
+      ],
+      "note": null,
+      "index": 270,
+      "basis": "public_office_address"
+    },
+    {
+      "id": "734a6ec7-1449-4045-97db-ded86a750cdd",
+      "label": "UAS d'Aquin",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Sud",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "UAS d'Aquin",
+          "department": "Sud",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 271,
+      "basis": "department_only"
+    },
+    {
+      "id": "e979d387-e986-411f-8649-7a5655bdc8ab",
+      "label": "UAS de Dessalines",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "UAS de Dessalines",
+          "department": "Artibonite",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 272,
+      "basis": "department_only"
+    },
+    {
+      "id": "db6990cc-0591-4de3-8e4a-9359f2ff6c16",
+      "label": "UAS de la Gonâve",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_catchment",
+          "url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+          "department": "Ouest",
+          "reason": "Territoire de l’unité sanitaire; commune du bureau non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 273,
+      "basis": "department_only"
+    },
+    {
+      "id": "8a8c00ff-6709-4548-b47e-d92878800245",
+      "label": "UAS de Marmelade",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Artibonite",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "explicit_department_or_area_in_label",
+          "registered_label": "UAS de Marmelade",
+          "department": "Artibonite",
+          "department_reference": "https://ihsi.gouv.ht/public/storage/document-views/March2025/Oan4m17p5LEKtsGEnHgt.pdf",
+          "reason": "Commune du bureau/établissement non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 274,
+      "basis": "department_only"
+    },
+    {
+      "id": "973c8592-7dd0-4841-b187-0fbcdfd64d37",
+      "label": "UAS Gonavienne",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_catchment",
+          "url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+          "department": "Ouest",
+          "reason": "Territoire de l’unité sanitaire; commune du bureau non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 276,
+      "basis": "department_only"
+    },
+    {
+      "id": "d148944b-318e-4498-8013-6beb077b0071",
+      "label": "UCS Anacaona",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_catchment",
+          "url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+          "department": "Ouest",
+          "reason": "Territoire de l’unité sanitaire; commune du bureau non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 277,
+      "basis": "department_only"
+    },
+    {
+      "id": "d235ab53-1367-480e-9214-2c5f70965dc7",
+      "label": "UCS du Cul-de-Sac / Frontière",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_catchment",
+          "url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+          "department": "Ouest",
+          "reason": "Territoire de l’unité sanitaire; commune du bureau non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 278,
+      "basis": "department_only"
+    },
+    {
+      "id": "9016649f-e5fa-42c1-b9ee-f32ef348117a",
+      "label": "UCS Matheux",
+      "version": 2,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+      "evidence": [
+        {
+          "kind": "administrative_catchment",
+          "url": "https://mspp.gouv.ht/site/downloads/Rapport%20carte%20sanitaire%20Ouest.pdf",
+          "department": "Ouest",
+          "reason": "Territoire de l’unité sanitaire; commune du bureau non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 279,
+      "basis": "department_only"
+    },
+    {
+      "id": "a6dd2294-198b-403e-b29c-25d89fbb110d",
+      "label": "Unité d'Appui à la Décentralisation Sanitaire",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité d'Appui à la Décentralisation Sanitaire",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 280,
+      "basis": "department_only"
+    },
+    {
+      "id": "ee05a448-4cab-4214-8ebe-c582bd401bd9",
+      "label": "Unité de Communication et des Relations Publiques",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité de Communication et des Relations Publiques",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 281,
+      "basis": "department_only"
+    },
+    {
+      "id": "5633f0c6-f9cc-4ac6-8bf9-d074c0ee162d",
+      "label": "Unité de Coordination des Maladies Infectieuses et Transmissibles",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité de Coordination des Maladies Infectieuses et Transmissibles",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 282,
+      "basis": "department_only"
+    },
+    {
+      "id": "dac80f88-0341-4959-aade-ea5ca32cc5b7",
+      "label": "Unité de Santé Mentale",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité de Santé Mentale",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 283,
+      "basis": "department_only"
+    },
+    {
+      "id": "394b340f-20d0-4e59-bdff-2b6725c6d8be",
+      "label": "Unité Juridique",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité Juridique",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 284,
+      "basis": "department_only"
+    },
+    {
+      "id": "c09319b3-a6af-4ab2-ac3c-81e9a7eae791",
+      "label": "Unité Nationale de Gestion des Urgences Sanitaires",
+      "version": 1,
+      "workspace_id": "workspace_default",
+      "before": {
+        "department": null,
+        "commune": null
+      },
+      "after": {
+        "department": "Ouest",
+        "commune": null
+      },
+      "source_url": "https://www.mspp.gouv.ht/directions",
+      "evidence": [
+        {
+          "kind": "central_service",
+          "registered_label": "Unité Nationale de Gestion des Urgences Sanitaires",
+          "department": "Ouest",
+          "url": "https://www.mspp.gouv.ht/directions",
+          "reason": "Service central du MSPP; adresse propre de l’unité non vérifiée."
+        }
+      ],
+      "note": null,
+      "index": 285,
+      "basis": "department_only"
+    }
+  ],
+  "unresolved": [
+    {
+      "id": "436a6d9a-0540-4dba-ac4d-2c3fd2dad782",
+      "label": "-",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 0
+    },
+    {
+      "id": "95d1cb6a-08d0-4895-ad6b-49940ef4514b",
+      "label": "Brigade Médicale Cubaine",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 1
+    },
+    {
+      "id": "55cf0e38-ccc7-46fe-aa9b-0553acfd6f4d",
+      "label": "Bureau Départemental Sanitaire de l'Artibonite",
+      "department": "Artibonite",
+      "reason": "Département déjà renseigné; commune du bureau à préciser.",
+      "index": 9
+    },
+    {
+      "id": "af6db41d-32f8-49a2-9403-25339aeb7f1e",
+      "label": "Centre d'Approvisionnement",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 17
+    },
+    {
+      "id": "bfa65240-1df3-48b8-9517-99765cb393c0",
+      "label": "Centre de Santé",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 21
+    },
+    {
+      "id": "31c9f50e-c934-4690-a2d4-0445c76e4461",
+      "label": "Centre de Santé Bethel Rochefort",
+      "department": null,
+      "reason": "Béthel est recensé à Fonds-des-Nègres, mais un établissement nommé Rochefort existe à Bombardopolis. Adresse exacte nécessaire.",
+      "index": 23
+    },
+    {
+      "id": "d07223e0-33d4-4ade-99ac-85a63163e70b",
+      "label": "Centre de Santé Bois Létang",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 24
+    },
+    {
+      "id": "f641d49d-5c7c-4eb7-85f2-5fec8275c283",
+      "label": "Centre de Santé Carrefour de Jérémie",
+      "department": null,
+      "reason": "« Carrefour de Jérémie » peut désigner un quartier de Port-au-Prince; le nom ne suffit pas à retenir la commune de Jérémie.",
+      "index": 25
+    },
+    {
+      "id": "c6abfb20-e639-4b0c-9b58-c51e1e2db230",
+      "label": "Centre de Santé Communautaire de Las Cidras",
+      "department": null,
+      "reason": "Le nom Las Cidras ne permet pas de retenir une commune en Haïti.",
+      "index": 26
+    },
+    {
+      "id": "0c4f7c68-8c84-4a8b-8df8-b02b605a4f77",
+      "label": "Centre de Santé de Baliverne",
+      "department": null,
+      "reason": "La variante Baliverne/Bas Liverné ne permet pas encore de déterminer la commune.",
+      "index": 31
+    },
+    {
+      "id": "45daa570-69c2-4ce5-8fe2-ea014471e34a",
+      "label": "Centre de Santé de Bethesda",
+      "department": null,
+      "reason": "Plusieurs établissements Bethesda existent, notamment à Carrefour, Léogâne, Tabarre et Terrier-Rouge.",
+      "index": 38
+    },
+    {
+      "id": "99b4fc57-5ee3-4a85-a35a-2c840057f3d3",
+      "label": "Centre de Santé de Caracolie",
+      "department": null,
+      "reason": "Caracolie peut renvoyer à une localité du Nord; ne pas assimiler automatiquement à Caracol du Nord-Est.",
+      "index": 47
+    },
+    {
+      "id": "9a2f778d-adb9-487f-b9dd-952aaf5620cf",
+      "label": "Centre de Santé de Carrefour Sanon",
+      "department": null,
+      "reason": "Carrefour Sanon nécessite une adresse ou un rattachement local.",
+      "index": 54
+    },
+    {
+      "id": "bcedfe1c-b563-42c5-a9b6-2560cd27693c",
+      "label": "Centre de Santé de Dano",
+      "department": null,
+      "reason": "Le nom Dano est trop court pour confirmer automatiquement le rapprochement avec Dano de Grand-Goâve.",
+      "index": 69
+    },
+    {
+      "id": "66a6b41c-84b5-4e8a-a09f-f54eaa1cb784",
+      "label": "Centre de Santé de Douin",
+      "department": null,
+      "reason": "Douin pourrait être une variante de Drouin, mais ce rapprochement n’a pas été confirmé.",
+      "index": 75
+    },
+    {
+      "id": "8667a417-b5d2-46bc-ade9-c73124517b4b",
+      "label": "Centre de Santé de Grande-Source",
+      "department": null,
+      "reason": "Grande Source existe à Anse-à-Galets et à Jean-Rabel.",
+      "index": 83
+    },
+    {
+      "id": "4ca6963a-59cb-4bf9-8b7d-e1d0f8587824",
+      "label": "Centre de Santé de la Croix-des-Missions",
+      "department": null,
+      "reason": "Le répertoire national contient deux fiches Croix-des-Missions (Delmas et Tabarre). La carte sanitaire en ligne retient Delmas. Confirmer la commune du centre enregistré.",
+      "index": 93
+    },
+    {
+      "id": "00cb71f1-dcdb-47e5-ba50-a7d9d37a4d59",
+      "label": "Centre de Santé de Lazarre",
+      "department": null,
+      "reason": "Lazarre doit être distingué des localités Lazare/Morne-Lazare.",
+      "index": 99
+    },
+    {
+      "id": "2c6b5cd0-04fc-4c32-8e30-f3390a6a1e88",
+      "label": "Centre de Santé de Lopineau",
+      "department": null,
+      "reason": "Lopineau nécessite une adresse ou un rattachement local.",
+      "index": 101
+    },
+    {
+      "id": "60b978fc-5521-4eed-9063-bfdb8c83d61a",
+      "label": "Centre de Santé de Lumière",
+      "department": null,
+      "reason": "Lumière existe à Cité Soleil, aux Cayes et à Bonne Fin/Cavaillon.",
+      "index": 102
+    },
+    {
+      "id": "3e9ad01b-f0ef-465d-ae9d-4cb90ba00b17",
+      "label": "Centre de Santé de Madeleine",
+      "department": null,
+      "reason": "Madeleine à Petit-Goâve et Madeline au Cap-Haïtien sont deux possibilités différentes.",
+      "index": 105
+    },
+    {
+      "id": "cacce406-7460-44e6-a9eb-51b674f3a06b",
+      "label": "Centre de Santé de Marcabée",
+      "department": null,
+      "reason": "Marcabée pourrait correspondre à Marcabel de Port-Salut; identité à confirmer.",
+      "index": 108
+    },
+    {
+      "id": "800c4619-692f-482a-9352-8ca1432fbd4e",
+      "label": "Centre de Santé de Morne Lazare",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 116
+    },
+    {
+      "id": "c5b91a35-e916-4717-8889-ff4795cca42a",
+      "label": "Centre de Santé de Mouline",
+      "department": null,
+      "reason": "Moulin est recensé à Gros-Morne, Moulines à Corail.",
+      "index": 117
+    },
+    {
+      "id": "cebe4b88-6c2e-4111-b915-a6de7eb06ebd",
+      "label": "Centre de Santé de Petite Rivière",
+      "department": null,
+      "reason": "Petite Rivière existe dans les Nippes, à Léogâne, à Dame-Marie et dans le Nord-Ouest.",
+      "index": 120
+    },
+    {
+      "id": "e71cd93a-bd83-4f34-871e-f383489bf496",
+      "label": "Centre de Santé de Plaisance",
+      "department": null,
+      "reason": "Plaisance peut désigner la commune du Nord ou Plaisance-du-Sud dans les Nippes.",
+      "index": 123
+    },
+    {
+      "id": "02325371-6a86-4ac3-80fd-a14889bd44a4",
+      "label": "Centre de Santé de Portail Léogâne",
+      "department": null,
+      "reason": "Un centre Portail Léogâne existe à Port-au-Prince et un autre à Jacmel.",
+      "index": 127
+    },
+    {
+      "id": "e698ecbe-52b9-4fe2-aaaf-c34035115d88",
+      "label": "Centre de Santé de Saint-Laurent",
+      "department": null,
+      "reason": "Saint-Laurent doit être distingué de Laurent aux Cayes et de Saint-Laurent Barbe à Saint-Marc.",
+      "index": 134
+    },
+    {
+      "id": "ff9652c3-26eb-49a7-ab7f-ed5fa8ddc653",
+      "label": "Centre de Santé de Ti François",
+      "department": null,
+      "reason": "Ti François nécessite une adresse ou un rattachement local.",
+      "index": 146
+    },
+    {
+      "id": "f70f654a-6d4d-48e8-ad3a-2027188432a3",
+      "label": "Centre de Santé de Vassal (Plaissance)",
+      "department": null,
+      "reason": "Vassal/Plaissance nécessite une localisation précise avant rapprochement.",
+      "index": 153
+    },
+    {
+      "id": "7d4f8a13-094f-404c-af40-6559201b365c",
+      "label": "Centre de Santé de Verssal(Plaissance)",
+      "department": null,
+      "reason": "Verssal/Plaissance nécessite une localisation précise avant rapprochement.",
+      "index": 154
+    },
+    {
+      "id": "346d6905-6b55-437e-b8bb-d24e306f8a25",
+      "label": "Centre de Santé des Abricots",
+      "department": null,
+      "reason": "Un établissement Abricots est recensé à Hinche; les Abricots sont également une commune de la Grand’Anse.",
+      "index": 155
+    },
+    {
+      "id": "40ccec38-33cc-4aba-9368-f41c97c069ed",
+      "label": "Centre de Santé La Source",
+      "department": null,
+      "reason": "La Source a plusieurs homonymes; département et commune restent à confirmer.",
+      "index": 164
+    },
+    {
+      "id": "bc373f7f-0fe1-4dd5-aa61-9e654499316e",
+      "label": "Centre de Santé Luza",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 166
+    },
+    {
+      "id": "5f42aa66-a282-4faa-8bac-600f89bbcdf8",
+      "label": "Centre de Santé Notre-Dame de l'Ascension",
+      "department": null,
+      "reason": "Ascension/Assomption ne peuvent pas être assimilés automatiquement.",
+      "index": 169
+    },
+    {
+      "id": "3dee2d1f-e4d2-43d8-a240-0fafd82f6a88",
+      "label": "Centre de Santé Saint-Jude",
+      "department": null,
+      "reason": "Saint-Jude existe à Port-au-Prince et une clinique homonyme à Delmas; confirmer l’établissement.",
+      "index": 171
+    },
+    {
+      "id": "86bc96aa-d410-4bce-ba61-473f10ba08e1",
+      "label": "Centre de Santé Sainte-Agnès",
+      "department": null,
+      "reason": "Une fiche Sainte-Agnès est localisée à Beaumont, mais confirmer que le nom non qualifié désigne bien ce centre. Aucune fusion proposée.",
+      "index": 173
+    },
+    {
+      "id": "df7ee331-b250-4dab-ab7e-b3d339fbed61",
+      "label": "Centre de Santé Sainte-Anne de",
+      "department": null,
+      "reason": "Nom incomplet; plusieurs Sainte-Anne existent.",
+      "index": 175
+    },
+    {
+      "id": "2824aa78-f669-4040-b288-baa87d7a2d9d",
+      "label": "Centre Materno",
+      "department": null,
+      "reason": "Nom incomplet; plusieurs centres materno-infantils existent.",
+      "index": 181
+    },
+    {
+      "id": "88c47cca-4d35-4b93-bdcc-ffebc56415df",
+      "label": "Centre Médical de Bercy-Anotte",
+      "department": null,
+      "reason": "Bercy-Anotte nécessite une adresse avant attribution de la commune.",
+      "index": 183
+    },
+    {
+      "id": "6ec12706-4675-4827-822c-caebae1f6b7b",
+      "label": "Centre Médico-Légal",
+      "department": null,
+      "reason": "Plusieurs centres médico-légaux existent; le nom seul ne permet pas de choisir une ville.",
+      "index": 185
+    },
+    {
+      "id": "0cb96253-8aae-4f11-8ecd-7665f3c134d3",
+      "label": "Centre Multifonctionnel CODEC",
+      "department": null,
+      "reason": "CODEC nécessite une adresse ou un rattachement local.",
+      "index": 189
+    },
+    {
+      "id": "bd4b7ddb-2a73-4d3a-802b-670e74de3bf2",
+      "label": "Centre National de Transfusion Sanguine",
+      "department": null,
+      "reason": "Adresse exacte du centre national non retrouvée; ne pas attribuer automatiquement la commune du ministère.",
+      "index": 190
+    },
+    {
+      "id": "1a8d3095-1564-4b13-8788-26560ff63435",
+      "label": "Clinique Saint-Damien",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 191
+    },
+    {
+      "id": "a4729791-db4d-423d-9acb-0cd7c6a34cac",
+      "label": "Département Sanitaire de l'Artibonite",
+      "department": "Artibonite",
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 193
+    },
+    {
+      "id": "5ea4a58d-de74-41b1-8167-879cc86d07f1",
+      "label": "Département Sanitaire de l'Ouest",
+      "department": "Ouest",
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 194
+    },
+    {
+      "id": "ebaf3930-2095-4861-85d6-5bcdb9e98820",
+      "label": "Département Sanitaire de la Grand'Anse",
+      "department": "Grand’Anse",
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 195
+    },
+    {
+      "id": "d0f4681a-9e5d-4d3d-affd-2bf7ad34c11b",
+      "label": "Département Sanitaire des Nippes",
+      "department": "Nippes",
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 196
+    },
+    {
+      "id": "bbcbbc4b-19e4-4268-bf2c-7cc97691dd8b",
+      "label": "Direction Départementale",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 208
+    },
+    {
+      "id": "e38b94b8-c54f-43b8-932c-9bded7875674",
+      "label": "Hôpital Delta",
+      "department": null,
+      "reason": "Hôpital Delta : adresse exacte non établie.",
+      "index": 242
+    },
+    {
+      "id": "e9e0e8d8-5301-4b9d-be06-feb9534bf94f",
+      "label": "Hôpital Toussaint Louverture d'Ennery",
+      "department": null,
+      "reason": "Nom insuffisant ou adresse exacte non retrouvée; commune à préciser.",
+      "index": 263
+    },
+    {
+      "id": "226093ce-50be-4d00-aa49-29eb49d4aba4",
+      "label": "Sanatorium",
+      "department": null,
+      "reason": "Plusieurs sanatoriums existent à Port-au-Prince, Léogâne et aux Cayes.",
+      "index": 269
+    },
+    {
+      "id": "10cd5624-0497-40c6-9bd0-d12b52a44dc8",
+      "label": "UAS du Cul-de-Sac Saint-Michel de l'Attalaye",
+      "department": null,
+      "reason": "Le nom combine Cul-de-Sac (Ouest) et Saint-Michel-de-l’Attalaye (Artibonite); rattachement à confirmer.",
+      "index": 275
+    }
+  ],
+  "policy": {
+    "names": "preserved",
+    "types": "preserved",
+    "merges": "none",
+    "contracts": "untouched",
+    "locations": "confirmed_and_applied",
+    "sources": "internal_only",
+    "versionChecks": "required_before_apply"
+  },
+  "confirmation": {
+    "date": "2026-09-28",
+    "answer": "Confirmer tout le lot",
+    "scope": "214 approved institution geography updates"
+  },
+  "verification": {
+    "updatedInstitutions": 214,
+    "updatedDepartmentAndCommune": 178,
+    "updatedDepartmentOnly": 36,
+    "totalInstitutions": 286,
+    "departments": 238,
+    "communes": 197,
+    "remainingWithoutCommune": 89,
+    "protectedFieldsPreserved": true,
+    "excludedInstitutionsUnchanged": true,
+    "contractsPreservedInTransaction": true,
+    "versionsIncrementedOnce": true,
+    "allApprovedValuesVerified": true
+  }
+}

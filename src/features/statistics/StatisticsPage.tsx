@@ -877,6 +877,7 @@ export function StatisticsPage() {
               selectedValues={selectedAssignments}
               onChange={setSelectedAssignments}
               placeholder="Toutes les affectations"
+              searchable
             />
 
             <MultiSelectDropdown
@@ -893,6 +894,7 @@ export function StatisticsPage() {
               selectedValues={selectedCommunes}
               onChange={setSelectedCommunes}
               placeholder="Toutes les communes"
+              searchable
             />
 
             <MultiSelectDropdown
@@ -901,6 +903,7 @@ export function StatisticsPage() {
               selectedValues={selectedPositions}
               onChange={setSelectedPositions}
               placeholder="Toutes les fonctions"
+              searchable
             />
 
             {filterType === 'custom' && (
