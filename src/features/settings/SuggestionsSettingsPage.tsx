@@ -1,13 +1,13 @@
+import { InstitutionsPage } from "../institutions/InstitutionsPage";
 import { SalaryGridPage } from "../salary-grid/SalaryGridPage";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/auth";
 import { 
-  useAddresses, useInstitutions,
-  useAddAddress, useAddInstitution,
-  useUpdateAddress, useUpdateInstitution
+  useAddresses,
+  useAddAddress,
+  useUpdateAddress
 } from "./suggestionsApi";
 import { getDataProvider } from "../../data/dataProvider";
-import { formatInstitutionLocation } from "../../data/local/suggestionsDb";
 import {
   getAutomaticSuggestionPrefix,
   type SuggestionPrefixKind
@@ -22,18 +22,7 @@ import { filterAndSortSuggestions } from "./suggestionList";
 
 type Tab = "addresses" | "positions" | "institutions" | "contractDates";
 
-const HAITI_DEPARTMENTS = [
-  "Artibonite",
-  "Centre",
-  "Grand'Anse",
-  "Nippes",
-  "Nord",
-  "Nord-Est",
-  "Nord-Ouest",
-  "Ouest",
-  "Sud",
-  "Sud-Est"
-] as const;
+
 
 function automaticPrefixPlaceholder(label: string, kind: SuggestionPrefixKind) {
   const prefix = getAutomaticSuggestionPrefix(label, kind);
@@ -317,157 +306,4 @@ function AddressesPanel() {
 
 function PositionsPanel() { return <SalaryGridPage />; }
 
-function InstitutionsPanel() {
-  const { user } = useAuth();
-  const workspaceId = user?.workspaceId || "";
-  const { data: items = [] } = useInstitutions(workspaceId);
-  const addMutation = useAddInstitution();
-  const updateMutation = useUpdateInstitution();
-  const [newLabel, setNewLabel] = useState("");
-  const [newKeywords, setNewKeywords] = useState("");
-  const [newPrefix, setNewPrefix] = useState("");
-  const [newDepartment, setNewDepartment] = useState("");
-  const [newCommune, setNewCommune] = useState("");
-  
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editLabel, setEditLabel] = useState("");
-  const [editKeywords, setEditKeywords] = useState("");
-  const [editPrefix, setEditPrefix] = useState("");
-  const [editLabelFeminine, setEditLabelFeminine] = useState("");
-  const [editDepartment, setEditDepartment] = useState("");
-  const [editCommune, setEditCommune] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const repo = getDataProvider().suggestions;
-  const visibleItems = useMemo(
-    () => filterAndSortSuggestions(items, searchQuery, (item) => [
-      item.label,
-      item.labelFeminine,
-      item.prefix,
-      item.department,
-      item.commune,
-      ...(item.addressKeywords ?? [])
-    ]),
-    [items, searchQuery]
-  );
-
-  async function handleAdd() {
-    if (!newLabel.trim()) return;
-    const res = await addMutation.mutateAsync({ 
-      workspaceId, 
-      label: newLabel.trim(), 
-      addressKeywords: newKeywords.split(",").map(k => k.trim()).filter(Boolean),
-      department: newDepartment || null,
-      commune: newCommune.trim() || null
-    });
-    if (newPrefix.trim()) {
-      await updateMutation.mutateAsync({
-        id: res.id,
-        label: res.label,
-        addressKeywords: res.addressKeywords,
-        prefix: newPrefix.trim(),
-        department: res.department,
-        commune: res.commune
-      });
-    }
-    setNewLabel("");
-    setNewKeywords("");
-    setNewPrefix("");
-    setNewDepartment("");
-    setNewCommune("");
-  }
-
-  return (
-    <div>
-      <div className="sug-panel-header">
-        <span className="material-symbols-rounded" style={{ color: "var(--accent)" }}>account_balance</span>
-        <div>
-          <strong>Institutions</strong>
-          <p className="helper-text">
-            Le département et la commune permettent de situer l’institution et de mieux la classer selon l’adresse du contractuel.
-          </p>
-        </div>
-        <SuggestionSearch value={searchQuery} onChange={setSearchQuery} label="institutions" />
-      </div>
-      <div className="sug-add-row sug-institution-form">
-        <input className="input" value={newPrefix} onChange={(e) => setNewPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(newLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
-        <input className="input sug-institution-name" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Nom de l'institution..." />
-        <select className="input" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)} aria-label="Département de l’institution">
-          <option value="">Département...</option>
-          {HAITI_DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}
-        </select>
-        <input className="input" value={newCommune} onChange={(e) => setNewCommune(e.target.value)} placeholder="Commune..." aria-label="Commune de l’institution" />
-        <input className="input sug-institution-keywords" value={newKeywords} onChange={(e) => setNewKeywords(e.target.value)} placeholder="Mots-clés d’adresse (facultatif)" />
-        <button type="button" className="btn btn-primary" onClick={handleAdd}>Ajouter</button>
-      </div>
-      <div className="sug-list">
-        {visibleItems.map(item => (
-          <div key={item.id} className="sug-item" style={{ flexDirection: editId === item.id ? 'column' : 'row', alignItems: editId === item.id ? 'stretch' : 'center', gap: 4 }}>
-            {editId === item.id ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" value={editPrefix} onChange={e => setEditPrefix(e.target.value)} placeholder={automaticPrefixPlaceholder(editLabel, "institution")} style={{ width: 92 }} title="Laissez vide pour utiliser le préfixe automatique" />
-                  <input className="input" autoFocus value={editLabel} onChange={e => setEditLabel(e.target.value)} style={{ flex: 2 }} placeholder="Nom" />
-                </div>
-                <div className="sug-institution-location-fields">
-                  <select className="input" value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)} aria-label="Département de l’institution">
-                    <option value="">Département...</option>
-                    {HAITI_DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}
-                  </select>
-                  <input className="input" value={editCommune} onChange={(e) => setEditCommune(e.target.value)} placeholder="Commune..." aria-label="Commune de l’institution" />
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                   <input className="input" value={editKeywords} onChange={e => setEditKeywords(e.target.value)} style={{ flex: 2 }} placeholder="Mots-clés d’adresse (facultatif)" />
-                   <input className="input" value={editLabelFeminine} onChange={e => setEditLabelFeminine(e.target.value)} placeholder="Équivalent féminin" style={{ flex: 1 }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button className="icon-btn" onClick={async () => {
-                     if(editLabel.trim()) {
-                       await updateMutation.mutateAsync({ 
-                          id: item.id, 
-                          label: editLabel.trim(), 
-                          addressKeywords: editKeywords.split(",").map(k => k.trim()).filter(Boolean),
-                          prefix: editPrefix.trim() || null,
-                          labelFeminine: editLabelFeminine.trim() || null,
-                          department: editDepartment || null,
-                          commune: editCommune.trim() || null
-                       });
-                     }
-                     setEditId(null);
-                  }}><span className="material-symbols-rounded">check</span></button>
-                  <button className="icon-btn" onClick={() => setEditId(null)}><span className="material-symbols-rounded">close</span></button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div style={{ flex: 1 }}>
-                  <SuggestionPrefix label={item.label} prefix={item.prefix} kind="institution" />
-                  <span className="sug-item-label">
-                    {item.label}
-                    {formatInstitutionLocation(item) && <span className="sug-location-tag"><span className="material-symbols-rounded">location_on</span>{formatInstitutionLocation(item)}</span>}
-                    {item.addressKeywords && item.addressKeywords.length > 0 && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>Mots-clés : {item.addressKeywords.join(", ")}</span>}
-                    {item.labelFeminine && <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>(f: {item.labelFeminine})</span>}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button className="icon-btn" onClick={() => { 
-                    setEditId(item.id); 
-                    setEditLabel(item.label); 
-                    setEditKeywords((item.addressKeywords||[]).join(", ")); 
-                    setEditPrefix(item.prefix || "");
-                    setEditLabelFeminine(item.labelFeminine || "");
-                    setEditDepartment(item.department || "");
-                    setEditCommune(item.commune || "");
-                  }}><span className="material-symbols-rounded">edit</span></button>
-                  <button className="icon-btn" onClick={async () => { if(confirm("Supprimer ?")) { await repo.deleteInstitution(item.id); window.location.reload(); } }}><span className="material-symbols-rounded">delete</span></button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-        {visibleItems.length === 0 && (
-          <div className="sug-empty">Aucune institution trouvée.</div>
-        )}
-      </div>
-    </div>
-  );
-}
+function InstitutionsPanel() { return <InstitutionsPage />; }

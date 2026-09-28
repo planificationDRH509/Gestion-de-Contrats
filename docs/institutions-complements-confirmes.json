@@ -1,0 +1,157 @@
+{
+  "changes": [
+    {
+      "label": "Centre de Santé de la Chapelle",
+      "department": "Artibonite",
+      "commune": "La Chapelle",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Hôpital Claire Heureuse de Marchand Dessalines",
+      "department": "Artibonite",
+      "commune": "Dessalines",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Hôpital Dumarsais Estimé de Verrettes",
+      "department": "Artibonite",
+      "commune": "Verrettes",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Hôpital La Providence des Gonaïves",
+      "department": "Artibonite",
+      "commune": "Gonaïves",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Centre de Santé de K-Soleil",
+      "department": "Artibonite",
+      "commune": "Gonaïves",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Centre de Santé de Terre-Neuve",
+      "department": "Artibonite",
+      "commune": "Terre-Neuve",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Centre de Santé de Marmelade",
+      "department": "Artibonite",
+      "commune": "Marmelade",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Hôpital Saint-Nicolas de Saint-Marc",
+      "department": "Artibonite",
+      "commune": "Saint-Marc",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    },
+    {
+      "label": "Hôpital Universitaire La Paix",
+      "department": "Ouest",
+      "commune": "Delmas",
+      "source": "https://faes.gouv.ht/2025/02/01/le-faes-determine-a-lutter-contre-linsecurite-alimentaire-et-a-favoriser-la-resilience/"
+    },
+    {
+      "label": "Hôpital Universitaire Justinien du Cap-Haïtien",
+      "department": "Nord",
+      "commune": "Cap-Haïtien",
+      "source": "https://faes.gouv.ht/2025/02/01/le-faes-determine-a-lutter-contre-linsecurite-alimentaire-et-a-favoriser-la-resilience/"
+    },
+    {
+      "label": "Hôpital Saint-Antoine de Jérémie",
+      "department": "Grand’Anse",
+      "commune": "Jérémie",
+      "source": "https://faes.gouv.ht/2025/02/01/le-faes-determine-a-lutter-contre-linsecurite-alimentaire-et-a-favoriser-la-resilience/"
+    },
+    {
+      "label": "Département Sanitaire de la Grand'Anse",
+      "department": "Grand’Anse",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire du Sud",
+      "department": "Sud",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire des Nippes",
+      "department": "Nippes",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Direction Sanitaire du Sud-Est",
+      "department": "Sud-Est",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire de l'Ouest",
+      "department": "Ouest",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Bureau Départemental du Centre",
+      "department": "Centre",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire de l'Artibonite",
+      "department": "Artibonite",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire du Nord-Est",
+      "department": "Nord-Est",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    },
+    {
+      "label": "Département Sanitaire du Nord",
+      "department": "Nord",
+      "commune": null,
+      "institutionType": "Bureau Départemental",
+      "source": "https://www.mspp.gouv.ht/directions"
+    }
+  ],
+  "added": [
+    {
+      "label": "Hôpital Universitaire de Mirebalais",
+      "department": "Centre",
+      "commune": "Mirebalais",
+      "institutionType": "Hôpital Universitaire",
+      "source": "https://www.mspp.gouv.ht/site/downloads/Realisations%20MSPP%202011%202014%20avec%20appui%20partenaires%2014%20sept%2014.pdf"
+    },
+    {
+      "label": "Hôpital Sacré-Cœur de Milot",
+      "department": "Nord",
+      "commune": "Milot",
+      "institutionType": "Hôpital",
+      "source": "https://www.mspp.gouv.ht/site/downloads/GR%20tome%202.pdf"
+    },
+    {
+      "label": "Hôpital Albert Schweitzer",
+      "department": "Artibonite",
+      "commune": "Verrettes",
+      "institutionType": "Hôpital",
+      "source": "https://mspp.gouv.ht/site/downloads/inst_artibonites.pdf"
+    }
+  ],
+  "confirmed": true
+}

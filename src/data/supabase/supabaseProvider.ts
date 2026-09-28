@@ -1,3 +1,4 @@
+import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
 import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError } from "../local/localDb";
@@ -1261,6 +1262,9 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
       labelFeminine: r.label_feminine,
       department: r.department,
       commune: r.commune,
+      institutionType: r.institution_type,
+      source: r.source_url,
+      version: r.version,
       addressKeywords: typeof r.address_keywords === 'string' ? JSON.parse(r.address_keywords) : (r.address_keywords || []), 
       order: r.order_index 
     }));
@@ -1325,54 +1329,40 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
     workspaceId: string,
     label: string,
     addressKeywords: string[],
-    createdBy?: string,
+    _createdBy?: string,
     department?: string | null,
     commune?: string | null
   ): Promise<InstitutionSuggestion> {
-    const client = getSupabaseClient();
-    const id = crypto.randomUUID();
-    const payload = { 
-      id, 
-      workspace_id: workspaceId, 
-      type: "institution", 
-      label, 
-      address_keywords: JSON.stringify(addressKeywords),
-      department: department?.trim() || null,
-      commune: commune?.trim() || null,
-      order_index: 0,
-      created_by: createdBy
-    };
-    const { error } = await (client.from("autocompletion").insert(payload as any) as any);
-    if (error) throw repositoryError("Impossible d'ajouter l'affectation.", error);
-    return {
-      id,
-      label,
-      department: department?.trim() || null,
-      commune: commune?.trim() || null,
-      addressKeywords,
-      order: 0
-    };
+    const raw = localStorage.getItem('contribution_auth');
+    const token = raw ? (JSON.parse(raw) as {taskSessionToken?:string}).taskSessionToken : undefined;
+    if (!token) throw new Error('Session utilisateur indisponible.');
+    const {data,error} = await getSupabaseClient().rpc('learn_institution', {
+      p_session_token:token, p_workspace_id:workspaceId,
+      p_entry:{label:label.trim(),addressKeywords,institutionType:inferInstitutionType(label),
+        department:department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(department)) ?? null : null,
+        commune:commune?.trim() || null}
+    });
+    if (error) throw repositoryError("Impossible d'ajouter l'affectation.",error);
+    return data as unknown as InstitutionSuggestion;
   }
 
   async updateInstitution(
-    id: string,
-    label: string,
-    addressKeywords: string[],
-    prefix?: string | null,
-    labelFeminine?: string | null,
-    department?: string | null,
-    commune?: string | null
+    id: string, label: string, addressKeywords: string[],
+    _prefix?: string | null, _labelFeminine?: string | null,
+    department?: string | null, commune?: string | null
   ): Promise<void> {
     const client = getSupabaseClient();
-    const { error } = await (client.from("autocompletion").update({
-      label, 
-      address_keywords: JSON.stringify(addressKeywords),
-      prefix,
-      label_feminine: labelFeminine,
-      department: department?.trim() || null,
-      commune: commune?.trim() || null
-    } as any).eq("id", id) as any);
-    if (error) throw repositoryError("Impossible de modifier l'affectation.", error);
+    const {data:previous,error:readError} = await client.from('autocompletion').select('*').eq('id',id).eq('type','institution').single();
+    if (readError || !previous) throw repositoryError('Institution inaccessible.',readError);
+    const raw = localStorage.getItem('contribution_auth');
+    const token = raw ? (JSON.parse(raw) as {taskSessionToken?:string}).taskSessionToken : undefined;
+    if (!token) throw new Error('Session utilisateur indisponible.');
+    const {error} = await client.rpc('save_institution', {
+      p_session_token:token,p_workspace_id:previous.workspace_id,
+      p_entry:{id,label,addressKeywords,department:department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(department)) ?? null : null,
+        commune:commune?.trim() || null,institutionType:previous.institution_type ?? inferInstitutionType(label) ?? 'Autre',source:previous.source_url,version:previous.version}
+    });
+    if (error) throw repositoryError("Impossible de modifier l'affectation.",error);
   }
 
   async deleteInstitution(id: string): Promise<void> {

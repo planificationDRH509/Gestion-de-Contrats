@@ -25,6 +25,7 @@ export function SettingsPage() {
           icon="payments"
           title="Grille Salariale"
         />
+        <SettingsCard to="/app/parametres/institutions" icon="domain" title="Institutions" />
         {can("settings.manage") ? (
           <>
             <SettingsCard

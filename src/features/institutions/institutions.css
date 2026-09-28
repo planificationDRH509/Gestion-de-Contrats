@@ -1,0 +1,19 @@
+.institutions-page { padding:24px; }
+.institutions-heading, .institutions-toolbar, .institutions-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.institutions-heading { justify-content:space-between; margin-bottom:24px; }
+.institutions-heading h1 { margin:0; }
+.institutions-toolbar { margin-bottom:20px; }
+.institutions-toolbar .input { width:auto; min-width:160px; }
+.institutions-toolbar input.input { flex:1; min-width:220px; }
+.institutions-count { white-space:nowrap; font-size:13px; }
+.institutions-table { overflow:auto; border:1px solid var(--border); border-radius:12px; }
+.institutions-table table { width:100%; border-collapse:collapse; font-size:13px; }
+.institutions-table th, .institutions-table td { padding:13px 16px; border-bottom:1px solid var(--border); text-align:left; }
+.institutions-table th { background:var(--panel-muted); font-weight:600; white-space:nowrap; }
+.institutions-table td:first-child { min-width:250px; }
+.institutions-overlay { position:fixed; inset:0; z-index:3000; background:#0008; display:grid; place-items:center; padding:20px; }
+.institutions-editor { width:min(580px,100%); max-height:90vh; overflow:auto; background:var(--panel); color:var(--ink); border-radius:16px; padding:28px; display:grid; gap:14px; }
+.institutions-editor h2 { margin:0 0 6px; }
+.institutions-editor label { display:grid; gap:6px; font-size:13px; font-weight:500; }
+.institutions-actions { justify-content:flex-end; }
+@media(max-width:600px) { .institutions-page { padding:12px; } .institutions-editor { padding:18px; } .institutions-toolbar .input { width:100%; } }

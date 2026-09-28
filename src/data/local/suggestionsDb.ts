@@ -3,6 +3,7 @@
  * Stores addresses, positions (with default salaries), and institutions (per address area).
  */
 import { sqliteApiRequest } from "./sqliteApiClient";
+import { normalizeInstitution } from "../../lib/institutions";
 import { getDataProvider } from "../dataProvider";
 
 const SUGGESTIONS_KEY = "contribution_suggestions_db";
@@ -24,16 +25,8 @@ export type PositionSuggestion = {
   order: number;
 };
 
-export type InstitutionSuggestion = {
-  id: string;
-  label: string;
-  prefix?: string | null;
-  labelFeminine?: string | null;
-  department?: string | null;
-  commune?: string | null;
-  addressKeywords: string[]; // which address areas this institution is linked to
-  order: number;
-};
+export type { InstitutionSuggestion } from '../../lib/institutions';
+import type { InstitutionSuggestion } from '../../lib/institutions';
 
 export type SuggestionsDb = {
   addresses: AddressSuggestion[];
@@ -481,7 +474,7 @@ export async function learnSuggestions(address?: string, _position?: string, ass
       }
       if (assignment) {
         const items = await repo.getInstitutions(workspaceId);
-        if (!items.some(i => i.label.toLowerCase() === assignment.trim().toLowerCase())) {
+        if (!items.some(i => normalizeInstitution(i.label) === normalizeInstitution(assignment))) {
           await repo.addInstitution(workspaceId, assignment.trim(), address ? [address] : []);
         }
       }
@@ -504,8 +497,8 @@ export async function learnSuggestions(address?: string, _position?: string, ass
     }
   }
   if (assignment) {
-    const nAssig = normalize(assignment);
-    if (!db.institutions.some((i) => normalize(i.label) === nAssig)) {
+    const nAssig = normalizeInstitution(assignment);
+    if (!db.institutions.some((i) => normalizeInstitution(i.label) === nAssig)) {
       const maxOrder = db.institutions.reduce((m, i) => Math.max(m, i.order), -1);
       const kw = address ? [normalize(address)] : [];
       db.institutions.push({ id: sugId(), label: assignment.trim(), addressKeywords: kw, order: maxOrder + 1 });

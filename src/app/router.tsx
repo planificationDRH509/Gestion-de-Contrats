@@ -1,4 +1,5 @@
 import { SalaryGridPage } from "../features/salary-grid/SalaryGridPage";
+import { InstitutionsPage } from "../features/institutions/InstitutionsPage";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { LoginPage } from "../features/auth/LoginPage";
@@ -57,6 +58,8 @@ export function AppRoutes() {
         <Route path="identification" element={<RequirePermission permission="identification.manage"><IdentificationPage /></RequirePermission>} />
         <Route path="parametres" element={<SettingsPage />} />
         <Route path="parametres/grille-salariale" element={<SalaryGridPage />} />
+        <Route path="parametres/institutions" element={<InstitutionsPage />} />
+        <Route path="institutions" element={<Navigate to="/app/parametres/institutions" replace />} />
         <Route path="parametres/mot-de-passe" element={<PasswordSettingsPage />} />
         <Route path="parametres/draft-html" element={<RequirePermission permission="settings.manage"><DraftHtmlPage /></RequirePermission>} />
         <Route path="parametres/suggestions" element={<RequirePermission permission="settings.manage"><SuggestionsSettingsPage /></RequirePermission>} />

@@ -4,8 +4,9 @@ import {
   addAddress, updateAddress, deleteAddress,
   addPosition, updatePosition, deletePosition,
   addInstitution, updateInstitution, deleteInstitution,
-  AddressSuggestion, PositionSuggestion, InstitutionSuggestion
+  AddressSuggestion, PositionSuggestion, InstitutionSuggestion, cacheSuggestions, type SuggestionsDb
 } from "./suggestionsDb";
+import { sqliteApiRequest } from "./sqliteApiClient";
 
 export class SqliteAutocompleteRepository implements AutocompleteRepository {
   async getAddresses(_workspaceId: string): Promise<AddressSuggestion[]> {
@@ -14,7 +15,14 @@ export class SqliteAutocompleteRepository implements AutocompleteRepository {
   async getPositions(_workspaceId: string): Promise<PositionSuggestion[]> {
     return getPositions();
   }
-  async getInstitutions(_workspaceId: string): Promise<InstitutionSuggestion[]> {
+  async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
+    if ((import.meta.env.VITE_DATA_PROVIDER ?? 'local') !== 'supabase' && navigator.onLine) {
+      try {
+        const data = await sqliteApiRequest<SuggestionsDb>(`/autocompletion?workspaceId=${encodeURIComponent(workspaceId)}`);
+        cacheSuggestions({institutions:data.institutions});
+        return data.institutions;
+      } catch { /* The cached references remain readable without the local server. */ }
+    }
     return getInstitutions();
   }
   async addAddress(_workspaceId: string, label: string): Promise<AddressSuggestion> {

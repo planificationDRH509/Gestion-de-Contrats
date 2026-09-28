@@ -1,0 +1,20 @@
+export type InstitutionSuggestion = {
+    id: string;
+    label: string;
+    prefix?: string | null;
+    labelFeminine?: string | null;
+    department?: string | null;
+    commune?: string | null;
+    institutionType?: string | null;
+    source?: string | null;
+    version?: number;
+    addressKeywords: string[];
+    order: number;
+};
+export declare const INSTITUTION_TYPES: readonly ["Centre de Santé", "Hôpital", "Hôpital Universitaire", "HCR", "Centre Hospitalier", "Centre Médico-Social", "Dispensaire", "Clinique", "Maternité", "Bureau Administratif", "Bureau Départemental", "Bureau Communal", "Bureau Central", "UAS / UCS", "Autre"];
+export type InstitutionType = typeof INSTITUTION_TYPES[number];
+export declare const DEPARTMENTS: string[];
+export declare function normalizeInstitution(value: string): string;
+export declare function inferInstitutionType(label: string): InstitutionType | null;
+export declare function institutionType(entry: InstitutionSuggestion): string | null;
+export declare function validateInstitution(entry: InstitutionSuggestion, entries: InstitutionSuggestion[]): void;

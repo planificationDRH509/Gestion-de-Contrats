@@ -88,6 +88,9 @@ export type Database = {
           commune: string | null
           created_at: string
           default_salary: number | null
+          institution_type: string | null
+          source_url: string | null
+          version: number
           department: string | null
           id: string
           label: string
@@ -101,6 +104,9 @@ export type Database = {
           commune?: string | null
           created_at?: string
           default_salary?: number | null
+          institution_type?: string | null
+          source_url?: string | null
+          version?: number
           department?: string | null
           id: string
           label: string
@@ -114,6 +120,9 @@ export type Database = {
           commune?: string | null
           created_at?: string
           default_salary?: number | null
+          institution_type?: string | null
+          source_url?: string | null
+          version?: number
           department?: string | null
           id?: string
           label?: string
@@ -489,6 +498,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      learn_institution: {
+        Args: { p_session_token: string; p_workspace_id: string; p_entry: Json }
+        Returns: Json
+      }
+      save_institution: {
+        Args: { p_session_token: string; p_workspace_id: string; p_entry: Json }
+        Returns: Json
+      }
       manage_person_attachments: { Args: { p_session_token: string; p_contract_id: string; p_action: string; p_document?: Json }; Returns: Json }
       read_salary_grid: { Args: { p_session_token: string }; Returns: Json }
       save_salary_grid_entry: { Args: { p_session_token: string; p_entry: Json }; Returns: Json }

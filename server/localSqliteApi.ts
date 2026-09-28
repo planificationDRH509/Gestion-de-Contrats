@@ -8,6 +8,8 @@ import type { Plugin } from "vite";
 
 import { migrateSalaryText } from "./salaryTextMigration";
 import { initializeContractLists, readContractLists, mutateContractList } from "./contractLists";
+import { validateInstitution } from "../src/lib/institutions";
+import type { InstitutionSuggestion } from "../src/lib/institutions";
 
 type RawRecord = Record<string, unknown>;
 
@@ -890,6 +892,10 @@ function getDb(): DatabaseSync {
     {
       name: "commune",
       sql: "ALTER TABLE autocompletion ADD COLUMN commune TEXT;"
+    },
+    { name: "institution_type", sql: "ALTER TABLE autocompletion ADD COLUMN institution_type TEXT;" },
+    { name: "source_url", sql: "ALTER TABLE autocompletion ADD COLUMN source_url TEXT;" },
+    { name: "version", sql: "ALTER TABLE autocompletion ADD COLUMN version INTEGER NOT NULL DEFAULT 1;"
     }
   ]);
   ensureColumns("identification", [
@@ -2753,6 +2759,47 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === `${API_PREFIX}/institutions` && method === "POST") {
+    const actor = operatorFromRequest(req);
+    if (actor.role !== 'admin') throw new HttpError(403, 'Modification réservée aux administrateurs.');
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const entry = body.entry as InstitutionSuggestion;
+    if (!workspaceId || !entry || typeof entry.id !== 'string' || typeof entry.label !== 'string') throw new HttpError(400,'Données invalides.');
+    const rows = db.prepare("SELECT * FROM autocompletion WHERE workspace_id=? AND type='institution'").all(workspaceId) as RawRecord[];
+    try { validateInstitution(entry,rows.map(r => ({id:asString(r.id),label:asString(r.label),addressKeywords:[],order:0}))); }
+    catch(e) { throw new HttpError(400,e instanceof Error ? e.message : 'Données invalides.'); }
+    const previous = db.prepare('SELECT * FROM autocompletion WHERE id=?').get(entry.id) as RawRecord | undefined;
+    if (previous && (previous.workspace_id !== workspaceId || previous.type !== 'institution')) throw new HttpError(403,'Institution inaccessible.');
+    if (Number(previous?.version ?? 0) !== entry.version) throw new HttpError(409,'Cette institution a changé. Rechargez la liste.');
+    const label = entry.label.trim();
+    const timestamp = nowIso();
+    const version = (entry.version ?? 0)+1;
+    const order = previous ? Number(previous.order_index) : rows.reduce((m,r) => Math.max(m,Number(r.order_index)), -1)+1;
+    db.exec('BEGIN TRANSACTION');
+    try {
+      if (previous) {
+        db.prepare('UPDATE autocompletion SET label=?,department=?,commune=?,institution_type=?,source_url=?,version=?,updated_at=? WHERE id=?').run(label,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,timestamp,entry.id);
+        if (previous.label !== label) {
+          const contracts = db.prepare('SELECT id_contrat,historique_saisie FROM contrat WHERE workspace_id=? AND lieu_affectation=?').all(workspaceId,asString(previous.label)) as RawRecord[];
+          const update = db.prepare('UPDATE contrat SET lieu_affectation=?,historique_saisie=?,updated_at=? WHERE id_contrat=?');
+          for (const contract of contracts) {
+            const history = parseHistory(asNullableString(contract.historique_saisie));
+            appendHistoryEntry(history,actor,'modification',[{field:'assignment',previousValue:asString(previous.label),newValue:label}],timestamp);
+            update.run(label,JSON.stringify(history),timestamp,asString(contract.id_contrat));
+          }
+        }
+      } else {
+        db.prepare("INSERT INTO autocompletion(id,type,label,department,commune,institution_type,source_url,version,address_keywords,order_index,workspace_id,created_at,updated_at) VALUES (?,'institution',?,?,?,?,?,?,?,?,?,?,?)").run(entry.id,label,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,JSON.stringify(entry.addressKeywords ?? []),order,workspaceId,timestamp,timestamp);
+      }
+      db.exec('COMMIT');
+    } catch(e) { db.exec('ROLLBACK'); throw e; }
+    let keywords: string[]=[];
+    try { keywords=previous ? JSON.parse(asString(previous.address_keywords) || '[]') : entry.addressKeywords; } catch {}
+    sendJson(res,200,{...entry,label,addressKeywords:keywords,order,version});
+    return;
+  }
+
   if (pathname === `${API_PREFIX}/autocompletion` && method === "GET") {
     const searchParams = url.searchParams;
     const workspaceId = searchParams.get("workspaceId") || "workspace_default";
@@ -2793,6 +2840,9 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           label: row.label,
           department: row.department || null,
           commune: row.commune || null,
+          institutionType: row.institution_type || null,
+          source: row.source_url || null,
+          version: Number(row.version ?? 1),
           addressKeywords: kw,
           order: row.order_index
         });
@@ -2845,6 +2895,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       if (Array.isArray(data.institutions)) {
         data.institutions.forEach((i: any, idx: number) => {
           insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, salaries: null, address_keywords: JSON.stringify(i.addressKeywords || []), department: i.department || null, commune: i.commune || null, order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
+          db.prepare("UPDATE autocompletion SET institution_type=?,source_url=?,version=? WHERE workspace_id=? AND type='institution' AND label=?").run(i.institutionType || null,i.source || null,i.version ?? 1,workspaceId,i.label);
         });
       }
       
