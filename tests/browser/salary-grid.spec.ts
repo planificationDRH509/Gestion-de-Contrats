@@ -48,6 +48,17 @@ test('edits the grid, adapts gender and marks unapproved salaries in both entry 
   await page.getByRole('radio',{name:/Femme/}).click();
   const title=page.locator('input[name="position"]');
   const salary=page.getByRole('textbox',{name:'Salaire en gourdes'});
+  await title.fill('Professionnel Senior');
+  await salary.fill('62000');
+  await expect(salary).not.toHaveAttribute('aria-invalid','true');
+  await title.fill('Agent Administratif');
+  await salary.fill('36500');
+  await expect(salary).not.toHaveAttribute('aria-invalid','true');
+  await salary.fill('35000');
+  await expect(salary).toHaveAttribute('aria-invalid','true');
+  await title.fill('Technicien Senior 1');
+  await salary.fill('45700');
+  await expect(salary).not.toHaveAttribute('aria-invalid','true');
   await title.fill('Comptable Contrôleuse Senior 1');
   await salary.fill('45700');
   await expect(salary).not.toHaveAttribute('aria-invalid','true');

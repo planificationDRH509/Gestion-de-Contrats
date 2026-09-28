@@ -16,6 +16,7 @@ export type SalaryGridEntry = {
   version: number;
 };
 export const normalizeTitle = (value: string) => normalizeSuggestionGrammarValue(stripSuggestionPrefix(value, 'position').replace(/[-‐‑–]/g, ' ').replace(/\./g, ''))
+  .replace(/\s+(iv|iii|ii|i)$/, (_, roman: string) => ` ${['i', 'ii', 'iii', 'iv'].indexOf(roman) + 1}`)
   .replace(/\s+(?:s|senior)\s*\(?([1-4])\)?$/, ' senior $1')
   .replace(/\s+(?:j|junior)\s*\(?([1-4])\)?$/, ' junior $1')
   .replace(/\s+\(([1-4])\)$/, ' $1');
@@ -33,7 +34,33 @@ export function genderedTitle(entries: SalaryGridEntry[], title: string, gender:
   return entry ? (gender === 'Femme' ? entry.feminine : entry.masculine) : title;
 }
 export function approvedSalaries(entries: SalaryGridEntry[], title: string) {
-  return [...new Set(matchingEntries(entries, title).flatMap(e => e.salaries))].sort((a,b) => a-b);
+  const exact = matchingEntries(entries, title);
+  let reference = exact;
+  if (!reference.length) {
+    const key = normalizeTitle(title)
+      .replace(/^agents? administrarif/, 'commis administratif')
+      .replace(/^agente?s? administrati(?:f|ve)s?/, 'commis administratif');
+    const numbered = /\s+[1-4]$/.test(key);
+    reference = entries.filter(entry => entry.active && [entry.masculine, entry.feminine, ...entry.aliases].some(value => {
+      const candidate = normalizeTitle(value);
+      return candidate === key || (!numbered && candidate.replace(/\s+[1-4]$/, '') === key);
+    }));
+    if (!reference.length) {
+      const level = key.match(/\s+(senior|junior)(?: ([1-4]))?$/);
+      if (level) {
+        const base = key.slice(0, level.index);
+        const baseTypes = [...new Set(matchingEntries(entries, base).map(entry => entry.jobType))];
+        const jobType = /\btechnicien(?:ne)?\b|\btechnique\b/.test(base) ? 'Technique'
+          : baseTypes.length === 1 ? baseTypes[0] : undefined;
+        reference = entries.filter(entry => entry.active && (!jobType || entry.jobType === jobType) &&
+          [entry.masculine, entry.feminine, ...entry.aliases].some(value => {
+            const candidate = normalizeTitle(value).match(/\s+(senior|junior)(?: ([1-4]))?$/);
+            return candidate?.[1] === level[1] && (!level[2] || candidate[2] === level[2]);
+          }));
+      }
+    }
+  }
+  return [...new Set(reference.flatMap(e => e.salaries))].sort((a,b) => a-b);
 }
 export function salaryOutsideGrid(entries: SalaryGridEntry[], title: string, salary: number) {
   return Boolean(title.trim()) && Number.isFinite(salary) && salary > 0 &&

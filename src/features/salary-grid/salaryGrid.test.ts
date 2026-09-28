@@ -35,7 +35,23 @@ describe('salary reference', () => {
     expect(salaryOutsideGrid(seed, 'Comptable Contrôleur Senior 2', 45700)).toBe(true);
     expect(salaryOutsideGrid(seed, 'Comptable Contrôleur Junior 1', 45700)).toBe(true);
     expect(approvedSalaries(seed, 'Opérateur informatique (3)')).toEqual([28700]);
-    expect(salaryOutsideGrid(seed, 'Technicien Senior 1', 45700)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Technicien Senior 1', 45700)).toBe(false);
+  });
+  it('validates an unspecified grade against its family and unknown jobs against their level', () => {
+    expect(approvedSalaries(seed, 'Professionnel Senior')).toEqual([51300,62000,71000]);
+    expect(salaryOutsideGrid(seed, 'Professionnel Senior', 51300)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Professionnel Senior', 62000)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Professionnel Junior', 51300)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Professionnel Junior III', 35100)).toBe(false);
+    expect(approvedSalaries(seed, 'Agent Administratif')).toEqual([27400,28700,36500]);
+    expect(salaryOutsideGrid(seed, 'Agent Administratif', 36500)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Agente Administrative II', 28700)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Agent Administratif II', 36500)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Agent Administratif', 35000)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Technicien Senior', 45700)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Technicien Senior 2', 45700)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Technicien Senior', 45000)).toBe(true);
+    expect(salaryOutsideGrid(seed.filter(e => e.jobType !== 'Technique'), 'Technicien Senior 1', 45700)).toBe(true);
   });
   it('switches in both directions and preserves unknown titles', () => {
     expect(genderedTitle(seed, 'Pharmacien','Femme')).toBe('Pharmacienne');

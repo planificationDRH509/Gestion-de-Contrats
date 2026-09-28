@@ -22,7 +22,12 @@ positive amounts outside the approved values in red without blocking an override
 Contract entry never learns an override as an approved salary. Unknown titles also
 remain unapproved. Gender normalization applies in entry, documents and export.
 Senior/S. and Junior/J. spellings, including parenthesized grades, match the same
-title and grade in legacy contracts. Different grades retain separate salaries.
+title and grade in legacy contracts. Roman numerals are also recognized. If a
+title omits the grade, approved amounts come from the same title family. Agent
+administratif uses the Commis administratif reference. An unknown title with an
+explicit Senior/Junior level uses the active grid entries for that level and,
+when identifiable, its Universitaire/Technique type. Different numbered grades
+retain separate salaries; unknown titles without a reference or level remain red.
 
 Offline reads use the last fetched grid; remote edits require connectivity. No
 remote fallback silently treats bundled seed values as a successfully loaded grid.
