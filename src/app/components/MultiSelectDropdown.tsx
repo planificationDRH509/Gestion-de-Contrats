@@ -22,15 +22,16 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const uniqueOptions = useMemo(() => [...new Set(options)], [options]);
 
   const visibleOptions = useMemo(() => {
     const tokens = searchable ? normalizeSearch(searchQuery).split(/\s+/).filter(Boolean) : [];
-    if (tokens.length === 0) return options;
-    return options.filter(option => {
+    if (tokens.length === 0) return uniqueOptions;
+    return uniqueOptions.filter(option => {
       const normalizedOption = normalizeSearch(option);
       return tokens.every(token => normalizedOption.includes(token));
     });
-  }, [options, searchQuery, searchable]);
+  }, [uniqueOptions, searchQuery, searchable]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -51,7 +52,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
   };
 
   const selectAll = () => {
-    onChange([...options]);
+    onChange([...uniqueOptions]);
   };
 
   const selectNone = () => {
@@ -60,10 +61,10 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
 
   const displayText = useMemo(() => {
     if (selectedValues.length === 0) return placeholder;
-    if (selectedValues.length === options.length) return "Toutes";
+    if (selectedValues.length === uniqueOptions.length) return "Toutes";
     if (selectedValues.length <= 2) return selectedValues.join(", ");
     return `${selectedValues.length} sélectionné(s)`;
-  }, [selectedValues, options, placeholder]);
+  }, [selectedValues, uniqueOptions, placeholder]);
 
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px' }}>
