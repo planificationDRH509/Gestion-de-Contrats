@@ -6,6 +6,9 @@ describe('salary reference', () => {
   it('uses April 2022 salaries and excludes teachers and police', () => {
     expect(seed).toHaveLength(141);
     expect(seed.filter(e => e.active)).toHaveLength(136);
+    expect(seed.every(e => e.jobType === 'Universitaire' || e.jobType === 'Technique')).toBe(true);
+    expect(seed.find(e => e.masculine === 'Médecin Généraliste')?.jobType).toBe('Universitaire');
+    expect(seed.find(e => e.masculine === 'Technicien en Maintenance Informatique 1')?.jobType).toBe('Technique');
     expect(seed.some(e => /policier|enseignant/i.test(e.category))).toBe(false);
     expect(approvedSalaries(seed, 'Infirmière de ligne')).toEqual([37200]);
     expect(salaryOutsideGrid(seed, 'Infirmier de ligne', 27500)).toBe(true);
@@ -23,6 +26,16 @@ describe('salary reference', () => {
     expect(salaryOutsideGrid(seed, 'Ingénieur', 75500)).toBe(true);
     expect(salaryOutsideGrid(seed, 'Titre libre', 50000)).toBe(true);
     expect(salaryOutsideGrid(seed, '', 0)).toBe(false);
+  });
+  it('recognizes legacy Senior and Junior grade spellings without mixing salaries', () => {
+    expect(salaryOutsideGrid(seed, 'Comptable Contrôleur Senior 1', 45700)).toBe(false);
+    expect(salaryOutsideGrid(seed, 'Comptable Contrôleuse Senior (2)', 40000)).toBe(false);
+    expect(approvedSalaries(seed, 'Comptable Contrôleur S1')).toEqual([45700]);
+    expect(approvedSalaries(seed, 'Comptable Contrôleur Junior3')).toEqual([28700]);
+    expect(salaryOutsideGrid(seed, 'Comptable Contrôleur Senior 2', 45700)).toBe(true);
+    expect(salaryOutsideGrid(seed, 'Comptable Contrôleur Junior 1', 45700)).toBe(true);
+    expect(approvedSalaries(seed, 'Opérateur informatique (3)')).toEqual([28700]);
+    expect(salaryOutsideGrid(seed, 'Technicien Senior 1', 45700)).toBe(true);
   });
   it('switches in both directions and preserves unknown titles', () => {
     expect(genderedTitle(seed, 'Pharmacien','Femme')).toBe('Pharmacienne');
@@ -50,5 +63,6 @@ describe('salary reference', () => {
     expect(approvedSalaries([{...entry,active:false}],'Pharmacien')).toEqual([]);
     expect(() => validateGridEntry({...entry,salaries:[0]})).toThrow();
     expect(validateGridEntry({...entry,active:true})).toMatchObject({active:true});
+    expect(() => validateGridEntry({...entry,jobType:'Autre'})).toThrow();
   });
 });

@@ -14,12 +14,15 @@ printed salary. Catch-all descriptions and “Salaire Minimum” are not job tit
 until reviewed and activated. Source row numbers and uncertainty notes are
 preserved. The source does not establish a newer national schedule than 2022.
 
-The manager edits masculine/feminine titles, category, approved amounts, aliases
+The manager edits masculine/feminine titles, personnel category, job type
+(`Universitaire` or `Technique`), approved amounts, aliases
 and active status. Renaming a title retains its previous spellings as aliases.
 Forms, spreadsheet entry, import previews and the contract list flag
 positive amounts outside the approved values in red without blocking an override.
 Contract entry never learns an override as an approved salary. Unknown titles also
 remain unapproved. Gender normalization applies in entry, documents and export.
+Senior/S. and Junior/J. spellings, including parenthesized grades, match the same
+title and grade in legacy contracts. Different grades retain separate salaries.
 
 Offline reads use the last fetched grid; remote edits require connectivity. No
 remote fallback silently treats bundled seed values as a successfully loaded grid.

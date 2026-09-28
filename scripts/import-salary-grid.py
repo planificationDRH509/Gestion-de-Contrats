@@ -7,6 +7,16 @@ expansions = {'Inspect. J.3':'Inspecteur J.3','Compt. Contr. J.3':'Comptable Con
 pairs = {'Premier':'Première','Assistant':'Assistante','Administrateur':'Administratrice','Chargé':'Chargée','Chef':'Cheffe','Conseiller':'Conseillère','Coordonnateur':'Coordonnatrice','Directeur':'Directrice','Départemental':'Départementale','Doyen':'Doyenne','Ingénieur':'Ingénieure','Consultant':'Consultante','Vérificateur':'Vérificatrice','Délégué':'Déléguée','Adjoint':'Adjointe','Administratif':'Administrative','Inspecteur':'Inspectrice','Programmeur':'Programmeuse','Professionnel':'Professionnelle','Contrôleur':'Contrôleuse','Financier':'Financière','Agent':'Agente','Douanier':'Douanière','douanier':'douanière','Technicien':'Technicienne','Teneur':'Teneuse','Opérateur':'Opératrice','Intendant':'Intendante','Chauffeur':'Chauffeuse','Mécanicien':'Mécanicienne','Messager':'Messagère','infirmier':'infirmière','Infirmier':'Infirmière','Médical':'Médicale','Pharmacien':'Pharmacienne','Magasinier':'Magasinière','Régisseur':'Régisseuse'}
 def feminine(s):
  return re.sub(r'[^\W\d_]+',lambda m:pairs.get(m[0],m[0]),s)
+def job_type(title, category):
+ if category in ('Personnel administratif', 'Personnel de soutien'):
+  return 'Technique'
+ if category == 'Personnel médical':
+  return 'Technique' if title.startswith(('Auxiliaire', 'Aide en soins', 'Régisseur', 'Massothérapeute')) else 'Universitaire'
+ if category == 'Personnel d’encadrement':
+  return 'Technique' if title.startswith(('Assistant Administratif', 'Inspecteur')) else 'Universitaire'
+ if category == 'Personnel professionnel diplômé ou certifié':
+  return 'Technique' if title.startswith(('Technicien', 'Tech.', 'Teneur de Livre', 'Agent Douanier', 'Agent douanier')) else 'Universitaire'
+ return 'Universitaire'
 entries={}
 for row in range(6,54):
  cat,sub,titles,_,_,salary,_,page,note=[book.worksheets[0].cell(row,c).value for c in range(1,10)]
@@ -18,7 +28,7 @@ for row in range(6,54):
   label=expansions.get(raw,raw)
   key=(category,label)
   if key not in entries:
-   entries[key]={'id':f'grid-2022-{row}-{len(entries)+1}','masculine':label,'feminine':feminine(label),'category':category,'salaries':[],'aliases':[],'source':'Grille salariale Haïti — mai 2022','sourceRows':[],'notes':'','active':True,'version':1}
+   entries[key]={'id':f'grid-2022-{row}-{len(entries)+1}','masculine':label,'feminine':feminine(label),'category':category,'jobType':job_type(label,category),'salaries':[],'aliases':[],'source':'Grille salariale Haïti — mai 2022','sourceRows':[],'notes':'','active':True,'version':1}
   e=entries[key]
   if salary not in e['salaries']: e['salaries'].append(salary)
   if raw!=label and raw not in e['aliases']: e['aliases'].append(raw)
@@ -27,7 +37,7 @@ for row in range(6,54):
 # Undated annotations are retained but not used as approved salaries until activated.
 for row,male,cat in [(6,'Magasinier','Personnel de soutien'),(7,'Régisseur de pharmacie','Personnel médical'),(8,'Archiviste','Personnel administratif'),(9,'Massothérapeute','Personnel médical'),(10,'Manutentionnaire','Personnel de soutien')]:
  raw,salary,_,note=[book.worksheets[1].cell(row,c).value for c in range(1,5)]
- entries[('annotation',male)]={'id':f'grid-note-{row}','masculine':male,'feminine':feminine(male),'category':cat,'salaries':[salary],'aliases':[raw] if raw!=male else [],'source':'Annotations manuscrites — sans date','sourceRows':[row],'notes':note or 'Montant manuscrit non daté, à valider.','active':False,'version':1}
+ entries[('annotation',male)]={'id':f'grid-note-{row}','masculine':male,'feminine':feminine(male),'category':cat,'jobType':job_type(male,cat),'salaries':[salary],'aliases':[raw] if raw!=male else [],'source':'Annotations manuscrites — sans date','sourceRows':[row],'notes':note or 'Montant manuscrit non daté, à valider.','active':False,'version':1}
 output=Path('src/features/salary-grid/salaryGridSeed.json')
 output.write_text(json.dumps(list(entries.values()),ensure_ascii=False,indent=2)+'\n')
 print(f'{len(entries)} titres, {sum(e["active"] for e in entries.values())} actifs')

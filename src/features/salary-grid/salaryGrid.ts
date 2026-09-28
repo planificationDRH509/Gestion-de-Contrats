@@ -6,6 +6,7 @@ export type SalaryGridEntry = {
   masculine: string;
   feminine: string;
   category: string;
+  jobType: string;
   salaries: number[];
   aliases: string[];
   source: string;
@@ -14,7 +15,10 @@ export type SalaryGridEntry = {
   active: boolean;
   version: number;
 };
-export const normalizeTitle = (value: string) => normalizeSuggestionGrammarValue(stripSuggestionPrefix(value, 'position').replace(/[-‐‑–]/g, ' ').replace(/\./g, ''));
+export const normalizeTitle = (value: string) => normalizeSuggestionGrammarValue(stripSuggestionPrefix(value, 'position').replace(/[-‐‑–]/g, ' ').replace(/\./g, ''))
+  .replace(/\s+(?:s|senior)\s*\(?([1-4])\)?$/, ' senior $1')
+  .replace(/\s+(?:j|junior)\s*\(?([1-4])\)?$/, ' junior $1')
+  .replace(/\s+\(([1-4])\)$/, ' $1');
 export const contractTitleWithoutGrade = (title: string) => title.trim()
   .replace(/\s+S\.[1-4]$/i, ' Senior')
   .replace(/\s+J\.[1-4]$/i, ' Junior')
@@ -43,6 +47,7 @@ export function gridPositions(entries: SalaryGridEntry[], gender = ''): Position
 }
 export function validateGridEntry(entry: SalaryGridEntry) {
   if (!entry.masculine.trim() || !entry.feminine.trim() || !entry.category.trim()) throw new Error('Renseignez les deux titres et le type de personnel.');
+  if (entry.jobType !== 'Universitaire' && entry.jobType !== 'Technique') throw new Error('Choisissez un type de poste.');
   if (!entry.salaries.length || entry.salaries.some(s => !Number.isFinite(s) || s <= 0 || Math.abs(s * 100 - Math.round(s * 100)) > 0.00001)) throw new Error('Renseignez des salaires positifs, avec deux décimales au maximum.');
   return entry;
 }
