@@ -215,15 +215,6 @@ function startOfDay(date) {
 function isDateInRange(date, startInclusive, endExclusive) {
     return date >= startInclusive && date < endExclusive;
 }
-function getContractActivityDate(contract) {
-    var _a;
-    var created = (_a = toValidDate(contract.createdAt)) !== null && _a !== void 0 ? _a : new Date();
-    var updated = toValidDate(contract.updatedAt);
-    if (updated && updated.getTime() > created.getTime()) {
-        return updated;
-    }
-    return created;
-}
 function getContractStartDate(contract) {
     var _a, _b;
     var createdAt = (_a = toValidDate(contract.createdAt)) !== null && _a !== void 0 ? _a : new Date();
@@ -258,14 +249,16 @@ function matchesContractDateFilter(contract, mode, options) {
         var contractFiscalYear = ((_c = contract.annee_fiscale) === null || _c === void 0 ? void 0 : _c.trim()) || "".concat(createdAt.getMonth() >= 9 ? createdAt.getFullYear() : createdAt.getFullYear() - 1, "-").concat(createdAt.getMonth() >= 9 ? createdAt.getFullYear() + 1 : createdAt.getFullYear());
         return contractFiscalYear === currentFiscalYear;
     }
-    var activityDate = getContractActivityDate(contract);
+    var createdDate = toValidDate(contract.createdAt);
+    if (!createdDate)
+        return false;
     var todayStart = startOfDay(now);
     if (mode === "day") {
         var explicitDay = options.dayDateInput ? parseDateInput(options.dayDateInput) : null;
         var dayStart = explicitDay ? startOfDay(explicitDay) : todayStart;
         var nextDay = new Date(dayStart);
         nextDay.setDate(nextDay.getDate() + 1);
-        return isDateInRange(activityDate, dayStart, nextDay);
+        return isDateInRange(createdDate, dayStart, nextDay);
     }
     if (mode === "range") {
         var explicitStart = options.rangeStartInput ? parseDateInput(options.rangeStartInput) : null;
@@ -275,13 +268,13 @@ function matchesContractDateFilter(contract, mode, options) {
         }
         var startBoundary = explicitStart ? startOfDay(explicitStart) : null;
         var endBoundary = explicitEnd ? startOfDay(explicitEnd) : null;
-        if (startBoundary && activityDate < startBoundary) {
+        if (startBoundary && createdDate < startBoundary) {
             return false;
         }
         if (endBoundary) {
             var nextDay = new Date(endBoundary);
             nextDay.setDate(nextDay.getDate() + 1);
-            if (activityDate >= nextDay) {
+            if (createdDate >= nextDay) {
                 return false;
             }
         }
@@ -294,12 +287,12 @@ function matchesContractDateFilter(contract, mode, options) {
         weekStart.setDate(weekStart.getDate() - diffToMonday);
         var nextWeek = new Date(weekStart);
         nextWeek.setDate(nextWeek.getDate() + 7);
-        return isDateInRange(activityDate, weekStart, nextWeek);
+        return isDateInRange(createdDate, weekStart, nextWeek);
     }
     if (mode === "month") {
         var monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
         var nextMonth = new Date(todayStart.getFullYear(), todayStart.getMonth() + 1, 1);
-        return isDateInRange(activityDate, monthStart, nextMonth);
+        return isDateInRange(createdDate, monthStart, nextMonth);
     }
     return true;
 }

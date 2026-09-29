@@ -15,6 +15,7 @@ export type DossierContractMetrics = Record<
   {
     assignedCount: number;
     doneCount: number;
+    authorIds: string[];
   }
 >;
 
@@ -32,8 +33,12 @@ export function readCachedDossierContractMetrics(workspaceId: string): DossierCo
 
       const dossierMetrics = metrics[contract.dossierId] ?? {
         assignedCount: 0,
-        doneCount: 0
+        doneCount: 0,
+        authorIds: []
       };
+      if (contract.createdBy && !dossierMetrics.authorIds.includes(contract.createdBy)) {
+        dossierMetrics.authorIds.push(contract.createdBy);
+      }
       dossierMetrics.assignedCount += 1;
       if (isContractDone(contract.status)) dossierMetrics.doneCount += 1;
       metrics[contract.dossierId] = dossierMetrics;
@@ -84,18 +89,23 @@ export function useDossierContractMetrics(workspaceId: string) {
 
         total = result.total;
         result.items.forEach((contract) => {
-          if (!contract.dossierId) {
+          if (contract.deletedAt || !contract.dossierId) {
             return;
           }
 
           if (!metrics[contract.dossierId]) {
             metrics[contract.dossierId] = {
               assignedCount: 0,
-              doneCount: 0
+              doneCount: 0,
+              authorIds: []
             };
           }
 
-          metrics[contract.dossierId].assignedCount += 1;
+          const dossierMetrics = metrics[contract.dossierId];
+          if (contract.createdBy && !dossierMetrics.authorIds.includes(contract.createdBy)) {
+            dossierMetrics.authorIds.push(contract.createdBy);
+          }
+          dossierMetrics.assignedCount += 1;
           if (isContractDone(contract.status)) {
             metrics[contract.dossierId].doneCount += 1;
           }

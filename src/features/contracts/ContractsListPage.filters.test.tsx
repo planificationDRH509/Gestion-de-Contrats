@@ -27,6 +27,7 @@ vi.mock("../lists/listsApi", () => ({ useContractLists: () => ({ data: [] }) }))
 vi.mock("./pinnedContracts", () => ({ usePinnedContracts: () => ({ ids: [] }) }));
 vi.mock("./ContractsImportModal", () => ({ ContractsImportModal: () => null }));
 import { ContractsListPage } from "./ContractsListPage";
+import { getTodayDateInputValue } from "../../lib/contractDateFilters";
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 function setup() {
@@ -39,6 +40,25 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("keeps Date in the filter panel and toggles today directly from the toolbar", async () => {
+    setup();
+    expect(screen.queryByRole("button", { name: /event Date/ })).not.toBeInTheDocument();
+    const today = screen.getByRole("button", { name: "Aujourd'hui" });
+    await userEvent.click(today);
+    expectParams({ dateFilterMode: "day", dateFilterDate: getTodayDateInputValue(), page: 1 });
+    expect(today).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(today);
+    expectParams({ dateFilterMode: undefined, dateFilterDate: undefined, page: 1 });
+    expect(today).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /event Date/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Semaine actuelle/ }));
+    expectParams({ dateFilterMode: "week" });
+    await userEvent.click(today);
+    expectParams({ dateFilterMode: "day", dateFilterDate: getTodayDateInputValue(), page: 1 });
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expect(today).toHaveAttribute("aria-pressed", "false");
+  });
   it("combines durations with other filters and supports removal and reset", async () => {
     setup();
     await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));

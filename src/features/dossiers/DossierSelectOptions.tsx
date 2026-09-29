@@ -1,5 +1,7 @@
+import { useDossierContractMetrics } from "./dossiersApi";
+import { useAuth } from "../auth/auth";
 import { Dossier } from "../../data/types";
-import { getDossierGroups } from "../../lib/dossier";
+import { getUserDossierGroups } from "../../lib/dossier";
 
 type DossierSelectOptionsProps = {
   dossiers: Dossier[];
@@ -10,7 +12,9 @@ export function DossierSelectOptions({
   dossiers,
   emptyLabel = "Aucun dossier"
 }: DossierSelectOptionsProps) {
-  const groups = getDossierGroups(dossiers);
+  const { user } = useAuth();
+  const { data: metrics = {} } = useDossierContractMetrics(user?.workspaceId ?? "");
+  const groups = getUserDossierGroups(dossiers, user?.id, metrics);
 
   return (
     <>
@@ -20,6 +24,13 @@ export function DossierSelectOptions({
           {dossier.name}
         </option>
       ))}
+      {groups.others.length > 0 ? (
+        <optgroup label="Autres dossiers">
+          {groups.others.map((dossier) => (
+            <option key={dossier.id} value={dossier.id}>{dossier.name}</option>
+          ))}
+        </optgroup>
+      ) : null}
       {groups.archived.length > 0 ? (
         <optgroup label="Dossiers archivés">
           {groups.archived.map((dossier) => (

@@ -32,7 +32,7 @@ import {
   isPastFiscalYear
 } from "../../lib/contractDateFilters";
 import { useFiscalYear } from "../settings/settingsApi";
-import { getDossierGroups } from "../../lib/dossier";
+import { getUserDossierGroups } from "../../lib/dossier";
 import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
   PrintHistoryEntry,
@@ -168,7 +168,7 @@ export function ContractsListPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [menuView, setMenuView] = useState<"main" | "dossiers" | "status" | "export" | "tags" | "duration">("main");
-  const [dossierSubmenu, setDossierSubmenu] = useState<"archived" | "classified" | null>(null);
+  const [dossierSubmenu, setDossierSubmenu] = useState<"others" | "archived" | "classified" | null>(null);
   const [menuMode, setMenuMode] = useState<"main" | "status">("main");
   const [tagSearch, setTagSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
@@ -423,7 +423,7 @@ export function ContractsListPage() {
     () => new Map(dossiers.map((dossier) => [dossier.id, dossier])),
     [dossiers]
   );
-  const dossierGroups = useMemo(() => getDossierGroups(dossiers), [dossiers]);
+  const dossierGroups = useMemo(() => getUserDossierGroups(dossiers, user?.id, dossierMetrics), [dossiers, user?.id, dossierMetrics]);
   const fiscalYearStartLabel = useMemo(
     () => getCurrentFiscalYearStart().toLocaleDateString("fr-FR"),
     []
@@ -433,7 +433,8 @@ export function ContractsListPage() {
     Boolean(dateFilterEnd) &&
     dateFilterStart > dateFilterEnd;
   const advancedFilterCount = [selectedAssignments, selectedDepartments, selectedCommunes, selectedPositions, selectedDurations]
-    .filter(values => values.length > 0).length;
+    .filter(values => values.length > 0).length + Number(statusFilter !== "all") + Number(dateFilterMode !== "all");
+  const isTodayFilterActive = dateFilterMode === "day" && dateFilterDate === getTodayDateInputValue();
   const hasActiveFilters =
     statusFilter !== "all" ||
     Boolean(dossierFilterId) ||
@@ -445,6 +446,9 @@ export function ContractsListPage() {
     selectedDurations.length > 0 ||
     selectedDepartments.length > 0 ||
     selectedCommunes.length > 0;
+  const hasFilterChips = Boolean(dossierFilterId || tagFilterId) ||
+    [selectedAssignments, selectedPositions, selectedDurations, selectedDepartments, selectedCommunes]
+      .some(values => values.length > 0);
 
   function clearFilters() {
     const today = getTodayDateInputValue();
@@ -1398,63 +1402,57 @@ export function ContractsListPage() {
     <div className="page-container contracts-page">
       {listsQuery.isError && <p className="list-notice" role="status">Listes non actualisées : {listError(listsQuery.error)} <button className="btn btn-outline" onClick={() => void listsQuery.refetch()}>Réessayer</button></p>}
       <header className="section-header contracts-page-header">
-        <div className="list-page-heading">
-          <div>
-            <span className="page-eyebrow">Gestion RH</span>
-            <div className="contracts-title-line">
-              <h1 className="section-title">Contrats</h1>
-            </div>
-          </div>
-          {can("contracts.create") ? (
-            <button className="btn btn-primary contracts-new-button" onClick={() => navigate("/app/contrats/nouveau")}>
-              <span className="material-symbols-rounded icon">add</span>
-              Nouveau contrat
-            </button>
-          ) : null}
-        </div>
         <div className="toolbar-unified contracts-filter-toolbar">
-          <div className="contracts-navigation-row">
-          <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
-            <button
-              className={`view-pill-unified ${activeView === "contracts" ? "active" : ""}`}
-              onClick={() => setActiveView("contracts")}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>description</span>
-              Contrats
-            </button>
-            <button
-              className={`view-pill-unified ${activeView === "dossiers" ? "active" : ""}`}
-              onClick={() => setActiveView("dossiers")}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder</span>
-              Dossiers
-            </button>
-          </div>
+          <div className="contracts-controls-row">
+            <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
+              <button
+                className={`view-pill-unified ${activeView === "contracts" ? "active" : ""}`}
+                onClick={() => setActiveView("contracts")}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>description</span>
+                Contrats
+              </button>
+              <button
+                className={`view-pill-unified ${activeView === "dossiers" ? "active" : ""}`}
+                onClick={() => setActiveView("dossiers")}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder</span>
+                Dossiers
+              </button>
+            </div>
             {activeView === "contracts" && (
-              <label className="contracts-scope-switch">
+              <label className="contracts-scope-switch" title={showAll ? "Tous les contrats" : "Mes contrats"}>
                 <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                <span className="material-symbols-rounded">{showAll ? "groups" : "person"}</span>
-                <span>{showAll ? "Tous les contrats" : "Mes contrats"}</span>
+                <span className="material-symbols-rounded" aria-hidden="true">{showAll ? "groups" : "person"}</span>
+                <span className="contracts-scope-label">{showAll ? "Tous les contrats" : "Mes contrats"}</span>
               </label>
             )}
-          </div>
-          {activeView === "contracts" && <>
-            <div className="contracts-search-row">
-              <div className="search-field-unified">
-                <span className="material-symbols-rounded icon">search</span>
+            {activeView === "contracts" && <>
+              <div className={`search-field-unified contracts-compact-search ${query ? "has-query" : ""}`}>
+                <span className="material-symbols-rounded icon" aria-hidden="true">search</span>
                 <input
+                  type="search"
                   className="input"
+                  aria-label="Rechercher par nom, NIF ou NINU"
+                  title="Rechercher par nom, NIF ou NINU"
                   placeholder="Rechercher par nom, NIF ou NINU..."
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 />
               </div>
               <div className="contracts-toolbar-actions" role="group" aria-label="Filtres et tri">
-                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
-                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
-                </button>
-                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
-                  <span className="material-symbols-rounded">event</span><span>Date</span>
+                <button
+                  type="button"
+                  className={`toolbar-action-button ${isTodayFilterActive ? "active" : ""}`}
+                  aria-pressed={isTodayFilterActive}
+                  onClick={() => {
+                    setDateFilterDate(getTodayDateInputValue());
+                    setDateFilterMode(isTodayFilterActive ? "all" : "day");
+                    setPage(1);
+                    setContextMenu(null);
+                  }}
+                >
+                  <span className="material-symbols-rounded" aria-hidden="true">today</span><span>Aujourd'hui</span>
                 </button>
                 <button className={`toolbar-action-button ${tagFilterId ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}>
                   <span className="material-symbols-rounded">label</span><span>Tag</span>
@@ -1472,9 +1470,42 @@ export function ContractsListPage() {
                   {advancedFilterCount > 0 && <span className="contract-filter-count">{advancedFilterCount}</span>}
                 </button>
               </div>
-            </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  className="icon-btn contracts-reset-button"
+                  aria-label="Réinitialiser"
+                  title="Réinitialiser les filtres"
+                  onClick={clearFilters}
+                >
+                  <span className="material-symbols-rounded" aria-hidden="true">restart_alt</span>
+                </button>
+              )}
+            </>}
+            {can("contracts.create") ? (
+              <button
+                type="button"
+                className="btn btn-primary contracts-new-button"
+                aria-label="Nouveau contrat"
+                title="Nouveau contrat"
+                onClick={() => navigate("/app/contrats/nouveau")}
+              >
+                <span className="material-symbols-rounded icon" aria-hidden="true">add</span>
+                <span className="contracts-new-label">Nouveau contrat</span>
+              </button>
+            ) : null}
+          </div>
+          {activeView === "contracts" && <>
             {showAdvancedFilters && (
               <div id="contract-advanced-filters" className="contracts-filter-grid">
+                <div className="contracts-filter-shortcuts">
+                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
+                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
+                </button>
+                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
+                  <span className="material-symbols-rounded">event</span><span>Date</span>
+                </button>
+                </div>
               <MultiSelectDropdown
                 fullWidth
                 label="Institution"
@@ -1525,7 +1556,7 @@ export function ContractsListPage() {
               />
               </div>
             )}
-            {hasActiveFilters && (
+            {hasFilterChips && (
               <div className="contracts-active-filters" aria-label="Filtres actifs">
               {dossierFilterId ? (
                 <button
@@ -1617,7 +1648,6 @@ export function ContractsListPage() {
                   <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
                 </button>
               ) : null}
-                <button className="toolbar-clear-button" onClick={clearFilters}>Réinitialiser</button>
               </div>
             )}
           </>}
@@ -2535,11 +2565,25 @@ export function ContractsListPage() {
                           <>
                             {dossierGroups.active.length === 0 ? (
                               <div className="context-menu-empty" style={{ padding: "10px", fontSize: "12px", color: "var(--ink-muted)" }}>
-                                Aucun dossier en traitement
+                                Aucun dossier personnel en traitement
                               </div>
                             ) : (
                               dossierGroups.active.map(renderDossierMenuItem)
                             )}
+
+                            {dossierGroups.others.length > 0 ? (
+                              <button
+                                type="button"
+                                className="context-menu-item"
+                                style={{ padding: "8px 10px", fontSize: "12px", fontWeight: 700 }}
+                                aria-expanded={dossierSubmenu === "others"}
+                                onClick={() => setDossierSubmenu((current) => current === "others" ? null : "others")}
+                              >
+                                <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>folder_shared</span>
+                                Autres dossiers
+                                <span className="material-symbols-rounded" style={{ marginLeft: "auto", fontSize: "16px", opacity: 0.55 }}>chevron_right</span>
+                              </button>
+                            ) : null}
 
                             {dossierGroups.archived.length > 0 ? (
                               <button
@@ -2580,7 +2624,9 @@ export function ContractsListPage() {
                                 className="context-menu dossier-submenu"
                                 style={{ position: "static", width: "100%", maxHeight: "180px", overflowY: "auto", padding: "4px", boxShadow: "none" }}
                               >
-                                {(dossierSubmenu === "archived"
+                                {(dossierSubmenu === "others"
+                                  ? dossierGroups.others
+                                  : dossierSubmenu === "archived"
                                   ? dossierGroups.archived
                                   : dossierGroups.classified
                                 ).map(renderDossierMenuItem)}

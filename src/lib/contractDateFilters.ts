@@ -144,7 +144,8 @@ export function matchesContractDateFilter(
     return getContractFiscalYear(contract) === getFiscalYearForDate(now);
   }
 
-  const activityDate = getContractActivityDate(contract);
+  const createdDate = toValidDate(contract.createdAt);
+  if (!createdDate) return false;
   const todayStart = startOfDay(now);
 
   if (mode === "day") {
@@ -152,7 +153,7 @@ export function matchesContractDateFilter(
     const dayStart = explicitDay ? startOfDay(explicitDay) : todayStart;
     const nextDay = new Date(dayStart);
     nextDay.setDate(nextDay.getDate() + 1);
-    return isDateInRange(activityDate, dayStart, nextDay);
+    return isDateInRange(createdDate, dayStart, nextDay);
   }
 
   if (mode === "range") {
@@ -166,14 +167,14 @@ export function matchesContractDateFilter(
     const startBoundary = explicitStart ? startOfDay(explicitStart) : null;
     const endBoundary = explicitEnd ? startOfDay(explicitEnd) : null;
 
-    if (startBoundary && activityDate < startBoundary) {
+    if (startBoundary && createdDate < startBoundary) {
       return false;
     }
 
     if (endBoundary) {
       const nextDay = new Date(endBoundary);
       nextDay.setDate(nextDay.getDate() + 1);
-      if (activityDate >= nextDay) {
+      if (createdDate >= nextDay) {
         return false;
       }
     }
@@ -188,13 +189,13 @@ export function matchesContractDateFilter(
     weekStart.setDate(weekStart.getDate() - diffToMonday);
     const nextWeek = new Date(weekStart);
     nextWeek.setDate(nextWeek.getDate() + 7);
-    return isDateInRange(activityDate, weekStart, nextWeek);
+    return isDateInRange(createdDate, weekStart, nextWeek);
   }
 
   if (mode === "month") {
     const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
     const nextMonth = new Date(todayStart.getFullYear(), todayStart.getMonth() + 1, 1);
-    return isDateInRange(activityDate, monthStart, nextMonth);
+    return isDateInRange(createdDate, monthStart, nextMonth);
   }
 
   return true;

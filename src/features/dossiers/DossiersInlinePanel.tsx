@@ -1,8 +1,9 @@
+import { useAuth } from "../auth/auth";
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dossier } from "../../data/types";
 import {
-  getDossierGroups,
+  getUserDossierGroups,
   getDossierProgressState,
   isDossierArchived,
   normalizeNonNegativeInteger,
@@ -30,6 +31,7 @@ export function DossiersInlinePanel({
   onViewDossier
 }: DossiersInlinePanelProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: dossiers = [], isLoading } = useDossiersList(workspaceId);
   const { data: metricsByDossier = {} } = useDossierContractMetrics(workspaceId);
   const createDossier = useCreateDossier();
@@ -47,7 +49,7 @@ export function DossiersInlinePanel({
   const [defaultDurationMonths, setDefaultDurationMonths] = useState("");
   const [createFormOpen, setCreateFormOpen] = useState(false);
   const [dossierQuery, setDossierQuery] = useState("");
-  const [dossierView, setDossierView] = useState<"active" | "archived" | "classified" | "all">("active");
+  const [dossierView, setDossierView] = useState<"active" | "others" | "archived" | "classified" | "all">("active");
   const [justCreatedDossierId, setJustCreatedDossierId] = useState<string | null>(null);
 
   const [editingDossierId, setEditingDossierId] = useState<string | null>(null);
@@ -278,15 +280,17 @@ export function DossiersInlinePanel({
     }
   }
 
-  const dossierGroups = getDossierGroups(dossiers);
+  const dossierGroups = getUserDossierGroups(dossiers, user?.id, metricsByDossier);
   const displayedDossiers = useMemo(() => {
     const source = dossierView === "active"
       ? dossierGroups.active
+      : dossierView === "others"
+        ? dossierGroups.others
       : dossierView === "archived"
         ? dossierGroups.archived
       : dossierView === "classified"
         ? dossierGroups.classified
-        : [...dossierGroups.active, ...dossierGroups.archived, ...dossierGroups.classified];
+        : [...dossierGroups.active, ...dossierGroups.others, ...dossierGroups.archived, ...dossierGroups.classified];
     const normalizedQuery = dossierQuery.trim().toLocaleLowerCase("fr");
     if (!normalizedQuery) return source;
     return source.filter((dossier) =>
@@ -294,7 +298,7 @@ export function DossiersInlinePanel({
         .filter(Boolean)
         .some((value) => value!.toLocaleLowerCase("fr").includes(normalizedQuery))
     );
-  }, [dossierGroups.active, dossierGroups.archived, dossierGroups.classified, dossierQuery, dossierView]);
+  }, [dossierGroups.active, dossierGroups.others, dossierGroups.archived, dossierGroups.classified, dossierQuery, dossierView]);
 
   return (
     <div className="dossiers-inline-panel dossier-modern-shell">
@@ -323,7 +327,7 @@ export function DossiersInlinePanel({
         </div>
 
         <div className="dossier-overview-stats" aria-label="Résumé des dossiers">
-          <div><strong>{dossierGroups.active.length}</strong><span>En traitement</span></div>
+          <div><strong>{dossierGroups.active.length + dossierGroups.others.length}</strong><span>En traitement</span></div>
           <div><strong>{dossierGroups.archived.length}</strong><span>Archivés</span></div>
           <div><strong>{dossierGroups.classified.length}</strong><span>Classés</span></div>
         </div>
@@ -331,7 +335,10 @@ export function DossiersInlinePanel({
         <div className="dossier-list-toolbar">
           <div className="view-switch-unified" role="group" aria-label="Filtrer les dossiers">
             <button type="button" className={`view-pill-unified ${dossierView === "active" ? "active" : ""}`} onClick={() => setDossierView("active")}>
-              En traitement <span className="dossier-filter-count">{dossierGroups.active.length}</span>
+              Mes dossiers <span className="dossier-filter-count">{dossierGroups.active.length}</span>
+            </button>
+            <button type="button" className={`view-pill-unified ${dossierView === "others" ? "active" : ""}`} onClick={() => setDossierView("others")}>
+              Autres dossiers <span className="dossier-filter-count">{dossierGroups.others.length}</span>
             </button>
             <button type="button" className={`view-pill-unified ${dossierView === "archived" ? "active" : ""}`} onClick={() => setDossierView("archived")}>
               Archivés <span className="dossier-filter-count">{dossierGroups.archived.length}</span>

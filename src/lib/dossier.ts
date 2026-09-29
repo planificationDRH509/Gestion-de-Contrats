@@ -79,6 +79,25 @@ export function getDossierGroups(dossiers: Dossier[], now = new Date()) {
   };
 }
 
+export function getUserDossierGroups(
+  dossiers: Dossier[],
+  userId?: string,
+  metrics: Record<string, { authorIds?: string[] }> = {},
+  now = new Date()
+) {
+  const groups = getDossierGroups(dossiers, now);
+  const isPersonal = (dossier: Dossier) => Boolean(userId) && (
+    dossier.createdBy
+      ? dossier.createdBy === userId
+      : Boolean(metrics[dossier.id]?.authorIds?.includes(userId!))
+  );
+  return {
+    ...groups,
+    active: groups.active.filter(isPersonal),
+    others: groups.active.filter((dossier) => !isPersonal(dossier))
+  };
+}
+
 export function getDossierProgressState(doneCount: number, targetCount: number) {
   const safeDone = normalizeNonNegativeInteger(doneCount);
   const safeTarget = normalizeNonNegativeInteger(targetCount);

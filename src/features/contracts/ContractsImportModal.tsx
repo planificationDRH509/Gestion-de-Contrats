@@ -1,3 +1,4 @@
+import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { genderedTitle, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
@@ -484,12 +485,7 @@ export function ContractsImportModal({
                   value={selectedDossierId}
                   onChange={(event) => setSelectedDossierId(event.target.value)}
                 >
-                  <option value="">Sélectionner un dossier</option>
-                  {dossiers.map((dossier) => (
-                    <option key={dossier.id} value={dossier.id}>
-                      {dossier.name}
-                    </option>
-                  ))}
+                  <DossierSelectOptions dossiers={dossiers} emptyLabel="Sélectionner un dossier" />
                 </select>
               </label>
               <label className="form-label">

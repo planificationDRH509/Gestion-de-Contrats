@@ -13,6 +13,36 @@ function isoLocal(year: number, month: number, day: number, hour = 12): string {
 }
 
 describe("contractDateFilters", () => {
+  it("includes only creations between local midnight and the next midnight", () => {
+    const now = new Date(2026, 8, 29, 12);
+    const start = new Date(2026, 8, 29).getTime();
+    const end = new Date(2026, 8, 30).getTime();
+    for (const [timestamp, expected] of [[start - 1, false], [start, true], [end - 1, true], [end, false]] as const) {
+      expect(matchesContractDateFilter({
+        createdAt: new Date(timestamp).toISOString(),
+        updatedAt: isoLocal(2026, 10, 5),
+        durationMonths: 12
+      }, "day", { now })).toBe(expected);
+    }
+  });
+
+  it.each(["day", "week", "month", "range"] as const)("does not use a recent modification for the %s filter", mode => {
+    expect(matchesContractDateFilter({
+      createdAt: isoLocal(2026, 2, 10),
+      updatedAt: isoLocal(2026, 9, 29),
+      durationMonths: 12
+    }, mode, {
+      now: new Date(2026, 8, 29, 12),
+      rangeStartInput: "2026-09-28",
+      rangeEndInput: "2026-09-30"
+    })).toBe(false);
+  });
+
+  it("does not substitute today for a missing or invalid creation date", () => {
+    for (const createdAt of ["", "invalid"]) {
+      expect(matchesContractDateFilter({ createdAt, updatedAt: new Date().toISOString(), durationMonths: 12 }, "day")).toBe(false);
+    }
+  });
   it("changes fiscal year on October 1", () => {
     expect(getDefaultFiscalYearString(new Date(2026, 8, 30, 23, 59))).toBe("2025-2026");
     expect(getDefaultFiscalYearString(new Date(2026, 9, 1, 0, 0))).toBe("2026-2027");
@@ -48,7 +78,7 @@ describe("contractDateFilters", () => {
     expect(activityDate.toISOString()).toBe(updatedAt);
   });
 
-  it("matches a precise day using activity date (updatedAt > createdAt)", () => {
+  it("excludes older contracts modified on the selected day", () => {
     const now = new Date(2026, 2, 24, 12, 0, 0);
     const contract = {
       createdAt: isoLocal(2026, 3, 20, 12),
@@ -61,7 +91,8 @@ describe("contractDateFilters", () => {
         dayDateInput: getTodayDateInputValue(now),
         now
       })
-    ).toBe(true);
+    ).toBe(false);
+    expect(matchesContractDateFilter(contract, "day", { dayDateInput: "2026-03-20", now })).toBe(true);
   });
 
   it("uses contract start date for fiscal year filter", () => {
@@ -103,11 +134,11 @@ describe("contractDateFilters", () => {
     ).toBe(false);
   });
 
-  it("matches a custom range using activity date", () => {
+  it("matches a custom range using creation date even after later edits", () => {
     const now = new Date(2026, 2, 24, 12, 0, 0);
     const contract = {
-      createdAt: isoLocal(2026, 3, 1, 12),
-      updatedAt: isoLocal(2026, 3, 12, 12),
+      createdAt: isoLocal(2026, 3, 12, 12),
+      updatedAt: isoLocal(2026, 3, 20, 12),
       durationMonths: 12
     };
 
