@@ -758,6 +758,10 @@ class SupabaseContractRepository implements ContractRepository {
       query = query.in("titre", params.positions);
     }
 
+    if (params.durations?.length) {
+      query = query.in("duree_contrat", params.durations);
+    }
+
     if (params.dossierId !== undefined) {
       if (params.dossierId === null) {
         query = query.is("dossier_id", null);
@@ -1509,7 +1513,7 @@ export function getSupabaseSyncState(workspaceId: string): SupabaseSyncState {
     isSyncing: activeSyncOperations > 0,
     pendingCount: getPendingOutboxCount(workspaceId),
     lastSyncedAt: metadata.lastSyncedAt ?? null,
-    lastError: getLocalStorageError() ?? metadata.lastError ?? null,
+    lastError: getLocalStorageError() ?? getPendingOutbox().find(item => item.workspaceId === workspaceId && item.lastError)?.lastError ?? metadata.lastError ?? null,
     lastFullSyncedAt: metadata.lastFullSyncedAt ?? null,
     cached: getWorkspaceCacheCounts(workspaceId)
   };

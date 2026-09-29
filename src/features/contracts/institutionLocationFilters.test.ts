@@ -36,6 +36,12 @@ const institutions: InstitutionSuggestion[] = [
 ];
 
 describe("institution location filters", () => {
+  it("restricts communes to the selected departments", () => {
+    expect(getInstitutionCommuneOptions(institutions, ["ouest"])).toEqual(["Delmas", "Pétion-Ville"]);
+    expect(getInstitutionCommuneOptions(institutions, ["Nord"])).toEqual(["Cap-Haïtien"]);
+    expect(getInstitutionCommuneOptions(institutions, ["Sud"])).toEqual([]);
+    expect(getInstitutionCommuneOptions(institutions, ["Nord", "Ouest"])).toHaveLength(3);
+  });
   it("builds unique, sorted department and commune options", () => {
     expect(getInstitutionDepartmentOptions(institutions)).toEqual(["Nord", "Ouest"]);
     expect(getInstitutionCommuneOptions(institutions)).toEqual([

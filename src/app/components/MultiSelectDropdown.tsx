@@ -7,6 +7,7 @@ export interface MultiSelectDropdownProps {
   onChange: (values: string[]) => void;
   placeholder: string;
   searchable?: boolean;
+  fullWidth?: boolean;
 }
 
 function normalizeSearch(value: string) {
@@ -18,10 +19,11 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false }: MultiSelectDropdownProps) {
+export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false, fullWidth = false }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const uniqueOptions = useMemo(() => [...new Set(options)], [options]);
 
   const visibleOptions = useMemo(() => {
@@ -52,24 +54,38 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
   };
 
   const selectAll = () => {
-    onChange([...uniqueOptions]);
+    onChange([...new Set([...selectedValues, ...visibleOptions])]);
   };
 
   const selectNone = () => {
-    onChange([]);
+    onChange(searchable && normalizeSearch(searchQuery)
+      ? selectedValues.filter(value => !visibleOptions.includes(value))
+      : []);
   };
 
   const displayText = useMemo(() => {
     if (selectedValues.length === 0) return placeholder;
-    if (selectedValues.length === uniqueOptions.length) return "Toutes";
+    if (uniqueOptions.length > 0 && selectedValues.length === uniqueOptions.length && uniqueOptions.every(value => selectedValues.includes(value))) return "Toutes";
     if (selectedValues.length <= 2) return selectedValues.join(", ");
     return `${selectedValues.length} sélectionné(s)`;
   }, [selectedValues, uniqueOptions, placeholder]);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <div ref={containerRef} className="multi-select-field" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}
+      onKeyDown={event => {
+        if (event.key === 'Escape' && isOpen) {
+          event.stopPropagation();
+          setIsOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsOpen(false);
+      }}
+    >
       <label style={{ fontSize: '13px', color: 'var(--ink-muted)', fontWeight: 600 }}>{label}</label>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => { setSearchQuery(''); setIsOpen(!isOpen); }}
         aria-expanded={isOpen}
@@ -79,8 +95,9 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           alignItems: 'center',
           justifyContent: 'space-between',
           height: '38px',
-          minWidth: '220px',
-          maxWidth: '300px',
+          minWidth: fullWidth ? 0 : '220px',
+          maxWidth: fullWidth ? '100%' : '300px',
+          width: fullWidth ? '100%' : undefined,
           textAlign: 'left',
           background: 'var(--surface-card)',
           border: '1px solid var(--border)',
@@ -103,7 +120,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
       </button>
 
       {isOpen && (
-        <div style={{
+        <div className="multi-select-menu" style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
           left: 0,
@@ -198,7 +215,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
                       height: '15px'
                     }}
                   />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option}</span>
+                  <span title={option} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option}</span>
                 </label>
               );
             })}

@@ -1,3 +1,4 @@
+import { usePendingSync } from "../../lib/usePendingSync";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Gender } from "../../data/types";
@@ -128,7 +129,7 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
   return null;
 }
 
-type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty";
+type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty" | "queued" | "local";
 export type IdentificationSpreadsheetZoomMode = "fit" | "custom";
 
 const STATUS_COLUMN_WIDTH = 96;
@@ -146,6 +147,8 @@ export function IdentificationSpreadsheetView({
   zoomMode?: IdentificationSpreadsheetZoomMode,
   zoomPercent?: number
 }) {
+  const pendingSync = usePendingSync();
+  const cloudEnabled = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
   const { data: identities = [], isLoading } = useIdentificationList(workspaceId);
   const createIdentity = useCreateIdentification();
   const updateIdentity = useUpdateIdentification();
@@ -303,6 +306,9 @@ export function IdentificationSpreadsheetView({
       colorClass = "saved";
     } else if (syncState === "saving") {
       icon = "sync";
+      colorClass = "pending";
+    } else if (syncState === "queued" || syncState === "local") {
+      icon = syncState === "queued" ? "cloud_upload" : "devices";
       colorClass = "pending";
     } else if (syncState === "unsaved") {
       icon = "edit";
@@ -760,8 +766,11 @@ export function IdentificationSpreadsheetView({
             const draft = draftById[identity.nif] || toDraft(identity);
             const hasChanges =
               JSON.stringify(normalizeDraft(draft)) !== JSON.stringify(normalizeDraft(toDraft(identity)));
-            let syncState: SyncState = "saved";
-            let label = "Enregistré";
+            const related = pendingSync.filter(item => !item.syncedAt && item.workspaceId === workspaceId &&
+              item.type.startsWith("applicant.") && (item.payload.nif === identity.nif || item.payload.id === (identity.id ?? identity.nif)));
+            const syncError = related.find(item => item.lastError)?.lastError;
+            let syncState: SyncState = syncError ? "error" : related.length ? "queued" : cloudEnabled ? "saved" : "local";
+            let label = syncError || (related.length ? "En attente de synchronisation" : cloudEnabled ? "Synchronisé sur le cloud" : "Sur cet appareil");
 
             if (savingRows[identity.nif]) {
               syncState = "saving";
@@ -769,17 +778,17 @@ export function IdentificationSpreadsheetView({
             } else if (rowErrors[identity.nif]) {
               syncState = "error";
               label = `Erreur: ${rowErrors[identity.nif]}`;
-            } else if (isEditing || hasChanges) {
+            } else if (hasChanges) {
               syncState = "unsaved";
-              label = "Modifications non synchronisées";
+              label = "Modifications non enregistrées";
             }
             
             return (
                <div key={identity.nif} className="contracts-sheet-row-wrap">
                 <div className={`contracts-sheet-row-shell ${isEditing ? 'is-editing' : ''}`}>
-                  <div className={`contracts-sheet-state-cell ${syncState === "saved" ? "saved" : syncState === "saving" ? "pending" : syncState === "error" ? "error" : "unsaved"}`} title={label} aria-label={label}>
+                  <div className={`contracts-sheet-state-cell ${syncState === "saved" ? "saved" : (syncState === "saving" || syncState === "queued" || syncState === "local") ? "pending" : syncState === "error" ? "error" : "unsaved"}`} title={label} aria-label={label}>
                     <span className={`material-symbols-rounded contracts-sheet-state-status-icon ${savingRows[identity.nif] ? "is-spinning" : ""}`}>
-                      {savingRows[identity.nif] ? "sync" : syncState === "error" ? "error" : isEditing ? "edit" : "check_circle"}
+                      {savingRows[identity.nif] ? "sync" : syncState === "error" ? "error" : syncState === "queued" ? "cloud_upload" : syncState === "local" ? "devices" : syncState === "unsaved" ? "edit" : "check_circle"}
                     </span>
                     {!savingRows[identity.nif] ? (
                       <div className={`contracts-sheet-state-actions ${isEditing ? "has-visible-action" : ""}`}>

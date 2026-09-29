@@ -1,3 +1,5 @@
+import { usePendingSync } from "../../lib/usePendingSync";
+import { contractSyncInfo } from "../../data/local/outboxDependencies";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -258,6 +260,8 @@ export function ContractsSpreadsheetView({
   zoomMode = "custom",
   zoomPercent = 100
 }: ContractsSpreadsheetViewProps) {
+  const pendingSync = usePendingSync();
+  const cloudEnabled = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supabase";
   const createContract = useCreateContract();
   const updateContract = useUpdateContract();
   const updateContractComment = useUpdateContractComment();
@@ -1291,7 +1295,7 @@ export function ContractsSpreadsheetView({
     );
   }
 
-  type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty";
+  type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty" | "queued" | "local";
 
   function renderRowStatusIcon(
     syncState: SyncState,
@@ -1319,6 +1323,9 @@ export function ContractsSpreadsheetView({
       colorClass = "saved";
     } else if (syncState === "saving") {
       icon = "sync";
+      colorClass = "pending";
+    } else if (syncState === "queued" || syncState === "local") {
+      icon = syncState === "queued" ? "cloud_upload" : "devices";
       colorClass = "pending";
     } else if (syncState === "unsaved") {
       icon = "edit";
@@ -1838,8 +1845,9 @@ export function ContractsSpreadsheetView({
             const saving = Boolean(savingRows[contract.id]);
             const hasChanges = !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
             
-            let syncState: SyncState = "saved";
-            let label = "Enregistré";
+            const info = contractSyncInfo(contract, pendingSync, cloudEnabled);
+            let syncState: SyncState = info.error ? "error" : info.pending ? "queued" : cloudEnabled ? "saved" : "local";
+            let label = info.error || info.label;
             
             if (saving) {
               syncState = "saving";
@@ -1849,7 +1857,7 @@ export function ContractsSpreadsheetView({
               label = `Erreur: ${rowError}`;
             } else if (hasChanges) {
               syncState = "unsaved";
-              label = "Modifications non synchronisées";
+              label = "Modifications non enregistrées";
             }
 
             return (

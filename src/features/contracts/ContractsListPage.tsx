@@ -75,6 +75,7 @@ import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
+const DURATION_FILTER_OPTIONS = Array.from({ length: 12 }, (_, index) => `${index + 1} mois`);
 
 function readContractsPageSize() {
   const value = Number(localStorage.getItem("contracts_page_size"));
@@ -84,6 +85,7 @@ function readContractsPageSize() {
 const STATUS_FILTER_OPTIONS: { id: ContractStatus; label: string }[] = [
   { id: "saisie", label: "Saisie" },
   { id: "correction", label: "Correction" },
+  { id: "impression_partiel", label: "Imp. Part." },
   { id: "imprime", label: "Imprimé" },
   { id: "signe", label: "Signé" },
   { id: "transfere", label: "Transféré" },
@@ -145,6 +147,7 @@ export function ContractsListPage() {
   const [tagFilterId, setTagFilterId] = useState<string | null>(null);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [selectedDurations, setSelectedDurations] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -240,15 +243,19 @@ export function ContractsListPage() {
   const { data: institutionsData = [] } = useInstitutions(workspaceId);
   const { data: addressesData = [] } = useAddresses(workspaceId);
 
-  const positionOptions = useMemo(() => positionsData.map(p => p.label), [positionsData]);
+  const positionOptions = useMemo(() => [...new Set(salaryGrid
+    .filter(entry => entry.active)
+    .flatMap(entry => [entry.masculine, entry.feminine, ...entry.aliases])
+    .map(value => value.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "fr")), [salaryGrid]);
   const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
   const departmentOptions = useMemo(
     () => getInstitutionDepartmentOptions(institutionsData),
     [institutionsData]
   );
   const communeOptions = useMemo(
-    () => getInstitutionCommuneOptions(institutionsData),
-    [institutionsData]
+    () => getInstitutionCommuneOptions(institutionsData, selectedDepartments),
+    [institutionsData, selectedDepartments]
   );
   const effectiveAssignments = useMemo(
     () => combineAssignmentAndInstitutionLocationFilters(
@@ -277,7 +284,8 @@ export function ContractsListPage() {
     dateFilterEnd: dateFilterMode === "range" ? dateFilterEnd : undefined,
     tagId: tagFilterId ?? undefined,
     assignments: effectiveAssignments,
-    positions: selectedPositions.length > 0 ? selectedPositions : undefined
+    positions: selectedPositions.length > 0 ? selectedPositions : undefined,
+    durations: selectedDurations.length > 0 ? selectedDurations.map(value => Number.parseInt(value, 10)) : undefined
   }), [
     dateFilterDate,
     dateFilterEnd,
@@ -290,6 +298,7 @@ export function ContractsListPage() {
     pinnedContracts.ids,
     query,
     selectedPositions,
+    selectedDurations,
     showAll,
     sort,
     statusFilter,
@@ -423,13 +432,17 @@ export function ContractsListPage() {
     Boolean(dateFilterStart) &&
     Boolean(dateFilterEnd) &&
     dateFilterStart > dateFilterEnd;
+  const advancedFilterCount = [selectedAssignments, selectedDepartments, selectedCommunes, selectedPositions, selectedDurations]
+    .filter(values => values.length > 0).length;
   const hasActiveFilters =
     statusFilter !== "all" ||
     Boolean(dossierFilterId) ||
+    Boolean(tagFilterId) ||
     dateFilterMode !== "all" ||
     query.trim().length > 0 ||
     selectedAssignments.length > 0 ||
     selectedPositions.length > 0 ||
+    selectedDurations.length > 0 ||
     selectedDepartments.length > 0 ||
     selectedCommunes.length > 0;
 
@@ -437,6 +450,7 @@ export function ContractsListPage() {
     const today = getTodayDateInputValue();
     setStatusFilter("all");
     setDossierFilterId(null);
+    setTagFilterId(null);
     setDateFilterMode("all");
     setDateFilterDate(today);
     setDateFilterStart(today);
@@ -444,6 +458,7 @@ export function ContractsListPage() {
     setQuery("");
     setSelectedAssignments([]);
     setSelectedPositions([]);
+    setSelectedDurations([]);
     setSelectedDepartments([]);
     setSelectedCommunes([]);
     setPage(1);
@@ -1397,7 +1412,8 @@ export function ContractsListPage() {
             </button>
           ) : null}
         </div>
-        <div className="toolbar-unified">
+        <div className="toolbar-unified contracts-filter-toolbar">
+          <div className="contracts-navigation-row">
           <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
             <button
               className={`view-pill-unified ${activeView === "contracts" ? "active" : ""}`}
@@ -1414,9 +1430,16 @@ export function ContractsListPage() {
               Dossiers
             </button>
           </div>
-
-          {activeView === "contracts" && (
-            <>
+            {activeView === "contracts" && (
+              <label className="contracts-scope-switch">
+                <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
+                <span className="material-symbols-rounded">{showAll ? "groups" : "person"}</span>
+                <span>{showAll ? "Tous les contrats" : "Mes contrats"}</span>
+              </label>
+            )}
+          </div>
+          {activeView === "contracts" && <>
+            <div className="contracts-search-row">
               <div className="search-field-unified">
                 <span className="material-symbols-rounded icon">search</span>
                 <input
@@ -1426,7 +1449,84 @@ export function ContractsListPage() {
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 />
               </div>
-
+              <div className="contracts-toolbar-actions" role="group" aria-label="Filtres et tri">
+                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
+                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
+                </button>
+                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
+                  <span className="material-symbols-rounded">event</span><span>Date</span>
+                </button>
+                <button className={`toolbar-action-button ${tagFilterId ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}>
+                  <span className="material-symbols-rounded">label</span><span>Tag</span>
+                </button>
+                <button className="toolbar-action-button" onClick={(e) => handleContextFromButton(e, "sort-trigger")}>
+                  <span className="material-symbols-rounded">sort</span><span>Trier</span>
+                </button>
+                <button
+                  className={`toolbar-action-button ${showAdvancedFilters || advancedFilterCount > 0 ? "active" : ""}`}
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  aria-expanded={showAdvancedFilters}
+                  aria-controls="contract-advanced-filters"
+                >
+                  <span className="material-symbols-rounded">tune</span><span>Filtres</span>
+                  {advancedFilterCount > 0 && <span className="contract-filter-count">{advancedFilterCount}</span>}
+                </button>
+              </div>
+            </div>
+            {showAdvancedFilters && (
+              <div id="contract-advanced-filters" className="contracts-filter-grid">
+              <MultiSelectDropdown
+                fullWidth
+                label="Institution"
+                options={institutionOptions}
+                selectedValues={selectedAssignments}
+                onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
+                placeholder="Toutes les institutions"
+                searchable
+              />
+              <MultiSelectDropdown
+                fullWidth
+                label="Département"
+                options={departmentOptions}
+                selectedValues={selectedDepartments}
+                onChange={(values) => {
+                  setSelectedDepartments(values);
+                  const availableCommunes = getInstitutionCommuneOptions(institutionsData, values);
+                  setSelectedCommunes(current => current.filter(value => availableCommunes.includes(value)));
+                  setPage(1);
+                }}
+                placeholder="Tous les départements"
+              />
+              <MultiSelectDropdown
+                fullWidth
+                label="Commune"
+                options={communeOptions}
+                selectedValues={selectedCommunes}
+                onChange={(values) => { setSelectedCommunes(values); setPage(1); }}
+                placeholder="Toutes les communes"
+                searchable
+              />
+              <MultiSelectDropdown
+                fullWidth
+                label="Fonction"
+                options={positionOptions}
+                selectedValues={selectedPositions}
+                onChange={(values) => { setSelectedPositions(values); setPage(1); }}
+                placeholder="Toutes les fonctions"
+                searchable
+              />
+              <MultiSelectDropdown
+                fullWidth
+                label="Durée"
+                options={DURATION_FILTER_OPTIONS}
+                selectedValues={selectedDurations}
+                onChange={(values) => { setSelectedDurations(values); setPage(1); }}
+                placeholder="Toutes les durées"
+              />
+              </div>
+            )}
+            {hasActiveFilters && (
+              <div className="contracts-active-filters" aria-label="Filtres actifs">
               {dossierFilterId ? (
                 <button
                   type="button"
@@ -1492,6 +1592,19 @@ export function ContractsListPage() {
                 </button>
               ) : null}
 
+              {selectedDurations.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedDurations([]); setPage(1); }}
+                  title="Retirer le filtre durée"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>schedule</span>
+                  Durée: {selectedDurations.length <= 2 ? selectedDurations.join(", ") : `${selectedDurations.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
+
               {selectedPositions.length > 0 ? (
                 <button
                   type="button"
@@ -1504,39 +1617,10 @@ export function ContractsListPage() {
                   <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
                 </button>
               ) : null}
-
-              <div className="contracts-toolbar-actions" role="group" aria-label="Filtres et tri">
-                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
-                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
-                </button>
-                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
-                  <span className="material-symbols-rounded">event</span><span>Date</span>
-                </button>
-                <button className={`toolbar-action-button ${tagFilterId ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "tag-filter-trigger")}>
-                  <span className="material-symbols-rounded">label</span><span>Tag</span>
-                </button>
-                <button className="toolbar-action-button" onClick={(e) => handleContextFromButton(e, "sort-trigger")}>
-                  <span className="material-symbols-rounded">sort</span><span>Trier</span>
-                </button>
-                <button
-                  className={`toolbar-action-button ${showAdvancedFilters || selectedAssignments.length > 0 || selectedPositions.length > 0 || selectedDepartments.length > 0 || selectedCommunes.length > 0 ? "active" : ""}`}
-                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  aria-expanded={showAdvancedFilters}
-                >
-                  <span className="material-symbols-rounded">tune</span><span>Plus</span>
-                </button>
+                <button className="toolbar-clear-button" onClick={clearFilters}>Réinitialiser</button>
               </div>
-
-              {hasActiveFilters ? <button className="toolbar-clear-button" onClick={clearFilters}>Réinitialiser</button> : null}
-
-              <label className="contracts-scope-switch">
-                <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                <span className="material-symbols-rounded">{showAll ? "groups" : "person"}</span>
-                <span>{showAll ? "Tous les contrats" : "Mes contrats"}</span>
-              </label>
-
-            </>
-          )}
+            )}
+          </>}
         </div>
       </header>
 
@@ -1568,52 +1652,7 @@ export function ContractsListPage() {
         />
       ) : (
         <div className="card" style={{ padding: "0", border: "none", background: "transparent", boxShadow: "none" }}>
-          {showAdvancedFilters && (
-            <div className="card" style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "24px",
-              padding: "20px",
-              marginBottom: "16px",
-              background: "var(--surface-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "16px",
-              boxShadow: "var(--shadow-premium)",
-              animation: "slideDownAndFade 0.25s ease-out"
-            }}>
-              <MultiSelectDropdown
-                label="Institution (Affectation)"
-                options={institutionOptions}
-                selectedValues={selectedAssignments}
-                onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
-                placeholder="Toutes les institutions"
-                searchable
-              />
-              <MultiSelectDropdown
-                label="Département"
-                options={departmentOptions}
-                selectedValues={selectedDepartments}
-                onChange={(values) => { setSelectedDepartments(values); setPage(1); }}
-                placeholder="Tous les départements"
-              />
-              <MultiSelectDropdown
-                label="Commune"
-                options={communeOptions}
-                selectedValues={selectedCommunes}
-                onChange={(values) => { setSelectedCommunes(values); setPage(1); }}
-                placeholder="Toutes les communes"
-                searchable
-              />
-              <MultiSelectDropdown
-                label="Fonction (Poste)"
-                options={positionOptions}
-                selectedValues={selectedPositions}
-                onChange={(values) => { setSelectedPositions(values); setPage(1); }}
-                placeholder="Toutes les fonctions"
-                searchable
-              />
-            </div>
-          )}
+
 
           {/* Bulk actions bar removed from here and moved to bottom as floating overlay */}
 

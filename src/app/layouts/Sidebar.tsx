@@ -170,7 +170,7 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
           title={syncState.lastError ?? "Actualiser les données disponibles hors ligne"}
         >
           <span className={`material-symbols-rounded${showSyncing ? " is-spinning" : ""}`}>
-            {showSyncing ? "sync" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
+            {showSyncing ? "sync" : syncState.lastError ? "sync_problem" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
           </span>
           <span className="offline-sync-copy">
             <strong>

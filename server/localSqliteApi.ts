@@ -77,6 +77,7 @@ type ContractListPayload = {
   tagId?: string;
   assignments?: string[];
   positions?: string[];
+  durations?: number[];
 };
 
 type ContractRow = {
@@ -2062,6 +2063,10 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (payload.positions && payload.positions.length > 0) {
       items = items.filter((item) => payload.positions!.includes(item.position));
+    }
+
+    if (payload.durations?.length) {
+      items = items.filter((item) => payload.durations!.includes(item.durationMonths));
     }
 
     if (payload.dateFilterMode && payload.dateFilterMode !== "all") {

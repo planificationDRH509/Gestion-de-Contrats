@@ -31,8 +31,11 @@ export function getInstitutionDepartmentOptions(institutions: InstitutionSuggest
   return uniqueSortedValues(institutions.map((institution) => institution.department));
 }
 
-export function getInstitutionCommuneOptions(institutions: InstitutionSuggestion[]) {
-  return uniqueSortedValues(institutions.map((institution) => institution.commune));
+export function getInstitutionCommuneOptions(institutions: InstitutionSuggestion[], departments: string[] = []) {
+  const normalizedDepartments = new Set(departments.map(normalizeLocationValue));
+  return uniqueSortedValues(institutions
+    .filter(institution => normalizedDepartments.size === 0 || normalizedDepartments.has(normalizeLocationValue(institution.department)))
+    .map((institution) => institution.commune));
 }
 
 export function getAssignmentsForInstitutionLocation(

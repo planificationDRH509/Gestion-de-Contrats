@@ -97,6 +97,10 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
       items = items.filter((contract) => params.positions!.includes(contract.position));
     }
 
+    if (params.durations?.length) {
+      items = items.filter((contract) => params.durations!.includes(contract.durationMonths));
+    }
+
     if (params.dateFilterMode && params.dateFilterMode !== "all") {
       items = items.filter((contract) =>
         matchesContractDateFilter(contract, params.dateFilterMode, {

@@ -210,6 +210,7 @@ export type ContractListParams = {
   tagId?: string;
   assignments?: string[];
   positions?: string[];
+  durations?: number[];
 };
 
 export type ContractDateFilterMode =

@@ -9,6 +9,7 @@ const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supaba
 
 function mapApplicant(applicant: Applicant): IdentificationRow {
   return {
+    id: applicant.id,
     nif: applicant.nif || applicant.id,
     nom: applicant.lastName,
     prenom: applicant.firstName,
@@ -27,6 +28,7 @@ function mapApplicant(applicant: Applicant): IdentificationRow {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface IdentificationRow {
+  id?: string;
   nif: string;
   nom: string;
   prenom: string;
