@@ -3,10 +3,10 @@ import { expect, test } from '@playwright/test';
 test('Dossiers stays usable on desktop and mobile with accessible dialogs', async ({ page }) => {
   const now = new Date().toISOString();
   const entries = [
-    { id: 'health', name: 'Campagne de recrutement — Santé', focal_point: 'Marie Jean', priority: 'urgence', deadline_date: '2020-01-10', contract_target_count: 40 },
-    { id: 'north', name: 'Renouvellements · Direction du Nord', focal_point: 'Jean Baptiste', priority: 'normal', deadline_date: '2099-10-15', contract_target_count: 25 },
-    { id: 'south', name: 'Personnel administratif — Sud', focal_point: 'Service des ressources humaines', priority: 'normal', deadline_date: null, contract_target_count: 0 },
-    { id: 'long', name: 'Programme de renforcement des équipes des établissements de santé de la Grand’Anse et du Nord-Ouest', focal_point: 'Équipe de coordination départementale', priority: 'normal', deadline_date: '2099-11-01', contract_target_count: 100 },
+    { id: 'health', name: 'Campagne de recrutement — Santé', updated_at: null, focal_point: 'Marie Jean', priority: 'urgence', deadline_date: '2020-01-10', contract_target_count: 40 },
+    { id: 'north', name: 'Renouvellements · Direction du Nord', updated_at: null, focal_point: 'Jean Baptiste', priority: 'normal', deadline_date: '2099-10-15', contract_target_count: 25 },
+    { id: 'south', name: 'Personnel administratif — Sud', updated_at: null, focal_point: 'Service des ressources humaines', priority: 'normal', deadline_date: null, contract_target_count: 0 },
+    { id: 'long', name: 'Programme de renforcement des équipes des établissements de santé de la Grand’Anse et du Nord-Ouest', updated_at: null, focal_point: 'Équipe de coordination départementale', priority: 'normal', deadline_date: '2099-11-01', contract_target_count: 100 },
     { id: 'archive', name: 'Campagne précédente', updated_at: '2020-01-01', priority: 'normal' },
     { id: 'closed', name: 'Dossier clôturé', status: 'classified', priority: 'normal' }
   ].map(row => ({ workspace_id: 'workspace_default', created_at: now, updated_at: now, created_by: 'dossier-ui-test', status: 'active', is_ephemeral: false, contract_target_count: 0, deleted_at: null, ...row }));

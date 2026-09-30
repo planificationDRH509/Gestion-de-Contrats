@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dossier } from "../../data/types";
-import { isDossierArchived } from "../../lib/dossier";
+import { getDossierActivityDate, isDossierArchived } from "../../lib/dossier";
 import { useAuth } from "../auth/auth";
 import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 import { useDeleteDossier, useDossierContractMetrics, useDossiersList, useUpdateDossier } from "./dossiersApi";
@@ -79,7 +79,7 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
     if (sort === "name") return a.name.localeCompare(b.name, "fr", { numeric: true });
     if (sort === "deadline") return (a.deadlineDate || "9999").localeCompare(b.deadlineDate || "9999") || a.name.localeCompare(b.name, "fr");
     if (sort === "priority" && a.priority !== b.priority) return a.priority === "urgence" ? -1 : 1;
-    return b.updatedAt.localeCompare(a.updatedAt);
+    return (getDossierActivityDate(b)?.getTime() ?? 0) - (getDossierActivityDate(a)?.getTime() ?? 0);
   });
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;

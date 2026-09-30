@@ -82,6 +82,21 @@ describe("Dossiers workspace", () => {
     expect(screen.getByRole("progressbar")).toHaveAttribute("max", "10");
     expect(screen.getByText("En retard")).toBeInTheDocument();
   });
+  it("opens cached dossiers without modification dates and sorts by their creation dates", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    mocks.list.mockReturnValue({ data: [
+      dossier("Ancien", { createdAt: `${today}T08:00:00Z`, updatedAt: null as unknown as string }),
+      dossier("Récent", { createdAt: `${today}T12:00:00Z`, updatedAt: null as unknown as string }),
+      dossier("Sans date", { createdAt: "", updatedAt: "" })
+    ], isLoading: false });
+    setup();
+    expect(screen.getByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ }).map(button => button.textContent)).toEqual([
+      expect.stringContaining("Récent"), expect.stringContaining("Ancien"), expect.stringContaining("Sans date")
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "Ouvrir les contrats de Récent" }));
+    expect(mocks.view).toHaveBeenCalledWith("Récent");
+  });
   it("creates with planning fields, clears a stale search and calls the selection callback", async () => {
     setup();
     await userEvent.type(screen.getByRole("searchbox"), "inconnu");
