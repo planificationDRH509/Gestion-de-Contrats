@@ -7,8 +7,14 @@ export function usePendingSync() {
   useEffect(() => {
     const refresh = () => setPending(getPendingOutbox());
     window.addEventListener("contribution-offline-sync", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
     refresh();
-    return () => window.removeEventListener("contribution-offline-sync", refresh);
+    return () => {
+      window.removeEventListener("contribution-offline-sync", refresh);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+    };
   }, []);
   return pending;
 }

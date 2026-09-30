@@ -1,3 +1,4 @@
+import { DiscardContractSyncButton } from "./DiscardContractSyncButton";
 import { useState } from "react";
 import type { Contract, OutboxItem } from "../../data/types";
 import { contractSyncInfo } from "../../data/local/outboxDependencies";
@@ -49,6 +50,7 @@ export function ContractSyncIndicator({ contract, pending, online, cloudEnabled,
           try { await onRetry(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Synchronisation impossible."); }
           finally { setBusy(false); }
         }}>{busy ? "Synchronisation…" : online ? "Réessayer la synchronisation" : "En attente d’Internet"}</button>}
+      {cloudEnabled && info.pending && <DiscardContractSyncButton contract={contract} pending={pending} online={online && !busy} />}
       <button type="button" className="btn btn-outline" onClick={() => setOpen(false)}>Fermer</button>
     </span>}
   </span>;

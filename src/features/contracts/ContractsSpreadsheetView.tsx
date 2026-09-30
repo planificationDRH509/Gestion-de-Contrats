@@ -1,8 +1,10 @@
+import { DiscardContractSyncButton } from "./DiscardContractSyncButton";
 import { usePendingSync } from "../../lib/usePendingSync";
 import { contractSyncInfo } from "../../data/local/outboxDependencies";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useMemo, useRef, useState } from "react";
+import "./contractsSpreadsheet.css";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
 import { Contract, Gender } from "../../data/types";
 import { parseMoney, formatFirstName, formatLastName } from "../../lib/format";
@@ -49,34 +51,12 @@ import {
 import { areSpreadsheetDraftsEqual } from "./contractSpreadsheetDrafts";
 import { getNextSpreadsheetCell } from "../../lib/spreadsheetNavigation";
 
-type SpreadsheetFieldKey =
-  | "nif"
-  | "firstName"
-  | "lastName"
-  | "gender"
-  | "ninu"
-  | "address"
-  | "position"
-  | "assignment"
-  | "salaryNumber"
-  | "salaryText"
-  | "comment"
-  | "durationMonths";
-
-type SpreadsheetDraft = {
-  nif: string;
-  firstName: string;
-  lastName: string;
-  gender: Gender | "";
-  ninu: string;
-  address: string;
-  position: string;
-  assignment: string;
-  salaryNumber: string;
-  salaryText: string;
-  comment: string;
-  durationMonths: string;
-};
+import {
+  SPREADSHEET_FIELDS, SpreadsheetHistory, normalizePastedValue,
+  parseSpreadsheetClipboard, spreadsheetErrors,
+  type SpreadsheetDraft, type SpreadsheetFieldKey, type SpreadsheetErrors,
+  type SpreadsheetChange
+} from "./spreadsheetEditing";
 
 type SpreadsheetNewRow = {
   id: string;
@@ -86,6 +66,23 @@ type SpreadsheetNewRow = {
 type SpreadsheetPersistedDraft = {
   newRows: SpreadsheetNewRow[];
   draftById: Record<string, SpreadsheetDraft>;
+  stagedRowKeys?: string[];
+};
+
+type SpreadsheetPreferences = {
+  columnWidths: Partial<Record<SpreadsheetFieldKey, number>>;
+  defaultsOpen: boolean;
+  recentOpen: boolean;
+  useDefaultDossier: boolean;
+  defaultDossierId: string;
+  useDefaultDuration: boolean;
+  defaultDuration: number;
+  useDefaultAddress: boolean;
+  defaultAddress: string;
+  useDefaultAssignment: boolean;
+  defaultAssignment: string;
+  useDefaultComment: boolean;
+  defaultComment: string;
 };
 
 type SpreadsheetColumn = {
@@ -96,7 +93,7 @@ type SpreadsheetColumn = {
 };
 
 const COLUMNS: SpreadsheetColumn[] = [
-  { key: "nif", label: "NIF", width: 152, min: 128 },
+  { key: "nif", label: "NIF", width: 152, min: 152 },
   { key: "firstName", label: "Prénom", width: 148, min: 120 },
   { key: "lastName", label: "Nom", width: 148, min: 120 },
   { key: "gender", label: "Sexe", width: 108, min: 96 },
@@ -125,7 +122,57 @@ const EMPTY_DRAFT: SpreadsheetDraft = {
 
 const EMPTY_NEW_ROWS_COUNT = 3;
 const NAVIGABLE_COLUMN_COUNT = 10;
-const STATUS_COLUMN_WIDTH = 88;
+const STATUS_COLUMN_WIDTH = 120;
+
+function SpreadsheetRow({ children, rowKey, errors = {}, busy, ...props }: React.HTMLAttributes<HTMLDivElement> & {
+  rowKey: string;
+  errors?: SpreadsheetErrors;
+  busy?: boolean;
+}) {
+  function decorate(child: React.ReactNode, index: number): React.ReactNode {
+    if (!isValidElement<Record<string, unknown>>(child)) return child;
+    const error = errors[COLUMNS[index].key];
+    const description = error ? `sheet-error-${rowKey}-${index}` : undefined;
+    if (child.type === "input" || child.type === "textarea") {
+      return cloneElement(child, { "aria-label": COLUMNS[index].label, "aria-invalid": Boolean(error) || undefined, "aria-describedby": description, disabled: busy });
+    }
+    if (child.type === AutocompleteField) {
+      return cloneElement(child, { ariaLabel: COLUMNS[index].label, ariaDescribedBy: description, hasError: Boolean(error) || child.props.hasError, disabled: busy });
+    }
+    if (child.props.children) return cloneElement(child, {}, Children.map(child.props.children as React.ReactNode, nested => decorate(nested, index)));
+    return child;
+  }
+  return (
+    <div {...props}>
+      {Children.toArray(children).map((child, index) => {
+        const error = errors[COLUMNS[index].key];
+        return <div key={COLUMNS[index].key} className={`contracts-sheet-cell ${error ? "has-error" : ""}`}
+          onClick={event => {
+            if (!(event.target as HTMLElement).closest("input, textarea, button, [role=option]")) event.currentTarget.querySelector<HTMLElement>("[data-sheet-col]")?.focus();
+          }}>
+          {decorate(child, index)}
+          {error && <span id={`sheet-error-${rowKey}-${index}`} className="sheet-cell-error">{error}</span>}
+        </div>;
+      })}
+    </div>
+  );
+}
+
+function DefaultDurationField({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  return <input aria-label="Durée par défaut (mois)" type="number" className="input defaults-input-mini" disabled={disabled}
+    value={text} min={1} max={60} onChange={event => {
+      setText(event.target.value);
+      const number = event.target.valueAsNumber;
+      if (Number.isInteger(number) && number >= 1 && number <= 60) onChange(number);
+    }} onBlur={() => {
+      const number = text.trim() ? Number(text) : value;
+      const next = Number.isFinite(number) ? Math.min(60, Math.max(1, Math.round(number))) : value;
+      setText(String(next));
+      onChange(next);
+    }} />;
+}
 
 function createEmptyDraft(): SpreadsheetDraft {
   return { ...EMPTY_DRAFT, durationMonths: getLastChoice("durationMonths") || "12" };
@@ -157,6 +204,7 @@ type ContractsSpreadsheetViewProps = {
   isLoading: boolean;
   canDelete: boolean;
   showToolbar?: boolean;
+  controls?: React.ReactNode;
   zoomMode?: SpreadsheetZoomMode;
   zoomPercent?: number;
 };
@@ -201,7 +249,8 @@ function isDraftEmpty(draft: SpreadsheetDraft): boolean {
 }
 
 function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
-  const salaryText = computeSalaryText(draft.salaryNumber);
+  const salaryNumber = normalizePastedValue("salaryNumber", draft.salaryNumber);
+  const salaryText = computeSalaryText(salaryNumber);
   return {
     nif: formatNifInput(draft.nif),
     firstName: formatFirstName(draft.firstName),
@@ -211,43 +260,11 @@ function normalizeDraft(draft: SpreadsheetDraft): SpreadsheetDraft {
     address: draft.address.trim(),
     position: draft.position.trim(),
     assignment: draft.assignment.trim(),
-    salaryNumber: draft.salaryNumber.trim(),
+    salaryNumber,
     salaryText,
     comment: draft.comment.trim(),
     durationMonths: draft.durationMonths.trim() || "12"
   };
-}
-
-function validateDraft(draft: SpreadsheetDraft): string | null {
-  if (!/^\d{3}-\d{3}-\d{3}-\d$/.test(draft.nif)) {
-    return "NIF invalide (format attendu: XXX-XXX-XXX-X).";
-  }
-  if (!draft.firstName) {
-    return "Le prénom est obligatoire.";
-  }
-  if (!draft.lastName) {
-    return "Le nom est obligatoire.";
-  }
-  if (draft.gender !== "Homme" && draft.gender !== "Femme") {
-    return "Le sexe est obligatoire (Homme ou Femme).";
-  }
-  if (draft.ninu && !/^\d{10}$/.test(draft.ninu)) {
-    return "NINU invalide (10 chiffres).";
-  }
-  if (!draft.address) {
-    return "L'adresse est obligatoire.";
-  }
-  if (!draft.position) {
-    return "Le poste est obligatoire.";
-  }
-  if (!draft.assignment) {
-    return "L'affectation est obligatoire.";
-  }
-  const salaryValue = parseMoney(draft.salaryNumber);
-  if (Number.isNaN(salaryValue) || salaryValue <= 0) {
-    return "Le salaire doit être un nombre valide.";
-  }
-  return null;
 }
 
 export function ContractsSpreadsheetView({
@@ -257,6 +274,7 @@ export function ContractsSpreadsheetView({
   isLoading,
   canDelete,
   showToolbar = true,
+  controls,
   zoomMode = "custom",
   zoomPercent = 100
 }: ContractsSpreadsheetViewProps) {
@@ -277,6 +295,20 @@ export function ContractsSpreadsheetView({
     [workspaceId, userId]
   );
   const draftHydratedRef = useRef(false);
+  const preferencesKey = `${unsavedDraftKey}:preferences`;
+  const preferences = useMemo(() => loadDraftValue<Partial<SpreadsheetPreferences>>(preferencesKey) ?? {}, [preferencesKey]);
+  const [defaultsOpen, setDefaultsOpen] = useState(preferences.defaultsOpen ?? false);
+  const [recentOpen, setRecentOpen] = useState(preferences.recentOpen ?? true);
+  const [pasteError, setPasteError] = useState("");
+  const [validatedRows, setValidatedRows] = useState<Set<string>>(new Set());
+  const [stagedRowKeys, setStagedRowKeys] = useState<Set<string>>(() => new Set(loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey)?.stagedRowKeys ?? []));
+  const stagedRowsRef = useRef(stagedRowKeys);
+  const history = useRef(new SpreadsheetHistory());
+  const [, refreshHistory] = useState(0);
+  const editSession = useRef(0);
+  const nifRequestVersions = useRef<Record<string, number>>({});
+  const [savingBatch, setSavingBatch] = useState(false);
+
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
   const [msppHtml, setMsppHtml] = useState("");
@@ -307,45 +339,46 @@ export function ContractsSpreadsheetView({
 
   const { data: dossiers = [] } = useDossiersList(workspaceId);
 
-  const [useDefaultDossier, setUseDefaultDossier] = useState(false);
-  const [defaultDossierId, setDefaultDossierId] = useState<string>("");
+  const [useDefaultDossier, setUseDefaultDossier] = useState(preferences.useDefaultDossier ?? false);
+  const [defaultDossierId, setDefaultDossierId] = useState<string>(preferences.defaultDossierId ?? "");
 
-  const [useDefaultDuration, setUseDefaultDuration] = useState(false);
+  const [useDefaultDuration, setUseDefaultDuration] = useState(preferences.useDefaultDuration ?? false);
   const [defaultDuration, setDefaultDuration] = useState<number>(() => {
     const last = getLastChoice("durationMonths");
-    return last ? parseInt(last, 10) : 12;
+    return preferences.defaultDuration ?? (last ? parseInt(last, 10) : 12);
   });
 
-  useEffect(() => {
-    if (useDefaultDossier && defaultDossierId) {
-      const selectedDossier = dossiers.find(d => d.id === defaultDossierId);
-      if (selectedDossier?.defaultDurationMonths) {
-        setUseDefaultDuration(true);
-        setDefaultDuration(selectedDossier.defaultDurationMonths);
-      }
-    }
-  }, [useDefaultDossier, defaultDossierId, dossiers]);  const [useDefaultAddress, setUseDefaultAddress] = useState(false);
-  const [defaultAddress, setDefaultAddress] = useState<string>(() => getLastChoice("address") || "");
+  const [useDefaultAddress, setUseDefaultAddress] = useState(preferences.useDefaultAddress ?? false);
+  const [defaultAddress, setDefaultAddress] = useState<string>(() => preferences.defaultAddress ?? (getLastChoice("address") || ""));
 
-  const [useDefaultAssignment, setUseDefaultAssignment] = useState(false);
-  const [defaultAssignment, setDefaultAssignment] = useState<string>(() => getLastChoice("assignment") || "");
+  const [useDefaultAssignment, setUseDefaultAssignment] = useState(preferences.useDefaultAssignment ?? false);
+  const [defaultAssignment, setDefaultAssignment] = useState<string>(() => preferences.defaultAssignment ?? (getLastChoice("assignment") || ""));
 
-  const [useDefaultComment, setUseDefaultComment] = useState(false);
-  const [defaultComment, setDefaultComment] = useState<string>("");
+  const [useDefaultComment, setUseDefaultComment] = useState(preferences.useDefaultComment ?? false);
+  const [defaultComment, setDefaultComment] = useState<string>(preferences.defaultComment ?? "");
 
   const [commentOpenContractId, setCommentOpenContractId] = useState<string | null>(null);
   const [commentDraftById, setCommentDraftById] = useState<Record<string, string>>({});
   const [columnWidths, setColumnWidths] = useState<Record<SpreadsheetFieldKey, number>>(
     () =>
       COLUMNS.reduce((acc, column) => {
-        acc[column.key] = column.min;
+        acc[column.key] = Math.max(column.min, Number(preferences.columnWidths?.[column.key]) || column.min);
         return acc;
       }, {} as Record<SpreadsheetFieldKey, number>)
   );
+  useEffect(() => {
+    saveUnsavedDraft(preferencesKey, {
+      columnWidths, defaultsOpen, recentOpen, useDefaultDossier, defaultDossierId,
+      useDefaultDuration, defaultDuration, useDefaultAddress, defaultAddress,
+      useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment
+    } satisfies SpreadsheetPreferences);
+  }, [preferencesKey, columnWidths, defaultsOpen, recentOpen, useDefaultDossier, defaultDossierId, useDefaultDuration, defaultDuration, useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment]);
+
   const [resizing, setResizing] = useState<{
     key: SpreadsheetFieldKey;
     startX: number;
     startWidth: number;
+    startZoom: number;
   } | null>(null);
 
   // ── MSPP Verification Fetch ──────────────────────────────────────────
@@ -403,6 +436,15 @@ export function ContractsSpreadsheetView({
     draftHydratedRef.current = false;
     const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
     setDraftById(saved?.draftById ?? {});
+    const staged = new Set(saved?.stagedRowKeys ?? []);
+    stagedRowsRef.current = staged;
+    setStagedRowKeys(staged);
+    setValidatedRows(new Set(staged));
+    history.current = new SpreadsheetHistory();
+    setNifStatusByRow({});
+    setNifCheckingRows({});
+    nifRequestVersions.current = {};
+
     setNewRows(saved?.newRows?.length ? saved.newRows : createDefaultNewRows());
     const timeoutId = window.setTimeout(() => {
       draftHydratedRef.current = true;
@@ -428,9 +470,10 @@ export function ContractsSpreadsheetView({
 
     saveUnsavedDraft<SpreadsheetPersistedDraft>(unsavedDraftKey, {
       newRows,
-      draftById: changedDraftById
+      draftById: changedDraftById,
+      stagedRowKeys: [...stagedRowKeys]
     });
-  }, [contractsMap, draftById, newRows, unsavedDraftKey, userId, workspaceId]);
+  }, [contractsMap, draftById, newRows, stagedRowKeys, unsavedDraftKey, userId, workspaceId]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -438,7 +481,7 @@ export function ContractsSpreadsheetView({
     const onMouseMove = (event: MouseEvent) => {
       const column = COLUMNS.find((item) => item.key === resizing.key);
       if (!column) return;
-      const nextWidth = Math.max(column.min, resizing.startWidth + (event.clientX - resizing.startX));
+      const nextWidth = Math.max(column.min, resizing.startWidth + (event.clientX - resizing.startX) / resizing.startZoom);
       setColumnWidths((prev) => ({
         ...prev,
         [resizing.key]: nextWidth
@@ -476,37 +519,33 @@ export function ContractsSpreadsheetView({
 
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
-  }, []);
+  }, [isLoading]);
 
+  const activeDefaults = {
+    address: useDefaultAddress ? defaultAddress : "",
+    assignment: useDefaultAssignment ? defaultAssignment : "",
+    comment: useDefaultComment ? defaultComment : "",
+    durationMonths: useDefaultDuration ? String(defaultDuration) : ""
+  };
+  const previousDefaults = useRef(activeDefaults);
   useEffect(() => {
-    setNewRows((prev) =>
-      prev.map((row) => {
-        const isCurrentlyEmpty = isDraftEmpty(normalizeDraft(row.draft));
-        if (!isCurrentlyEmpty) return row;
-
-        const nextDraft = { ...row.draft };
-        let modified = false;
-
-        if (useDefaultAddress && !row.draft.address) {
-          nextDraft.address = defaultAddress;
-          modified = true;
-        }
-        if (useDefaultAssignment && !row.draft.assignment) {
-          nextDraft.assignment = defaultAssignment;
-          modified = true;
-        }
-        if (useDefaultComment && !row.draft.comment) {
-          nextDraft.comment = defaultComment;
-          modified = true;
-        }
-        if (useDefaultDuration && row.draft.durationMonths !== String(defaultDuration)) {
-          nextDraft.durationMonths = String(defaultDuration);
-          modified = true;
-        }
-
-        return modified ? { ...row, draft: nextDraft } : row;
-      })
-    );
+    const previous = previousDefaults.current;
+    const next = {
+      address: useDefaultAddress ? defaultAddress : "",
+      assignment: useDefaultAssignment ? defaultAssignment : "",
+      comment: useDefaultComment ? defaultComment : "",
+      durationMonths: useDefaultDuration ? String(defaultDuration) : ""
+    };
+    previousDefaults.current = next;
+    setNewRows(rows => rows.map(row => {
+      if (!isDraftEmpty(row.draft)) return row;
+      const draft = { ...row.draft };
+      for (const field of ["address", "assignment", "comment", "durationMonths"] as const) {
+        const inherited = !draft[field] || draft[field] === previous[field] || (field === "durationMonths" && !previous[field] && Boolean(next[field]) && draft[field] === createEmptyDraft().durationMonths);
+        if (inherited) draft[field] = next[field] || (field === "durationMonths" ? createEmptyDraft().durationMonths : "");
+      }
+      return { ...row, draft };
+    }));
   }, [useDefaultAddress, defaultAddress, useDefaultAssignment, defaultAssignment, useDefaultComment, defaultComment, useDefaultDuration, defaultDuration]);
 
   const featuredAddress = useMemo(() => {
@@ -565,16 +604,172 @@ export function ContractsSpreadsheetView({
       return Math.max(0.5, Math.min(2, zoomPercent / 100));
     }
     if (!sheetViewportWidth) return 1;
-    return Math.max(0.35, Math.min(1, (sheetViewportWidth - 16) / sheetGridWidth));
+    return Math.max(0.35, Math.min(1, sheetViewportWidth / sheetGridWidth));
   }, [sheetGridWidth, sheetViewportWidth, zoomMode, zoomPercent]);
 
   const rowOrder = useMemo(
     () => [
       ...newRows.map((row) => getNewRowKey(row.id)),
-      ...visibleContracts.map((contract) => getExistingRowKey(contract.id))
+      ...(recentOpen ? visibleContracts.map((contract) => getExistingRowKey(contract.id)) : [])
     ],
-    [newRows, visibleContracts]
+    [newRows, visibleContracts, recentOpen]
   );
+
+  const sheetBusy = savingBatch || Object.values(creatingRows).some(Boolean) || Object.values(savingRows).some(Boolean);
+  const pendingCount = newRows.filter(row => !isDraftEmpty(row.draft)).length + [...stagedRowKeys].filter(key => key.startsWith("existingRow_")).length;
+
+  function markStaged(keys: string[], staged = true) {
+    const next = new Set(stagedRowsRef.current);
+    keys.forEach(key => staged ? next.add(key) : next.delete(key));
+    stagedRowsRef.current = next;
+    setStagedRowKeys(next);
+  }
+
+  function recordChanges(changes: SpreadsheetChange[], rowKey: string, columnIndex: number, group?: string) {
+    history.current.record({ changes, focus: { rowKey, columnIndex }, group });
+    refreshHistory(value => value + 1);
+  }
+
+  function forgetHistory(rowKey: string) {
+    history.current.forget(rowKey);
+    markStaged([rowKey], false);
+    refreshHistory(value => value + 1);
+  }
+
+  function applyChanges(changes: SpreadsheetChange[], reverse = false) {
+    let rows = [...newRowsRef.current];
+    const drafts = { ...draftByIdRef.current };
+    for (const change of changes) {
+      const value = reverse ? change.before : change.after;
+      if (change.rowKey.startsWith("newRow_")) {
+        const id = change.rowKey.slice("newRow_".length);
+        nifRequestVersions.current[id] = (nifRequestVersions.current[id] ?? 0) + 1;
+        const index = rows.findIndex(row => row.id === id);
+        if (!value) rows = rows.filter(row => row.id !== id);
+        else if (index < 0) rows.push({ id, draft: value });
+        else rows[index] = { id, draft: value };
+      } else {
+        const id = change.rowKey.slice("existingRow_".length);
+        if (value) drafts[id] = value;
+        else delete drafts[id];
+      }
+    }
+    newRowsRef.current = rows;
+    draftByIdRef.current = drafts;
+    setNewRows(rows);
+    setDraftById(drafts);
+    const touchedIds = new Set(changes.filter(change => change.rowKey.startsWith("newRow_")).map(change => change.rowKey.slice("newRow_".length)));
+    setNifStatusByRow(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !touchedIds.has(id))));
+    setNifCheckingRows(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !touchedIds.has(id))));
+    setRowErrors(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !changes.some(change => change.rowKey === getExistingRowKey(id)))));
+    setNewRowErrors(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !touchedIds.has(id))));
+  }
+
+  function restoreHistory(redo: boolean) {
+    if (sheetBusy || creatingRowIdsRef.current.size) return;
+    const edit = redo ? history.current.redo() : history.current.undo();
+    if (!edit) return;
+    editSession.current++;
+    applyChanges(edit.changes, !redo);
+    const keys = edit.changes.map(change => change.rowKey);
+    markStaged(keys);
+    setValidatedRows(previous => new Set([...previous, ...keys]));
+    refreshHistory(value => value + 1);
+    setPasteError("");
+    if (edit.focus.rowKey.startsWith("existingRow_")) setRecentOpen(true);
+    window.requestAnimationFrame(() => focusGridCell(edit.focus.rowKey, edit.focus.columnIndex));
+  }
+
+  function fieldErrors(rowKey: string, draft: SpreadsheetDraft): SpreadsheetErrors {
+    if (rowKey.startsWith("newRow_") && isDraftEmpty(draft)) return {};
+    const errors = validatedRows.has(rowKey) || stagedRowKeys.has(rowKey) ? spreadsheetErrors(draft) : {};
+    if (rowKey.startsWith("newRow_")) {
+      const id = rowKey.slice("newRow_".length);
+      const status = nifStatusByRow[id];
+      if (status?.type === "blocked") errors.nif = status.message;
+      const nif = draft.nif.replace(/\D/g, "");
+      if (nif.length === 10 && newRows.some(row => row.id !== id && row.draft.nif.replace(/\D/g, "") === nif)) {
+        errors.nif = "Ce NIF est présent dans une autre ligne de saisie.";
+      }
+    }
+    return errors;
+  }
+
+  function validateRow(rowKey: string, draft: SpreadsheetDraft, focus = true) {
+    const errors = { ...spreadsheetErrors(draft), ...fieldErrors(rowKey, draft) };
+    setValidatedRows(previous => new Set(previous).add(rowKey));
+    const first = SPREADSHEET_FIELDS.findIndex(field => errors[field]);
+    if (first < 0) return true;
+    if (focus) {
+      if (rowKey.startsWith("existingRow_")) setRecentOpen(true);
+      window.requestAnimationFrame(() => focusGridCell(rowKey, first));
+    }
+    return false;
+  }
+
+  function handleSheetPaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    const rowKey = target.dataset.sheetRow;
+    const columnIndex = Number(target.dataset.sheetCol);
+    if (!rowKey || !Number.isInteger(columnIndex)) return;
+    const text = event.clipboardData.getData("text/plain");
+    if (!/[\t\r\n]/.test(text)) return;
+    event.preventDefault();
+    if (sheetBusy) return;
+    try {
+      const matrix = parseSpreadsheetClipboard(text);
+      if (!matrix.length) return;
+      if (matrix.some(row => row.length + columnIndex > COLUMNS.length)) {
+        throw new Error("Le collage dépasse la dernière colonne. Sélectionnez sa cellule de départ.");
+      }
+      const isNew = rowKey.startsWith("newRow_");
+      const keys = isNew ? newRowsRef.current.map(row => getNewRowKey(row.id)) : visibleContracts.map(contract => getExistingRowKey(contract.id));
+      const start = keys.indexOf(rowKey);
+      if (start < 0) return;
+      if (!isNew && start + matrix.length > keys.length) throw new Error("Le collage dépasse les contrats affichés. Collez les nouveaux contrats dans les lignes de saisie.");
+      const changes = matrix.map((cells, offset): SpreadsheetChange => {
+        const key = keys[start + offset] ?? getNewRowKey(createNewRow().id);
+        const existing = isNew ? newRowsRef.current.find(row => getNewRowKey(row.id) === key)?.draft : draftByIdRef.current[key.slice("existingRow_".length)] ?? toDraft(contractsMap.get(key.slice("existingRow_".length))!);
+        const after = { ...(existing ?? buildResetDraft()) };
+        cells.forEach((value, index) => { after[COLUMNS[columnIndex + index].key] = normalizePastedValue(COLUMNS[columnIndex + index].key, value); });
+        after.salaryText = computeSalaryText(after.salaryNumber);
+        after.position = genderedTitle(salaryGrid, after.position, after.gender);
+        return { rowKey: key, before: existing ?? null, after };
+      });
+      editSession.current++;
+      recordChanges(changes, rowKey, columnIndex);
+      applyChanges(changes);
+      markStaged(changes.map(change => change.rowKey));
+      setValidatedRows(previous => new Set([...previous, ...changes.map(change => change.rowKey)]));
+      setPasteError("");
+    } catch (error) { setPasteError(error instanceof Error ? error.message : "Collage impossible."); }
+  }
+
+  async function savePendingRows() {
+    const rows = newRowsRef.current.filter(row => !isDraftEmpty(row.draft));
+    const existingIds = [...stagedRowsRef.current].filter(key => key.startsWith("existingRow_")).map(key => key.slice("existingRow_".length));
+    let firstInvalid: { rowKey: string; draft: SpreadsheetDraft } | undefined;
+    for (const row of rows) {
+      const rowKey = getNewRowKey(row.id);
+      if (!validateRow(rowKey, row.draft, false)) firstInvalid ??= { rowKey, draft: row.draft };
+    }
+    for (const id of existingIds) {
+      const draft = draftByIdRef.current[id];
+      if (draft && !validateRow(getExistingRowKey(id), draft, false)) firstInvalid ??= { rowKey: getExistingRowKey(id), draft };
+    }
+    if (firstInvalid) { validateRow(firstInvalid.rowKey, firstInvalid.draft); return; }
+    setSavingBatch(true);
+    try {
+      for (const row of rows) {
+        if (!(await maybeCreateFromNewRow(row.id, {}, false))) return;
+      }
+      for (const id of existingIds) {
+        if (!(await saveExistingRow(id))) return;
+      }
+      const next = newRowsRef.current.find(row => isDraftEmpty(row.draft));
+      if (next) window.requestAnimationFrame(() => focusNewRowCell(next.id, 0));
+    } finally { setSavingBatch(false); }
+  }
 
   function isHorizontalBoundaryReached(
     event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -609,6 +804,39 @@ export function ContractsSpreadsheetView({
     focusGridCell(getNewRowKey(rowId), columnIndex);
   }
 
+  const activeDefaultCount = [useDefaultDossier, useDefaultDuration, useDefaultAddress, useDefaultAssignment, useDefaultComment].filter(Boolean).length;
+  function missingDefaultsChanges(): SpreadsheetChange[] {
+    return newRowsRef.current.filter(row => !isDraftEmpty(row.draft)).flatMap(row => {
+      const after = { ...row.draft };
+      for (const field of ["address", "assignment", "comment", "durationMonths"] as const) {
+        if (!after[field].trim() && activeDefaults[field]) after[field] = activeDefaults[field];
+      }
+      return JSON.stringify(after) === JSON.stringify(row.draft) ? [] : [{ rowKey: getNewRowKey(row.id), before: row.draft, after }];
+    });
+  }
+  function completeDraftDefaults() {
+    const changes = missingDefaultsChanges();
+    if (!changes.length || sheetBusy) return;
+    recordChanges(changes, changes[0].rowKey, 0);
+    applyChanges(changes);
+    markStaged(changes.map(change => change.rowKey));
+  }
+  function disableDefaults() {
+    setUseDefaultDossier(false);
+    setUseDefaultDuration(false);
+    setUseDefaultAddress(false);
+    setUseDefaultAssignment(false);
+    setUseDefaultComment(false);
+  }
+  function chooseDefaultDossier(id: string) {
+    setDefaultDossierId(id);
+    const duration = dossiers.find(dossier => dossier.id === id)?.defaultDurationMonths;
+    if (duration && duration >= 1 && duration <= 60) {
+      setDefaultDuration(duration);
+      setUseDefaultDuration(true);
+    }
+  }
+
   function buildResetDraft(durationValue?: string): SpreadsheetDraft {
     const nextDraft = createEmptyDraft();
     if (useDefaultAddress) nextDraft.address = defaultAddress;
@@ -622,6 +850,10 @@ export function ContractsSpreadsheetView({
   function clearNewRow(rowId: string) {
     const currentRow = newRowsRef.current.find((row) => row.id === rowId);
     const resetDraft = buildResetDraft(currentRow?.draft.durationMonths);
+    if (currentRow) recordChanges([{ rowKey: getNewRowKey(rowId), before: currentRow.draft, after: resetDraft }], getNewRowKey(rowId), 0);
+    nifRequestVersions.current[rowId] = (nifRequestVersions.current[rowId] ?? 0) + 1;
+    markStaged([getNewRowKey(rowId)], false);
+    setValidatedRows(previous => { const next = new Set(previous); next.delete(getNewRowKey(rowId)); return next; });
     setNewRows((prev) =>
       prev.map((row) => (row.id === rowId ? { ...row, draft: resetDraft } : row))
     );
@@ -651,6 +883,7 @@ export function ContractsSpreadsheetView({
   function insertNewRowAfter(rowId: string) {
     const insertedRow = createNewRow();
     insertedRow.draft = buildResetDraft();
+    recordChanges([{ rowKey: getNewRowKey(insertedRow.id), before: null, after: insertedRow.draft }], getNewRowKey(rowId), 0);
     setNewRows((prev) => {
       const index = prev.findIndex((row) => row.id === rowId);
       if (index < 0) return [...prev, insertedRow];
@@ -670,6 +903,10 @@ export function ContractsSpreadsheetView({
 
     if (event.key === "Enter") {
       event.preventDefault();
+      if (rowKey.startsWith("newRow_") && columnIndex === NAVIGABLE_COLUMN_COUNT - 1) {
+        void maybeCreateFromNewRow(rowKey.slice("newRow_".length));
+        return;
+      }
       const nextCell = getNextSpreadsheetCell(
         rowOrder,
         rowKey,
@@ -744,74 +981,43 @@ export function ContractsSpreadsheetView({
     return draftById[contract.id] ?? toDraft(contract);
   }
 
+  function editedDraft(source: SpreadsheetDraft, key: SpreadsheetFieldKey, value: string): SpreadsheetDraft {
+    const next = { ...source };
+    if (key === "nif") next.nif = formatNifInput(value);
+    else if (key === "ninu") next.ninu = formatNinuInput(value);
+    else if (key !== "salaryText") next[key] = value;
+    if (key === "salaryNumber") next.salaryText = computeSalaryText(value);
+    if (key === "gender" || key === "position") next.position = genderedTitle(salaryGrid, next.position, next.gender);
+    return next;
+  }
+
   function setExistingField(contractId: string, key: SpreadsheetFieldKey, value: string) {
-    setDraftById((prev) => {
-      const contract = contractsMapRef.current.get(contractId);
-      const source = prev[contractId] ?? (contract ? toDraft(contract) : EMPTY_DRAFT);
-      const next: SpreadsheetDraft = { ...source };
-
-      if (key === "nif") next.nif = formatNifInput(value);
-      else if (key === "ninu") next.ninu = formatNinuInput(value);
-      else if (key === "gender") next.gender = value as Gender | "";
-      else if (key === "salaryNumber") {
-        next.salaryNumber = value;
-        next.salaryText = computeSalaryText(value);
-      } else if (key !== "salaryText") {
-        (next[key] as string) = value;
-      }
-
-      if (key === "gender" || key === "position") next.position = genderedTitle(salaryGrid, next.position, next.gender);
-      return { ...prev, [contractId]: next };
-    });
-
-    setRowErrors((prev) => {
-      if (!prev[contractId]) return prev;
-      const next = { ...prev };
-      delete next[contractId];
-      return next;
-    });
+    const contract = contractsMapRef.current.get(contractId);
+    const source = draftByIdRef.current[contractId] ?? (contract ? toDraft(contract) : EMPTY_DRAFT);
+    const next = editedDraft(source, key, value);
+    const rowKey = getExistingRowKey(contractId);
+    recordChanges([{ rowKey, before: source, after: next }], rowKey, SPREADSHEET_FIELDS.indexOf(key), `${rowKey}:${editSession.current}`);
+    const drafts = { ...draftByIdRef.current, [contractId]: next };
+    draftByIdRef.current = drafts;
+    setDraftById(drafts);
+    setRowErrors(previous => ({ ...previous, [contractId]: "" }));
   }
 
   function setNewField(rowId: string, key: SpreadsheetFieldKey, value: string) {
-    setNewRows((prev) => {
-      const nextRows = prev.map((row) => {
-        if (row.id !== rowId) return row;
-        const next: SpreadsheetDraft = { ...row.draft };
-        if (key === "nif") next.nif = formatNifInput(value);
-        else if (key === "ninu") next.ninu = formatNinuInput(value);
-        else if (key === "gender") next.gender = value as Gender | "";
-        else if (key === "salaryNumber") {
-          next.salaryNumber = value;
-          next.salaryText = computeSalaryText(value);
-        } else if (key !== "salaryText") {
-          (next[key] as string) = value;
-        }
-        if (key === "gender" || key === "position") next.position = genderedTitle(salaryGrid, next.position, next.gender);
-        return {
-          ...row,
-          draft: next
-        };
-      });
-      // Keep creation reads in sync with the most recent keystroke, including
-      // when the user validates immediately after changing the duration.
-      newRowsRef.current = nextRows;
-      return nextRows;
-    });
-    // Reset NIF status when NIF field is modified
+    const row = newRowsRef.current.find(item => item.id === rowId);
+    if (!row) return;
+    const next = editedDraft(row.draft, key, value);
+    const rowKey = getNewRowKey(rowId);
+    recordChanges([{ rowKey, before: row.draft, after: next }], rowKey, SPREADSHEET_FIELDS.indexOf(key), `${rowKey}:${editSession.current}`);
+    const rows = newRowsRef.current.map(item => item.id === rowId ? { ...item, draft: next } : item);
+    newRowsRef.current = rows;
+    setNewRows(rows);
     if (key === "nif") {
-      setNifStatusByRow((prev) => {
-        if (!prev[rowId]) return prev;
-        const next = { ...prev };
-        delete next[rowId];
-        return next;
-      });
+      nifRequestVersions.current[rowId] = (nifRequestVersions.current[rowId] ?? 0) + 1;
+      setNifStatusByRow(previous => { const next = { ...previous }; delete next[rowId]; return next; });
+      setNifCheckingRows(previous => ({ ...previous, [rowId]: false }));
     }
-    setNewRowErrors((prev) => {
-      if (!prev[rowId]) return prev;
-      const next = { ...prev };
-      delete next[rowId];
-      return next;
-    });
+    setNewRowErrors(previous => ({ ...previous, [rowId]: "" }));
   }
 
   function applyPositionSelection(contractId: string, item: AutocompleteItem) {
@@ -848,103 +1054,58 @@ export function ContractsSpreadsheetView({
   // ── NIF lookup for new rows ───────────────────────────────────────────
   async function handleNewRowNifComplete(rowId: string, nifFormatted: string) {
     if (!workspaceId) return;
-    setNifCheckingRows((prev) => ({ ...prev, [rowId]: true }));
+    const beforeLookup = newRowsRef.current.find(row => row.id === rowId)?.draft;
+    const version = (nifRequestVersions.current[rowId] ?? 0) + 1;
+    nifRequestVersions.current[rowId] = version;
+    const stillCurrent = () => nifRequestVersions.current[rowId] === version && newRowsRef.current.some(row => row.id === rowId && row.draft.nif === nifFormatted);
+    setNifCheckingRows(previous => ({ ...previous, [rowId]: true }));
     try {
-      const result = await lookupNif(nifFormatted, workspaceId);
-      const { identification, contracts } = result;
-
-      if (!identification) {
-        // NIF not found – silent, allow manual entry
-        setNifStatusByRow((prev) => {
-          const next = { ...prev };
-          delete next[rowId];
-          return next;
-        });
+      const { identification, contracts: matches } = await lookupNif(nifFormatted, workspaceId);
+      if (!stillCurrent()) return;
+      const fiscalYear = getStoredFiscalYear();
+      if (matches.some(contract => contract.annee_fiscale === fiscalYear)) {
+        setNifStatusByRow(previous => ({ ...previous, [rowId]: { type: "blocked", message: `Un contrat existe déjà pour ${fiscalYear}.` } }));
         return;
       }
-
-      // Auto-fill personal info
-      setNewRows((prev) =>
-        prev.map((row) => {
-          if (row.id !== rowId) return row;
-          const next: SpreadsheetDraft = { ...row.draft };
-          next.firstName = identification.prenom;
-          next.lastName = identification.nom;
-          next.address = identification.adresse;
-          if (identification.ninu) next.ninu = identification.ninu;
-          if (identification.sexe === "Homme" || identification.sexe === "Femme") {
-            next.gender = identification.sexe;
-          }
-          return { ...row, draft: next };
-        })
-      );
-
-      const currentFiscalYear = getStoredFiscalYear();
-
-      if (contracts.length === 0) {
-        // No existing contract – normal creation
-        setNifStatusByRow((prev) => {
-          const next = { ...prev };
-          delete next[rowId];
-          return next;
-        });
-        return;
+      const row = newRowsRef.current.find(item => item.id === rowId)!;
+      const next = { ...row.draft };
+      const fillIfUnchanged = (field: SpreadsheetFieldKey, value: string) => {
+        if (row.draft[field] === beforeLookup?.[field]) next[field] = value;
+      };
+      if (identification) {
+        fillIfUnchanged("firstName", identification.prenom);
+        fillIfUnchanged("lastName", identification.nom);
+        fillIfUnchanged("address", identification.adresse);
+        if (identification.ninu) fillIfUnchanged("ninu", identification.ninu);
+        if (["Homme", "Femme"].includes(identification.sexe ?? "")) fillIfUnchanged("gender", identification.sexe!);
       }
-
-      const currentYearContract = contracts.find((c) => c.annee_fiscale === currentFiscalYear);
-      if (currentYearContract) {
-        setNifStatusByRow((prev) => ({
-          ...prev,
-          [rowId]: {
-            type: "blocked",
-            message: `Contrat déjà existant pour l'année fiscale ${currentFiscalYear}.`
-          }
-        }));
-        return;
+      const latest = matches[0];
+      if (latest) {
+        fillIfUnchanged("position", latest.titre);
+        fillIfUnchanged("assignment", latest.lieu_affectation);
+        if (latest.salaire_en_chiffre != null) fillIfUnchanged("salaryNumber", latest.salaire_en_chiffre.toString());
+        next.salaryText = computeSalaryText(next.salaryNumber);
+        setNifStatusByRow(previous => ({ ...previous, [rowId]: { type: "renewal", message: `Renouvellement — ${latest.annee_fiscale}` } }));
       }
-
-      // Renewal: auto-fill from latest contract
-      const latest = contracts[0];
-      setNewRows((prev) =>
-        prev.map((row) => {
-          if (row.id !== rowId) return row;
-          const next: SpreadsheetDraft = { ...row.draft };
-          next.position = latest.titre;
-          next.assignment = latest.lieu_affectation;
-          next.salaryNumber = latest.salaire_en_chiffre?.toString() ?? latest.salaire;
-          next.salaryText = computeSalaryText(next.salaryNumber);
-          // Do NOT overwrite durationMonths
-          return { ...row, draft: next };
-        })
-      );
-      setNifStatusByRow((prev) => ({
-        ...prev,
-        [rowId]: {
-          type: "renewal",
-          message: `Renouvellement — données du contrat ${latest.annee_fiscale} pré-remplies.`
-        }
-      }));
+      if (JSON.stringify(next) !== JSON.stringify(row.draft)) {
+        recordChanges([{ rowKey: getNewRowKey(rowId), before: row.draft, after: next }], getNewRowKey(rowId), 0);
+        const rows = newRowsRef.current.map(item => item.id === rowId ? { ...item, draft: next } : item);
+        newRowsRef.current = rows;
+        setNewRows(rows);
+      }
     } catch {
-      // Network error – silent, allow manual entry
-      setNifStatusByRow((prev) => {
-        const next = { ...prev };
-        delete next[rowId];
-        return next;
-      });
+      // A failed suggestion lookup leaves manual entry available; saving checks again.
     } finally {
-      setNifCheckingRows((prev) => {
-        const next = { ...prev };
-        delete next[rowId];
-        return next;
-      });
+      if (stillCurrent()) setNifCheckingRows(previous => ({ ...previous, [rowId]: false }));
     }
   }
 
   function queueExistingSave(contractId: string) {
+    if (stagedRowsRef.current.has(getExistingRowKey(contractId))) return;
     const chain = saveQueueRef.current[contractId] ?? Promise.resolve();
     saveQueueRef.current[contractId] = chain
       .then(async () => {
-        await saveExistingRow(contractId);
+        if (!stagedRowsRef.current.has(getExistingRowKey(contractId))) await saveExistingRow(contractId);
       })
       .catch(() => {
       });
@@ -956,21 +1117,17 @@ export function ContractsSpreadsheetView({
 
     const baseDraft = normalizeDraft(toDraft(contract));
     const editedDraft = normalizeDraft(draftByIdRef.current[contractId] ?? baseDraft);
-    const validationError = validateDraft(editedDraft);
-
-    if (validationError) {
-      setRowErrors((prev) => ({ ...prev, [contractId]: validationError }));
-      return;
-    }
+    if (!validateRow(getExistingRowKey(contractId), draftByIdRef.current[contractId] ?? baseDraft, false)) return false;
 
     if (areSpreadsheetDraftsEqual(editedDraft, baseDraft)) {
+      forgetHistory(getExistingRowKey(contractId));
       setRowErrors((prev) => {
         if (!prev[contractId]) return prev;
         const next = { ...prev };
         delete next[contractId];
         return next;
       });
-      return;
+      return true;
     }
 
     setSavingRows((prev) => ({ ...prev, [contractId]: true }));
@@ -1031,13 +1188,14 @@ export function ContractsSpreadsheetView({
              ...item,
              draft: {
                ...item.draft,
-               durationMonths: editedDraft.durationMonths
+               durationMonths: useDefaultDuration ? String(defaultDuration) : editedDraft.durationMonths
              }
            };
         }
         return item;
       }));
 
+      forgetHistory(getExistingRowKey(contractId));
       setDraftById((prev) => ({ ...prev, [contractId]: editedDraft }));
       setRowErrors((prev) => {
         if (!prev[contractId]) return prev;
@@ -1045,6 +1203,7 @@ export function ContractsSpreadsheetView({
         delete next[contractId];
         return next;
       });
+      return true;
     } catch (error) {
       console.error(error);
       setRowErrors((prev) => ({
@@ -1054,6 +1213,7 @@ export function ContractsSpreadsheetView({
             ? error.message
             : "Impossible d'enregistrer la ligne."
       }));
+      return false;
     } finally {
       setSavingRows((prev) => {
         const next = { ...prev };
@@ -1065,7 +1225,8 @@ export function ContractsSpreadsheetView({
 
   async function maybeCreateFromNewRow(
     rowId: string,
-    draftOverride: Partial<SpreadsheetDraft> = {}
+    draftOverride: Partial<SpreadsheetDraft> = {},
+    focusNext = true
   ) {
     if (
       !workspaceId ||
@@ -1089,11 +1250,7 @@ export function ContractsSpreadsheetView({
       return;
     }
 
-    const validationError = validateDraft(candidate);
-    if (validationError) {
-      setNewRowErrors((prev) => ({ ...prev, [rowId]: validationError }));
-      return;
-    }
+    if (!validateRow(getNewRowKey(rowId), { ...row.draft, ...draftOverride })) return false;
 
     creatingRowIdsRef.current.add(rowId);
     setCreatingRows((prev) => ({ ...prev, [rowId]: true }));
@@ -1105,6 +1262,12 @@ export function ContractsSpreadsheetView({
     });
 
     try {
+      const matches = await lookupNif(candidate.nif, workspaceId);
+      if (matches.contracts.some(contract => contract.annee_fiscale === getStoredFiscalYear())) {
+        setNifStatusByRow(previous => ({ ...previous, [rowId]: { type: "blocked", message: `Un contrat existe déjà pour ${getStoredFiscalYear()}.` } }));
+        window.requestAnimationFrame(() => focusNewRowCell(rowId, 0));
+        return false;
+      }
       const salaryNumberValue = parseMoney(candidate.salaryNumber);
 
       saveLastChoice("address", candidate.address);
@@ -1154,45 +1317,18 @@ export function ContractsSpreadsheetView({
 
       saveLastChoice("durationMonths", candidate.durationMonths);
 
-      setNewRows((prev) => {
-        const next = prev.map((item) => {
-          if (item.id === rowId) {
-            const empty = createNewRow();
-            if (useDefaultAddress) empty.draft.address = defaultAddress;
-            if (useDefaultAssignment) empty.draft.assignment = defaultAssignment;
-            if (useDefaultComment) empty.draft.comment = defaultComment;
-            if (useDefaultDuration) empty.draft.durationMonths = String(defaultDuration);
-            else empty.draft.durationMonths = candidate.durationMonths;
-            return empty;
-          }
-          if (isDraftEmpty(normalizeDraft(item.draft))) {
-            return {
-              ...item,
-              draft: {
-                ...item.draft,
-                durationMonths: candidate.durationMonths
-              }
-            };
-          }
-          return item;
-        });
-
-        const emptyRowsCount = next.filter((item) => isDraftEmpty(item.draft)).length;
-        if (emptyRowsCount < EMPTY_NEW_ROWS_COUNT) {
-          const toAdd = EMPTY_NEW_ROWS_COUNT - emptyRowsCount;
-          const extra = Array.from({ length: toAdd }, () => {
-            const row = createNewRow();
-            if (useDefaultAddress) row.draft.address = defaultAddress;
-            if (useDefaultAssignment) row.draft.assignment = defaultAssignment;
-            if (useDefaultComment) row.draft.comment = defaultComment;
-            if (useDefaultDuration) row.draft.durationMonths = String(defaultDuration);
-            else row.draft.durationMonths = candidate.durationMonths;
-            return row;
-          });
-          return [...next, ...extra];
-        }
-        return next;
-      });
+      forgetHistory(getNewRowKey(rowId));
+      const rows = newRowsRef.current.map(item => item.id === rowId ? { ...item, draft: buildResetDraft(candidate.durationMonths) } : item);
+      const currentIndex = rows.findIndex(item => item.id === rowId);
+      while (rows.filter(item => isDraftEmpty(item.draft)).length < EMPTY_NEW_ROWS_COUNT || !rows[currentIndex + 1]) {
+        rows.push({ ...createNewRow(), draft: buildResetDraft(candidate.durationMonths) });
+      }
+      newRowsRef.current = rows;
+      setNewRows(rows);
+      setValidatedRows(previous => { const next = new Set(previous); next.delete(getNewRowKey(rowId)); return next; });
+      setNifStatusByRow(previous => { const next = { ...previous }; delete next[rowId]; return next; });
+      if (focusNext) window.requestAnimationFrame(() => focusNewRowCell(rows[currentIndex + 1].id, 0));
+      return true;
     } catch (error) {
       console.error(error);
       setNewRowErrors((prev) => ({
@@ -1202,6 +1338,7 @@ export function ContractsSpreadsheetView({
             ? error.message
             : "Impossible de créer le contrat."
       }));
+      return false;
     } finally {
       creatingRowIdsRef.current.delete(rowId);
       setCreatingRows((prev) => {
@@ -1249,13 +1386,13 @@ export function ContractsSpreadsheetView({
     const canVerify = isMedical && value.length >= 10;
 
     return (
-      <div style={{ position: "relative", display: "flex", alignItems: "stretch", width: "100%" }}>
+      <div className="contracts-sheet-nif-field">
         <input
           ref={ref}
           data-sheet-row={rowKey}
           data-sheet-col={columnIndex}
           className={rowClassName}
-          style={{ paddingRight: canVerify ? "32px" : "8px" }}
+          style={{ "--sheet-input-trailing-space": canVerify ? "32px" : "10px" } as React.CSSProperties}
           value={value}
           placeholder="000-000-000-0"
           onBeforeInput={(event) => prepareNifDigitOverwrite(event.currentTarget, (event.nativeEvent as InputEvent).data)}
@@ -1264,7 +1401,7 @@ export function ContractsSpreadsheetView({
           onBlur={onBlur}
         />
         {canVerify && (
-          <div style={{ position: "absolute", right: "4px", top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+          <div className="contracts-sheet-nif-indicator">
             <button
               type="button"
               onClick={(e) => {
@@ -1301,6 +1438,7 @@ export function ContractsSpreadsheetView({
     syncState: SyncState,
     label: string,
     options?: {
+      contract?: Contract;
       showCommentButton?: boolean;
       hasComment?: boolean;
       onCommentClick?: () => void;
@@ -1346,6 +1484,7 @@ export function ContractsSpreadsheetView({
         </span>
         {showCommentButton || options?.onAddClick || options?.onSaveClick || options?.onDeleteClick ? (
           <div className={`contracts-sheet-state-actions ${hasComment ? "has-visible-action" : ""}`}>
+            {cloudEnabled && options?.contract && <DiscardContractSyncButton contract={options.contract} pending={pendingSync} online={navigator.onLine} iconOnly />}
             {options?.onAddClick ? (
               <button
                 type="button"
@@ -1422,140 +1561,86 @@ export function ContractsSpreadsheetView({
     : null;
 
   return (
-    <div className="contracts-sheet-wrapper contracts-data-sheet" ref={sheetRootRef}>
-      <div className="contracts-sheet-overview">
-        <div className="contracts-sheet-overview-main">
-          <span className="material-symbols-rounded contracts-sheet-overview-icon">table_view</span>
-          <div>
-            <strong>Tableur des contrats</strong>
-            <span>Appuyez sur Entrée pour enregistrer la ligne et passer à la suivante</span>
-          </div>
+    <div
+      className="contracts-sheet-wrapper contracts-data-sheet"
+      ref={sheetRootRef}
+      onPaste={handleSheetPaste}
+      onFocusCapture={event => {
+        if ((event.target as HTMLElement).dataset.sheetRow) editSession.current++;
+      }}
+      onKeyDownCapture={event => {
+        if (!(event.target as HTMLElement).dataset.sheetRow || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+        if (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y") {
+          event.preventDefault();
+          event.stopPropagation();
+          restoreHistory(event.shiftKey || event.key.toLowerCase() === "y");
+        }
+      }}
+      style={{ "--sheet-state-width": `${STATUS_COLUMN_WIDTH}px` } as React.CSSProperties}
+    >
+      <div className="sheet-edit-toolbar" role="toolbar" aria-label="Actions du tableur">
+        <div className="sheet-edit-actions">
+          <button type="button" className="icon-btn" aria-label="Annuler la saisie" title="Annuler (Ctrl/⌘ Z)" disabled={!history.current.past.length || sheetBusy} onMouseDown={event => event.preventDefault()} onClick={() => restoreHistory(false)}>
+            <span className="material-symbols-rounded" aria-hidden="true">undo</span>
+          </button>
+          <button type="button" className="icon-btn" aria-label="Rétablir la saisie" title="Rétablir (Ctrl/⌘ Maj Z)" disabled={!history.current.future.length || sheetBusy} onMouseDown={event => event.preventDefault()} onClick={() => restoreHistory(true)}>
+            <span className="material-symbols-rounded" aria-hidden="true">redo</span>
+          </button>
+          <button type="button" className="btn btn-outline" onMouseDown={event => event.preventDefault()} onClick={() => insertNewRowAfter(newRowsRef.current[newRowsRef.current.length - 1].id)} disabled={sheetBusy}>
+            <span className="material-symbols-rounded" aria-hidden="true">add</span>Ligne
+          </button>
+          {pendingCount > 0 && <button type="button" className="btn btn-primary" onMouseDown={event => event.preventDefault()} onClick={() => void savePendingRows()} disabled={sheetBusy || Object.values(nifCheckingRows).some(Boolean)}>
+            <span className="material-symbols-rounded" aria-hidden="true">check</span>Enregistrer ({pendingCount})
+          </button>}
+          {showToolbar && <button type="button" className={`btn btn-outline ${defaultsOpen ? "active" : ""}`} aria-label="Valeurs par défaut" aria-expanded={defaultsOpen} aria-controls="sheet-defaults" onMouseDown={event => event.preventDefault()} onClick={() => setDefaultsOpen(open => !open)}>
+            <span className="material-symbols-rounded" aria-hidden="true">tune</span>Valeurs par défaut{activeDefaultCount > 0 && <span className="sheet-default-count" aria-label={`${activeDefaultCount} actives`}>{activeDefaultCount}</span>}
+          </button>}
         </div>
-        <div className="contracts-sheet-overview-stats">
-          <span className="contracts-sheet-stat is-accent">
-            <span className="material-symbols-rounded">add_circle</span>
-            {newRows.length} lignes de saisie
-          </span>
-          <span className="contracts-sheet-stat">
-            <span className="material-symbols-rounded">description</span>
-            {visibleContracts.length} contrat{visibleContracts.length > 1 ? "s" : ""}
-          </span>
-        </div>
+        <div className="sheet-edit-controls">{controls}</div>
       </div>
-      {showToolbar ? (
-        <div className="contracts-sheet-toolbar contracts-sheet-toolbar-defaults">
-          <div className="contracts-sheet-toolbar-label">
-            <span className="material-symbols-rounded">auto_fix_high</span>
-            Valeurs par défaut
+      {pasteError && <div className="contracts-sheet-inline-error" role="alert">{pasteError}</div>}
+      {showToolbar && defaultsOpen ? (
+        <div id="sheet-defaults" className="contracts-sheet-toolbar contracts-sheet-toolbar-defaults">
+          <div className="sheet-default-fields">
+            <div className={`sheet-default-field ${useDefaultDossier ? "is-active" : ""}`}>
+              <label className="sheet-default-toggle">
+                <span className="material-symbols-rounded" aria-hidden="true">folder</span><span>Dossier</span>
+                <input type="checkbox" role="switch" aria-label="Activer dossier par défaut" checked={useDefaultDossier} disabled={sheetBusy} onChange={event => setUseDefaultDossier(event.target.checked)} />
+              </label>
+              <select aria-label="Dossier par défaut" className="select defaults-select" disabled={!useDefaultDossier || sheetBusy} value={defaultDossierId} onChange={event => chooseDefaultDossier(event.target.value)}><DossierSelectOptions dossiers={dossiers} /></select>
+            </div>
+            <div className={`sheet-default-field ${useDefaultDuration ? "is-active" : ""}`}>
+              <label className="sheet-default-toggle">
+                <span className="material-symbols-rounded" aria-hidden="true">calendar_month</span><span>Durée</span>
+                <input type="checkbox" role="switch" aria-label="Activer durée par défaut" checked={useDefaultDuration} disabled={sheetBusy} onChange={event => setUseDefaultDuration(event.target.checked)} />
+              </label>
+              <DefaultDurationField value={defaultDuration} disabled={!useDefaultDuration || sheetBusy} onChange={setDefaultDuration} />
+            </div>
+            <div className={`sheet-default-field ${useDefaultAddress ? "is-active" : ""}`}>
+              <label className="sheet-default-toggle">
+                <span className="material-symbols-rounded" aria-hidden="true">location_on</span><span>Adresse</span>
+                <input type="checkbox" role="switch" aria-label="Activer adresse par défaut" checked={useDefaultAddress} disabled={sheetBusy} onChange={event => setUseDefaultAddress(event.target.checked)} />
+              </label>
+              <AutocompleteField ariaLabel="Adresse par défaut" disabled={!useDefaultAddress || sheetBusy} className="input defaults-autocomplete" value={defaultAddress} onChange={setDefaultAddress} items={addressItems} placeholder="Adresse par défaut" pinCategory="address" />
+            </div>
+            <div className={`sheet-default-field ${useDefaultAssignment ? "is-active" : ""}`}>
+              <label className="sheet-default-toggle">
+                <span className="material-symbols-rounded" aria-hidden="true">business</span><span>Affectation</span>
+                <input type="checkbox" role="switch" aria-label="Activer affectation par défaut" checked={useDefaultAssignment} disabled={sheetBusy} onChange={event => setUseDefaultAssignment(event.target.checked)} />
+              </label>
+              <AutocompleteField ariaLabel="Affectation par défaut" disabled={!useDefaultAssignment || sheetBusy} className="input defaults-autocomplete" value={defaultAssignment} onChange={setDefaultAssignment} items={assignmentItemsForAddress(defaultAddress)} placeholder="Affectation par défaut" pinCategory="assignment" />
+            </div>
+            <div className={`sheet-default-field ${useDefaultComment ? "is-active" : ""}`}>
+              <label className="sheet-default-toggle">
+                <span className="material-symbols-rounded" aria-hidden="true">chat_bubble</span><span>Commentaire</span>
+                <input type="checkbox" role="switch" aria-label="Activer commentaire par défaut" checked={useDefaultComment} disabled={sheetBusy} onChange={event => setUseDefaultComment(event.target.checked)} />
+              </label>
+              <input aria-label="Commentaire par défaut" disabled={!useDefaultComment || sheetBusy} className="input defaults-input" value={defaultComment} onChange={event => setDefaultComment(event.target.value)} placeholder="Commentaire par défaut" />
+            </div>
           </div>
-          <div className="contracts-sheet-defaults-bar">
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultDossier ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultDossier}
-                  onChange={(e) => setUseDefaultDossier(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">folder</span>
-                Dossier
-              </label>
-              {useDefaultDossier && (
-                <select
-                  className="select defaults-select"
-                  value={defaultDossierId}
-                  onChange={(e) => setDefaultDossierId(e.target.value)}
-                >
-                  <DossierSelectOptions dossiers={dossiers} />
-                </select>
-              )}
-            </div>
-
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultDuration ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultDuration}
-                  onChange={(e) => setUseDefaultDuration(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">calendar_month</span>
-                Durée
-              </label>
-              {useDefaultDuration && (
-                <input
-                  type="number"
-                  className="input defaults-input-mini"
-                  value={defaultDuration}
-                  min={1}
-                  max={60}
-                  onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 12)}
-                />
-              )}
-            </div>
-
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultAddress ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultAddress}
-                  onChange={(e) => setUseDefaultAddress(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">location_on</span>
-                Adresse
-              </label>
-              {useDefaultAddress && (
-                <AutocompleteField
-                  className="defaults-autocomplete"
-                  value={defaultAddress}
-                  onChange={setDefaultAddress}
-                  items={addressItems}
-                  placeholder="Adresse par défaut"
-                  pinCategory="address"
-                />
-              )}
-            </div>
-
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultAssignment ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultAssignment}
-                  onChange={(e) => setUseDefaultAssignment(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">business</span>
-                Affectation
-              </label>
-              {useDefaultAssignment && (
-                <AutocompleteField
-                  className="defaults-autocomplete"
-                  value={defaultAssignment}
-                  onChange={setDefaultAssignment}
-                  items={assignmentItemsForAddress(defaultAddress)}
-                  placeholder="Affectation par défaut"
-                  pinCategory="assignment"
-                />
-              )}
-            </div>
-
-            <div className="defaults-bar-item">
-              <label className={`defaults-checkbox ${useDefaultComment ? "is-active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={useDefaultComment}
-                  onChange={(e) => setUseDefaultComment(e.target.checked)}
-                />
-                <span className="material-symbols-rounded">chat_bubble</span>
-                Commentaire
-              </label>
-              {useDefaultComment && (
-                <input
-                  className="input defaults-input"
-                  style={{ width: '180px' }}
-                  value={defaultComment}
-                  onChange={(e) => setDefaultComment(e.target.value)}
-                  placeholder="Commentaire par défaut"
-                />
-              )}
-            </div>
+          <div className="sheet-default-actions">
+            <button type="button" className="btn btn-ghost" disabled={!activeDefaultCount || sheetBusy} onClick={disableDefaults}>Tout désactiver</button>
+            <button type="button" className="btn btn-outline" disabled={sheetBusy || !missingDefaultsChanges().length} onClick={completeDraftDefaults}>Compléter les champs vides</button>
           </div>
         </div>
       ) : null}
@@ -1563,7 +1648,7 @@ export function ContractsSpreadsheetView({
         <div
           className="contracts-sheet-grid"
           style={{
-            minWidth: `${sheetGridWidth}px`,
+            width: `${sheetGridWidth}px`,
             zoom: effectiveZoom
           } as React.CSSProperties}
         >
@@ -1584,7 +1669,8 @@ export function ContractsSpreadsheetView({
                       setResizing({
                         key: column.key,
                         startX: event.clientX,
-                        startWidth: columnWidths[column.key]
+                        startWidth: columnWidths[column.key],
+                        startZoom: effectiveZoom
                       });
                     }}
                   />
@@ -1608,9 +1694,9 @@ export function ContractsSpreadsheetView({
             if (creating) {
                syncState = "saving";
                label = "Enregistrement en cours...";
-            } else if (rowError) {
+            } else if (rowError || Object.keys(fieldErrors(rowKey, row.draft)).length) {
                syncState = "error";
-               label = `Erreur: ${rowError}`;
+               label = rowError || Object.values(fieldErrors(rowKey, row.draft))[0] || "Erreur de saisie";
             } else if (hasValues) {
                syncState = "unsaved";
                label = "Non synchronisé";
@@ -1629,17 +1715,20 @@ export function ContractsSpreadsheetView({
                     onDeleteClick: hasValues && !creating ? () => clearNewRow(row.id) : undefined,
                     deleteLabel: "Effacer cette ligne"
                   })}
-                  <div
+                  <SpreadsheetRow
+                    rowKey={rowKey}
+                    errors={fieldErrors(rowKey, row.draft)}
+                    busy={creating}
                     className={`contracts-sheet-row contracts-sheet-row-new ${creating ? "is-saving" : ""}`}
-                    style={{ gridTemplateColumns, opacity: isBlocked ? 0.5 : 1, pointerEvents: isBlocked ? "none" : undefined }}
+                    style={{ gridTemplateColumns }}
                   >
                     {/* NIF cell with inline status indicator */}
-                    <div style={{ position: "relative", display: "flex", alignItems: "stretch", width: "100%" }}>
+                    <div className="contracts-sheet-nif-field">
                       <input
                         data-sheet-row={rowKey}
                         data-sheet-col={0}
                         className="input contracts-sheet-input"
-                        style={{ paddingRight: (nifChecking || nifStatus) ? "52px" : "8px" }}
+                        style={{ "--sheet-input-trailing-space": (nifChecking || nifStatus) ? "32px" : "10px" } as React.CSSProperties}
                         value={row.draft.nif}
                         placeholder="000-000-000-0"
                         onBeforeInput={(event) => prepareNifDigitOverwrite(event.currentTarget, (event.nativeEvent as InputEvent).data)}
@@ -1655,7 +1744,7 @@ export function ContractsSpreadsheetView({
                         }}
                         onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 0)}
                       />
-                      <div style={{ position: "absolute", right: "8px", top: 0, bottom: 0, display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                      <div className="contracts-sheet-nif-indicator" style={{ pointerEvents: "none" }}>
                         {/* Loading spinner */}
                         {nifChecking && (
                           <span
@@ -1798,12 +1887,13 @@ export function ContractsSpreadsheetView({
                       onChange={(event) => setNewField(row.id, "durationMonths", event.target.value)}
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={(event) => {
+                        if (stagedRowsRef.current.has(rowKey)) return;
                         void maybeCreateFromNewRow(row.id, {
                           durationMonths: event.currentTarget.value
                         });
                       }}
                     />
-                  </div>
+                  </SpreadsheetRow>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
                 {nifStatus?.type === "renewal" && (
@@ -1817,27 +1907,16 @@ export function ContractsSpreadsheetView({
                     {nifStatus.message}
                   </div>
                 )}
-                {nifStatus?.type === "blocked" && (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: "6px",
-                    padding: "3px 8px", fontSize: "11px",
-                    color: "#991b1b", background: "rgba(239,68,68,0.08)",
-                    borderLeft: "2px solid #dc2626"
-                  }}>
-                    <span className="material-symbols-rounded" style={{ fontSize: "13px" }}>block</span>
-                    {nifStatus.message}
-                  </div>
-                )}
+
               </div>
             );
           })}
 
-          <div className="contracts-sheet-divider" role="separator">
-            <span className="material-symbols-rounded">database</span>
-            <strong>Contrats enregistrés</strong>
-            <span>{visibleContracts.length}</span>
-          </div>
-
+          <button type="button" className="contracts-sheet-divider sheet-recent-toggle" aria-expanded={recentOpen} aria-controls="sheet-recent-contracts" onClick={() => setRecentOpen(open => !open)}>
+            <span className="material-symbols-rounded" aria-hidden="true">{recentOpen ? "expand_more" : "chevron_right"}</span>
+            <strong>Contrats récents</strong><span>{visibleContracts.length}</span>
+          </button>
+          <div id="sheet-recent-contracts" hidden={!recentOpen}>
           {visibleContracts.map((contract) => {
             const rowKey = getExistingRowKey(contract.id);
             const draft = getRowDraft(contract);
@@ -1852,9 +1931,9 @@ export function ContractsSpreadsheetView({
             if (saving) {
               syncState = "saving";
               label = "Enregistrement en cours...";
-            } else if (rowError) {
+            } else if (rowError || Object.keys(fieldErrors(rowKey, draft)).length) {
               syncState = "error";
-              label = `Erreur: ${rowError}`;
+              label = rowError || Object.values(fieldErrors(rowKey, draft))[0] || "Erreur de saisie";
             } else if (hasChanges) {
               syncState = "unsaved";
               label = "Modifications non enregistrées";
@@ -1867,6 +1946,7 @@ export function ContractsSpreadsheetView({
                     syncState,
                     label,
                     {
+                      contract,
                       showCommentButton: true,
                       hasComment: Boolean(contract.commentaire?.trim()),
                       onCommentClick: () => openCommentDialog(contract),
@@ -1879,7 +1959,10 @@ export function ContractsSpreadsheetView({
                         : undefined
                     }
                   )}
-                  <div
+                  <SpreadsheetRow
+                    rowKey={rowKey}
+                    errors={fieldErrors(rowKey, draft)}
+                    busy={saving}
                     className={`contracts-sheet-row ${saving ? "is-saving" : ""}`}
                     style={{ gridTemplateColumns }}
                   >
@@ -2013,13 +2096,13 @@ export function ContractsSpreadsheetView({
                       onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
                       onBlur={() => queueExistingSave(contract.id)}
                     />
-                  </div>
+                  </SpreadsheetRow>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
                 {contract.tags && contract.tags.length > 0 && (
                   <div style={{ 
                     display: "flex", gap: "4px", flexWrap: "wrap",
-                    padding: "4px 8px 4px 96px",
+                    padding: `4px 8px 4px ${STATUS_COLUMN_WIDTH + 10}px`,
                     borderBottom: "1px solid var(--border)", 
                     background: "var(--bg)",
                     borderRight: "1px solid var(--border)"
@@ -2033,21 +2116,7 @@ export function ContractsSpreadsheetView({
             );
           })}
 
-          {!isLoading && visibleContracts.length === 0 ? (
-            <div className="empty-state">
-              Aucun contrat existant. Utilisez les lignes vierges ci-dessus pour en créer.
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="contracts-sheet-footer">
-        <div className="contracts-sheet-footer-count">
-          <span className="contracts-sheet-footer-dot" />
-          <strong>{visibleContracts.length}</strong> contrat{visibleContracts.length > 1 ? "s" : ""} affiché{visibleContracts.length > 1 ? "s" : ""}
-        </div>
-        <div className="contracts-sheet-keyboard-hint">
-          <span className="material-symbols-rounded">keyboard</span>
-          Entrée pour enregistrer et changer de ligne · Flèches pour naviguer · Tab pour avancer
+          </div>
         </div>
       </div>
       <ContractCommentModal

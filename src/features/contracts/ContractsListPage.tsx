@@ -45,6 +45,8 @@ import { PersonAttachmentsDialog } from "../attachments/PersonAttachmentsDialog"
 import { ContractCommentModal } from "./ContractCommentModal";
 import { ContractsImportModal } from "./ContractsImportModal";
 import { TagBadge } from "./TagBadge";
+import { formatInstitutionAssignment } from "../institutions/institutionPrepositions";
+import { useInstitutionPrepositions } from "../institutions/institutionPrepositionsApi";
 import {
   applySuggestionPrefix,
   normalizeSuggestionGrammarValue
@@ -72,6 +74,7 @@ import { listError, listName } from "../lists/listModel";
 import { ContractActionsMenu, contractContextTargets } from "./ContractActionsMenu";
 import { ListAssignmentDialog } from "../lists/ListAssignmentDialog";
 import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
+import { ContractsScopeButton } from "./ContractsScopeButton";
 
 type ContractsView = "contracts" | "dossiers";
 const CONTRACT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
@@ -226,10 +229,10 @@ export function ContractsListPage() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [userId, workspaceId]);
 
-  const toggleShowAll = () => {
-    const newValue = !showAll;
-    setShowAll(newValue);
-    localStorage.setItem("contracts_view_all", String(newValue));
+  const selectContractsScope = (nextShowAll: boolean) => {
+    setShowAll(nextShowAll);
+    localStorage.setItem("contracts_view_all", String(nextShowAll));
+    setActiveView("contracts");
     setPage(1);
   };
 
@@ -241,6 +244,7 @@ export function ContractsListPage() {
 
   const positionsData = useMemo(() => gridPositions(salaryGrid), [salaryGrid]);
   const { data: institutionsData = [] } = useInstitutions(workspaceId);
+  const { rules: institutionPrepositions } = useInstitutionPrepositions();
   const { data: addressesData = [] } = useAddresses(workspaceId);
 
   const positionOptions = useMemo(() => [...new Set(salaryGrid
@@ -660,9 +664,9 @@ export function ContractsListPage() {
             )
           : genderedTitle(salaryGrid, contract.position, contract.gender),
         exportWithPrepositions
-          ? applySuggestionPrefix(
+          ? formatInstitutionAssignment(
               contract.assignment,
-              "institution",
+              institutionPrepositions,
               institutionPrefixes.get(normalizeSuggestionGrammarValue(contract.assignment))
             )
           : contract.assignment,
@@ -1399,34 +1403,25 @@ export function ContractsListPage() {
   }
 
   return (
-    <div className="page-container contracts-page">
+    <div className={`page-container contracts-page${activeView === "dossiers" ? " contracts-dossiers-view" : ""}`}>
       {listsQuery.isError && <p className="list-notice" role="status">Listes non actualisées : {listError(listsQuery.error)} <button className="btn btn-outline" onClick={() => void listsQuery.refetch()}>Réessayer</button></p>}
       <header className="section-header contracts-page-header">
         <div className="toolbar-unified contracts-filter-toolbar">
           <div className="contracts-controls-row">
             <div className="view-switch-unified" role="group" aria-label="Vue des contrats">
-              <button
-                className={`view-pill-unified ${activeView === "contracts" ? "active" : ""}`}
-                onClick={() => setActiveView("contracts")}
-              >
-                <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>description</span>
-                Contrats
-              </button>
+              <ContractsScopeButton
+                active={activeView === "contracts"}
+                showAll={showAll}
+                onSelect={selectContractsScope}
+              />
               <button
                 className={`view-pill-unified ${activeView === "dossiers" ? "active" : ""}`}
                 onClick={() => setActiveView("dossiers")}
               >
-                <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>folder</span>
+                <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: "18px" }}>folder</span>
                 Dossiers
               </button>
             </div>
-            {activeView === "contracts" && (
-              <label className="contracts-scope-switch" title={showAll ? "Tous les contrats" : "Mes contrats"}>
-                <input type="checkbox" checked={showAll} onChange={toggleShowAll} />
-                <span className="material-symbols-rounded" aria-hidden="true">{showAll ? "groups" : "person"}</span>
-                <span className="contracts-scope-label">{showAll ? "Tous les contrats" : "Mes contrats"}</span>
-              </label>
-            )}
             {activeView === "contracts" && <>
               <div className={`search-field-unified contracts-compact-search ${query ? "has-query" : ""}`}>
                 <span className="material-symbols-rounded icon" aria-hidden="true">search</span>
@@ -1482,7 +1477,7 @@ export function ContractsListPage() {
                 </button>
               )}
             </>}
-            {can("contracts.create") ? (
+            {activeView === "contracts" && can("contracts.create") ? (
               <button
                 type="button"
                 className="btn btn-primary contracts-new-button"
@@ -1675,6 +1670,9 @@ export function ContractsListPage() {
           canManage={can("dossiers.manage")}
           onDossierCreated={(dossierId) => void handleDossierCreated(dossierId)}
           onViewDossier={(dossierId) => {
+            clearFilters();
+            setShowAll(true);
+            setSelected([]);
             setDossierFilterId(dossierId);
             setActiveView("contracts");
             setPage(1);

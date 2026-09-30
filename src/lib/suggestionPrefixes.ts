@@ -2,10 +2,11 @@ export type SuggestionPrefixKind = "position" | "institution" | "address";
 
 const FRENCH_ELISION_START = /^[aeiouyàâäéèêëîïôöùûüœh]/i;
 const PREFIXED_POSITION = /^(?:(?:à titre|au poste|en qualité)\s+(?:de\s+|d['’])|comme\s+|d['’]|de\s+(?:l['’]|la\s+|le\s+)?|du\s+|des\s+)/i;
-const PREFIXED_LOCATION = /^(?:au\s+sein\s+de\s+|affect(?:é|ée)\s+(?:(?:a|à)\s+|au\s+|aux\s+)|(?:a|à)\s+(?:l['’]|la\s+|le\s+|les\s+)?|au\s+|aux\s+|d['’]|de\s+(?:l['’]|la\s+|le\s+|les\s+)?|du\s+|des\s+|chez\s+|en\s+|dans\s+(?:l['’]|la\s+|le\s+|les\s+)?|sur\s+|sous\s+|près\s+de\s+)/i;
+const PREFIXED_LOCATION = /^(?:au\s+sein\s+(?:de|du|des)\s+|affect(?:é|ée)\s+(?:(?:a|à)\s+|au\s+|aux\s+)|(?:a|à)\s+(?:l['’]|la\s+|le\s+|les\s+)?|au\s+|aux\s+|d['’]|de\s+(?:l['’]|la\s+|le\s+|les\s+)?|du\s+|des\s+|chez\s+|en\s+|dans\s+(?:l['’]|la\s+|le\s+|les\s+)?|sur\s+|sous\s+|près\s+de\s+)/i;
 
 const FEMININE_INSTITUTION_WORDS = new Set([
   "administration",
+  "brigade",
   "clinique",
   "coordination",
   "delegation",
@@ -23,6 +24,8 @@ const MASCULINE_INSTITUTION_WORDS = new Set([
   "centre",
   "college",
   "departement",
+  // This legacy spelling is still present in institution and contract records.
+  "depatement",
   "dispensaire",
   "laboratoire",
   "lycee",
@@ -89,7 +92,7 @@ export function getAutomaticSuggestionPrefix(
 
     const word = firstWord(trimmed);
     if (PLURAL_INSTITUTION_WORDS.has(word)) return "aux";
-    if (FEMININE_INSTITUTION_WORDS.has(word)) return "à la";
+    if (FEMININE_INSTITUTION_WORDS.has(word)) return FRENCH_ELISION_START.test(trimmed) ? "à l'" : "à la";
     if (MASCULINE_INSTITUTION_WORDS.has(word)) return "au";
   }
 

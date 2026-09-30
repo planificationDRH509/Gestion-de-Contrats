@@ -1,3 +1,4 @@
+import type { SalaryGridEntry } from "../salary-grid/salaryGrid";
 import { getDataProvider } from "../../data/dataProvider";
 import { createListExcelWorkbook } from "./listExcelExport";
 import { listName, sortedMembers, type ContractList } from "./listModel";
@@ -7,7 +8,7 @@ function snapshot(list: ContractList) {
   return JSON.stringify([list.id, list.workspaceId, list.version, list.durationMonths, list.visaNumber, list.sealedAt, sortedMembers(list.members)]);
 }
 
-export async function downloadListExcel(readCurrentList: () => Promise<ContractList>) {
+export async function downloadListExcel(readCurrentList: () => Promise<ContractList>, salaryGrid: SalaryGridEntry[]) {
   const list = await readCurrentList();
   const provider = getDataProvider();
   const [contracts, institutions, emblemResponse] = await Promise.all([
@@ -17,7 +18,7 @@ export async function downloadListExcel(readCurrentList: () => Promise<ContractL
   ]);
   if (!emblemResponse.ok) throw new Error("Le modèle Excel n’a pas pu être chargé. Réessayez l’export.");
   const emblem = new Uint8Array(await emblemResponse.arrayBuffer());
-  const blob = createListExcelWorkbook(list, contracts, institutions, emblem);
+  const blob = createListExcelWorkbook(list, contracts, institutions, emblem, salaryGrid);
   if (snapshot(await readCurrentList()) !== snapshot(list)) {
     throw new Error("La liste a changé pendant l’export. Vérifiez son contenu puis réessayez.");
   }

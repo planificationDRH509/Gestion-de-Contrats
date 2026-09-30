@@ -1,3 +1,4 @@
+import { normalizeTitle, type SalaryGridEntry } from "../salary-grid/salaryGrid";
 import type { Contract } from "../../data/types";
 import type { InstitutionSuggestion } from "../../data/local/suggestionsDb";
 import { createExcelPackageBlob, escapeExcelXml as xml } from "../../lib/excelExport";
@@ -12,8 +13,8 @@ const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships";
 const widths = [4.35, 24.67, 17.35, 17.85, 20.5, 21, 47.85, 13, 13.35, 11.5, 13.17, 14.85, 14.85, 18.5, 17.85];
-const headers = ["No", "Nom", "Prénom", "NIF", "NINU", "Titre Emploi", "Institutions", "Départements",
-  "Formation\nUniversitaire/Technique", "Nbre d’années\nd’expérience", "Description de\ntâches", "Début", "Fin", "Rémunération", "Remarque de la\nCSCCA"];
+const headers = ["No", "Nom", "Prénom", "NIF", "NINU", "Titre Emploi", "Institutions", "Département",
+  "Formation", "Nbre d’années\nd’expérience", "Description de\ntâches", "Début", "Fin", "Rémunération", "Remarque de la\nCSCCA"];
 const letters = "ABCDEFGHIJKLMNO";
 type Style = keyof typeof styles.ids;
 
@@ -37,6 +38,14 @@ export function listContractDates(contract: Contract) {
     ? new Date(configured.getMonth() >= 9 ? endYear - 1 : endYear, configured.getMonth(), configured.getDate())
     : getContractStartDate(contract);
   return [serialDate(start), serialDate(new Date(endYear, 8, 30))];
+}
+
+export function listContractFormation(title: string, entries: SalaryGridEntry[]) {
+  const key = normalizeTitle(title);
+  if (!key) return "";
+  const types = new Set(entries.filter(entry => [entry.masculine, entry.feminine, ...entry.aliases].some(value => normalizeTitle(value) === key))
+    .map(entry => entry.jobType).filter(type => type === "Universitaire" || type === "Technique"));
+  return types.size === 1 ? [...types][0] : "";
 }
 
 function institutionKey(value: string) {
@@ -65,7 +74,7 @@ export function orderedListContracts(list: ContractList, contracts: Contract[]) 
 }
 
 /** MSPP layout based on “Lot 25 Delice Darbicha.xlsx”; never includes its sample personnel. */
-export function createListExcelWorkbook(list: ContractList, contracts: Contract[], institutions: InstitutionSuggestion[], emblem: Uint8Array) {
+export function createListExcelWorkbook(list: ContractList, contracts: Contract[], institutions: InstitutionSuggestion[], emblem: Uint8Array, salaryGrid: SalaryGridEntry[] = []) {
   const ordered = orderedListContracts(list, contracts);
   const years = [...new Set(ordered.map(getContractFiscalYear))].sort();
   const rows: string[] = [];
@@ -93,7 +102,7 @@ export function createListExcelWorkbook(list: ContractList, contracts: Contract[
     const [start, end] = listContractDates(contract);
     const values = [index + 1, formatLastName(contract.lastName), formatFirstName(contract.firstName), contract.nif ?? "", contract.ninu ?? "",
       stripSuggestionPrefix(contract.position, "position"), stripSuggestionPrefix(contract.assignment, "institution"), institution?.department ?? "",
-      "", "", "", start, end, Math.round(contract.salaryNumber * 100) / 100, ""];
+      listContractFormation(contract.position, salaryGrid), "", "", start, end, Math.round(contract.salaryNumber * 100) / 100, ""];
     const height = Math.max(38.25, ...values.map((value, col) => typeof value === "string" ? Math.ceil(value.length / Math.max(1, widths[col] - 3)) * 14 : 0));
     row(number, height, values.map((value, col) => cell(`${letters[col]}${number}`, value,
       col === 3 || col === 4 ? "identifier" : col === 11 || col === 12 ? "date" : col === 13 ? "money" : "body")).join(""));

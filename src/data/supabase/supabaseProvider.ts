@@ -1,9 +1,9 @@
 import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
-import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError } from "../local/localDb";
+import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError, loadDb, saveDb } from "../local/localDb";
 import { withBrowserLock } from "../../lib/browserLock";
-import { outboxKeys } from "../local/outboxDependencies";
+import { outboxKeys, discardableContractChanges } from "../local/outboxDependencies";
 import { setOutboxError } from "../local/localOutbox";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
 import { readCachedContracts } from "../local/localContractRepository";
@@ -1679,6 +1679,55 @@ function syncPendingOutbox() {
   });
 
   return outboxSyncPromise;
+}
+
+/** Restore confirmed server data before dropping this contract's queued edits. */
+export async function discardContractSyncChanges(contract: Contract, expectedIds: string[]) {
+  if (!navigator.onLine) throw new Error("Reconnectez-vous pour récupérer la version du serveur.");
+  await withBrowserLock("outbox-sync", async () => {
+    await refreshLocalDb();
+    const pending = getPendingOutbox();
+    const selected = discardableContractChanges(contract, pending);
+    const assertUnchanged = (items: typeof selected) => {
+      if (!items.length || items.length !== expectedIds.length || items.some(item => !expectedIds.includes(item.id))) {
+        throw new Error("Les modifications ont changé. Actualisez avant de réessayer.");
+      }
+    };
+    assertUnchanged(selected);
+    if (pending.some(item => item.workspaceId === contract.workspaceId && item.type === "contract.create" && item.payload.id === contract.id)) {
+      throw new Error("Ce contrat n’existe pas encore sur le serveur.");
+    }
+    const remote = await new SupabaseContractRepository().getById(contract.id);
+    if (!remote || remote.workspaceId !== contract.workspaceId) throw new Error("La version du serveur est introuvable. Les modifications sont conservées.");
+    await refreshLocalDb();
+    const db = loadDb();
+    const current = discardableContractChanges(contract, db.outbox);
+    assertUnchanged(current);
+    if (JSON.stringify(current) !== JSON.stringify(selected)) throw new Error("Les modifications ont changé. Réessayez.");
+    const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
+    if (current.some(item => item.actorId && item.actorId !== actor?.id)) throw new Error("Reconnectez le compte ayant effectué ces modifications.");
+    db.outbox = db.outbox.flatMap(item => {
+      if (!expectedIds.includes(item.id)) return [item];
+      if (Array.isArray(item.payload.contractIds)) {
+        const contractIds = item.payload.contractIds.filter(id => id !== contract.id);
+        if (contractIds.length) return [{ ...item, payload: { ...item.payload, contractIds } }];
+      }
+      return [];
+    });
+    const index = db.contracts.findIndex(item => item.id === contract.id && item.workspaceId === contract.workspaceId);
+    if (index < 0) throw new Error("Le contrat local a changé. Actualisez avant de réessayer.");
+    db.contracts[index] = remote;
+    db.contractTags = db.contractTags.filter(item => item.contractId !== contract.id);
+    for (const tag of remote.tags ?? []) {
+      if (!db.tags.some(item => item.id === tag.id)) db.tags.push(tag);
+      db.contractTags.push({ contractId: contract.id, tagId: tag.id, createdAt: new Date().toISOString() });
+    }
+    db.syncMetadata[contract.workspaceId] = { ...db.syncMetadata[contract.workspaceId],
+      lastError: db.outbox.find(item => !item.syncedAt && item.workspaceId === contract.workspaceId && item.lastError)?.lastError ?? null };
+    saveDb(db);
+    await flushLocalDbWrites();
+    notifySyncState();
+  });
 }
 
 export function syncSupabaseOutbox() {

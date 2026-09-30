@@ -54,3 +54,12 @@ export function contractSyncInfo(contract: Contract, pending: OutboxItem[], clou
     error
   };
 }
+
+/** Only contract-local edits can be dropped without changing shared records. */
+export function discardableContractChanges(contract: Contract, pending: OutboxItem[]) {
+  return pending.filter(item => !item.syncedAt && item.workspaceId === contract.workspaceId && (
+    (item.type === "contract.update" && (item.payload.id === contract.id ||
+      (Array.isArray(item.payload.contractIds) && item.payload.contractIds.includes(contract.id)))) ||
+    ((item.type === "tag.assign" || item.type === "tag.remove") && item.payload.contractId === contract.id)
+  ));
+}

@@ -18,6 +18,20 @@ describe("automatic suggestion prefixes", () => {
     expect(applySuggestionPrefix("Centre de Santé", "institution")).toBe("au Centre de Santé");
   });
 
+  it.each(["Département", "Departement", "Dépatement", "Depatement", "DÉPARTEMENT"])(
+    "uses au for %s Sanitaire, including legacy catalogue spellings",
+    (name) => {
+      expect(applySuggestionPrefix(`${name} Sanitaire du Sud`, "institution")).toBe(
+        `au ${name} Sanitaire du Sud`
+      );
+    }
+  );
+
+  it("elides feminine names beginning with a vowel", () => {
+    expect(applySuggestionPrefix("Administration Centrale", "institution")).toBe("à l'Administration Centrale");
+    expect(applySuggestionPrefix("Brigade Médicale Cubaine", "institution")).toBe("à la Brigade Médicale Cubaine");
+  });
+
   it("uses à la before feminine institution names", () => {
     expect(applySuggestionPrefix("Direction Départementale", "institution")).toBe(
       "à la Direction Départementale"

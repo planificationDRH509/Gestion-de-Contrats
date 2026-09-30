@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { downloadListExcel } from "./downloadListExcel";
+import type { SalaryGridEntry } from "../salary-grid/salaryGrid";
 import type { ContractList } from "./listModel";
 
 const mocks = vi.hoisted(() => ({ getByIds: vi.fn(), getInstitutions: vi.fn(), build: vi.fn() }));
@@ -26,27 +27,28 @@ describe("list Excel download", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype,"click").mockImplementation(function(this: HTMLAnchorElement) {
       expect(this.download).toBe("LOT-1-LOUIS-Ana.xlsx"); expect(this.href).toBe("blob:excel");
     });
-    await downloadListExcel(read);
+    const grid = [{id:"nurse",jobType:"Universitaire"}] as SalaryGridEntry[];
+    await downloadListExcel(read, grid);
     expect(read).toHaveBeenCalledTimes(2);
     expect(mocks.getByIds).toHaveBeenCalledWith(["c"],"w");
     expect(mocks.getInstitutions).toHaveBeenCalledWith("w");
-    expect(mocks.build).toHaveBeenCalledWith(list,["contract"],[],expect.any(Uint8Array));
+    expect(mocks.build).toHaveBeenCalledWith(list,["contract"],[],expect.any(Uint8Array),grid);
     expect(click).toHaveBeenCalledOnce(); expect(document.querySelector('a[download]')).toBeNull();
     vi.runOnlyPendingTimers(); expect(revokeUrl).toHaveBeenCalledWith("blob:excel");
   });
   it("does not download if the list changes during preparation", async () => {
     const read = vi.fn().mockResolvedValueOnce(list).mockResolvedValueOnce({...list,visaNumber:"new",version:2});
-    await expect(downloadListExcel(read)).rejects.toThrow(/changé/);
+    await expect(downloadListExcel(read, [])).rejects.toThrow(/changé/);
     expect(createUrl).not.toHaveBeenCalled();
   });
   it("does not download on read, template or validation errors", async () => {
     const read = vi.fn().mockResolvedValue(list);
     mocks.getByIds.mockRejectedValueOnce(new Error("Réseau indisponible"));
-    await expect(downloadListExcel(read)).rejects.toThrow(/Réseau/);
+    await expect(downloadListExcel(read, [])).rejects.toThrow(/Réseau/);
     mocks.build.mockImplementationOnce(() => {throw new Error("Contrat manquant");});
-    await expect(downloadListExcel(read)).rejects.toThrow(/manquant/);
+    await expect(downloadListExcel(read, [])).rejects.toThrow(/manquant/);
     vi.mocked(fetch).mockResolvedValueOnce({ok:false} as Response);
-    await expect(downloadListExcel(read)).rejects.toThrow(/modèle Excel/);
+    await expect(downloadListExcel(read, [])).rejects.toThrow(/modèle Excel/);
     expect(createUrl).not.toHaveBeenCalled();
   });
 });

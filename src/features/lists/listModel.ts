@@ -48,3 +48,5 @@ export function listError(error: unknown): string {
   if (/PGRST202|Could not find the function/.test(message)) return "La mise à jour des listes doit être appliquée à la base de données.";
   return message;
 }
+
+export const normalizeListSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");

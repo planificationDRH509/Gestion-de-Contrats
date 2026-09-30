@@ -42,6 +42,24 @@ begin
   rejected:=false;
   begin perform public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload || '{"version":2,"source":"javascript:alert(1)"}'::jsonb); exception when others then rejected:=sqlerrm='Adresse de source invalide.'; end;
   if not rejected then raise exception 'Unsafe source accepted'; end if;
+
+  payload := '{"id":"institution-prefix-test","label":"Département Sanitaire de Test","institutionType":"Bureau Départemental","addressKeywords":[],"prefix":" au ","version":0}'::jsonb;
+  result := public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload);
+  assert result->>'prefix'='au','Insert did not persist and trim prefix';
+  assert (select prefix='au' from public.autocompletion where id='institution-prefix-test'),'Stored insert prefix missing';
+  result := public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload || '{"version":1,"prefix":"au sein du"}'::jsonb);
+  assert result->>'prefix'='au sein du','Update did not persist prefix';
+  result := public.save_institution(current_setting('test.institution_admin'),'workspace_default',(payload - 'prefix') || '{"version":2}'::jsonb);
+  assert result->>'prefix'='au sein du','Older client erased prefix';
+  result := public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload || '{"version":3,"prefix":null}'::jsonb);
+  assert result->>'prefix' is null,'Automatic prefix reset failed';
+  assert (select prefix is null from public.autocompletion where id='institution-prefix-test'),'Stored prefix not cleared';
+  rejected:=false;
+  begin perform public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload || jsonb_build_object('version',4,'prefix',repeat('x',51))); exception when others then rejected:=sqlerrm='Préposition invalide.'; end;
+  assert rejected,'Oversized prefix accepted';
+  rejected:=false;
+  begin perform public.save_institution(current_setting('test.institution_admin'),'workspace_default',payload || '{"version":4,"prefix":42}'::jsonb); exception when others then rejected:=sqlerrm='Préposition invalide.'; end;
+  assert rejected,'Non-text prefix accepted';
 end $$;
 reset role;
 insert into public.identification(nif,nom,prenom,sexe,adresse,workspace_id)

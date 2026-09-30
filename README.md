@@ -96,6 +96,8 @@ Dans l'application, ouvrez **Parametres -> Backup SQL** pour telecharger un expo
 
 La page **Listes** du menu latéral permet de créer des lots de durée commune (1 à 12 mois), avec un numéro de visa facultatif. Les contrats sont classés par nom, puis prénom, selon l’ordre alphabétique français. Le nom du lot se recalcule automatiquement : `LOT-<quantité>-<NOM>-<Prénom>`. Une liste vide porte le nom `LOT-0`, avec une référence distincte.
 
+- Sur grand écran, un navigateur de listes avec recherche et filtres reste visible à côté du lot sélectionné. Le visa, l’ajout de contrats et les confirmations disposent de fenêtres dédiées. Sur mobile, la page permet uniquement de consulter les listes et de télécharger leur Excel, selon les droits d’export du compte.
+- L’export Excel renseigne « Département » depuis l’institution d’affectation et « Formation » depuis le type de poste de la grille salariale (« Universitaire » ou « Technique »). Les titres masculins, féminins et les alias enregistrés sont reconnus ; les références absentes ou les formations ambiguës restent vides.
 - Un contrat appartient à une seule liste. L’attribution et le déplacement groupés sont atomiques : une incompatibilité annule toute l’opération.
 - Depuis **Contrats**, le clic droit sur une carte sélectionnée ou le bouton **Actions** ouvre les actions de toute la sélection. Le menu permet d’attribuer les contrats à un lot existant ou de créer et remplir un nouveau lot en une seule opération, avec aperçu du nom, du total et saisie du visa facultatif.
 - Le total mensuel additionne les salaires ; le montant total multiplie cette somme par la durée commune.

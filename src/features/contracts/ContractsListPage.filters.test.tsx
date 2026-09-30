@@ -19,7 +19,10 @@ vi.mock("../settings/suggestionsApi", () => ({ useInstitutions: () => ({ data: [
   { id: "a", label: "Hôpital de Delmas", department: "Ouest", commune: "Delmas" },
   { id: "b", label: "Hôpital du Cap", department: "Nord", commune: "Cap-Haïtien" }
 ] }), useAddresses: () => ({ data: [] }) }));
-vi.mock("../dossiers/dossiersApi", () => ({ useDossiersList: () => ({ data: [] }), useDossierContractMetrics: () => ({ data: {} }) }));
+vi.mock("../dossiers/dossiersApi", () => ({
+  useDossiersList: () => ({ data: [{ id: "dossier-test", workspaceId: "w", name: "Campagne", status: "active", priority: "normal", isEphemeral: false, contractTargetCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }] }),
+  useDossierContractMetrics: () => ({ data: {} }), useUpdateDossier: () => ({}), useDeleteDossier: () => ({})
+}));
 vi.mock("./tagsApi", () => ({ useTags: () => ({ data: [{ id: "urgent", name: "Urgent" }] }), useCreateTag: () => ({}), useAssignTagToContract: () => ({}) }));
 vi.mock("../auth/usersApi", () => ({ useAppUsers: () => ({ data: [] }) }));
 vi.mock("../tasks/tasksApi", () => ({ usePrivateTasks: () => ({ data: [] }) }));
@@ -40,6 +43,38 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("opens every contract in a dossier without retaining unrelated filters", async () => {
+    setup();
+    await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
+    await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
+    await userEvent.click(screen.getByRole("button", { name: /Dossiers/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Ouvrir les contrats de Campagne" }));
+    expectParams({ dossierId: "dossier-test", onlyMine: false, query: undefined, dateFilterMode: undefined, page: 1 });
+    expect(screen.getByRole("button", { name: "Tous les contrats" })).toBeInTheDocument();
+  });
+
+  it("selects the contract scope from the view button and remembers it on remount", async () => {
+    setup();
+    expectParams({ onlyMine: true });
+    const trigger = screen.getByRole("button", { name: "Mes contrats" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    await userEvent.click(trigger);
+    expect(screen.getByRole("menuitemradio", { name: "Mes contrats" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Tous les contrats" }));
+    expectParams({ onlyMine: false, page: 1 });
+    expect(localStorage.getItem("contracts_view_all")).toBe("true");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    cleanup();
+    setup();
+    const savedTrigger = screen.getByRole("button", { name: "Tous les contrats" });
+    expectParams({ onlyMine: false });
+    await userEvent.click(savedTrigger);
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Mes contrats" }));
+    expectParams({ onlyMine: true, page: 1 });
+    expect(localStorage.getItem("contracts_view_all")).toBe("false");
+    expect(screen.getByRole("button", { name: "Mes contrats" })).toHaveFocus();
+  });
+
   it("keeps Date in the filter panel and toggles today directly from the toolbar", async () => {
     setup();
     expect(screen.queryByRole("button", { name: /event Date/ })).not.toBeInTheDocument();

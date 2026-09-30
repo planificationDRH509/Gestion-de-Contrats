@@ -48,6 +48,8 @@ export function validateInstitution(entry, entries) {
     var _a, _b;
     if (!entry.label.trim() || entry.label.trim().length > 250)
         throw new Error('Nom d’institution invalide.');
+    if (entry.prefix != null && (typeof entry.prefix !== 'string' || entry.prefix.length > 50))
+        throw new Error('Préposition invalide.');
     if (!entry.institutionType || !INSTITUTION_TYPES.includes(entry.institutionType))
         throw new Error('Choisissez un type d’institution.');
     if (entry.department && !DEPARTMENTS.some(function (d) { return normalizeInstitution(d) === normalizeInstitution(entry.department); }))

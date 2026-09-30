@@ -10,6 +10,7 @@ import {
   renderTemplate
 } from "./contractTemplate";
 import { setStoredContractStartDates } from "./settingsApi";
+import { defaultInstitutionPrepositions } from '../institutions/institutionPrepositions';
 
 const printCss = readFileSync(
   resolve(process.cwd(), "src/styles/print.css"),
@@ -176,6 +177,30 @@ describe("reference contract template", () => {
     expect(template.html).toContain(
       "à titre <strong>{{position_prefixed}} {{assignment_prefixed}}</strong>"
     );
+  });
+
+  it.each([
+    '<p>Affecté à {{assignment}}</p>',
+    '<p>Affecté &agrave;&nbsp;<strong>{{assignment}}</strong></p>',
+    '<p><span>Affecté &#224; </span><strong><span>{{assignment}}</span></strong></p>'
+  ])("corrects the institution preposition in a saved formatted model: %s", (html) => {
+    localStorage.setItem("contribution_contract_template", JSON.stringify({ html, css: "p { color: black; }" }));
+    const template = loadTemplate();
+    const variables = buildTemplateVariables({...contract, assignment: "Dépatement Sanitaire du Sud"});
+    expect(variables.assignment_prefixed).toBe("au Dépatement Sanitaire du Sud");
+    const document = new DOMParser().parseFromString(renderTemplate(template.html, variables), "text/html");
+    expect(document.body.textContent).toBe("Affecté au Dépatement Sanitaire du Sud");
+    expect(template.css).toBe("p { color: black; }");
+    expect(loadTemplate().html).toBe(template.html);
+  });
+
+  it("uses the shared family rule for all matching contracts", () => {
+    const rules=defaultInstitutionPrepositions().map(rule => rule.family==='department' ? {...rule,prefix:'au sein du'} : rule);
+    for (const assignment of ['Département Sanitaire du Sud','Département Sanitaire des Nippes']) {
+      const variables=buildTemplateVariables({...contract,assignment},[],[],rules);
+      expect(variables.assignment_prefixed).toBe(`au sein du ${assignment}`);
+      expect(renderTemplate(getDefaultTemplate('contract').html,variables)).toContain(`au sein du ${assignment}`);
+    }
   });
 
   it("uses the configured duration date for the start and signature", () => {

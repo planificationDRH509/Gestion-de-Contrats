@@ -1,3 +1,6 @@
+import { discardContractSyncChanges } from "./supabaseProvider";
+import { queueOutbox } from "../local/localOutbox";
+import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreateContractInput, UpsertApplicantInput } from "../types";
 import { createSupabaseProvider, syncSupabaseOutbox, getSupabaseSyncState } from "./supabaseProvider";
@@ -343,5 +346,33 @@ describe("sync recovery", () => {
     await syncSupabaseOutbox();
     expect(duplicates.insert).not.toHaveBeenCalled();
     expect(getPendingOutbox().find((item) => item.payload.id === contract.id)?.lastError).toContain("existe déjà");
+  });
+});
+
+describe("discard pending contract edits", () => {
+  it("restores the server version and preserves other contracts in a batch", async () => {
+    mock.from.mockReturnValue(reply(contractRow("editable")));
+    const contract = await createSupabaseProvider().contracts.getById("editable");
+    expect(contract).not.toBeNull();
+    const queued = queueOutbox(input.workspaceId, "contract.update", { contractIds: ["editable", "other"], status: "imprime" });
+    await discardContractSyncChanges(contract!, [queued.id]);
+    expect(getPendingOutbox().find(item => item.id === queued.id)?.payload.contractIds).toEqual(["other"]);
+    expect(loadDb().contracts.find(item => item.id === "editable")?.status).toBe("saisie");
+  });
+  it("keeps pending edits when the server cannot be read", async () => {
+    mock.from.mockReturnValue(reply(contractRow("editable")));
+    const contract = await createSupabaseProvider().contracts.getById("editable");
+    const queued = queueOutbox(input.workspaceId, "contract.update", { id: "editable", position: "Local" });
+    mock.from.mockReturnValue(reply(null, { message: "Network unavailable" }));
+    await expect(discardContractSyncChanges(contract!, [queued.id])).rejects.toThrow();
+    expect(getPendingOutbox().some(item => item.id === queued.id)).toBe(true);
+  });
+  it("refuses to discard edits added after the confirmation was opened", async () => {
+    mock.from.mockReturnValue(reply(contractRow("editable")));
+    const contract = await createSupabaseProvider().contracts.getById("editable");
+    const first = queueOutbox(input.workspaceId, "contract.update", { id: "editable", position: "Local" });
+    queueOutbox(input.workspaceId, "contract.update", { id: "editable", commentaire: "New edit" });
+    await expect(discardContractSyncChanges(contract!, [first.id])).rejects.toThrow("modifications ont changé");
+    expect(getPendingOutbox()).toHaveLength(2);
   });
 });

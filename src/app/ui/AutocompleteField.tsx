@@ -40,6 +40,8 @@ interface AutocompleteFieldProps {
   placeholder?: string;
   /** Accessible name when the field intentionally has no visible label. */
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  disabled?: boolean;
   className?: string;
   style?: React.CSSProperties;
   name?: string;
@@ -84,6 +86,8 @@ export function AutocompleteField({
   items,
   placeholder,
   ariaLabel,
+  ariaDescribedBy,
+  disabled,
   className = "input",
   style,
   name,
@@ -390,6 +394,8 @@ export function AutocompleteField({
           name={name}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          disabled={disabled}
           aria-invalid={hasError || undefined}
           style={{
             ...style,
@@ -424,6 +430,8 @@ export function AutocompleteField({
           name={name}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          disabled={disabled}
           aria-invalid={hasError || undefined}
           style={{
             ...style,

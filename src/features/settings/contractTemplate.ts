@@ -10,6 +10,8 @@ import {
   type SuggestionPrefixKind
 } from "../../lib/suggestionPrefixes";
 import { loadSuggestions } from "../../data/local/suggestionsDb";
+import type { InstitutionSuggestion } from "../../lib/institutions";
+import { formatInstitutionAssignment, readInstitutionPrepositions, type InstitutionPrepositionRule } from "../institutions/institutionPrepositions";
 import { referenceContractTemplate } from "./referenceContractTemplate";
 import { getStoredContractStartDate } from "./settingsApi";
 import {
@@ -498,6 +500,10 @@ function withContextualContractGrammar(html: string): string {
     .replace(
       /à titre de(\s*(?:<strong>)?)\s*\{\{\s*position\s*\}\}\s+à\s+\{\{\s*assignment\s*\}\}/gi,
       "à titre$1{{position_prefixed}} {{assignment_prefixed}}"
+    )
+    .replace(
+      /(?:à|&agrave;|&#224;|&#xe0;)(?:\s|&nbsp;|&#160;|&#xa0;)+((?:<\/?(?:span|strong|em|b|i|u)\b[^>]*>(?:\s|&nbsp;|&#160;|&#xa0;)*)*)\{\{\s*assignment\s*\}\}/gi,
+      "$1{{assignment_prefixed}}"
     );
 }
 
@@ -583,7 +589,12 @@ export function subscribeTemplate(listener: () => void) {
   return subscribeTemplateByType("contract", listener);
 }
 
-export function buildTemplateVariables(contract: Contract, salaryGrid: SalaryGridEntry[] = readSalaryGridCache() ?? []) {
+export function buildTemplateVariables(
+  contract: Contract,
+  salaryGrid: SalaryGridEntry[] = readSalaryGridCache() ?? [],
+  institutions?: InstitutionSuggestion[],
+  prepositions: InstitutionPrepositionRule[] = readInstitutionPrepositions()
+) {
   const date = new Date(contract.createdAt);
   const fiscalYear = getContractFiscalYear(contract);
   const endYear = getFiscalYearEndYear(contract);
@@ -644,7 +655,7 @@ export function buildTemplateVariables(contract: Contract, salaryGrid: SalaryGri
   };
 
   const positionMatch = findSuggestion(contract.position, "position", suggestions.positions);
-  const assignmentMatch = findSuggestion(contract.assignment, "institution", suggestions.institutions);
+  const assignmentMatch = findSuggestion(contract.assignment, "institution", institutions ?? suggestions.institutions);
   const addressMatch = findSuggestion(contract.address, "address", suggestions.addresses);
 
   const positionLabel = contractTitleWithoutGrade(stripSuggestionPrefix(
@@ -663,7 +674,7 @@ export function buildTemplateVariables(contract: Contract, salaryGrid: SalaryGri
   );
 
   const positionPrefixed = applySuggestionPrefix(positionLabel, "position", positionMatch?.prefix);
-  const assignmentPrefixed = applySuggestionPrefix(assignmentLabel, "institution", assignmentMatch?.prefix);
+  const assignmentPrefixed = formatInstitutionAssignment(assignmentLabel, prepositions, assignmentMatch?.prefix);
   const addressPrefixed = applySuggestionPrefix(addressLabel, "address", addressMatch?.prefix);
 
   const formattedFirstName = formatFirstName(contract.firstName);

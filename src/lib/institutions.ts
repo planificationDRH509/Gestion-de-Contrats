@@ -43,6 +43,7 @@ export function institutionType(entry: InstitutionSuggestion) {
 
 export function validateInstitution(entry: InstitutionSuggestion, entries: InstitutionSuggestion[]) {
   if (!entry.label.trim() || entry.label.trim().length > 250) throw new Error('Nom d’institution invalide.');
+  if (entry.prefix != null && (typeof entry.prefix !== 'string' || entry.prefix.length > 50)) throw new Error('Préposition invalide.');
   if (!entry.institutionType || !INSTITUTION_TYPES.includes(entry.institutionType as InstitutionType)) throw new Error('Choisissez un type d’institution.');
   if (entry.department && !DEPARTMENTS.some(d => normalizeInstitution(d) === normalizeInstitution(entry.department!))) throw new Error('Département invalide.');
   if (entry.commune && !entry.department) throw new Error('Choisissez le département de cette commune.');

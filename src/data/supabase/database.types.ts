@@ -498,6 +498,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      read_institution_prepositions: { Args: { p_session_token: string }; Returns: Json }
+      save_institution_prepositions: { Args: { p_session_token: string; p_rules: Json }; Returns: Json }
       learn_institution: {
         Args: { p_session_token: string; p_workspace_id: string; p_entry: Json }
         Returns: Json

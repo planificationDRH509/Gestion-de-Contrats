@@ -18,7 +18,7 @@ export function useInstitutionCatalogue() {
       if (!can('settings.manage')) throw new Error('Modification réservée aux administrateurs.');
       if (!navigator.onLine) throw new Error('Connectez-vous pour modifier les institutions.');
       validateInstitution(entry, query.data ?? []);
-      const payload = {...entry, label: entry.label.trim(), department: entry.department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(entry.department!)) ?? null : null, commune: entry.commune?.trim() || null, source: entry.source?.trim() || null};
+      const payload = {...entry, label: entry.label.trim(), prefix: entry.prefix?.trim() || null, department: entry.department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(entry.department!)) ?? null : null, commune: entry.commune?.trim() || null, source: entry.source?.trim() || null};
       if ((import.meta.env.VITE_DATA_PROVIDER ?? 'local') !== 'supabase') {
         return sqliteApiRequest<InstitutionSuggestion>('/institutions', {method:'POST',body:{workspaceId,entry:payload}});
       }

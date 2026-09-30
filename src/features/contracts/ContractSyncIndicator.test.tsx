@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import type { Contract, OutboxItem } from "../../data/types";
@@ -16,8 +17,8 @@ it("distinguishes device-only creation, pending changes and confirmed cloud data
 });
 it("opens the sync detail and offers a retry without navigating away", () => {
   const onRetry = vi.fn(async () => {});
-  render(<ContractSyncIndicator contract={contract} pending={[pending("contract.create", { id: "c" }, "Conflit à vérifier")]}
-    online cloudEnabled onRetry={onRetry} />);
+  render(<QueryClientProvider client={new QueryClient()}><ContractSyncIndicator contract={contract} pending={[pending("contract.create", { id: "c" }, "Conflit à vérifier")]}
+    online cloudEnabled onRetry={onRetry} /></QueryClientProvider>);
   fireEvent.click(screen.getByRole("button", { name: "Sur cet appareil" }));
   expect(screen.getByText("Conflit à vérifier")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Réessayer la synchronisation" }));

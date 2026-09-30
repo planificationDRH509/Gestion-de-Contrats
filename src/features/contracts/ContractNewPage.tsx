@@ -759,20 +759,7 @@ export function ContractNewPage() {
               Tableur
             </button>
           </div>
-          {sheetControls}
-          {isSheetMode ? (
-            <button
-              type="button"
-              className={`icon-btn ${isSheetFullscreen ? "primary" : ""}`}
-              title={isSheetFullscreen ? "Réduire le tableur" : "Afficher le tableur en plein écran"}
-              onClick={() => setIsSheetFullscreen((prev) => !prev)}
-              aria-label={isSheetFullscreen ? "Réduire le tableur" : "Agrandir le tableur"}
-            >
-              <span className="material-symbols-rounded">
-                {isSheetFullscreen ? "fullscreen_exit" : "fullscreen"}
-              </span>
-            </button>
-          ) : null}
+
         </div>
       </div>
 
@@ -1115,51 +1102,16 @@ export function ContractNewPage() {
         </div>
       </form>
       ) : (
-        isSheetFullscreen ? (
-          <div className={`contracts-sheet-fullscreen ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
-            <div className="contracts-sheet-fullscreen-topbar">
-              {fiscalYearIsPast ? (
-                <div className="fiscal-year-sheet-warning" role="alert">
-                  <span className="material-symbols-rounded">warning</span>
-                  Année fiscale passée : {fiscalYear}
-                </div>
-              ) : null}
-              {sheetControls}
-              <button
-                type="button"
-                className="icon-btn primary"
-                title="Réduire le tableur"
-                onClick={() => setIsSheetFullscreen(false)}
-                aria-label="Réduire le tableur"
-              >
-                <span className="material-symbols-rounded">fullscreen_exit</span>
-              </button>
+        <div className={`${isSheetFullscreen ? "contracts-sheet-fullscreen" : "card contract-sheet-card"} ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
+          {fiscalYearIsPast && (
+            <div className="fiscal-year-sheet-warning" role="alert">
+              <span className="material-symbols-rounded">warning</span>
+              Année fiscale passée : {fiscalYear}
             </div>
-            <div className="contracts-sheet-fullscreen-body">
-              <ContractsSpreadsheetView
-                workspaceId={workspaceId}
-                userId={userId}
-                contracts={spreadsheetData?.items ?? []}
-                isLoading={spreadsheetLoading}
-                canDelete={can("contracts.delete")}
-                showToolbar={false}
-                zoomMode={sheetZoomMode}
-                zoomPercent={sheetZoomPercent}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className={`card contract-sheet-card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
-            {fiscalYearIsPast ? (
-              <div className="fiscal-year-contract-warning" role="alert">
-                <span className="material-symbols-rounded">warning</span>
-                <div>
-                  <strong>Attention : année fiscale passée ({fiscalYear})</strong>
-                  <span>Les nouveaux contrats saisis ici seront enregistrés dans un exercice déjà terminé.</span>
-                </div>
-              </div>
-            ) : null}
+          )}
+          <div className={isSheetFullscreen ? "contracts-sheet-fullscreen-body" : "contract-sheet-body"}>
             <ContractsSpreadsheetView
+              key={`${workspaceId}:${userId}`}
               workspaceId={workspaceId}
               userId={userId}
               contracts={spreadsheetData?.items ?? []}
@@ -1167,9 +1119,26 @@ export function ContractNewPage() {
               canDelete={can("contracts.delete")}
               zoomMode={sheetZoomMode}
               zoomPercent={sheetZoomPercent}
+              controls={
+                <>
+                  {sheetControls}
+                  <button
+                    type="button"
+                    className={`icon-btn ${isSheetFullscreen ? "primary" : ""}`}
+                    title={isSheetFullscreen ? "Réduire le tableur" : "Afficher le tableur en plein écran"}
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => setIsSheetFullscreen(previous => !previous)}
+                    aria-label={isSheetFullscreen ? "Réduire le tableur" : "Agrandir le tableur"}
+                  >
+                    <span className="material-symbols-rounded" aria-hidden="true">
+                      {isSheetFullscreen ? "fullscreen_exit" : "fullscreen"}
+                    </span>
+                  </button>
+                </>
+              }
             />
           </div>
-        )
+        </div>
       )}
 
       {/* ── Modal MSPP ──────────────────────────────────── */}

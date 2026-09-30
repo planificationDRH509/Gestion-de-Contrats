@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { SalaryGridEntry } from "../salary-grid/salaryGrid";
 import type { Contract } from "../../data/types";
-import { createListExcelWorkbook } from "./listExcelExport";
+import { createListExcelWorkbook, listContractFormation } from "./listExcelExport";
 import type { ContractList } from "./listModel";
 import { setStoredContractStartDates } from "../settings/settingsApi";
 
@@ -38,6 +39,33 @@ const emblem = new Uint8Array([137, 80, 78, 71]);
 beforeEach(() => localStorage.clear());
 
 describe("Excel des listes", () => {
+  const gridEntry = (overrides: Partial<SalaryGridEntry> = {}): SalaryGridEntry => ({
+    id: "nurse", masculine: "Infirmier de ligne", feminine: "Infirmière de ligne", jobType: "Universitaire",
+    category: "Soins", aliases: ["Infirmière"], salaries: [25000.25], source: "", sourceRows: [], notes: "", active: true, version: 1, ...overrides
+  });
+  it("fills Department and Formation from institution and title references, leaving missing values empty", async () => {
+    const contracts = [
+      contract("a", { lastName: "A", position: "à titre d’Infirmière de ligne", assignment: "à l’Hôpital de Jérémie" }),
+      contract("b", { lastName: "B", position: "Technicienne en Maintenance Informatique II", assignment: "Institution inconnue" }),
+      contract("c", { lastName: "C", position: "Médecin inconnu", assignment: "Sans département" })
+    ];
+    const reference = [gridEntry(), gridEntry({ id: "tech", masculine: "Technicien en Maintenance Informatique 2", feminine: "Technicienne en Maintenance Informatique 2", jobType: "Technique", aliases: [] })];
+    const institutions = [{id:"i",label:"Hôpital de Jérémie",department:"Grand’Anse",order:0,addressKeywords:[]}, {id:"j",label:"Sans département",department:null,order:1,addressKeywords:[]}];
+    const result = await parts(createListExcelWorkbook(list(contracts), contracts, institutions, emblem, reference));
+    expect(result.value("H10")).toBe("Département"); expect(result.value("I10")).toBe("Formation");
+    expect(result.value("H12")).toBe("Grand’Anse"); expect(result.value("I12")).toBe("Universitaire");
+    expect(result.value("H13")).toBe(""); expect(result.value("I13")).toBe("Technique");
+    expect(result.value("H14")).toBe(""); expect(result.value("I14")).toBe("");
+    expect(result.sheet.querySelector('c[r="N15"] f')?.textContent).toBe("SUM(N12:N14)");
+  });
+  it("supports registered aliases and historical titles without inferring missing or ambiguous training", () => {
+    expect(listContractFormation("infirmiere", [gridEntry()])).toBe("Universitaire");
+    expect(listContractFormation("Infirmier de ligne", [gridEntry({active:false})])).toBe("Universitaire");
+    expect(listContractFormation("Infirmière", [gridEntry({jobType:""})])).toBe("");
+    expect(listContractFormation("Infirmière", [gridEntry(), gridEntry({id:"conflict",jobType:"Technique"})])).toBe("");
+    expect(listContractFormation("Médecin", [gridEntry()])).toBe("");
+    expect(listContractFormation("", [gridEntry()])).toBe("");
+  });
   it("exports all 15 columns alphabetically, preserving identifiers and using institution departments", async () => {
     const contracts = [contract("z", { lastName: "Louis", firstName: "Louvens", salaryNumber: 100.15 }), contract("a")];
     const result = await parts(createListExcelWorkbook(list(contracts), contracts, [{id: "i", label: "Direction générale", department: "Ouest", order: 0, addressKeywords: []}], emblem));

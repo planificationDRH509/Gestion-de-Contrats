@@ -19,4 +19,8 @@ describe('institution references',() => {
     expect(() => validateInstitution({...entry,department:'Province'},[])).toThrow('Département invalide');
     expect(() => validateInstitution({...entry,institutionType:'Inconnu'},[])).toThrow('type');
   });
+  it('accepts a custom preposition and rejects an oversized value',() => {
+    expect(() => validateInstitution({...entry,prefix:'au sein du'},[])).not.toThrow();
+    expect(() => validateInstitution({...entry,prefix:'x'.repeat(51)},[])).toThrow('Préposition invalide');
+  });
 });

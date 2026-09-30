@@ -7544,35 +7544,6 @@ button {
   text-underline-offset: 3px;
 }
 
-.contracts-scope-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
-  color: var(--ink-muted);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.contracts-scope-switch:hover {
-  color: var(--ink);
-  background: var(--panel-muted);
-}
-
-.contracts-scope-switch input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.contracts-scope-switch .material-symbols-rounded {
-  font-size: 18px;
-}
-
 .contracts-new-button {
   min-height: 38px;
   white-space: nowrap;
@@ -8114,8 +8085,7 @@ button {
   }
 
   .contracts-page-header .search-field-unified,
-  .contracts-toolbar-actions,
-  .contracts-scope-switch {
+  .contracts-toolbar-actions {
     width: 100%;
   }
 
@@ -8125,10 +8095,6 @@ button {
 
   .toolbar-action-button {
     flex: 1 0 auto;
-  }
-
-  .contracts-scope-switch {
-    justify-content: center;
   }
 
   .contracts-page .list-page-heading {
@@ -8225,9 +8191,6 @@ body,
     order: 4;
   }
 
-  .contracts-scope-switch {
-    margin-left: auto;
-  }
 }
 
 @media (max-width: 960px) {
@@ -8400,13 +8363,6 @@ body,
 
   .contracts-page-header .toolbar-action-button .material-symbols-rounded {
     font-size: 16px;
-  }
-
-  .contracts-page-header .contracts-scope-switch {
-    order: 4;
-    width: auto;
-    align-self: flex-start;
-    justify-content: flex-start;
   }
 
   .contracts-page .contracts-list {
@@ -10068,7 +10024,7 @@ body,
   .selection-actions-shell.selection-actions-compact.active { transform: translateX(-50%) translateY(0); }
 }
 
-/* Compact contract controls, with search expanding on focus or while filled. */
+/* Contract controls, with search expanding on focus or while filled. */
 .contracts-page-header .contracts-filter-toolbar {
   display: flex;
   flex-direction: column;
@@ -10099,22 +10055,27 @@ body,
   flex-shrink: 0;
 }
 
-.contracts-filter-toolbar .contracts-controls-row .contracts-scope-switch {
-  order: initial;
-  width: auto;
-  margin-left: 0;
-  flex-shrink: 0;
-  align-self: center;
-  border: 1px solid var(--border);
+.contracts-scope-menu {
+  z-index: 200;
+  min-width: 190px;
+  background: var(--panel);
 }
 
-.contracts-filter-toolbar .contracts-scope-switch:has(input:checked) {
+.contracts-scope-menu .context-menu-item {
+  justify-content: space-between;
+}
+
+.contracts-scope-menu .context-menu-item[aria-checked="true"] {
   color: var(--accent);
   background: var(--accent-soft);
 }
 
+.contracts-scope-menu .material-symbols-rounded {
+  font-size: 16px;
+}
+
 .contracts-controls-row :is(button, input):focus-visible,
-.contracts-filter-toolbar .contracts-scope-switch:focus-within,
+.contracts-scope-menu button:focus-visible,
 .contracts-filter-grid .accent-select:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 3px;
@@ -10122,16 +10083,16 @@ body,
 
 .contracts-page-header .contracts-filter-toolbar .search-field-unified {
   order: initial;
-  flex: 0 1 38px;
-  width: 38px;
-  min-width: 38px;
-  max-width: 260px;
+  flex: 0 1 220px;
+  width: 220px;
+  min-width: 140px;
+  max-width: 320px;
   transition: flex-basis 180ms ease, width 180ms ease;
 }
 
 .contracts-page-header .contracts-filter-toolbar .contracts-compact-search:is(:focus-within, .has-query) {
-  flex-basis: 260px;
-  width: 260px;
+  flex-basis: 320px;
+  width: 320px;
   min-width: 140px;
 }
 
@@ -10139,15 +10100,6 @@ body,
   width: 100%;
   height: 38px;
   padding-right: 8px;
-}
-
-.contracts-compact-search:not(:focus-within):not(.has-query) .input {
-  padding-right: 0;
-  cursor: pointer;
-}
-
-.contracts-compact-search:not(:focus-within):not(.has-query) .input::placeholder {
-  color: transparent;
 }
 
 .contracts-page-header .contracts-filter-toolbar .contracts-toolbar-actions {
@@ -10217,13 +10169,19 @@ body,
 }
 
 @container contracts-toolbar (max-width: 760px) {
-  .contracts-controls-row .contracts-scope-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .contracts-page-header .contracts-filter-toolbar .contracts-compact-search:not(:focus-within):not(.has-query) {
+    flex-basis: 38px;
+    width: 38px;
+    min-width: 38px;
+  }
+
+  .contracts-compact-search:not(:focus-within):not(.has-query) .input {
+    padding-right: 0;
+    cursor: pointer;
+  }
+
+  .contracts-compact-search:not(:focus-within):not(.has-query) .input::placeholder {
+    color: transparent;
   }
 }
 

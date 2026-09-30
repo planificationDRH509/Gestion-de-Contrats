@@ -16,4 +16,5 @@
 .institutions-editor h2 { margin:0 0 6px; }
 .institutions-editor label { display:grid; gap:6px; font-size:13px; font-weight:500; }
 .institutions-actions { justify-content:flex-end; }
+.institutions-editor .institution-preposition-row { grid-template-columns:minmax(0,1fr) 120px; align-items:center; gap:12px; }
 @media(max-width:600px) { .institutions-page { padding:12px; } .institutions-editor { padding:18px; } .institutions-toolbar .input { width:100%; } }

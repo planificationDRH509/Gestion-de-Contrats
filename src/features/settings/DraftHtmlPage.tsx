@@ -11,6 +11,7 @@ import {
 } from "./contractTemplate";
 import { Contract } from "../../data/types";
 import "./DraftHtmlPage.css";
+import { useInstitutionPrepositions } from '../institutions/institutionPrepositionsApi';
 
 const sampleContract: Contract = {
   id: "sample-0001",
@@ -33,6 +34,7 @@ const sampleContract: Contract = {
 };
 
 export function DraftHtmlPage() {
+  const { rules: prepositions } = useInstitutionPrepositions();
   const [selectedDraft, setSelectedDraft] = useState<DraftTemplateType>("contract");
   const [template, setTemplate] = useState(() => loadTemplateByType("contract"));
   const [activeTab, setActiveTab] = useState<"editor" | "preview">("editor");
@@ -48,9 +50,9 @@ export function DraftHtmlPage() {
   const previewHtml = useMemo(() => {
     return renderTemplate(
       template.html,
-      buildTemplateVariables(sampleContract)
+      buildTemplateVariables(sampleContract, undefined, undefined, prepositions)
     );
-  }, [template.html]);
+  }, [template.html, prepositions]);
 
   const handleSave = async () => {
     try {

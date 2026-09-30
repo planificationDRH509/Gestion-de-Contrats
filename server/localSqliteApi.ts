@@ -887,6 +887,7 @@ function getDb(): DatabaseSync {
       sql: "ALTER TABLE autocompletion ADD COLUMN commune TEXT;"
     },
     { name: "institution_type", sql: "ALTER TABLE autocompletion ADD COLUMN institution_type TEXT;" },
+    { name: "prefix", sql: "ALTER TABLE autocompletion ADD COLUMN prefix TEXT;" },
     { name: "source_url", sql: "ALTER TABLE autocompletion ADD COLUMN source_url TEXT;" },
     { name: "version", sql: "ALTER TABLE autocompletion ADD COLUMN version INTEGER NOT NULL DEFAULT 1;"
     }
@@ -2770,13 +2771,14 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     if (previous && (previous.workspace_id !== workspaceId || previous.type !== 'institution')) throw new HttpError(403,'Institution inaccessible.');
     if (Number(previous?.version ?? 0) !== entry.version) throw new HttpError(409,'Cette institution a changé. Rechargez la liste.');
     const label = entry.label.trim();
+    const prefix = entry.prefix === undefined ? asNullableString(previous?.prefix) : entry.prefix?.trim() || null;
     const timestamp = nowIso();
     const version = (entry.version ?? 0)+1;
     const order = previous ? Number(previous.order_index) : rows.reduce((m,r) => Math.max(m,Number(r.order_index)), -1)+1;
     db.exec('BEGIN TRANSACTION');
     try {
       if (previous) {
-        db.prepare('UPDATE autocompletion SET label=?,department=?,commune=?,institution_type=?,source_url=?,version=?,updated_at=? WHERE id=?').run(label,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,timestamp,entry.id);
+        db.prepare('UPDATE autocompletion SET label=?,prefix=?,department=?,commune=?,institution_type=?,source_url=?,version=?,updated_at=? WHERE id=?').run(label,prefix,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,timestamp,entry.id);
         if (previous.label !== label) {
           const contracts = db.prepare('SELECT id_contrat,historique_saisie FROM contrat WHERE workspace_id=? AND lieu_affectation=?').all(workspaceId,asString(previous.label)) as RawRecord[];
           const update = db.prepare('UPDATE contrat SET lieu_affectation=?,historique_saisie=?,updated_at=? WHERE id_contrat=?');
@@ -2787,13 +2789,13 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           }
         }
       } else {
-        db.prepare("INSERT INTO autocompletion(id,type,label,department,commune,institution_type,source_url,version,address_keywords,order_index,workspace_id,created_at,updated_at) VALUES (?,'institution',?,?,?,?,?,?,?,?,?,?,?)").run(entry.id,label,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,JSON.stringify(entry.addressKeywords ?? []),order,workspaceId,timestamp,timestamp);
+        db.prepare("INSERT INTO autocompletion(id,type,label,prefix,department,commune,institution_type,source_url,version,address_keywords,order_index,workspace_id,created_at,updated_at) VALUES (?,'institution',?,?,?,?,?,?,?,?,?,?,?,?)").run(entry.id,label,prefix,entry.department ?? null,entry.commune ?? null,entry.institutionType ?? null,entry.source ?? null,version,JSON.stringify(entry.addressKeywords ?? []),order,workspaceId,timestamp,timestamp);
       }
       db.exec('COMMIT');
     } catch(e) { db.exec('ROLLBACK'); throw e; }
     let keywords: string[]=[];
     try { keywords=previous ? JSON.parse(asString(previous.address_keywords) || '[]') : entry.addressKeywords; } catch {}
-    sendJson(res,200,{...entry,label,addressKeywords:keywords,order,version});
+    sendJson(res,200,{...entry,label,prefix,addressKeywords:keywords,order,version});
     return;
   }
 
@@ -2835,6 +2837,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         result.institutions.push({
           id: row.id,
           label: row.label,
+          prefix: row.prefix || null,
           department: row.department || null,
           commune: row.commune || null,
           institutionType: row.institution_type || null,
@@ -2892,7 +2895,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       if (Array.isArray(data.institutions)) {
         data.institutions.forEach((i: any, idx: number) => {
           insertAuto.run({ id: i.id || randomUUID(), type: "institution", label: i.label, salaries: null, address_keywords: JSON.stringify(i.addressKeywords || []), department: i.department || null, commune: i.commune || null, order_index: typeof i.order === 'number' ? i.order : idx, workspace_id: workspaceId, created_at: now, updated_at: now });
-          db.prepare("UPDATE autocompletion SET institution_type=?,source_url=?,version=? WHERE workspace_id=? AND type='institution' AND label=?").run(i.institutionType || null,i.source || null,i.version ?? 1,workspaceId,i.label);
+          db.prepare("UPDATE autocompletion SET prefix=?,institution_type=?,source_url=?,version=? WHERE workspace_id=? AND type='institution' AND label=?").run(i.prefix?.trim() || null,i.institutionType || null,i.source || null,i.version ?? 1,workspaceId,i.label);
         });
       }
       
