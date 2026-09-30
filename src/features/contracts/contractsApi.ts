@@ -36,6 +36,7 @@ export interface NifIdentification {
   sexe: string | null;
   ninu: string | null;
   adresse: string;
+  telephone?: string | null;
 }
 
 export interface NifContractMatch {
@@ -78,6 +79,7 @@ export async function lookupNif(rawNif: string, workspaceId: string): Promise<Ni
           sexe: applicant.gender,
           ninu: applicant.ninu ?? null,
           adresse: applicant.address,
+          telephone: applicant.phone ?? null,
         }
       : cachedIdentity ? {
           nif, nom: cachedIdentity.lastName, prenom: cachedIdentity.firstName,
@@ -604,9 +606,15 @@ export function usePrintJob() {
 
 export function useApplicantUpsert() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpsertApplicantInput) => 
-      provider.applicants.upsert({ ...input, createdBy: user?.id })
+      provider.applicants.upsert({ ...input, createdBy: user?.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
+      queryClient.invalidateQueries({ queryKey: ["identification"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
+    }
   });
 }
 

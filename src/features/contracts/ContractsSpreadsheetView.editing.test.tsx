@@ -4,7 +4,7 @@ import type { Contract } from "../../data/types";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(), update: vi.fn(), applicant: vi.fn(), lookup: vi.fn(), empty: [],
-  comment: vi.fn(), remove: vi.fn(), dossierList: vi.fn()
+  comment: vi.fn(), remove: vi.fn(), dossierList: vi.fn(), matches: vi.fn()
 }));
 vi.mock("./contractsApi", () => ({
   useCreateContract: () => ({ mutateAsync: mocks.create }),
@@ -12,6 +12,7 @@ vi.mock("./contractsApi", () => ({
   useApplicantUpsert: () => ({ mutateAsync: mocks.applicant }),
   useUpdateContractComment: () => ({ mutateAsync: mocks.comment }),
   useDeleteContract: () => ({ mutate: mocks.remove }),
+  useImportApplicantMatches: () => ({ data: mocks.matches() }),
   lookupNif: mocks.lookup
 }));
 vi.mock("../../lib/usePendingSync", () => ({ usePendingSync: () => mocks.empty }));
@@ -49,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   mocks.dossierList.mockReturnValue(mocks.empty);
+  mocks.matches.mockReturnValue(mocks.empty);
   mocks.lookup.mockResolvedValue({ identification: null, contracts: [] });
   mocks.applicant.mockResolvedValue({ id: "person" });
   mocks.create.mockResolvedValue({ id: "saved" });
@@ -57,6 +59,111 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("spreadsheet editing", () => {
+  it("toggles the phone column for every row and remembers visibility across remounts", () => {
+    const view = setup([existing]);
+    expect(screen.queryByRole("textbox", { name: "Téléphone" })).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".contracts-sheet-state-cell button")).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Afficher le téléphone" }));
+    expect(screen.getAllByRole("textbox", { name: "Téléphone" })).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: "Ligne" }));
+    expect(screen.getAllByRole("textbox", { name: "Téléphone" })).toHaveLength(5);
+    view.unmount();
+    const reopened = setup([existing]);
+    expect(screen.getAllByRole("textbox", { name: "Téléphone" })).toHaveLength(4);
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" }).at(-1)!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Masquer le téléphone" }));
+    expect(screen.queryByRole("textbox", { name: "Téléphone" })).not.toBeInTheDocument();
+    reopened.unmount();
+    setup([existing]);
+    expect(screen.queryByRole("textbox", { name: "Téléphone" })).not.toBeInTheDocument();
+  });
+
+  it("saves a pasted phone number with the applicant and preserves it when hidden", async () => {
+    setup();
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Afficher le téléphone" }));
+    paste(cell(0, 0), `${validRow()}\t+509 37 00 00 00`);
+    expect(cell(0, 10)).toHaveValue("+509 37 00 00 00");
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[1]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Masquer le téléphone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer les lignes collées (1)" }));
+    await waitFor(() => expect(mocks.applicant).toHaveBeenCalledWith(expect.objectContaining({ phone: "+509 37 00 00 00" })));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+  });
+
+  it("loads and edits an existing phone without erasing it when another field changes", async () => {
+    mocks.matches.mockReturnValue([{ id: "person", nif: existing.nif, phone: "+509 37 00 00 00" }]);
+    setup([existing]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" }).at(-1)!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Afficher le téléphone" }));
+    const phone = document.querySelector<HTMLInputElement>('[data-sheet-row="existingRow_existing"][data-sheet-col="10"]')!;
+    expect(phone).toHaveValue("+509 37 00 00 00");
+    fireEvent.change(phone, { target: { value: "+509 38 11 22 33" } });
+    fireEvent.blur(phone);
+    await waitFor(() => expect(mocks.applicant).toHaveBeenCalledWith(expect.objectContaining({ phone: "+509 38 11 22 33" })));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Masquer le téléphone" }));
+    const name = document.querySelector<HTMLInputElement>('[data-sheet-row="existingRow_existing"][data-sheet-col="1"]')!;
+    fireEvent.change(name, { target: { value: "Jacques" } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(mocks.applicant).toHaveBeenLastCalledWith(expect.objectContaining({ firstName: "Jacques", phone: "+509 38 11 22 33" })));
+  });
+
+  it("navigates to the visible phone before saving and keeps duration arrows working", async () => {
+    setup();
+    fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Afficher le téléphone" }));
+    paste(cell(0, 0), validRow());
+    cell(0, 9).focus();
+    fireEvent.keyDown(cell(0, 9), { key: "ArrowUp" });
+    expect(cell(0, 9)).toHaveValue("7");
+    fireEvent.keyDown(cell(0, 9), { key: "Enter" });
+    await waitFor(() => expect(cell(0, 10)).toHaveFocus());
+    expect(mocks.create).not.toHaveBeenCalled();
+    fireEvent.change(cell(0, 10), { target: { value: "37000000" } });
+    fireEvent.keyDown(cell(0, 10), { key: "Enter" });
+    await waitFor(() => expect(mocks.applicant).toHaveBeenCalledWith(expect.objectContaining({ phone: "37000000", nif: "123-456-789-0" })));
+  });
+
+  it("opens existing comments from the menu and closes the menu with Escape", async () => {
+    setup([existing]);
+    const trigger = screen.getAllByRole("button", { name: "Actions de la ligne" }).at(-1)!;
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ajouter un commentaire" }));
+    fireEvent.change(screen.getByPlaceholderText("Ajouter un commentaire..."), { target: { value: "À vérifier" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(mocks.comment).toHaveBeenCalledWith({ id: "existing", workspaceId: "w", commentaire: "À vérifier" }));
+  });
+
+  it("saves a new row comment in its draft and preserves it when a later edit is cancelled", () => {
+    setup();
+    fireEvent.change(cell(0, 1), { target: { value: "Marie" } });
+    fireEvent.change(cell(0, 2), { target: { value: "Jean" } });
+    const openComment = () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
+      fireEvent.click(screen.getByRole("menuitem", { name: /commentaire/ }));
+    };
+    openComment();
+    expect(screen.getByRole("dialog", { name: /^Commentaire du contrat Marie Jean$/i })).toBeVisible();
+    fireEvent.change(screen.getByPlaceholderText("Ajouter un commentaire..."), { target: { value: "Pièce à compléter" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    openComment();
+    expect(screen.getByPlaceholderText("Ajouter un commentaire...")).toHaveValue("Pièce à compléter");
+    fireEvent.change(screen.getByPlaceholderText("Ajouter un commentaire..."), { target: { value: "Modification annulée" } });
+    fireEvent.click(screen.getByRole("button", { name: "Annuler" }));
+    openComment();
+    expect(screen.getByPlaceholderText("Ajouter un commentaire...")).toHaveValue("Pièce à compléter");
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.comment).not.toHaveBeenCalled();
+  });
+
   it("keeps default fields visible and updates inherited blank rows while preserving started rows", () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: "Valeurs par défaut" }));
@@ -127,6 +234,46 @@ describe("spreadsheet editing", () => {
     expect(cell(0, 9)).toHaveValue("6");
   });
 
+  it("adjusts duration with vertical arrows without moving focus or saving", async () => {
+    setup([existing]);
+    const duration = cell(0, 9);
+    duration.focus();
+    fireEvent.keyDown(duration, { key: "ArrowUp" });
+    expect(duration).toHaveValue("13");
+    fireEvent.keyDown(duration, { key: "ArrowDown" });
+    expect(duration).toHaveValue("12");
+    fireEvent.change(duration, { target: { value: "1" } });
+    fireEvent.keyDown(duration, { key: "ArrowDown" });
+    expect(duration).toHaveValue("1");
+    fireEvent.change(duration, { target: { value: "60" } });
+    fireEvent.keyDown(duration, { key: "ArrowUp" });
+    expect(duration).toHaveValue("60");
+    await act(async () => {});
+    expect(duration).toHaveFocus();
+    expect(mocks.create).not.toHaveBeenCalled();
+    const savedDuration = document.querySelector<HTMLInputElement>('[data-sheet-row="existingRow_existing"][data-sheet-col="9"]')!;
+    savedDuration.focus();
+    fireEvent.keyDown(savedDuration, { key: "ArrowUp" });
+    expect(savedDuration).toHaveValue("13");
+    expect(savedDuration).toHaveFocus();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("shows bulk saving only for pasted rows and leaves manually entered rows untouched", async () => {
+    setup();
+    fireEvent.change(cell(0, 1), { target: { value: "Saisie manuelle" } });
+    expect(screen.queryByRole("button", { name: /Enregistrer les lignes collées/ })).not.toBeInTheDocument();
+    paste(cell(1, 0), validRow());
+    expect(screen.getByRole("button", { name: "Enregistrer les lignes collées (1)" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annuler la saisie" }));
+    expect(screen.queryByRole("button", { name: /Enregistrer les lignes collées/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rétablir la saisie" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer les lignes collées (1)" }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Enregistrer les lignes collées/ })).not.toBeInTheDocument());
+    expect(cell(0, 1)).toHaveValue("Saisie manuelle");
+  });
+
   it("stages an Excel paste, validates it, then creates every row exactly once", async () => {
     setup();
     paste(cell(0, 0), `${validRow()}\r\n${validRow("9876543210", "Anne")}\r\n`);
@@ -135,7 +282,7 @@ describe("spreadsheet editing", () => {
     expect(cell(0, 8)).toHaveValue("45000.5");
     fireEvent.blur(cell(0, 9));
     expect(mocks.create).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer \(2\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(2\)/ }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(cell(0, 0)).toHaveValue(""));
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ firstName: "Marie", salaryNumber: 45000.5, durationMonths: 6 }));
@@ -162,7 +309,7 @@ describe("spreadsheet editing", () => {
     expect(cell(0, 0)).toHaveValue("12345678901");
     expect(cell(0, 0)).toHaveAttribute("aria-invalid", "true");
     expect(cell(0, 1)).toHaveAttribute("aria-invalid", "true");
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer \(1\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(1\)/ }));
     await waitFor(() => expect(cell(0, 0)).toHaveFocus());
     expect(mocks.applicant).not.toHaveBeenCalled();
     fireEvent.change(cell(0, 0), { target: { value: "9876543210" } });
@@ -182,7 +329,7 @@ describe("spreadsheet editing", () => {
     // Saving a pasted duplicate runs the same duplicate check without overwriting the paste.
     mocks.lookup.mockResolvedValue({ identification: null, contracts: [{ annee_fiscale: "2025-2026" }] });
     paste(cell(0, 0), validRow());
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer \(1\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(1\)/ }));
     await screen.findByText("Un contrat existe déjà pour 2025-2026.");
     expect(cell(0, 0)).not.toBeDisabled();
     fireEvent.change(cell(0, 0), { target: { value: "9876543210" } });
@@ -229,7 +376,7 @@ describe("spreadsheet editing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Annuler la saisie" }));
     expect(field).toHaveValue("Pierre");
     fireEvent.click(screen.getByRole("button", { name: "Rétablir la saisie" }));
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer \(1\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(1\)/ }));
     await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ id: "existing", firstName: "Marie", lastName: "JEAN" })));
   });
 
@@ -239,7 +386,7 @@ describe("spreadsheet editing", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("dernière colonne");
     expect(cell(0, 9)).toHaveValue("12");
     paste(cell(0, 0), `${validRow()}\n${validRow()}`);
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer \(2\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(2\)/ }));
     expect(cell(0, 0)).toHaveAttribute("aria-invalid", "true");
     expect(cell(1, 0)).toHaveAttribute("aria-invalid", "true");
     expect(mocks.applicant).not.toHaveBeenCalled();

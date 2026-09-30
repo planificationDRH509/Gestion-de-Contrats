@@ -38,9 +38,9 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
     if (!user) return;
     void run(async () => {
       if (kind === 'file' && !file) throw new Error('Choisissez un fichier.');
-      const fingerprint = JSON.stringify([kind,name,location,file?.name,file?.size,file?.lastModified]);
+      const fingerprint = JSON.stringify([contract.nif,kind,name,location,file?.name,file?.size,file?.lastModified]);
       if (pendingDraft.current?.fingerprint !== fingerprint) pendingDraft.current = {fingerprint,id:crypto.randomUUID()};
-      const draft: AttachmentDraft = {id:pendingDraft.current.id,name:name.trim() || file?.name || '',kind};
+      const draft: AttachmentDraft = {id:pendingDraft.current.id,name:kind === 'file' ? file!.name : name.trim(),kind};
       if (kind === 'file') draft.content = await readAttachmentFile(file!);
       else draft.location = location.trim();
       const items = await manageAttachments(user, contract, 'add', draft);
@@ -83,8 +83,8 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
           {([['file','Fichier','upload_file'],['link','Lien','link'],['path','Chemin externe','folder_open']] as const).map(([value,label,icon]) => <button key={value} type="button" disabled={busy} aria-pressed={kind===value} onClick={() => {setKind(value);setError('');}}><span className="material-symbols-rounded" aria-hidden="true">{icon}</span>{label}</button>)}
         </div>
         <fieldset disabled={busy}>
-          {kind === 'file' && <label className="attachment-file-picker">Fichier<input ref={fileInput} type="file" onChange={event => {const selected = event.target.files?.[0] ?? null; setFile(selected);setName(selected?.name ?? '');}} /></label>}
-          <label>Nom<input className="input" value={name} maxLength={255} required onChange={event => setName(event.target.value)} /></label>
+          {kind === 'file' && <label className="attachment-file-picker">Fichier<input ref={fileInput} type="file" onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>}
+          {kind !== 'file' && <label>Nom<input className="input" value={name} maxLength={255} required onChange={event => setName(event.target.value)} /></label>}
           {kind !== 'file' && <label>{kind === 'link' ? 'Lien du document' : 'Chemin externe'}<input className="input" type={kind === 'link' ? 'url' : 'text'} value={location} maxLength={4096} required placeholder={kind === 'link' ? 'https://…' : '/dossier/document.pdf'} onChange={event => setLocation(event.target.value)} /></label>}
         </fieldset>
         <button className="btn btn-primary attachment-submit" type="submit" disabled={busy || query.isPending || query.isError}>{busy ? 'En cours…' : 'Ajouter'}</button>

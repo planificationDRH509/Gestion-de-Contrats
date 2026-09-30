@@ -27,7 +27,7 @@ async function expectAlignedSheet(page: Page, fits = false) {
       return Math.max(...tops) - Math.min(...tops);
     });
     const borderDrift = rows.flatMap(row => [...row.children].map(cell => Math.abs(cell.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom)));
-    const actionOverflow = [...root.querySelectorAll('.contracts-sheet-state-cell')].flatMap(cell => [...cell.querySelectorAll('button')].map(button => button.getBoundingClientRect().right - cell.getBoundingClientRect().right));
+    const actionOverflow = [...root.querySelectorAll('.contracts-sheet-menu-cell')].flatMap(cell => [...cell.querySelectorAll('button')].map(button => button.getBoundingClientRect().right - cell.getBoundingClientRect().right));
     const scroll = root.querySelector('.contracts-sheet-scroll')!;
     return {textDrift: Math.max(...textDrift), borderDrift: Math.max(...borderDrift), actionOverflow: Math.max(...actionOverflow), overflow: scroll.scrollWidth - scroll.clientWidth};
   });
@@ -53,6 +53,7 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
     const path = new URL(route.request().url()).pathname;
     let body: unknown = [];
     if (path.endsWith('/app_users')) body={role:'admin'};
+    if (path.endsWith('/identification')) body=people.map((person,index) => ({nif:`123456789${index}`,workspace_id:'workspace_default',prenom:person.first,nom:person.last,sexe:'Femme',adresse:person.address,telephone:`+509 37 00 00 0${index}`,created_at:now,updated_at:now,deleted_at:null}));
     if (path.endsWith('/contrat')) body=people.map((person,index) => ({id_contrat:person.id,nif:`123456789${index}`,workspace_id:'workspace_default',status:'saisie',duree_contrat:6,annee_fiscale:'2025-2026',salaire_en_chiffre:35000,titre:person.position,lieu_affectation:person.assignment,created_by:'sheet-layout-user',created_at:now,updated_at:now,deleted_at:null,contract_tags:[],identification:{nif:`123456789${index}`,prenom:person.first,nom:person.last,sexe:'Femme',adresse:person.address}}));
     if(path.endsWith('/read_salary_grid')) body=[{id:'nurse',masculine:'Infirmier de ligne',feminine:'Infirmière de ligne',category:'Soins',jobType:'Universitaire',salaries:[35000],aliases:[],source:'',sourceRows:[],notes:'',active:true,version:1}];
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':`0-${Array.isArray(body)?Math.max(0,body.length-1):0}/${Array.isArray(body)?body.length:1}`}});
@@ -62,6 +63,32 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   await expect(page.locator('[data-sheet-row="existingRow_long"][data-sheet-col="1"]')).toBeVisible();
   await expectAlignedSheet(page, true);
   await page.screenshot({path:'/tmp/contract-sheet-aligned.png',fullPage:true});
+
+  await expect(page.locator('.contracts-sheet-head-cell')).toHaveCount(10);
+  expect(await page.locator('.contracts-sheet-state-cell').first().evaluate(el => parseFloat(getComputedStyle(el).width))).toBeCloseTo(30, 1);
+  await expect(page.locator('.contracts-sheet-state-cell button')).toHaveCount(0);
+  await page.getByRole('button', {name:'Actions de la ligne',exact:true}).first().click();
+  await page.getByRole('menuitem', {name:'Afficher le téléphone',exact:true}).click();
+  await expect(page.locator('.contracts-sheet-head-cell')).toHaveCount(11);
+  await expect(page.getByRole('textbox', {name:'Téléphone',exact:true})).toHaveCount(5);
+  await expect(page.locator('[data-sheet-row="existingRow_long"][data-sheet-col="10"]')).toHaveValue('+509 37 00 00 01');
+  const phoneOverflow = await page.locator('[data-sheet-row="existingRow_long"][data-sheet-col="10"]').evaluate(element => {
+    const input = element as HTMLInputElement;
+    const style = getComputedStyle(input);
+    const context = document.createElement('canvas').getContext('2d')!;
+    context.font = style.font;
+    return context.measureText(input.value).width + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) - input.clientWidth;
+  });
+  expect(phoneOverflow).toBeLessThanOrEqual(0);
+  await expectAlignedSheet(page, true);
+  await page.reload();
+  await expect(page.locator('.contracts-sheet-head-cell')).toHaveCount(11);
+  await page.getByRole('button', {name:'Actions de la ligne',exact:true}).last().click();
+  await page.screenshot({path:'/tmp/contract-sheet-row-menu.png',fullPage:true});
+  await page.getByRole('menuitem', {name:'Masquer le téléphone',exact:true}).click();
+  await expect(page.locator('.contracts-sheet-head-cell')).toHaveCount(10);
+  await expect(page.getByRole('textbox', {name:'Téléphone',exact:true})).toHaveCount(0);
+  await expectAlignedSheet(page, true);
 
   const startCell = page.locator('.contracts-sheet-row-new [data-sheet-col="0"]').first();
   await startCell.focus();
@@ -75,7 +102,7 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   });
   await expect(startCell).toHaveValue('12345678901');
   await expect(startCell).toHaveAttribute('aria-invalid', 'true');
-  await page.getByRole('button', {name:'Enregistrer (2)', exact:true}).click();
+  await page.getByRole('button', {name:'Enregistrer les lignes collées (2)', exact:true}).click();
   await expect(startCell).toBeFocused();
   await page.screenshot({path:'/tmp/contract-sheet-paste-errors.png',fullPage:true});
   await startCell.press('ControlOrMeta+z');
@@ -94,6 +121,9 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   const defaultHeights = await page.locator('.sheet-default-field').evaluateAll(items => items.map(item => item.getBoundingClientRect().height));
   expect(Math.max(...defaultHeights) - Math.min(...defaultHeights)).toBeLessThan(1);
   await page.screenshot({path:'/tmp/contract-sheet-defaults-aligned.png',fullPage:true});
+
+  await page.getByRole('button', {name:'Actions de la ligne',exact:true}).first().click();
+  await page.getByRole('menuitem', {name:'Afficher le téléphone',exact:true}).click();
 
   for (const zoom of ['75', '100', '125']) {
     await page.getByRole('combobox', {name:'Zoom du tableur', exact:true}).selectOption(zoom);
@@ -131,6 +161,10 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   await expect(activeCell).toBeFocused();
   await expect(page.locator('.contracts-sheet-fullscreen')).toBeVisible();
   await expectAlignedSheet(page, true);
+  await page.getByRole('button', {name:'Actions de la ligne',exact:true}).last().click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(page.getByRole('menuitem', {name:'Ajouter un commentaire',exact:true})).toBeVisible();
+  await page.getByRole('menu').press('Escape');
   expect(await page.locator('.contracts-sheet-header').evaluate(el => (el as HTMLElement).style.gridTemplateColumns)).toBe(widths);
   await expect(page.locator('.defaults-input-mini')).toHaveValue('6');
   await expect(page.getByPlaceholder('Adresse par défaut')).toHaveValue('Delmas');

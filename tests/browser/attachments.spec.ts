@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('adds files, links and paths from the contract card and allows reader downloads', async ({page,context}) => {
   let role = 'agent';
-  let entries: Record<string, any>[] = [];
+  let entries: Record<string, any>[] = [{id:'legacy-file',kind:'file',name:'ancienne.pdf',content:'SGVsbG8=',size:5,createdAt:'2026-09-01'}];
   await context.grantPermissions(['clipboard-read','clipboard-write']);
   await page.addInitScript(() => {
     localStorage.setItem('contribution_auth',JSON.stringify({id:'attachment-test-user',username:'agent',name:'Test',workspaceId:'workspace_default',role:'agent',taskSessionToken:'test-token'}));
@@ -25,16 +25,33 @@ test('adds files, links and paths from the contract card and allows reader downl
   await page.getByRole('button',{name:'Pièces jointes',exact:true}).first().click();
   const dialog = page.getByRole('dialog',{name:'Pièces jointes'});
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Nom',{exact:true})).toHaveCount(0);
+  const legacyDownloadPromise = page.waitForEvent('download');
+  await dialog.getByRole('button',{name:'Télécharger 123456789.pdf'}).click();
+  expect((await legacyDownloadPromise).suggestedFilename()).toBe('123456789.pdf');
   await dialog.getByLabel('Fichier',{exact:true}).setInputFiles({name:'preuve.txt',mimeType:'text/plain',buffer:Buffer.from('Document de test')});
   await dialog.getByRole('button',{name:'Ajouter',exact:true}).click();
-  await expect(dialog.getByRole('button',{name:'Télécharger preuve.txt'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-1.pdf'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-2.txt'})).toBeVisible();
+  expect(entries[0].name).toBe('123456789.txt');
   const downloadPromise = page.waitForEvent('download');
-  await dialog.getByRole('button',{name:'Télécharger preuve.txt'}).click();
+  await dialog.getByRole('button',{name:'Télécharger 123456789-2.txt'}).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe('preuve.txt');
+  expect(download.suggestedFilename()).toBe('123456789-2.txt');
   const stream = await download.createReadStream();
   const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(chunk);
   expect(Buffer.concat(chunks).toString()).toBe('Document de test');
+  await dialog.getByLabel('Fichier',{exact:true}).setInputFiles({name:'deuxieme.txt',mimeType:'text/plain',buffer:Buffer.from('Autre document')});
+  await dialog.getByRole('button',{name:'Ajouter',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-2.txt'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-3.txt'})).toBeVisible();
+  const secondDownloadPromise = page.waitForEvent('download');
+  await dialog.getByRole('button',{name:'Télécharger 123456789-3.txt'}).click();
+  const secondDownload = await secondDownloadPromise;
+  expect(secondDownload.suggestedFilename()).toBe('123456789-3.txt');
+  const secondStream = await secondDownload.createReadStream();
+  const secondChunks: Buffer[] = []; for await (const chunk of secondStream!) secondChunks.push(chunk);
+  expect(Buffer.concat(secondChunks).toString()).toBe('Autre document');
   await dialog.getByRole('button',{name:'Lien',exact:true}).click();
   await dialog.getByLabel('Nom',{exact:true}).fill('Document Drive');
   await dialog.getByLabel('Lien du document').fill('https://example.com/document');
@@ -59,7 +76,8 @@ test('adds files, links and paths from the contract card and allows reader downl
   role = 'reader';
   await page.reload();
   await page.getByRole('button',{name:'Pièces jointes',exact:true}).first().click();
-  await expect(dialog.getByRole('button',{name:'Télécharger preuve.txt'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-2.txt'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Télécharger 123456789-3.txt'})).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Ajouter',exact:true})).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:/Supprimer/})).toHaveCount(0);
 });

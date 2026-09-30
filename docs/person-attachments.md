@@ -2,7 +2,7 @@
 
 Le bouton trombone au bas des cartes contrat ouvre les pièces jointes. Elles sont communes aux contrats d’une même personne (identification/NIF), dans le même espace de travail.
 
-- Fichier : import puis téléchargement, maximum 10 Mio, fichiers vides refusés.
+- Fichier : nom automatique à partir du NIF de la personne, avec conservation de l’extension. Un seul fichier porte le nom `123-456-789-0.pdf` ; plusieurs fichiers sont numérotés dans l’ordre d’ajout (`123-456-789-0-1.pdf`, `123-456-789-0-2.jpg`, etc.), à l’affichage et au téléchargement, y compris pour les fichiers existants. Les liens et chemins ne comptent pas dans la numérotation. Maximum 10 Mio, fichiers vides refusés. Les fichiers restent distincts grâce à leur UUID.
 - Lien : URL HTTP ou HTTPS, ouverture dans un nouvel onglet.
 - Chemin externe : référence textuelle (disque, partage réseau, stockage externe), copiable ; aucun fichier externe n’est transféré ni supprimé.
 

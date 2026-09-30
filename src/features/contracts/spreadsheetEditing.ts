@@ -7,7 +7,7 @@ export type SpreadsheetErrors = Partial<Record<SpreadsheetFieldKey, string>>;
 
 export const SPREADSHEET_FIELDS: SpreadsheetFieldKey[] = [
   "nif", "firstName", "lastName", "gender", "ninu", "address", "position",
-  "assignment", "salaryNumber", "durationMonths"
+  "assignment", "salaryNumber", "durationMonths", "phone"
 ];
 
 export function normalizePastedValue(field: SpreadsheetFieldKey, value: string): string {
@@ -74,7 +74,7 @@ export function parseSpreadsheetClipboard(text: string): string[][] {
   return rows;
 }
 
-export type SpreadsheetChange = { rowKey: string; before: SpreadsheetDraft | null; after: SpreadsheetDraft | null };
+export type SpreadsheetChange = { rowKey: string; before: SpreadsheetDraft | null; after: SpreadsheetDraft | null; wasPasted?: boolean; isPasted?: boolean };
 export type SpreadsheetEdit = { changes: SpreadsheetChange[]; focus: { rowKey: string; columnIndex: number }; group?: string };
 
 export class SpreadsheetHistory {
@@ -85,7 +85,7 @@ export class SpreadsheetHistory {
     if (edit.group && previous?.group === edit.group && this.future.length === 0) {
       const changes = new Map(previous.changes.map(change => [change.rowKey, change]));
       for (const change of edit.changes) {
-        changes.set(change.rowKey, { ...change, before: changes.has(change.rowKey) ? changes.get(change.rowKey)!.before : change.before });
+        changes.set(change.rowKey, { ...change, wasPasted: changes.has(change.rowKey) ? changes.get(change.rowKey)!.wasPasted : change.wasPasted, before: changes.has(change.rowKey) ? changes.get(change.rowKey)!.before : change.before });
       }
       previous.changes = [...changes.values()];
     } else this.past = [...this.past.slice(-49), edit];

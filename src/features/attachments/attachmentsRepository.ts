@@ -12,6 +12,24 @@ export type AttachmentDraft = Pick<Attachment, 'id' | 'name' | 'kind' | 'locatio
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 export const remoteAttachments = (import.meta.env.VITE_DATA_PROVIDER ?? 'local') === 'supabase';
 
+export function attachmentFileName(nif: Contract['nif'], originalName: string, number?: number): string {
+  const personNif = nif?.trim();
+  if (!personNif) throw new Error('Le NIF de la personne est requis pour nommer le fichier.');
+  const basename = originalName.trim().split(/[\\/]/).pop() ?? '';
+  const dot = basename.lastIndexOf('.');
+  const extension = dot > 0 && dot < basename.length - 1 ? basename.slice(dot) : '';
+  return `${personNif}${number === undefined ? '' : `-${number}`}${extension}`;
+}
+
+type AttachmentResult = Attachment[] | {name: string; content: string};
+function nameAttachmentFiles(contract: Contract, items: Attachment[]): Attachment[] {
+  const files = items.filter(item => item.kind === 'file').sort((left, right) =>
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
+  const numbers = new Map(files.map((item, index) => [item.id, index + 1]));
+  return items.map(item => item.kind === 'file'
+    ? {...item, name: attachmentFileName(contract.nif, item.name, files.length > 1 ? numbers.get(item.id) : undefined)} : item);
+}
+
 export function validDocumentLink(value: string): boolean {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !!url.hostname; }
   catch { return false; }
@@ -36,9 +54,12 @@ export function readAttachmentFile(file: File): Promise<string> {
 }
 
 type StoredAttachment = Attachment & { content?: string };
-export async function manageAttachments(user: AuthUser, contract: Contract, action: 'list' | 'add' | 'delete' | 'get', document: Partial<AttachmentDraft> = {}): Promise<Attachment[] | {name: string; content: string}> {
+export async function manageAttachments(user: AuthUser, contract: Contract, action: 'list' | 'add' | 'delete' | 'get', document: Partial<AttachmentDraft> = {}): Promise<AttachmentResult> {
   if (['add', 'delete'].includes(action) && user.role === 'reader') throw new Error('Modification non autorisée.');
-  if (action === 'add') validateAttachment(document as AttachmentDraft);
+  if (action === 'add') {
+    if (document.kind === 'file') document = {...document, name: attachmentFileName(contract.nif, document.name ?? '')};
+    validateAttachment(document as AttachmentDraft);
+  }
   if (remoteAttachments) {
     if (!navigator.onLine) throw new Error('Connectez-vous pour accéder aux pièces jointes.');
     if (!user.taskSessionToken) throw new Error('Reconnectez-vous pour accéder aux pièces jointes.');
@@ -46,7 +67,14 @@ export async function manageAttachments(user: AuthUser, contract: Contract, acti
       p_session_token: user.taskSessionToken, p_contract_id: contract.id, p_action: action, p_document: document as Json
     });
     if (error) throw new Error(error.message);
-    return data as unknown as Attachment[] | {name: string; content: string};
+    if (action === 'get') {
+      const file = data as unknown as {name: string; content: string};
+      const items = await manageAttachments(user, contract, 'list') as Attachment[];
+      const item = items.find(item => item.id === document.id);
+      if (!item) throw new Error('Fichier introuvable.');
+      return {...file, name: item.name};
+    }
+    return nameAttachmentFiles(contract, data as unknown as Attachment[]);
   }
   const key = `person-attachments:${contract.workspaceId}:${contract.applicantId || contract.nif || contract.id}`;
   if (action === 'add' || action === 'delete') {
@@ -58,12 +86,13 @@ export async function manageAttachments(user: AuthUser, contract: Contract, acti
     });
   }
   const items = await get<StoredAttachment[]>(key) ?? [];
+  const listed = nameAttachmentFiles(contract, items.map(({content: _content, ...item}) => item));
   if (action === 'get') {
     const item = items.find(item => item.id === document.id);
     if (!item?.content) throw new Error('Fichier introuvable.');
-    return {name: item.name, content: item.content};
+    return {name: listed.find(namedItem => namedItem.id === item.id)!.name, content: item.content};
   }
-  return items.map(({content: _content, ...item}) => item);
+  return listed;
 }
 
 export function downloadAttachment(name: string, content: string) {

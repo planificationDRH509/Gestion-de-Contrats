@@ -13,6 +13,7 @@ export type ComparableSpreadsheetDraft = {
   salaryText: string;
   comment: string;
   durationMonths: string;
+  phone?: string;
 };
 
 export function areSpreadsheetDraftsEqual(
@@ -25,6 +26,7 @@ export function areSpreadsheetDraftsEqual(
     a.lastName === b.lastName &&
     a.gender === b.gender &&
     a.ninu === b.ninu &&
+    (a.phone ?? "") === (b.phone ?? "") &&
     a.address === b.address &&
     a.position === b.position &&
     a.assignment === b.assignment &&
