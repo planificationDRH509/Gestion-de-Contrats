@@ -27,6 +27,7 @@ import {
   type TaskContractSuggestion,
   useCreatePrivateTask,
   useDeletePrivateTask,
+  useEditPrivateTask,
   usePrivateTasks,
   useSetTaskStatus,
   useTaskContractSuggestions,
@@ -67,6 +68,46 @@ export function TasksPage() {
   const createTask = useCreatePrivateTask();
   const setStatus = useSetTaskStatus();
   const deleteTask = useDeletePrivateTask();
+  const editTask = useEditPrivateTask();
+  const [editingTask, setEditingTask] = useState<PersonalTask | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [search, setSearch] = useState("");
+  const [noteSearch, setNoteSearch] = useState("");
+  const [newNote, setNewNote] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  function closeEditor() {
+    if (editTask.isPending || createTask.isPending) return;
+    const changed = editContent !== (editingTask?.content ?? "") || editNotes !== (editingTask?.notes ?? "");
+    if (changed && !window.confirm("Abandonner les modifications ?")) return;
+    dialogRef.current?.close();
+    setEditingTask(null);
+  }
+
+  function openEditor(task: PersonalTask) {
+    setActionError(null);
+    setNewNote(false);
+    setEditingTask(task);
+    setEditContent(task.content);
+    setEditNotes(task.notes ?? "");
+    dialogRef.current?.showModal();
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if ((!editingTask && !newNote) || !editContent.trim() || editTask.isPending || createTask.isPending) return;
+    setActionError(null);
+    try {
+      if (newNote) {
+        await createTask.mutateAsync({ content: editContent.trim(), notes: editNotes, kind: "note", assigneeId: null });
+      } else if (editingTask) {
+        await editTask.mutateAsync({ taskId: editingTask.id, content: editContent.trim(), notes: editingTask.kind === "note" ? editNotes : "" });
+      }
+      dialogRef.current?.close();
+      setEditingTask(null);
+    } catch (error) { setActionError(getTaskErrorMessage(error)); }
+  }
 
   const [draft, setDraft] = useState("");
   const [recipient, setRecipient] = useState<TaskRecipient | null>(null);
@@ -94,17 +135,20 @@ export function TasksPage() {
     activeContractTag?.query ?? null
   );
   const contractSuggestions = contractSuggestionsQuery.data ?? [];
-  const tasks = tasksQuery.data ?? [];
+  const allItems = tasksQuery.data ?? [];
+  const tasks = allItems.filter(task => task.kind !== "note");
+  const notes = allItems.filter(task => task.kind === "note" && `${task.content} ${task.notes ?? ""}`.toLocaleLowerCase().includes(noteSearch.toLocaleLowerCase().trim()));
   const todoCount = tasks.filter((task) => task.status === "todo").length;
   const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
   const completedCount = tasks.filter((task) => task.status === "done").length;
   const visibleTasks = tasks.filter((task) => {
-    return filter === "all" || task.status === filter;
+    return (view === "kanban" || filter === "all" || task.status === filter)
+      && `${task.content} ${task.notes ?? ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim());
   });
 
   const sessionUnavailable = !user?.taskSessionToken;
   const queryError = tasksQuery.error ?? recipientsQuery.error;
-  const isBusy = createTask.isPending || setStatus.isPending || deleteTask.isPending;
+  const isBusy = createTask.isPending || setStatus.isPending || deleteTask.isPending || editTask.isPending;
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -294,8 +338,8 @@ export function TasksPage() {
     void changeTaskStatus(task.id, status);
   }
 
-  async function removeTask(taskId: string) {
-    if (!window.confirm("Supprimer cette tâche ?")) return;
+  async function removeTask(taskId: string, isNote = false) {
+    if (!window.confirm(isNote ? "Supprimer cette note ?" : "Supprimer cette tâche ?")) return;
     setActionError(null);
     try {
       await deleteTask.mutateAsync(taskId);
@@ -309,11 +353,8 @@ export function TasksPage() {
       <header className="section-header page-header tasks-page-header">
         <div>
           <span className="page-eyebrow">Espace personnel</span>
-          <h1 className="section-title">Mes tâches</h1>
-          <div className="section-subtitle">
-            Votre liste est confidentielle et disponible hors ligne. Utilisez{" "}
-            <strong>@</strong> pour transmettre et <strong>#</strong> pour lier un contrat.
-          </div>
+          <h1 className="section-title">Tâches et notes</h1>
+
         </div>
         <div className="tasks-header-actions">
           <span className={`tasks-connectivity${isOnline ? " is-online" : " is-offline"}`}>
@@ -395,28 +436,24 @@ export function TasksPage() {
         </div>
       ) : null}
 
-      <section className={`card task-composer-card${sessionUnavailable ? " is-disabled" : ""}`}>
+      <nav className="tasks-jump-links" aria-label="Accès rapide">
+        <a href="#task-section">Tâches <span>{tasks.length}</span></a>
+        <a href="#notes-heading">Notes <span>{allItems.filter(item => item.kind === "note").length}</span></a>
+      </nav>
+      <div className="tasks-and-notes">
+      <div className="tasks-workspace" id="task-section">
+      <details open className={`card task-composer-card${sessionUnavailable ? " is-disabled" : ""}`} >
+        <summary className="task-composer-toggle"><span className="material-symbols-rounded" aria-hidden="true">add</span>Nouvelle tâche<span className="material-symbols-rounded" aria-hidden="true">expand_more</span></summary>
         <form onSubmit={handleSubmit}>
-          <div className="task-composer-heading">
-            <div>
-              <h2>Nouvelle tâche</h2>
-              <p>Sans destinataire, elle reste visible uniquement par vous.</p>
-            </div>
-            <span className="task-privacy-badge">
-              <span className="material-symbols-rounded">lock</span>
-              Privée
-            </span>
-          </div>
-
           <div className="task-composer-input-wrap">
             <textarea
               ref={textareaRef}
               className="textarea task-composer-input"
               value={draft}
-              rows={3}
+              rows={2}
               maxLength={1000}
               disabled={sessionUnavailable}
-              placeholder="Ex. Vérifier le dossier #NIF puis prévenir @utilisateur"
+              placeholder="Ajouter une tâche…"
               aria-label="Description de la tâche"
               aria-expanded={Boolean(
                 (activeMention && suggestions.length) ||
@@ -588,18 +625,19 @@ export function TasksPage() {
             </button>
           </div>
         </form>
-      </section>
+      </details>
 
       <section className="tasks-list-section">
         <div className="tasks-list-heading">
           <div>
-            <h2>Ma liste</h2>
+            <h2>Tâches</h2>
             <span>
               {todoCount} à faire · {inProgressCount} en cours · {completedCount} terminée
               {completedCount === 1 ? "" : "s"}
             </span>
           </div>
           <div className="tasks-list-controls">
+            <input className="input tasks-search" type="search" aria-label="Rechercher les tâches" placeholder="Rechercher…" value={search} onChange={event => setSearch(event.target.value)} />
             <div className="task-view-switch" aria-label="Mode d’affichage">
               <button
                 type="button"
@@ -632,6 +670,7 @@ export function TasksPage() {
                     key={value}
                     type="button"
                     className={filter === value ? "is-active" : ""}
+                    aria-pressed={filter === value}
                     onClick={() => setFilter(value)}
                   >
                     {label}
@@ -653,17 +692,13 @@ export function TasksPage() {
               {filter === "done" ? "task_alt" : "checklist"}
             </span>
             <h3>
-              {filter === "done"
+              {search.trim() ? "Aucun résultat" : filter === "done"
                 ? "Aucune tâche terminée"
                 : filter === "all"
                   ? "Votre liste est à jour"
                   : "Aucune tâche dans cet état"}
             </h3>
-            <p>
-              {filter === "done"
-                ? "Les tâches cochées apparaîtront ici."
-                : "Ajoutez une tâche personnelle ou transmettez-en une avec @."}
-            </p>
+
           </div>
         ) : view === "list" ? (
           <div className="tasks-list">
@@ -690,6 +725,7 @@ export function TasksPage() {
                   </button>
                   <div className="task-row-content">
                     <p><TaskText content={task.content} /></p>
+
                     <div className="task-row-meta">
                       <TaskStatusSelect
                         task={task}
@@ -716,6 +752,9 @@ export function TasksPage() {
                       <span>{taskDateFormatter.format(new Date(task.createdAt))}</span>
                     </div>
                   </div>
+                  <button type="button" className="task-edit-button" aria-label="Modifier la tâche" disabled={isBusy} onClick={() => openEditor(task)}>
+                    <span className="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                  </button>
                   <button
                     type="button"
                     className="task-delete-button"
@@ -732,7 +771,7 @@ export function TasksPage() {
         ) : (
           <div className="tasks-kanban" aria-label="Tableau Kanban">
             {TASK_COLUMNS.map((column) => {
-              const columnTasks = tasks.filter((task) => task.status === column.status);
+              const columnTasks = visibleTasks.filter((task) => task.status === column.status);
               const isDropTarget = dragTargetStatus === column.status;
               return (
                 <section
@@ -778,6 +817,9 @@ export function TasksPage() {
                                 disabled={isBusy}
                                 onChange={(status) => void changeTaskStatus(task.id, status)}
                               />
+                              <button type="button" className="task-edit-button" aria-label="Modifier la tâche" disabled={isBusy} onClick={() => openEditor(task)}>
+                                <span className="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                              </button>
                               <button
                                 type="button"
                                 className="task-delete-button"
@@ -789,6 +831,7 @@ export function TasksPage() {
                               </button>
                             </div>
                             <p><TaskText content={task.content} /></p>
+
                             <div className="kanban-card-meta">
                               {task.id.startsWith("offline-task-") ? (
                                 <span className="task-pending-sync">
@@ -820,6 +863,34 @@ export function TasksPage() {
           </div>
         )}
       </section>
+      </div>
+      <section className="notes-section" aria-labelledby="notes-heading">
+        <h2 id="notes-heading" tabIndex={-1}>Notes <span className="notes-count">{allItems.filter(item => item.kind === "note").length}</span></h2>
+        <div className="notes-toolbar">
+          <input className="input" type="search" aria-label="Rechercher les notes" placeholder="Rechercher…" value={noteSearch} onChange={event => setNoteSearch(event.target.value)} />
+          <button className="btn btn-primary" disabled={sessionUnavailable || isBusy} onClick={() => { setNewNote(true); setEditingTask(null); setEditContent(""); setEditNotes(""); setActionError(null); dialogRef.current?.showModal(); }}>Nouvelle note</button>
+        </div>
+        {tasksQuery.isLoading ? <p role="status">Chargement…</p> : notes.length === 0 ? <div className="tasks-empty-state"><h3>{noteSearch.trim() ? "Aucun résultat" : "Aucune note"}</h3></div> : <div className="notes-grid">{notes.map(note => <article className="card note-card" key={note.id}>
+          <h3><button type="button" className="note-open-button" disabled={isBusy} onClick={() => openEditor(note)}>{note.content}</button></h3><p>{note.notes}</p>
+          <div className="notes-toolbar"><time>{taskDateFormatter.format(new Date(note.updatedAt))}</time>
+            <button className="task-edit-button" aria-label="Modifier la note" disabled={isBusy} onClick={() => openEditor(note)}><span className="material-symbols-rounded" aria-hidden="true">edit</span></button>
+            <button className="task-delete-button" aria-label="Supprimer la note" disabled={isBusy} onClick={() => void removeTask(note.id, true)}><span className="material-symbols-rounded" aria-hidden="true">delete</span></button>
+          </div>
+        </article>)}</div>}
+      </section>
+      </div>
+      <dialog ref={dialogRef} className="task-editor-dialog" aria-labelledby="task-editor-title" onCancel={event => { event.preventDefault(); closeEditor(); }}>
+        <form onSubmit={saveEdit} className="task-editor-form" onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); event.currentTarget.requestSubmit(); } }}>
+          <h2 id="task-editor-title">{newNote ? "Nouvelle note" : editingTask?.kind === "note" ? "Modifier la note" : "Modifier la tâche"}</h2>
+          <label>{newNote || editingTask?.kind === "note" ? "Titre" : "Tâche"}<textarea autoFocus className="textarea" aria-label={newNote || editingTask?.kind === "note" ? "Titre" : "Tâche"} value={editContent} maxLength={1000} required rows={3} disabled={editTask.isPending || createTask.isPending} onChange={event => setEditContent(event.target.value)} /></label>
+          {newNote || editingTask?.kind === "note" ? <label>Note<textarea className="textarea" aria-label="Notes" value={editNotes} maxLength={10000} rows={8} disabled={editTask.isPending || createTask.isPending} onChange={event => setEditNotes(event.target.value)} /></label> : null}
+          {actionError ? <p role="alert">{actionError}</p> : null}
+          <div className="task-editor-actions">
+            <button type="button" className="btn btn-outline" disabled={editTask.isPending || createTask.isPending} onClick={closeEditor}>Annuler</button>
+            <button type="submit" className="btn btn-primary" disabled={!editContent.trim() || editTask.isPending || createTask.isPending}>{editTask.isPending ? "Enregistrement…" : "Enregistrer"}</button>
+          </div>
+        </form>
+      </dialog>
     </div>
   );
 }

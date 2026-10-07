@@ -15,6 +15,7 @@ vi.mock("idb-keyval", () => ({
 
 import {
   queueOfflineTaskCreation,
+  queueOfflineTaskEdit,
   queueOfflineTaskDeletion,
   queueOfflineTaskStatus,
   readPrivateTaskOfflineState,
@@ -154,4 +155,14 @@ describe("private task offline storage", () => {
       content: "À transmettre"
     });
   });
+  it("preserves note edits while mapping a pending creation to its server ID", async () => {
+    const created = await queueOfflineTaskCreation(sessionToken, { userId: user.id, userName: user.name, username: user.username, content: "Note", notes: "Initial", kind: "note", assigneeId: null });
+    await queueOfflineTaskEdit(user.id, sessionToken, created.id, "Titre modifié", "Texte modifié");
+    const first = await claimPrivateTaskOperation(user.id, sessionToken);
+    await completePrivateTaskOfflineOperation(user.id, sessionToken, first!.id, { tempTaskId: created.id, remoteTaskId: "remote-note" });
+    const state = await readPrivateTaskOfflineState(user.id, sessionToken);
+    expect(state.tasks[0]).toMatchObject({ id: "remote-note", kind: "note", content: "Titre modifié", notes: "Texte modifié" });
+    expect(state.outbox[0]).toMatchObject({ type: "edit", taskId: "remote-note", notes: "Texte modifié" });
+  });
+
 });

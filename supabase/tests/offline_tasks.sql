@@ -27,6 +27,12 @@ begin
   begin perform public.sync_private_task(other_token,gen_random_uuid()::text,jsonb_build_object('type','status','taskId',result,'status','todo'));
     exception when others then failed:=true; assert sqlerrm='TASK_NOT_FOUND'; end;
   assert failed, 'other account cannot modify task';
+  perform public.sync_private_task(token,'edit-'||request,jsonb_build_object('type','edit','taskId',result,'content','Edited task','notes',''));
+  failed := false;
+  begin perform public.sync_private_task(other_token,'foreign-edit-'||request,jsonb_build_object('type','edit','taskId',result,'content','Forbidden','notes',''));
+    exception when others then failed:=true; assert sqlerrm='TASK_NOT_FOUND'; end;
+  assert failed, 'other account cannot edit content';
+  assert (select content from public.list_private_tasks(token) where id=result)='Edited task', 'edited content is returned';
   reset role;
   assert (select count(*) from public.private_tasks where created_by=actor)=1, 'no duplicates';
   assert (select status from public.private_tasks where id=result)='done', 'creation and status atomic';

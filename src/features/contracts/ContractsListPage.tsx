@@ -314,7 +314,7 @@ export function ContractsListPage() {
   const { data, isLoading, isFetching } = useContractsList(queryParams);
   const { data: privateTasks = [] } = usePrivateTasks();
   const privateTasksByNif = useMemo(
-    () => indexTasksByContractNif(privateTasks),
+    () => indexTasksByContractNif(privateTasks.filter(task => task.kind !== "note")),
     [privateTasks]
   );
 

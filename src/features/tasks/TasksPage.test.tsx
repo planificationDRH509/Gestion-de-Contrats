@@ -5,6 +5,7 @@ import type { PersonalTask } from "../../data/types";
 
 const createMutateAsync = vi.fn();
 const statusMutateAsync = vi.fn();
+const editMutateAsync = vi.fn();
 const activateTaskSession = vi.fn();
 let mockTasks: PersonalTask[] = [];
 let mockTaskSessionToken: string | undefined = "session-token";
@@ -56,6 +57,7 @@ vi.mock("./tasksApi", () => ({
     isPending: false,
     mutateAsync: createMutateAsync
   }),
+  useEditPrivateTask: () => ({ isPending: false, mutateAsync: editMutateAsync }),
   useSetTaskStatus: () => ({
     isPending: false,
     mutateAsync: statusMutateAsync
@@ -72,6 +74,10 @@ describe("TasksPage", () => {
   });
 
   beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+    editMutateAsync.mockReset();
+    editMutateAsync.mockResolvedValue(true);
     mockTasks = [];
     mockTaskSessionToken = "session-token";
     mockContractSuggestions = [
@@ -227,4 +233,34 @@ describe("TasksPage", () => {
       });
     });
   });
+  it("creates independent notes without a task status", async () => {
+    render(<TasksPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Nouvelle note" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Titre" }), { target: { value: "Réunion" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "Points à retenir" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(createMutateAsync).toHaveBeenCalledWith({ content: "Réunion", notes: "Points à retenir", kind: "note", assigneeId: null }));
+  });
+
+  it("keeps notes out of the task list and edits them independently", async () => {
+    mockTasks = [{ id: "note-1", kind: "note", content: "Réunion", notes: "Avant", status: "todo", completed: false, completedAt: null, createdAt: "2026-10-06T12:00:00Z", updatedAt: "2026-10-06T12:00:00Z", createdBy: "current-user", createdByName: "Admin", createdByUsername: "admin" }];
+    render(<TasksPage />);
+    expect(screen.getByRole("heading", { name: "Tâches" })).toBeInTheDocument();
+    expect(screen.getByText("Réunion")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Modifier la note" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "Après" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(editMutateAsync).toHaveBeenCalledWith({ taskId: "note-1", content: "Réunion", notes: "Après" }));
+  });
+
+  it("edits task content without showing a note field", async () => {
+    mockTasks = [{ id: "task-1", content: "Avant", status: "todo", completed: false, completedAt: null, createdAt: "2026-10-06T12:00:00Z", updatedAt: "2026-10-06T12:00:00Z", createdBy: "current-user", createdByName: "Admin", createdByUsername: "admin" }];
+    render(<TasksPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier la tâche" }));
+    expect(screen.queryByRole("textbox", { name: "Notes" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Tâche" }), { target: { value: "Après" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(editMutateAsync).toHaveBeenCalledWith({ taskId: "task-1", content: "Après", notes: "" }));
+  });
+
 });

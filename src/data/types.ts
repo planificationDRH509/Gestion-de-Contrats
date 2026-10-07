@@ -289,6 +289,8 @@ export type TaskRecipient = {
 export type TaskStatus = "todo" | "in_progress" | "done";
 
 export type PersonalTask = {
+  notes?: string;
+  kind?: "task" | "note";
   id: string;
   content: string;
   status: TaskStatus;

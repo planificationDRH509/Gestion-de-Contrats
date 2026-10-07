@@ -10,10 +10,20 @@ export type PrivateTaskOfflineOperation = { sent?: boolean } & (
   | {
       id: string;
       type: "create";
+      kind?: "task" | "note";
+      notes?: string;
       tempTaskId: string | null;
       content: string;
       assigneeId: string | null;
       status: TaskStatus;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: "edit";
+      taskId: string;
+      content: string;
+      notes: string;
       createdAt: string;
     }
   | {
@@ -46,6 +56,8 @@ type EncryptedTaskEnvelope = {
 };
 
 type OfflineCreateInput = {
+  kind?: "task" | "note";
+  notes?: string;
   userId: string;
   userName: string;
   username: string;
@@ -221,6 +233,8 @@ export async function queueOfflineTaskCreation(
     const operation: PrivateTaskOfflineOperation = {
       id: createOfflineId("task-operation"),
       type: "create",
+      kind: input.kind ?? "task",
+      notes: input.notes ?? "",
       tempTaskId,
       content: input.content,
       assigneeId: input.assigneeId,
@@ -233,6 +247,8 @@ export async function queueOfflineTaskCreation(
       state.tasks.unshift({
         id: tempTaskId,
         content: input.content,
+        kind: input.kind ?? "task",
+        notes: input.notes ?? "",
         status: "todo",
         completed: false,
         completedAt: null,
@@ -371,5 +387,21 @@ export async function clearPrivateTaskOfflineData(userId: string, sessionToken?:
   await transact(userId, sessionToken, (state) => {
     state.recipients = [];
     if (!state.outbox.length) state.tasks = [];
+  });
+}
+
+export async function queueOfflineTaskEdit(
+  userId: string, sessionToken: string, taskId: string, content: string, notes: string
+) {
+  if (!content.trim() || content.trim().length > 1000 || notes.length > 10000) {
+    throw new Error("La tâche ou les notes dépassent la longueur autorisée.");
+  }
+  await transact(userId, sessionToken, state => {
+    const timestamp = new Date().toISOString();
+    state.tasks = state.tasks.map(task => task.id === taskId
+      ? { ...task, content: content.trim(), notes, updatedAt: timestamp } : task);
+    state.outbox = state.outbox.filter(op => op.sent || !(op.type === "edit" && op.taskId === taskId));
+    state.outbox.push({ id: createOfflineId("task-operation"), type: "edit", taskId,
+      content: content.trim(), notes, createdAt: timestamp });
   });
 }
