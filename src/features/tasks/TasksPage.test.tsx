@@ -236,21 +236,22 @@ describe("TasksPage", () => {
   it("creates independent notes without a task status", async () => {
     render(<TasksPage />);
     fireEvent.click(screen.getByRole("button", { name: "Nouvelle note" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Titre" }), { target: { value: "Réunion" } });
+    expect(screen.queryByRole("textbox", { name: "Titre" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "Points à retenir" } });
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
-    await waitFor(() => expect(createMutateAsync).toHaveBeenCalledWith({ content: "Réunion", notes: "Points à retenir", kind: "note", assigneeId: null }));
+    await waitFor(() => expect(createMutateAsync).toHaveBeenCalledWith({ content: "Points à retenir", notes: "Points à retenir", kind: "note", assigneeId: null }));
   });
 
   it("keeps notes out of the task list and edits them independently", async () => {
     mockTasks = [{ id: "note-1", kind: "note", content: "Réunion", notes: "Avant", status: "todo", completed: false, completedAt: null, createdAt: "2026-10-06T12:00:00Z", updatedAt: "2026-10-06T12:00:00Z", createdBy: "current-user", createdByName: "Admin", createdByUsername: "admin" }];
     render(<TasksPage />);
     expect(screen.getByRole("heading", { name: "Tâches" })).toBeInTheDocument();
-    expect(screen.getByText("Réunion")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Réunion.*Avant/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Modifier la note" }));
+    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("Réunion\n\nAvant");
     fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "Après" } });
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
-    await waitFor(() => expect(editMutateAsync).toHaveBeenCalledWith({ taskId: "note-1", content: "Réunion", notes: "Après" }));
+    await waitFor(() => expect(editMutateAsync).toHaveBeenCalledWith({ taskId: "note-1", content: "Après", notes: "Après" }));
   });
 
   it("edits task content without showing a note field", async () => {

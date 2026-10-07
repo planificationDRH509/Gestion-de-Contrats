@@ -17,13 +17,13 @@ test('tasks and independent notes remain usable on desktop and mobile', async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('http://127.0.0.1:5179/app/taches');
   await expect(page.getByText('Préparer les contrats', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Réunion du lundi' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Réunion du lundi/ })).toBeVisible();
   await page.screenshot({ path: '/tmp/tasks-notes-desktop.png', fullPage: true });
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     await expect(page.getByRole('link', { name: /Notes/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.getByRole('button', { name: 'Réunion du lundi' }).click();
+    await page.getByRole('button', { name: /^Réunion du lundi/ }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Enregistrer', exact: true })).toBeVisible();
     await page.screenshot({ path: `/tmp/tasks-notes-editor-${width}.png` });

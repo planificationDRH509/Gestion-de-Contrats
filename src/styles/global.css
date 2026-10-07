@@ -10430,3 +10430,4 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .task-composer-toggle > :last-child { transition: none; }
 }
+.note-body-button { white-space: pre-wrap; font-size: 14px; font-weight: 400; line-height: 1.65; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }

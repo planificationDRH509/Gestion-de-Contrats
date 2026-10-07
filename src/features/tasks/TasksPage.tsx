@@ -60,6 +60,11 @@ const taskDateFormatter = new Intl.DateTimeFormat("fr-HT", {
   minute: "2-digit"
 });
 
+function noteText(note: PersonalTask) {
+  if (!note.notes) return note.content;
+  return note.notes.startsWith(note.content) ? note.notes : `${note.content}\n\n${note.notes}`;
+}
+
 export function TasksPage() {
   const { user, activateTaskSession } = useAuth();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -77,9 +82,14 @@ export function TasksPage() {
   const [newNote, setNewNote] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
+  const isNoteEditor = newNote || editingTask?.kind === "note";
+  const editorText = isNoteEditor ? editNotes : editContent;
+
   function closeEditor() {
     if (editTask.isPending || createTask.isPending) return;
-    const changed = editContent !== (editingTask?.content ?? "") || editNotes !== (editingTask?.notes ?? "");
+    const changed = isNoteEditor
+      ? editNotes !== (editingTask ? noteText(editingTask) : "")
+      : editContent !== (editingTask?.content ?? "");
     if (changed && !window.confirm("Abandonner les modifications ?")) return;
     dialogRef.current?.close();
     setEditingTask(null);
@@ -90,19 +100,21 @@ export function TasksPage() {
     setNewNote(false);
     setEditingTask(task);
     setEditContent(task.content);
-    setEditNotes(task.notes ?? "");
+    setEditNotes(task.kind === "note" ? noteText(task) : "");
     dialogRef.current?.showModal();
   }
 
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
-    if ((!editingTask && !newNote) || !editContent.trim() || editTask.isPending || createTask.isPending) return;
+    if ((!editingTask && !newNote) || !editorText.trim() || editTask.isPending || createTask.isPending) return;
     setActionError(null);
+    const text = editorText.trim();
+    const content = isNoteEditor ? text.split("\n")[0].slice(0, 1000) : text;
     try {
       if (newNote) {
-        await createTask.mutateAsync({ content: editContent.trim(), notes: editNotes, kind: "note", assigneeId: null });
+        await createTask.mutateAsync({ content, notes: text, kind: "note", assigneeId: null });
       } else if (editingTask) {
-        await editTask.mutateAsync({ taskId: editingTask.id, content: editContent.trim(), notes: editingTask.kind === "note" ? editNotes : "" });
+        await editTask.mutateAsync({ taskId: editingTask.id, content, notes: isNoteEditor ? text : "" });
       }
       dialogRef.current?.close();
       setEditingTask(null);
@@ -871,7 +883,7 @@ export function TasksPage() {
           <button className="btn btn-primary" disabled={sessionUnavailable || isBusy} onClick={() => { setNewNote(true); setEditingTask(null); setEditContent(""); setEditNotes(""); setActionError(null); dialogRef.current?.showModal(); }}>Nouvelle note</button>
         </div>
         {tasksQuery.isLoading ? <p role="status">Chargement…</p> : notes.length === 0 ? <div className="tasks-empty-state"><h3>{noteSearch.trim() ? "Aucun résultat" : "Aucune note"}</h3></div> : <div className="notes-grid">{notes.map(note => <article className="card note-card" key={note.id}>
-          <h3><button type="button" className="note-open-button" disabled={isBusy} onClick={() => openEditor(note)}>{note.content}</button></h3><p>{note.notes}</p>
+          <button type="button" className="note-open-button note-body-button" disabled={isBusy} onClick={() => openEditor(note)}>{noteText(note)}</button>
           <div className="notes-toolbar"><time>{taskDateFormatter.format(new Date(note.updatedAt))}</time>
             <button className="task-edit-button" aria-label="Modifier la note" disabled={isBusy} onClick={() => openEditor(note)}><span className="material-symbols-rounded" aria-hidden="true">edit</span></button>
             <button className="task-delete-button" aria-label="Supprimer la note" disabled={isBusy} onClick={() => void removeTask(note.id, true)}><span className="material-symbols-rounded" aria-hidden="true">delete</span></button>
@@ -882,12 +894,11 @@ export function TasksPage() {
       <dialog ref={dialogRef} className="task-editor-dialog" aria-labelledby="task-editor-title" onCancel={event => { event.preventDefault(); closeEditor(); }}>
         <form onSubmit={saveEdit} className="task-editor-form" onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); event.currentTarget.requestSubmit(); } }}>
           <h2 id="task-editor-title">{newNote ? "Nouvelle note" : editingTask?.kind === "note" ? "Modifier la note" : "Modifier la tâche"}</h2>
-          <label>{newNote || editingTask?.kind === "note" ? "Titre" : "Tâche"}<textarea autoFocus className="textarea" aria-label={newNote || editingTask?.kind === "note" ? "Titre" : "Tâche"} value={editContent} maxLength={1000} required rows={3} disabled={editTask.isPending || createTask.isPending} onChange={event => setEditContent(event.target.value)} /></label>
-          {newNote || editingTask?.kind === "note" ? <label>Note<textarea className="textarea" aria-label="Notes" value={editNotes} maxLength={10000} rows={8} disabled={editTask.isPending || createTask.isPending} onChange={event => setEditNotes(event.target.value)} /></label> : null}
+          <textarea autoFocus className="textarea" aria-label={isNoteEditor ? "Notes" : "Tâche"} placeholder={isNoteEditor ? "Écrire une note…" : "Tâche"} value={editorText} maxLength={isNoteEditor ? 10000 : 1000} required rows={isNoteEditor ? 10 : 3} disabled={editTask.isPending || createTask.isPending} onChange={event => isNoteEditor ? setEditNotes(event.target.value) : setEditContent(event.target.value)} />
           {actionError ? <p role="alert">{actionError}</p> : null}
           <div className="task-editor-actions">
             <button type="button" className="btn btn-outline" disabled={editTask.isPending || createTask.isPending} onClick={closeEditor}>Annuler</button>
-            <button type="submit" className="btn btn-primary" disabled={!editContent.trim() || editTask.isPending || createTask.isPending}>{editTask.isPending ? "Enregistrement…" : "Enregistrer"}</button>
+            <button type="submit" className="btn btn-primary" disabled={!editorText.trim() || editTask.isPending || createTask.isPending}>{editTask.isPending ? "Enregistrement…" : "Enregistrer"}</button>
           </div>
         </form>
       </dialog>
