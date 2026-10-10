@@ -28,6 +28,7 @@ begin
 
   -- Use the actual API role: the RPC validates the opaque application session.
   set local role anon;
+  perform set_config('request.headers',jsonb_build_object('x-app-session',admin_token)::text,true);
   a := public.mutate_contract_list(admin_token,w,'{"action":"create","durationMonths":6}');
   b := public.mutate_contract_list(agent_token,w,'{"action":"create","durationMonths":6,"visaNumber":"V-TEST"}');
   perform public.mutate_contract_list(admin_token,w,jsonb_build_object('action','assign','listId',a,'contractIds',jsonb_build_array(w||'-c1',w||'-c2')));
