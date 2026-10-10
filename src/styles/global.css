@@ -1178,36 +1178,111 @@ img {
   margin-top: 10px;
 }
 
-.print-page-selection-label {
-  margin-right: 2px;
-  color: var(--ink-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.print-page-selection label {
+.print-page-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
+  justify-content: center;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--panel);
   color: var(--ink-muted);
-  font-size: 12px;
-  font-weight: 700;
   cursor: pointer;
-  user-select: none;
 }
 
-.print-page-selection label.is-active {
+.print-page-toggle.is-active {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--panel));
   color: var(--accent);
 }
 
-.print-page-selection input {
-  accent-color: var(--accent);
+.print-page-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media screen {
+  .print-preview-layout {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .print-contract-index,
+  .print-preview-documents {
+    max-height: max(280px, calc(100dvh - 230px));
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+
+  .print-contract-index {
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+
+  .print-contract-index ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-contract-index a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 8px;
+    border-radius: 7px;
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.4;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .print-contract-index a:hover,
+  .print-contract-index a:focus-visible {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .print-contract-index-number {
+    flex: 0 0 20px;
+    color: var(--ink-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .print-preview-documents {
+    min-width: 0;
+    padding: 2px;
+  }
+
+  .print-preview-documents > .contract-document {
+    min-width: 8.5in;
+    margin-bottom: 24px;
+    scroll-margin-top: 2px;
+    outline: none;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .print-preview-layout {
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .print-contract-index a {
+    gap: 5px;
+    padding: 10px 4px;
+    font-size: 12px;
+  }
+
+  .print-contract-index-number {
+    flex-basis: 14px;
+  }
 }
 
 .defaults-autocomplete {

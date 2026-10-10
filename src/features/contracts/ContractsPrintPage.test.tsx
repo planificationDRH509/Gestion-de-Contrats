@@ -35,9 +35,10 @@ vi.mock("./contractsApi", () => ({
 }));
 
 vi.mock("./ContractDocument", () => ({
-  ContractDocument: ({ contract, pageSelection }: { contract: { id: string }; pageSelection: string }) => (
-    <div data-testid="contract-document" data-contract-id={contract.id} data-page-selection={pageSelection}>Contrat</div>
-  )
+  CONTRACT_PAGES: [1, 2, 3, 4],
+  ContractDocuments: ({ contracts, pageSelection }: { contracts: { id: string }[]; pageSelection: number[] }) => contracts.map(contract => (
+    <div key={contract.id} data-testid="contract-document" data-contract-id={contract.id} data-page-selection={pageSelection.join(" ")}>Contrat</div>
+  ))
 }));
 
 vi.mock("../../lib/printHistory", () => ({
@@ -71,7 +72,7 @@ describe("ContractsPrintPage", () => {
     vi.useRealTimers();
   });
 
-  it("does not automatically print again when contract data refreshes", () => {
+  it("shows the single-contract preview without automatically printing, including after refresh", () => {
     const view = render(
       <StrictMode>
         <ContractsPrintPage />
@@ -79,7 +80,7 @@ describe("ContractsPrintPage", () => {
     );
 
     act(() => vi.advanceTimersByTime(300));
-    expect(window.print).toHaveBeenCalledOnce();
+    expect(window.print).not.toHaveBeenCalled();
 
     mocks.contracts = mocks.contracts.map((contract) => ({
       ...contract,
@@ -92,15 +93,18 @@ describe("ContractsPrintPage", () => {
     );
 
     act(() => vi.advanceTimersByTime(300));
-    expect(window.print).toHaveBeenCalledOnce();
+    expect(window.print).not.toHaveBeenCalled();
   });
 
   it("still allows a deliberate reprint from the button", () => {
     render(<ContractsPrintPage />);
 
     act(() => vi.advanceTimersByTime(300));
+    expect(window.print).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
 
+    expect(window.print).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
     expect(window.print).toHaveBeenCalledTimes(2);
   });
 
@@ -114,15 +118,29 @@ describe("ContractsPrintPage", () => {
 
     act(() => vi.advanceTimersByTime(300));
     expect(window.print).not.toHaveBeenCalled();
-    expect(screen.getByRole("radio", { name: "Les 4 pages" })).toBeChecked();
+    for (const page of [1, 2, 3, 4]) expect(screen.getByRole("button", { name: `Page ${page}` })).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Page 4 seulement" }));
+    for (const page of [1, 2, 3]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
     screen.getAllByTestId("contract-document").forEach((document) => {
-      expect(document).toHaveAttribute("data-page-selection", "fourth");
+      expect(document).toHaveAttribute("data-page-selection", "4");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
     expect(window.print).toHaveBeenCalledOnce();
+  });
+
+  it("allows multiple pages for a single contract and disables printing an empty selection", () => {
+    render(<ContractsPrintPage />);
+    expect(screen.queryByText("Pages de chaque contrat :")).not.toBeInTheDocument();
+    for (const page of [1, 3]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
+    expect(screen.getByTestId("contract-document")).toHaveAttribute("data-page-selection", "2 4");
+    for (const page of [2, 4]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
+    expect(window.print).not.toHaveBeenCalled();
+    for (const page of [4, 2]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
+    expect(screen.getByTestId("contract-document")).toHaveAttribute("data-page-selection", "2 4");
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeEnabled();
   });
 
   it("renders a group in the same order as the requested ids", () => {
@@ -147,7 +165,7 @@ describe("ContractsPrintPage", () => {
     ];
     render(<ContractsPrintPage />);
 
-    fireEvent.click(screen.getByRole("radio", { name: "Page 1 seulement" }));
+    for (const page of [2, 3, 4]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
     act(() => window.dispatchEvent(new Event("afterprint")));
 
     expect(window.confirm).toHaveBeenCalledWith(

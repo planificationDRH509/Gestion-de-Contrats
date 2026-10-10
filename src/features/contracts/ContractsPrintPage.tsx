@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import { useChangeContractsStatus, useContractsByIds } from "./contractsApi";
 import {
-  ContractDocument,
+  ContractDocuments,
+  CONTRACT_PAGES,
   type ContractPageSelection
 } from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
 import { orderContractsByIds } from "../../lib/contractSorting";
+import { formatFirstName, formatLastName } from "../../lib/format";
 
 export function ContractsPrintPage() {
   const [searchParams] = useSearchParams();
@@ -16,35 +18,16 @@ export function ContractsPrintPage() {
   const workspaceId = user?.workspaceId ?? "";
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
-  const lastAutoPrintedSelectionRef = useRef<string | null>(null);
-  const [pageSelection, setPageSelection] = useState<ContractPageSelection>("all");
+  const [pageSelection, setPageSelection] = useState<ContractPageSelection>(CONTRACT_PAGES);
 
   const idsParam = searchParams.get("ids") ?? "";
-  const ids = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
-  const printSelectionKey = `${workspaceId}:${ids.join(",")}`;
+  const ids = useMemo(() => idsParam.split(",").map((id) => id.trim()).filter(Boolean), [idsParam]);
   const { data, isLoading } = useContractsByIds(ids, workspaceId);
 
-  useEffect(() => {
-    if (
-      !isLoading &&
-      data &&
-      data.length > 0 &&
-      ids.length === 1 &&
-      lastAutoPrintedSelectionRef.current !== printSelectionKey
-    ) {
-      const timer = setTimeout(() => {
-        if (lastAutoPrintedSelectionRef.current === printSelectionKey) return;
-        lastAutoPrintedSelectionRef.current = printSelectionKey;
-        window.print();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [isLoading, data, ids.length, printSelectionKey]);
+  const orderedContracts = useMemo(() => orderContractsByIds(data ?? [], ids), [data, ids]);
 
   function handlePrint() {
-    lastAutoPrintedSelectionRef.current = printSelectionKey;
-    window.print();
+    if (pageSelection.length > 0) window.print();
   }
 
   useEffect(() => {
@@ -55,7 +38,7 @@ export function ContractsPrintPage() {
         return;
       }
       lastAfterPrintAtRef.current = now;
-      const isPartialPrint = pageSelection !== "all";
+      const isPartialPrint = pageSelection.length !== CONTRACT_PAGES.length;
       const nextStatus = isPartialPrint ? "impression_partiel" : "imprime";
       const nextStatusLabel = isPartialPrint ? "Impression partielle" : "Imprimé";
       if (can("contracts.change_status")) {
@@ -90,74 +73,76 @@ export function ContractsPrintPage() {
     return <div className="card">Aucun contrat à imprimer.</div>;
   }
 
-  const orderedContracts = orderContractsByIds(data, ids);
-
-  const copies = 1;
-  const pages = orderedContracts.flatMap((contract) =>
-    Array.from({ length: copies }, (_, index) => ({
-      contract,
-      key: `${contract.id}-${index}`
-    }))
-  );
-
   return (
     <div className="print-stack">
       <div className="section-header no-print">
         <div>
           <div className="section-title">Impression</div>
-          {ids.length > 1 ? (
-            <div className="print-page-selection" role="radiogroup" aria-label="Pages à imprimer">
-              <span className="print-page-selection-label">Pages de chaque contrat :</span>
-              <label className={pageSelection === "all" ? "is-active" : ""}>
-                <input
-                  type="radio"
-                  name="contract-pages"
-                  value="all"
-                  checked={pageSelection === "all"}
-                  onChange={() => setPageSelection("all")}
-                />
-                Les 4 pages
-              </label>
-              <label className={pageSelection === "first" ? "is-active" : ""}>
-                <input
-                  type="radio"
-                  name="contract-pages"
-                  value="first"
-                  checked={pageSelection === "first"}
-                  onChange={() => setPageSelection("first")}
-                />
-                Page 1 seulement
-              </label>
-              <label className={pageSelection === "fourth" ? "is-active" : ""}>
-                <input
-                  type="radio"
-                  name="contract-pages"
-                  value="fourth"
-                  checked={pageSelection === "fourth"}
-                  onChange={() => setPageSelection("fourth")}
-                />
-                Page 4 seulement
-              </label>
-            </div>
-          ) : null}
+          <div className="print-page-selection" role="group" aria-label="Pages à imprimer">
+            {CONTRACT_PAGES.map(page => (
+              <button
+                key={page}
+                type="button"
+                className={`print-page-toggle${pageSelection.includes(page) ? " is-active" : ""}`}
+                aria-label={`Page ${page}`}
+                aria-pressed={pageSelection.includes(page)}
+                title={`Page ${page}`}
+                onClick={() => setPageSelection(selected => selected.includes(page)
+                  ? selected.filter(value => value !== page)
+                  : CONTRACT_PAGES.filter(value => value === page || selected.includes(value)))}
+              >
+                <svg width="32" height="40" viewBox="0 0 32 40" fill="none" aria-hidden="true">
+                  <path d="M5 2h14l8 8v28H5V2Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <path d="M19 2v8h8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <text x="16" y="29" textAnchor="middle" fill="currentColor" fontSize="16" fontWeight="600">{page}</text>
+                </svg>
+              </button>
+            ))}
+          </div>
         </div>
         <div className="toolbar">
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
-          <button className="btn btn-primary" onClick={handlePrint}>
+          <button className="btn btn-primary" onClick={handlePrint} disabled={pageSelection.length === 0}>
             Imprimer
           </button>
         </div>
       </div>
 
-      {pages.map((item) => (
-        <ContractDocument
-          key={item.key}
-          contract={item.contract}
-          pageSelection={pageSelection}
-        />
-      ))}
+      <div className="print-preview-layout">
+        <nav className="print-contract-index no-print" aria-label="Contrats sélectionnés">
+          <ol>
+            {orderedContracts.map((contract, index) => (
+              <li key={contract.id}>
+                <a
+                  href={`#${encodeURIComponent(`print-contract-${contract.id}`)}`}
+                  onClick={event => {
+                    event.preventDefault();
+                    const target = document.getElementById(`print-contract-${contract.id}`);
+                    target?.scrollIntoView({
+                      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+                      block: "start",
+                      inline: "nearest"
+                    });
+                    target?.focus({ preventScroll: true });
+                  }}
+                >
+                  <span className="print-contract-index-number" aria-hidden="true">{index + 1}</span>
+                  <span>{[formatFirstName(contract.firstName ?? ""), formatLastName(contract.lastName ?? "")].filter(Boolean).join(" ") || contract.nif || contract.id}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+        <div className="print-preview-documents">
+          <ContractDocuments
+            contracts={orderedContracts}
+            workspaceId={workspaceId}
+            pageSelection={pageSelection}
+          />
+        </div>
+      </div>
     </div>
   );
 }

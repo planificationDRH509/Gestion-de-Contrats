@@ -70,6 +70,7 @@
     width: 8.5in;
     margin: 0;
     padding: 0;
+    outline: none;
   }
 
   /* The extra specificity makes this safeguard apply to reference templates
@@ -93,12 +94,11 @@
     page-break-before: always !important;
   }
 
-  /* Hidden sheets still count as adjacent siblings for CSS selectors. Remove
-     their inherited break so a page-4-only batch does not start with blanks. */
-  .contract-document[data-contract-page-selection="first"]
-    .contract-sheet[data-page="1"],
-  .contract-document[data-contract-page-selection="fourth"]
-    .contract-sheet[data-page="4"] {
+  /* The first visible sheet starts without a break, even when earlier sheets are hidden. */
+  .contract-document[data-first-selected-page="1"] .contract-sheet[data-page="1"],
+  .contract-document[data-first-selected-page="2"] .contract-sheet[data-page="2"],
+  .contract-document[data-first-selected-page="3"] .contract-sheet[data-page="3"],
+  .contract-document[data-first-selected-page="4"] .contract-sheet[data-page="4"] {
     break-before: auto !important;
     page-break-before: auto !important;
   }
@@ -120,11 +120,11 @@
   white-space: nowrap !important;
 }
 
-/* The grouped-print page can keep only the same sheet from every contract. */
-.contract-document[data-contract-page-selection="first"]
-  .contract-sheet:not([data-page="1"]),
-.contract-document[data-contract-page-selection="fourth"]
-  .contract-sheet:not([data-page="4"]) {
+/* Apply the selection to both the preview and the printed batch. */
+.contract-document[data-contract-page-selection]:not([data-contract-page-selection~="1"]) .contract-sheet[data-page="1"],
+.contract-document[data-contract-page-selection]:not([data-contract-page-selection~="2"]) .contract-sheet[data-page="2"],
+.contract-document[data-contract-page-selection]:not([data-contract-page-selection~="3"]) .contract-sheet[data-page="3"],
+.contract-document[data-contract-page-selection]:not([data-contract-page-selection~="4"]) .contract-sheet[data-page="4"] {
   display: none !important;
 }
 
