@@ -1,5 +1,8 @@
+import { ContractMandateAlert } from "./ContractMandateAlert";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
-import { memo, useEffect, useMemo, useState } from "react";
+import { useMinisters } from "../settings/ministersApi";
+import { findContractMinister } from "../../lib/ministers";
+import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { Contract } from "../../data/types";
 import { useInstitutions } from "../settings/suggestionsApi";
 import { useInstitutionPrepositions } from "../institutions/institutionPrepositionsApi";
@@ -34,6 +37,7 @@ export function ContractDocuments({
   pageSelection?: ContractPageSelection;
 }) {
   const { entries: salaryGrid } = useSalaryGrid();
+  const { registry, error: ministersError } = useMinisters();
   const { data: institutions } = useInstitutions(workspaceId);
   const { rules: prepositions } = useInstitutionPrepositions();
   const [template, setTemplate] = useState(() => loadTemplate());
@@ -43,20 +47,26 @@ export function ContractDocuments({
   }, []);
 
   const documents = useMemo(() => contracts.map((contract) => {
-    const variables = buildTemplateVariables(contract, salaryGrid, institutions, prepositions);
-    return { id: contract.id, html: renderTemplate(template.html, variables as Record<string, string>) };
-  }), [contracts, template.html, salaryGrid, institutions, prepositions]);
+    const minister = findContractMinister(contract, registry);
+    if (!minister) return null;
+    const variables = buildTemplateVariables(contract, salaryGrid, institutions, prepositions, minister);
+    return { id: contract.id, contract, minister, html: renderTemplate(template.html, variables as Record<string, string>) };
+  }), [contracts, template.html, salaryGrid, institutions, prepositions, registry]);
+
+  if (documents.some(document => !document)) return <p role="alert">{ministersError ? "Impossible de charger le ministre de ce contrat." : "Chargement des ministres…"}</p>;
 
   return (
     <>
       {documents.map((document, index) => (
-        <RenderedContractDocument
-          key={document.id}
-          contractId={document.id}
-          html={document.html}
-          css={index === 0 ? template.css : undefined}
-          pageSelection={pageSelection}
-        />
+        <Fragment key={document!.id}>
+          <ContractMandateAlert contract={document!.contract} minister={document!.minister} />
+          <RenderedContractDocument
+            contractId={document!.id}
+            html={document!.html}
+            css={index === 0 ? template.css : undefined}
+            pageSelection={pageSelection}
+          />
+        </Fragment>
       ))}
     </>
   );

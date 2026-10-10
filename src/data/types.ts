@@ -1,4 +1,5 @@
 import type { AppRole } from "../features/auth/permissions";
+import type { Minister } from "../lib/ministers";
 
 export type Gender = "Homme" | "Femme";
 
@@ -111,6 +112,9 @@ export type Tag = {
 };
 
 export type Contract = {
+  ministerId?: string;
+  /** Immutable reference data cached with the contract for offline printing. */
+  minister?: Minister;
   id: string;
   workspaceId: string;
   dossierId?: string | null;

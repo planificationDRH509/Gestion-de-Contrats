@@ -1,3 +1,6 @@
+import { contractMandateWarning } from "./ContractMandateAlert";
+import { useMinisters } from "../settings/ministersApi";
+import { findContractMinister } from "../../lib/ministers";
 import "./contractsImport.css";
 import { createPortal } from "react-dom";
 import { confirmImportReceipt, readImportRequest } from "./contractImportRun";
@@ -104,6 +107,8 @@ export function ContractsImportModal({
 
   const importContracts = useImportContracts();
   const { fiscalYear } = useFiscalYear();
+  const { registry: ministerRegistry } = useMinisters();
+  const currentMinister = ministerRegistry?.ministers.find(minister => minister.id === ministerRegistry.currentMinisterId);
   const targetFiscalYear = importFiscalYear || fiscalYear;
   const fiscalYearIsPast = isPastFiscalYear(targetFiscalYear);
 
@@ -748,11 +753,18 @@ export function ContractsImportModal({
                     );
                     const parsedSalary = parseImportMoney(row.salaryNumber);
                     const outsideGrid = salaryGridData !== undefined && parsedSalary !== null && salaryOutsideGrid(salaryGrid, row.position, parsedSalary);
+                    const savedRequest = row.contractId ? readImportRequest(workspaceId, row.contractId) : null;
+                    const imported = row.importedContractId ? history.data?.find(contract => contract.id === row.importedContractId) : null;
+                    const mandateContract = imported ?? savedRequest;
+                    const mandateWarning = !row.excluded && (!row.importedContractId || imported) ? contractMandateWarning(
+                      mandateContract ?? { workspaceId, durationMonths: validation?.values?.durationMonths ?? NaN, annee_fiscale: targetFiscalYear },
+                      mandateContract ? findContractMinister(mandateContract, ministerRegistry) : currentMinister
+                    ) : null;
                     const stateClass = row.excluded
                       ? "excluded"
                       : validation?.errors.length || row.importError
                         ? "invalid"
-                        : validation?.warnings.length
+                        : validation?.warnings.length || mandateWarning
                           ? "warning"
                           : "";
                     return (
@@ -919,6 +931,7 @@ export function ContractsImportModal({
                             {clearButton("commentaire")}
                           </td>
                         </tr>
+                        {mandateWarning && <tr className="warning"><td colSpan={15}><div className="contract-mandate-warning" role="alert">Ligne {row.sourceRowNumber} · {mandateWarning}</div></td></tr>}
                         {Boolean(validation?.errors.length || row.importError) && !row.importedContractId ? (
                           <tr className={stateClass}>
                             <td colSpan={15} className="contracts-import-row-state">

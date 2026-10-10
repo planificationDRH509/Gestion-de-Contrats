@@ -1,4 +1,5 @@
 import { assertContractDuration } from "../../lib/contractDuration";
+import { bindContractMinister, migrateLegacyContract, readMinistersCache } from "../../features/settings/ministersCache";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
@@ -163,6 +164,7 @@ export class LocalContractRepository implements ContractRepository {
 
   async create(input: CreateContractInput): Promise<Contract> {
     assertContractDuration(input.durationMonths);
+    input = readMinistersCache() || input.ministerId ? bindContractMinister(input) : migrateLegacyContract(input);
     input = { ...input, annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
     const db = loadDb();
     assertNoFiscalYearDuplicate(input, db.contracts);
@@ -203,6 +205,7 @@ export class LocalContractRepository implements ContractRepository {
       throw new Error("Contrat introuvable");
     }
     const previous = db.contracts[contractIndex];
+    if (input.ministerId !== undefined && input.ministerId !== previous.ministerId) throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
     const timestamp = now();
     const nextValues: Partial<Contract> = {
       ...input,
@@ -219,6 +222,8 @@ export class LocalContractRepository implements ContractRepository {
       ...previous,
       ...input,
       ...nextValues,
+      ministerId: previous.ministerId,
+      minister: previous.minister,
       updatedAt: timestamp,
       auditHistory: appendContractAuditEntry(previous.auditHistory, {
         action: inferAuditAction(changes),

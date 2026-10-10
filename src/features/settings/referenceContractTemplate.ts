@@ -14,7 +14,7 @@ export const referenceContractTemplate: ContractTemplate = {
     <p class="contract-title"><strong><u>CONTRAT DE SERVICE</u></strong></p>
     <p><strong>Entre</strong></p>
 
-    <p>L’Etat Haïtien, représenté par <strong>Docteur Bertrand SINAL</strong>, identifié par son <strong>NINU : 1009241060</strong> et son <strong>NIF : 003-888-685-8</strong>, demeurant et domicilié au numéro 1 Rue Jacques Roumain, Maïs Gâté, Port-au-Prince, agissant en ses qualités de Ministre de la Santé Publique et de la Population, ci-après dénommé&lt;&lt; <strong>l’Employeur</strong>&gt;&gt;.</p>
+    <p>L’Etat Haïtien, représenté par <strong>{{minister_name}}</strong>, {{minister_identified}} par son <strong>NINU : {{minister_ninu}}</strong> et son <strong>NIF : {{minister_nif}}</strong>, demeurant et {{minister_domiciled}} au {{minister_address}}, agissant en ses qualités de Ministre de la Santé Publique et de la Population, ci-après dénommé&lt;&lt; <strong>l’Employeur</strong>&gt;&gt;.</p>
 
     <p><strong>Et</strong></p>
 
@@ -140,7 +140,7 @@ export const referenceContractTemplate: ContractTemplate = {
       </div>
       <div class="contract-signature contract-signature-right">
         <span class="contract-signature-line"></span>
-        <strong class="contract-signature-name">Dr Bertrand SINAL</strong>
+        <strong class="contract-signature-name">{{minister_signature}}</strong>
         <strong class="contract-signature-label">Ministre</strong>
       </div>
     </div>

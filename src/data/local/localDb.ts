@@ -1,4 +1,5 @@
 import { withBrowserLock } from "../../lib/browserLock";
+import { migrateLegacyContract } from "../../features/settings/ministersCache";
 import {
   Applicant,
   Contract,
@@ -179,7 +180,7 @@ function normalizeDb(value: LocalDb): LocalDb {
       : [],
     contracts: Array.isArray(value.contracts)
       ? value.contracts.map((contract) => ({
-          ...contract,
+          ...migrateLegacyContract(contract),
           salaryText: numberToFrenchWords(contract.salaryNumber),
           dossierId: contract.dossierId ?? null,
           durationMonths: contract.durationMonths ?? 12,
@@ -210,6 +211,7 @@ function normalizeDb(value: LocalDb): LocalDb {
       // Legacy bulk edits did not capture base versions. Split them so each can
       // be compared and resolved independently instead of blindly replayed.
       const p = item.payload;
+      if (item.type === "contract.create") item = { ...item, payload: migrateLegacyContract(p) };
       if (item.type === "contract.update" && !p.id && !p.status && Array.isArray(p.contractIds)) {
         return p.contractIds.map((id, index) => ({ ...item, id: `${item.id}:${id}`,
           sequence: (item.sequence ?? 0) + index / (p.contractIds as unknown[]).length,

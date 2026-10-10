@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMinisters } from "../settings/ministersApi";
+import { findContractMinister } from "../../lib/ministers";
 import { PanelLeftClose, PanelLeftOpen, List } from "lucide-react";
 import { printContractList } from "./printContractList";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -14,6 +16,7 @@ import { sortContracts } from "../../lib/contractSorting";
 import { PrintContractIndexItem } from "./PrintContractIndexItem";
 
 export function ContractsPrintPage() {
+  const { registry: ministers } = useMinisters();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, can } = useAuth();
@@ -36,6 +39,7 @@ export function ContractsPrintPage() {
   const orderedContracts = useMemo(() => sortContracts(data ?? [], "name_asc"), [data]);
 
   const printableContracts = useMemo(() => orderedContracts.filter(contract => !excludedIds.has(contract.id)), [orderedContracts, excludedIds]);
+  const ministersReady = printableContracts.every(contract => findContractMinister(contract, ministers));
 
   useEffect(() => {
     setExcludedIds(new Set());
@@ -102,7 +106,7 @@ export function ContractsPrintPage() {
       observer?.disconnect();
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [printableContracts, isLoading, pageSelection]);
+  }, [printableContracts, isLoading, pageSelection, ministersReady]);
 
   useEffect(() => {
     const index = indexRef.current;
@@ -119,11 +123,11 @@ export function ContractsPrintPage() {
 
   function handlePrint() {
     listPrintInProgressRef.current = false;
-    if (pageSelection.length > 0 && printableContracts.length > 0) window.print();
+    if (ministersReady && pageSelection.length > 0 && printableContracts.length > 0) window.print();
   }
 
   useEffect(() => {
-    if (printableContracts.length === 0 || pageSelection.length === 0 || !workspaceId) return;
+    if (!ministersReady || printableContracts.length === 0 || pageSelection.length === 0 || !workspaceId) return;
     const handleAfterPrint = () => {
       if (listPrintInProgressRef.current) return;
       const now = Date.now();
@@ -156,7 +160,7 @@ export function ContractsPrintPage() {
     };
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [printableContracts, workspaceId, changeContractsStatus, user, can, pageSelection]);
+  }, [printableContracts, workspaceId, changeContractsStatus, user, can, pageSelection, ministersReady]);
 
   if (isLoading) {
     return <div className="card">Chargement des contrats…</div>;
@@ -211,7 +215,7 @@ export function ContractsPrintPage() {
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
-          <button className="btn btn-primary" onClick={handlePrint} disabled={pageSelection.length === 0 || printableContracts.length === 0}>
+          <button className="btn btn-primary" onClick={handlePrint} disabled={!ministersReady || pageSelection.length === 0 || printableContracts.length === 0}>
             Imprimer
           </button>
         </div>

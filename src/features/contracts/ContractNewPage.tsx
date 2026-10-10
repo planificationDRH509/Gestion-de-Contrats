@@ -1,3 +1,4 @@
+import { EditorMandateAlert } from "./ContractMandateAlert";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -766,6 +767,7 @@ export function ContractNewPage() {
 
       {!isSheetMode ? (
       <form className={`card form-compact contract-quick-form ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={onSubmit("save")} onKeyDown={handleFormKeyDown}>
+        <EditorMandateAlert current contract={{ workspaceId, durationMonths: durationValue, annee_fiscale: fiscalYear }} />
         {fiscalYearIsPast ? (
           <div className="fiscal-year-contract-warning" role="alert">
             <span className="material-symbols-rounded">warning</span>

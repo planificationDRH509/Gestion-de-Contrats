@@ -173,6 +173,18 @@ export type Database = {
           },
         ]
       }
+      ministres: {
+        Row: { id: string; nom_complet: string; sexe: string; nif: string; ninu: string; debut_mandat: string | null; fin_mandat: string | null; created_at: string }
+        Insert: { id: string; nom_complet: string; sexe: string; nif: string; ninu: string; debut_mandat?: string | null; fin_mandat?: string | null; created_at?: string }
+        Update: { id?: string; nom_complet?: string; sexe?: string; nif?: string; ninu?: string; debut_mandat?: string | null; fin_mandat?: string | null; created_at?: string }
+        Relationships: []
+      }
+      ministre_actuel: {
+        Row: { singleton: boolean; ministre_id: string }
+        Insert: { singleton?: boolean; ministre_id: string }
+        Update: { singleton?: boolean; ministre_id?: string }
+        Relationships: [{ foreignKeyName: "ministre_actuel_ministre_id_fkey"; columns: ["ministre_id"]; isOneToOne: false; referencedRelation: "ministres"; referencedColumns: ["id"] }]
+      }
       contrat: {
         Row: {
           annee_fiscale: string
@@ -183,6 +195,7 @@ export type Database = {
           dossier_id: string | null
           duree_contrat: number
           historique_saisie: string | null
+          ministre_id: string
           id_contrat: string
           lieu_affectation: string
           nif: string
@@ -201,6 +214,7 @@ export type Database = {
           dossier_id?: string | null
           duree_contrat?: number
           historique_saisie?: string | null
+          ministre_id?: string
           id_contrat: string
           lieu_affectation: string
           nif: string
@@ -219,6 +233,7 @@ export type Database = {
           dossier_id?: string | null
           duree_contrat?: number
           historique_saisie?: string | null
+          ministre_id?: string
           id_contrat?: string
           lieu_affectation?: string
           nif?: string
@@ -229,6 +244,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contrat_ministre_id_fkey"
+            columns: ["ministre_id"]
+            isOneToOne: false
+            referencedRelation: "ministres"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contrat_dossier_id_fkey"
             columns: ["dossier_id"]
@@ -508,6 +530,8 @@ export type Database = {
         Args: { p_username: string; p_password: string }
         Returns: Json
       }
+      read_ministers: { Args: { p_session_token: string }; Returns: Json }
+      manage_ministers: { Args: { p_session_token: string; p_input: Json }; Returns: Json }
       read_institution_prepositions: { Args: { p_session_token: string }; Returns: Json }
       save_institution_prepositions: { Args: { p_session_token: string; p_rules: Json }; Returns: Json }
       learn_institution: {

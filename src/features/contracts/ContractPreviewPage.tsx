@@ -16,6 +16,8 @@ export function ContractPreviewPage() {
     if (!draft) return;
     const contract = await createContract.mutateAsync({
       workspaceId: draft.workspaceId,
+      ministerId: draft.ministerId,
+      minister: draft.minister,
       applicantId: draft.applicantId,
       dossierId: draft.dossierId ?? null,
       status: "saisie",

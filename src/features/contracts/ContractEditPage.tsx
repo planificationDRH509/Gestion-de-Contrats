@@ -1,3 +1,4 @@
+import { EditorMandateAlert } from "./ContractMandateAlert";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { approvedSalaries, genderedTitle, gridPositions, salaryOutsideGrid } from "../salary-grid/salaryGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -428,6 +429,7 @@ export function ContractEditPage() {
       </div>
 
       <form className={`card form-compact ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`} onSubmit={handleSubmit(onSubmit)} onKeyDown={handleFormKeyDown}>
+        <EditorMandateAlert contract={{ ...data, durationMonths: watch("durationMonths") }} />
         {fiscalYearIsPast ? (
           <div className="fiscal-year-contract-warning" role="alert">
             <span className="material-symbols-rounded">warning</span>

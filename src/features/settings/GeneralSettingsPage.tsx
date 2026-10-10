@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useFiscalYear } from "./settingsApi";
+import { MinistersSettings } from "./MinistersSettings";
 import { Link } from "react-router-dom";
 import {
   getDefaultFiscalYearString,
@@ -102,6 +103,7 @@ export function GeneralSettingsPage() {
           )}
         </div>
       </div>
+      <MinistersSettings />
     </div>
   );
 }

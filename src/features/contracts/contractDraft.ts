@@ -1,5 +1,6 @@
 import { Contract } from "../../data/types";
 import { createId } from "../../lib/uuid";
+import { bindContractMinister } from "../settings/ministersCache";
 
 const DRAFT_KEY = "contribution_contract_draft";
 
@@ -8,7 +9,7 @@ export type DraftContract = Contract & { isDraft: true };
 export function saveDraftContract(contract: Omit<Contract, "id" | "createdAt" | "updatedAt">) {
   const now = new Date().toISOString();
   const draft: DraftContract = {
-    ...contract,
+    ...bindContractMinister(contract),
     id: createId(),
     createdAt: now,
     updatedAt: now,

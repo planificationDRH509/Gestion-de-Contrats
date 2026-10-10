@@ -1,3 +1,4 @@
+import { LEGACY_MINISTER, type MinisterRegistry } from "../../lib/ministers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ContractsImportModal } from "./ContractsImportModal";
@@ -5,7 +6,8 @@ import { loadContractImportDraft, saveContractImportDraft } from "./contractImpo
 import { buildImportEditableRows, inferImportMapping, parsePastedContractTable } from "./contractImport";
 import type { Applicant, Contract } from "../../data/types";
 
-const mocks = vi.hoisted(() => ({ applicants: [] as Applicant[], contracts: [] as Contract[], mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ registry: undefined as MinisterRegistry | undefined, applicants: [] as Applicant[], contracts: [] as Contract[], mutate: vi.fn() }));
+vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: mocks.registry }) }));
 vi.mock("./contractsApi", () => ({
   useImportApplicantMatches: () => ({ data: mocks.applicants, isPending: false, isFetching: false, isError: false }),
   useImportContractHistory: () => ({ data: mocks.contracts, isPending: false, isFetching: false, isError: false }),
@@ -14,11 +16,11 @@ vi.mock("./contractsApi", () => ({
 vi.mock("../auth/auth", () => ({ useAuth: () => ({ user: { id: "u", workspaceId: "w" } }) }));
 vi.mock("../dossiers/dossiersApi", () => ({ useDossierContractMetrics: () => ({ data: {} }) }));
 vi.mock("../salary-grid/salaryGridApi", () => ({ useSalaryGrid: () => ({ entries: [], data: undefined }) }));
-vi.mock("../settings/settingsApi", () => ({ useFiscalYear: () => ({ fiscalYear: "2026-2027" }) }));
+vi.mock("../settings/settingsApi", async importOriginal => ({ ...await importOriginal<typeof import("../settings/settingsApi")>(), useFiscalYear: () => ({ fiscalYear: "2026-2027" }) }));
 const text = "NIF\tNom\tPrénom\tSexe\tAdresse\tTéléphone\tSalaire\tPoste\tAffectation\n1234567890\tLouis\tJean\tHomme\t\t\t30000\tAgent\tMSPP\n1234567891\tPierre\tAnne\tFemme\t\t\t30000\tAgent\tMSPP";
 const props = { isOpen: true, workspaceId: "w", currentUserId: "u", currentUserName: "User", dossiers: [], appUsers: [], existingContracts: [], onClose: vi.fn(), onImported: vi.fn() };
 afterEach(cleanup);
-beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); mocks.applicants = []; mocks.contracts = []; });
+beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); mocks.registry = undefined; mocks.applicants = []; mocks.contracts = []; });
 function paste(value = text) { fireEvent.change(screen.getByPlaceholderText("Collez les lignes copiées depuis Excel"), { target: { value } }); }
 
 describe("import review", () => {
@@ -123,4 +125,10 @@ describe("import review", () => {
     expect(screen.getByLabelText("Sélectionner la ligne 3")).not.toBeChecked();
   });
 
+});
+it("warns on out-of-mandate imports without treating them as invalid rows", () => {
+  mocks.registry = { currentMinisterId: LEGACY_MINISTER.id, ministers: [{ ...LEGACY_MINISTER, mandateStartDate: "2027-01-01" }] };
+  render(<ContractsImportModal {...props} />); paste();
+  expect(screen.getAllByRole("alert").filter(node => node.textContent?.includes("hors du mandat"))).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "Importer 2 contrat(s)" })).toBeEnabled();
 });

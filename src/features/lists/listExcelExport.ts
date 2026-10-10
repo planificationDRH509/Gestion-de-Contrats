@@ -2,10 +2,10 @@ import { normalizeTitle, type SalaryGridEntry } from "../salary-grid/salaryGrid"
 import type { Contract } from "../../data/types";
 import type { InstitutionSuggestion } from "../../data/local/suggestionsDb";
 import { createExcelPackageBlob, escapeExcelXml as xml } from "../../lib/excelExport";
-import { getContractFiscalYear, getContractStartDate, getFiscalYearEndYear } from "../../lib/contractDateFilters";
+import { getContractFiscalYear } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { normalizeSuggestionGrammarValue, stripSuggestionPrefix } from "../../lib/suggestionPrefixes";
-import { getStoredContractStartDate } from "../settings/settingsApi";
+import { getContractPeriod } from "../contracts/contractPeriod";
 import { listName, listTotals, sortedMembers, type ContractList } from "./listModel";
 import styles from "./excel/styles.json";
 
@@ -32,12 +32,8 @@ function serialDate(date: Date) {
 
 /** Use the same fiscal year and configured start day as the printed contract. */
 export function listContractDates(contract: Contract) {
-  const endYear = getFiscalYearEndYear(contract);
-  const configured = getStoredContractStartDate(contract.workspaceId, contract.durationMonths);
-  const start = configured
-    ? new Date(configured.getMonth() >= 9 ? endYear - 1 : endYear, configured.getMonth(), configured.getDate())
-    : getContractStartDate(contract);
-  return [serialDate(start), serialDate(new Date(endYear, 8, 30))];
+  const { startDate, endDate } = getContractPeriod(contract);
+  return [serialDate(startDate), serialDate(endDate)];
 }
 
 export function listContractFormation(title: string, entries: SalaryGridEntry[]) {

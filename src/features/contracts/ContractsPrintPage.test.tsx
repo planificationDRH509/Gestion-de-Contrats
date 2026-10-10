@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: undefined }) }));
 
 const mocks = vi.hoisted(() => ({
   appendPrintHistory: vi.fn(),
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
       workspaceId: "workspace-1",
       status: "saisie"
     }
-  ] as { id: string; workspaceId: string; status: string; firstName?: string; lastName?: string }[],
+  ] as { id: string; workspaceId: string; status: string; firstName?: string; lastName?: string; ministerId?: string }[],
   canChangeStatus: true,
   mutate: vi.fn(),
   navigate: vi.fn(),
@@ -51,6 +52,15 @@ vi.mock("../../lib/printHistory", () => ({
 import { ContractsPrintPage } from "./ContractsPrintPage";
 
 describe("ContractsPrintPage", () => {
+  it("prevents printing and marking printed when a referenced minister is unavailable", () => {
+    mocks.contracts = [{ id: "contract-1", workspaceId: "workspace-1", status: "saisie", ministerId: "unknown" }];
+    render(<ContractsPrintPage />);
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeDisabled();
+    act(() => window.dispatchEvent(new Event("afterprint")));
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.appendPrintHistory).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.contracts = [

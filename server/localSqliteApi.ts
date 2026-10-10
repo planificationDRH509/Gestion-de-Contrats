@@ -1,3 +1,4 @@
+import { initializeMinisters, readMinisters, readContractMinister, selectContractMinister, manageMinisters } from "./ministers";
 import { assertContractDuration } from "../src/lib/contractDuration";
 import { numberToFrenchWords } from "../src/lib/numberToFrenchWords";
 import fs from "node:fs";
@@ -83,6 +84,7 @@ type ContractListPayload = {
 };
 
 type ContractRow = {
+  ministre_id: string;
   id_contrat: string;
   workspace_id: string;
   dossier_id: string | null;
@@ -627,6 +629,8 @@ function mapDossier(row: RawRecord) {
 function mapContract(row: ContractRow) {
   return {
     id: row.id_contrat,
+    ministerId: row.ministre_id,
+    minister: readContractMinister(getDb(), row.ministre_id),
     workspaceId: row.workspace_id,
     dossierId: row.dossier_id,
     applicantId: row.nif,
@@ -1020,6 +1024,7 @@ function getDb(): DatabaseSync {
   }
 
   migrateSalaryText(db, filePath);
+  initializeMinisters(db);
   initializeContractLists(db);
   cachedDb = db;
   return db;
@@ -1126,7 +1131,7 @@ function buildContractRows(
   const rows = db
     .prepare(`
       SELECT
-        c.id_contrat,
+        c.id_contrat, c.ministre_id,
         c.workspace_id,
         c.dossier_id,
         c.nif,
@@ -1217,6 +1222,15 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
   if (pathname === `${API_PREFIX}/health` && method === "GET") {
     sendJson(res, 200, { ok: true, provider: "sqlite", path: getDbFilePath() });
     return;
+  }
+
+  if (pathname === `${API_PREFIX}/ministers`) {
+    if (method === "GET") { sendJson(res, 200, readMinisters(db)); return; }
+    if (method === "POST") {
+      const input = await parseBody(req);
+      sendJson(res, 200, manageMinisters(db, input, operatorFromRequest(req).role));
+      return;
+    }
   }
 
   if (pathname === `${API_PREFIX}/backup/sql` && method === "GET") {
@@ -2193,6 +2207,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     db.prepare(`
       INSERT INTO contrat (
         id_contrat,
+        ministre_id,
         nif,
         duree_contrat,
         annee_fiscale,
@@ -2210,6 +2225,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         deleted_at
       ) VALUES (
         :id_contrat,
+        :ministre_id,
         :nif,
         :duree_contrat,
         :annee_fiscale,
@@ -2228,6 +2244,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       )
     `).run({
       id_contrat: id,
+      ministre_id: selectContractMinister(db, asNullableString(body.ministerId)),
       nif,
       duree_contrat: durationMonths,
       annee_fiscale: fiscalYear,
@@ -2247,7 +2264,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const createdRow = db
       .prepare(`
         SELECT
-          c.id_contrat,
+          c.id_contrat, c.ministre_id,
           c.workspace_id,
           c.dossier_id,
           c.nif,
@@ -2524,7 +2541,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const row = db
       .prepare(`
         SELECT
-          c.id_contrat,
+          c.id_contrat, c.ministre_id,
           c.workspace_id,
           c.dossier_id,
           c.nif,
@@ -2701,7 +2718,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const updatedRow = db
       .prepare(`
         SELECT
-          c.id_contrat,
+          c.id_contrat, c.ministre_id,
           c.workspace_id,
           c.dossier_id,
           c.nif,

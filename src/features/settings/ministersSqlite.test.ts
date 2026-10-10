@@ -1,0 +1,61 @@
+import { createRequire } from 'node:module';
+import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { initializeMinisters, manageMinisters, readMinisters, selectContractMinister } from '../../../server/ministers';
+import { LEGACY_MINISTER } from '../../lib/ministers';
+let db: SqliteDatabase;
+const next = { id: 'next', fullName: 'Marie EXEMPLE', gender: 'Femme', nif: '111-222-333-4', ninu: '1112223334', mandateStartDate: '2026-10-01', mandateEndDate: null };
+beforeEach(() => {
+  db = new DatabaseSync(':memory:');
+  db.exec(`PRAGMA foreign_keys=ON;
+    CREATE TABLE contrat(id_contrat TEXT PRIMARY KEY, updated_at TEXT, historique_saisie TEXT);
+    INSERT INTO contrat VALUES('old','original date','original history');
+    CREATE TRIGGER existing_guard BEFORE UPDATE ON contrat BEGIN SELECT RAISE(ABORT,'Existing guard'); END;
+  `);
+  initializeMinisters(db);
+});
+afterEach(() => db.close());
+it('backfills old contracts without running existing triggers and restores those guards', () => {
+  expect(db.prepare('SELECT * FROM contrat').get()).toMatchObject({ ministre_id: LEGACY_MINISTER.id, updated_at: 'original date', historique_saisie: 'original history' });
+  expect(() => db.exec("UPDATE contrat SET updated_at='changed'")).toThrow('Existing guard');
+  initializeMinisters(db);
+  expect(readMinisters(db).ministers).toHaveLength(1);
+});
+it('selects a successor without touching old contracts and includes them in future contracts', () => {
+  manageMinisters(db, { action: 'add', minister: next }, 'admin');
+  expect(readMinisters(db).currentMinisterId).toBe(LEGACY_MINISTER.id);
+  manageMinisters(db, { action: 'select', ministerId: next.id }, 'admin');
+  db.prepare('INSERT INTO contrat(id_contrat,ministre_id) VALUES(?,?)').run('new', selectContractMinister(db));
+  expect(db.prepare('SELECT ministre_id FROM contrat WHERE id_contrat=?').get('old')?.ministre_id).toBe(LEGACY_MINISTER.id);
+  expect(db.prepare('SELECT ministre_id FROM contrat WHERE id_contrat=?').get('new')?.ministre_id).toBe(next.id);
+  expect(() => db.exec("INSERT INTO contrat(id_contrat,ministre_id) VALUES('unknown','missing')")).toThrow();
+  expect(() => db.exec("INSERT INTO contrat(id_contrat) VALUES('null')")).toThrow();
+  expect(() => db.exec("DELETE FROM ministres WHERE id='bertrand-sinal'")).toThrow();
+  db.exec('DROP TRIGGER existing_guard');
+  expect(() => db.exec("UPDATE contrat SET ministre_id='next' WHERE id_contrat='old'")).toThrow(/remplacé/);
+});
+it('enforces admin writes, valid selections, distinct identities and idempotent additions', () => {
+  for (const role of ['agent','controller','reader',null]) expect(() => manageMinisters(db,{action:'add',minister:next},role)).toThrow(/administrateurs/);
+  manageMinisters(db,{action:'add',minister:next},'admin');
+  manageMinisters(db,{action:'add',minister:next},'admin');
+  expect(readMinisters(db).ministers).toHaveLength(2);
+  expect(() => manageMinisters(db,{action:'add',minister:{...next,id:'duplicate'}},'admin')).toThrow(/NIF/);
+  expect(() => manageMinisters(db,{action:'select',ministerId:'missing'},'admin')).toThrow(/introuvable/);
+});
+it('persists mandate dates, enforces bounds and prevents stale edits without touching contracts', () => {
+  expect(readMinisters(db).ministers[0]).toEqual(LEGACY_MINISTER);
+  const command = { action: 'mandate', ministerId: LEGACY_MINISTER.id, mandateStartDate: '2020-01-01', mandateEndDate: '2026-09-30', expectedStartDate: '2020-01-01', expectedEndDate: null };
+  expect(() => manageMinisters(db, command, 'reader')).toThrow(/administrateurs/);
+  expect(() => manageMinisters(db, { ...command, mandateEndDate: '2019-12-31' }, 'admin')).toThrow(/précéder/);
+  expect(() => manageMinisters(db, { ...command, mandateEndDate: '2026-02-30' }, 'admin')).toThrow(/valide/);
+  manageMinisters(db, command, 'admin');
+  initializeMinisters(db);
+  expect(readMinisters(db).ministers[0].mandateEndDate).toBe('2026-09-30');
+  expect(() => manageMinisters(db, command, 'admin')).toThrow(/changé/);
+  expect(() => db.exec("UPDATE ministres SET fin_mandat='2019-12-31'")).toThrow();
+  expect(() => db.exec("UPDATE ministres SET debut_mandat='2027-01-01'")).toThrow();
+  manageMinisters(db, { ...command, expectedEndDate: '2026-09-30', mandateEndDate: null }, 'admin');
+  expect(readMinisters(db).ministers[0].mandateEndDate).toBeNull();
+  expect(db.prepare('SELECT * FROM contrat').get()).toMatchObject({ updated_at: 'original date', historique_saisie: 'original history', ministre_id: LEGACY_MINISTER.id });
+});

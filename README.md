@@ -46,6 +46,7 @@ Le mode local cree automatiquement les tables suivantes :
 - `identification` : `nif` (PK), `nom`, `prenom`, `sexe`, `ninu` (unique), `adresse`, horodatages
 - `contrat` : `id_contrat` (PK), FK `nif` vers `identification`, `duree_contrat`, `salaire`, `annee_fiscale`, `salaire_en_chiffre`, `titre`, `lieu_affectation`, `historique_saisie` (JSON), `dossier_id`
 - `dossiers` : table liee aux contrats via `dossier_id` cote `contrat` (et champ `id_contrat` disponible pour liaison directe), avec les champs de pilotage (`priority`, `contract_target_count`, etc.)
+- `ministres` : `id`, `nom_complet`, `sexe`, `nif`, `ninu`, `debut_mandat`, `fin_mandat`, `created_at` ; `ministre_actuel` conserve le ministre sélectionné et chaque `contrat.ministre_id` référence son signataire.
 
 Notes :
 - `id_contrat` est genere au format `AFAAxxxx` (ex: `25261234`) avec `AFAA = annee fiscale`.
@@ -85,6 +86,18 @@ Dans l'application, ouvrez **Parametres -> DRAFT HTML** pour modifier le HTML/CS
 ## Backup SQL
 
 Dans l'application, ouvrez **Parametres -> Backup SQL** pour telecharger un export complet de la base locale SQLite (`.sql`).
+
+## Ministres
+
+**Paramètres → Général → Ministres** permet aux administrateurs d'ajouter un ministre (nom complet, sexe, NIF, NINU et dates de mandat), puis de le sélectionner comme ministre actuel. L'adresse du ministère reste commune. L'ajout seul ne change pas la sélection.
+
+Les contrats existants sont rattachés à Bertrand SINAL avec les identifiants présents dans le modèle d'origine. Chaque nouveau contrat conserve son ministre, y compris dans les imports, les demandes de synchronisation hors ligne, les aperçus et les réimpressions. Changer le ministre actuel ne modifie aucun ancien contrat. L'identité d'un ministre enregistré n'est pas modifiable depuis l'application et le ministre d'un contrat existant ne peut pas être remplacé.
+
+Le début de mandat est obligatoire à l'ajout, et la fin peut rester vide tant que le mandat est en cours. **Modifier le mandat** permet de corriger les dates ou de clôturer le mandat sans modifier les contrats. Bertrand SINAL est initialisé au **1er janvier 2020**, sans date de fin. Une alerte non bloquante signale une **date de début de contrat** antérieure au début du mandat ou postérieure à sa fin (bornes incluses). Elle utilise la date imprimée, avec les dates personnalisées de l'espace de travail, et apparaît dans la saisie, le tableur, l'import, la liste et les aperçus. Elle n'est pas imprimée sur le contrat. Les dates actualisées du catalogue priment sur une ancienne copie hors ligne.
+
+Le catalogue et la sélection sont partagés par Supabase (ou par SQLite en mode local). En mode Supabase, les créations hors ligne utilisent la dernière sélection téléchargée ; il faut avoir chargé le catalogue au moins une fois. Les anciens modèles HTML enregistrés utilisant les coordonnées de Bertrand SINAL sont adaptés aux variables `{{minister_name}}`, `{{minister_signature}}`, `{{minister_nif}}`, `{{minister_ninu}}`, `{{minister_identified}}` et `{{minister_domiciled}}` sans remplacer leur mise en page.
+
+Migrations : `supabase/migrations/20261010155650_contract_ministers.sql` et `supabase/migrations/20261010161426_minister_mandate_dates.sql`. Les deux nouvelles tables ont RLS activé et leurs accès API directs sont révoqués ; seules les RPC validant la session de l'application y accèdent. SQLite migre automatiquement et inclut ces tables dans le backup SQL. Vérifications : `supabase/tests/ministers.sql` (transaction annulée), tests unitaires et `tests/browser/ministers.spec.ts`.
 
 ## Structure rapide
 

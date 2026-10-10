@@ -3,6 +3,7 @@ import type { Contract, CreateContractInput } from "../../data/types";
 import { identityDigits } from "../../data/contractIdentity";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
 import { createId } from "../../lib/uuid";
+import { migrateLegacyContract, readMinistersCache } from "../settings/ministersCache";
 import { getContractImportIdentityIssues, type ContractImportDraft } from "./contractImport";
 
 export type ContractImportProgress = { phase: "applicants" | "contracts"; completed: number; total: number };
@@ -29,7 +30,7 @@ export async function loadImportContracts(provider: Pick<DataProvider, "contract
 function journalKey(workspaceId: string, id: string) { return `contract_import_request:${workspaceId}:${id}`; }
 export function readImportRequest(workspaceId: string, id: string): CreateContractInput | null {
   const raw = localStorage.getItem(journalKey(workspaceId, id));
-  return raw ? JSON.parse(raw) as CreateContractInput : null;
+  return raw ? migrateLegacyContract(JSON.parse(raw) as CreateContractInput) : null;
 }
 export function confirmImportReceipt(workspaceId: string, id: string) {
   localStorage.removeItem(journalKey(workspaceId, id));
@@ -41,6 +42,8 @@ function saveRequest(input: CreateContractInput) {
 }
 
 export async function runContractImport(provider: ImportProvider, input: ImportRunInput) {
+  const registry = readMinistersCache();
+  const minister = registry?.ministers.find(m => m.id === registry.currentMinisterId);
   const { workspaceId, responsibleUserId, fiscalYear, onRowResult, onProgress } = input;
   const rows = input.rows.map(row => ({ ...row, contractId: row.contractId || createId() }));
   const contracts: Contract[] = [];
@@ -122,6 +125,7 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
           input.onDossierCreated?.(dossier.id);
         }
         request = {
+          ...(minister ? { ministerId: minister.id, minister } : {}),
           id: row.contractId, workspaceId, annee_fiscale: fiscalYear, applicantId: row.nif, dossierId,
           status: "saisie", gender: row.gender, firstName: row.firstName, lastName: row.lastName,
           nif: row.nif, ninu: row.ninu, address: row.address, position: row.position, assignment: row.assignment,

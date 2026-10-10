@@ -1,3 +1,6 @@
+import { contractMandateWarning } from "./ContractMandateAlert";
+import { useMinisters } from "../settings/ministersApi";
+import { findContractMinister } from "../../lib/ministers";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { salaryOutsideGrid, genderedTitle, gridPositions } from "../salary-grid/salaryGrid";
@@ -118,6 +121,7 @@ export function ContractsListPage() {
   const userId = user?.id ?? "";
   const pinnedContracts = usePinnedContracts();
   const { fiscalYear } = useFiscalYear();
+  const { registry: ministerRegistry } = useMinisters();
   const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
   const currentFiscalYear = getFiscalYearForDate(new Date());
 
@@ -1757,6 +1761,7 @@ export function ContractsListPage() {
                   {items.map((contract) => {
                     const hasComment = Boolean(contract.commentaire?.trim());
                     const contractFiscalYear = getContractFiscalYear(contract);
+                    const mandateWarning = contractMandateWarning(contract, findContractMinister(contract, ministerRegistry));
                     const contractNif =
                       contract.nif?.trim() || contract.applicantId?.trim() || "";
                     const linkedTasks = contractNif
@@ -1825,6 +1830,7 @@ export function ContractsListPage() {
                         ) : null}
 
                         <div className="contracts-badges" style={{ marginTop: "6px" }}>
+                          {mandateWarning && <span className="badge contract-mandate-badge" role="status" title={mandateWarning} aria-label={mandateWarning}>Hors mandat</span>}
                           {contractFiscalYear !== currentFiscalYear ? (
                             <span className="contract-list-fiscal-year" title={`Année fiscale ${contractFiscalYear}`} aria-label={`Année fiscale ${contractFiscalYear}`}>
                               {contractFiscalYear}

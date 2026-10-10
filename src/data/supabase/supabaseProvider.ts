@@ -1,4 +1,6 @@
 import { assertContractDuration } from "../../lib/contractDuration";
+import { bindContractMinister, cachedContractMinister } from "../../features/settings/ministersCache";
+import { LEGACY_MINISTER } from "../../lib/ministers";
 import { applicantDatabaseConflictMessage } from "../applicantConflict";
 import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
@@ -137,6 +139,8 @@ function mapContract(row: any): Contract {
   const ident = row.identification || {};
   return {
     id: row.id_contrat,
+    ministerId: row.ministre_id || LEGACY_MINISTER.id,
+    minister: row.ministre_id && row.ministre_id !== LEGACY_MINISTER.id ? cachedContractMinister({ ministerId: row.ministre_id }) : undefined,
     workspaceId: row.workspace_id,
     dossierId: row.dossier_id,
     applicantId: row.nif,
@@ -211,7 +215,8 @@ function sameQueuedContract(remote: Contract, local: Contract): boolean {
   const fields = ["workspaceId", "applicantId", "dossierId", "status", "position",
     "assignment", "salaryNumber", "durationMonths", "annee_fiscale",
     "commentaire", "createdBy"] as const;
-  return !remote.deletedAt && fields.every((field) => (remote[field] || null) === (local[field] || null));
+  return !remote.deletedAt && (remote.ministerId || LEGACY_MINISTER.id) === (local.ministerId || LEGACY_MINISTER.id)
+    && fields.every((field) => (remote[field] || null) === (local[field] || null));
 }
 
 class SupabaseApplicantRepository implements ApplicantRepository {
@@ -668,6 +673,7 @@ class SupabaseContractRepository implements ContractRepository {
       createContractAuditHistory(getStoredAuditActor(), timestamp);
     return {
       id_contrat: (input as CreateContractInput & { id?: string }).id || crypto.randomUUID(),
+      ministre_id: input.ministerId,
       workspace_id: input.workspaceId,
       dossier_id: input.dossierId || null,
       nif: input.applicantId || input.nif || "",
@@ -894,6 +900,9 @@ class SupabaseContractRepository implements ContractRepository {
     const existing = expected ?? await this.getById(input.id);
     if (!existing) {
       throw new Error("Contrat introuvable.");
+    }
+    if (input.ministerId !== undefined && input.ministerId !== existing.ministerId) {
+      throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
     }
     const payload: Record<string, any> = {};
     if (input.status !== undefined) payload.status = input.status;
@@ -2091,12 +2100,14 @@ class OfflineFirstContractRepository implements ContractRepository {
     assertContractDuration(input.durationMonths);
     // Persist before any network work; AppLayout drains the outbox in the background.
     // Replay performs the authoritative fiscal-year duplicate check before insertion.
+    input = bindContractMinister(input);
     return this.local.create({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() });
   }
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
     inputs.forEach(input => assertContractDuration(input.durationMonths));
     inputs = inputs.map((input) => ({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() }));
+    inputs = inputs.map(bindContractMinister);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       await syncPendingOutbox();

@@ -1,4 +1,6 @@
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
+import { ministerTemplateVariables, type Minister } from "../../lib/ministers";
+import { cachedContractMinister } from "./ministersCache";
 import { readSalaryGridCache } from "../salary-grid/salaryGridCache";
 import { contractTitleWithoutGrade, genderedTitle, matchingEntries, type SalaryGridEntry } from "../salary-grid/salaryGrid";
 import { Contract } from "../../data/types";
@@ -13,11 +15,9 @@ import { loadSuggestions } from "../../data/local/suggestionsDb";
 import type { InstitutionSuggestion } from "../../lib/institutions";
 import { formatInstitutionAssignment, readInstitutionPrepositions, type InstitutionPrepositionRule } from "../institutions/institutionPrepositions";
 import { referenceContractTemplate } from "./referenceContractTemplate";
-import { getStoredContractStartDate } from "./settingsApi";
+import { getContractPeriod } from "../contracts/contractPeriod";
 import {
-  getContractFiscalYear,
-  getContractStartDate,
-  getFiscalYearEndYear
+  getContractFiscalYear
 } from "../../lib/contractDateFilters";
 
 export type ContractTemplate = {
@@ -492,6 +492,20 @@ function withoutLegacyWorkspaceMarkup(html: string): string {
     .replace(/\{\{\s*workspace_name\s*\}\}/gi, "");
 }
 
+/** Upgrade the original signatory in saved templates without replacing their layout. */
+export function withMinisterVariables(html: string): string {
+  return html
+    .replace(/Docteur\s+Bertrand\s+SINAL/g, "{{minister_name}}")
+    .replace(/Dr\s+Bertrand\s+SINAL/g, "{{minister_signature}}")
+    .replace(/Bertrand\s+SINAL/g, "{{minister_full_name}}")
+    .replace(/003-888-685-8/g, "{{minister_nif}}")
+    .replace(/1009241060/g, "{{minister_ninu}}")
+    .replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, paragraph => paragraph.includes("{{minister_name}}")
+      ? paragraph.replace(/identifi(?:é|&eacute;)e?/g, "{{minister_identified}}")
+          .replace(/domicili(?:é|&eacute;)e?/g, "{{minister_domiciled}}")
+      : paragraph);
+}
+
 function withContextualContractGrammar(html: string): string {
   return html
     .replace(
@@ -541,8 +555,8 @@ export function loadTemplateByType(type: DraftTemplateType): ContractTemplate {
 
     return {
       html: type === "contract"
-        ? withContextualContractGrammar(withoutLegacyWorkspaceMarkup(parsed.html))
-        : withoutLegacyWorkspaceMarkup(parsed.html),
+        ? withMinisterVariables(withContextualContractGrammar(withoutLegacyWorkspaceMarkup(parsed.html)))
+        : withMinisterVariables(withoutLegacyWorkspaceMarkup(parsed.html)),
       css: parsed.css
     };
   } catch {
@@ -594,23 +608,13 @@ export function buildTemplateVariables(
   contract: Contract,
   salaryGrid: SalaryGridEntry[] = readSalaryGridCache() ?? [],
   institutions?: InstitutionSuggestion[],
-  prepositions: InstitutionPrepositionRule[] = readInstitutionPrepositions()
+  prepositions: InstitutionPrepositionRule[] = readInstitutionPrepositions(),
+  minister: Minister | undefined = cachedContractMinister(contract)
 ) {
+  if (!minister) throw new Error("Les informations du ministre de ce contrat sont indisponibles.");
   const date = new Date(contract.createdAt);
   const fiscalYear = getContractFiscalYear(contract);
-  const endYear = getFiscalYearEndYear(contract);
-  const endDate = new Date(endYear, 8, 30);
-
-  const d = contract.durationMonths ?? 12;
-  const automaticStartDate = getContractStartDate(contract);
-  const configuredStartDate = getStoredContractStartDate(contract.workspaceId, d);
-  const startDate = configuredStartDate
-    ? new Date(
-        configuredStartDate.getMonth() >= 9 ? endYear - 1 : endYear,
-        configuredStartDate.getMonth(),
-        configuredStartDate.getDate()
-      )
-    : automaticStartDate;
+  const { startDate, endDate } = getContractPeriod(contract);
 
   const formatReferenceDate = (value: Date) => {
     const parts = new Intl.DateTimeFormat("fr-FR", {
@@ -679,6 +683,7 @@ export function buildTemplateVariables(
 
   return {
     contract_id: contract.id,
+    ...ministerTemplateVariables(minister),
     fiscal_year: fiscalYear,
     first_name: formattedFirstName,
     last_name: formattedLastName,
@@ -726,12 +731,21 @@ export function buildTemplateVariables(
 }
 
 export function renderTemplate(html: string, variables: Record<string, string>) {
-  return withoutLegacyWorkspaceMarkup(html).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
-    return variables[key] ?? "";
+  return withMinisterVariables(withoutLegacyWorkspaceMarkup(html)).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+    const value = variables[key] ?? "";
+    return key.startsWith("minister_") ? value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;") : value;
   });
 }
 
 export const templateVariables = [
+  { key: "{{minister_full_name}}", label: "Nom complet du ministre" },
+  { key: "{{minister_name}}", label: "Ministre avec civilité" },
+  { key: "{{minister_signature}}", label: "Signature du ministre" },
+  { key: "{{minister_nif}}", label: "NIF du ministre" },
+  { key: "{{minister_ninu}}", label: "NINU du ministre" },
+  { key: "{{minister_address}}", label: "Adresse du ministère" },
+  { key: "{{minister_identified}}", label: "Ministre identifié(e)" },
+  { key: "{{minister_domiciled}}", label: "Ministre domicilié(e)" },
   { key: "{{contract_id}}", label: "ID du contrat" },
   { key: "{{fiscal_year}}", label: "Année fiscale" },
   { key: "{{first_name}}", label: "Prénom" },

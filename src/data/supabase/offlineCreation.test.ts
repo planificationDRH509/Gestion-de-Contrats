@@ -1,4 +1,6 @@
 import { discardContractSyncChanges } from "./supabaseProvider";
+import { cacheMinisters } from "../../features/settings/ministersCache";
+import { LEGACY_MINISTER } from "../../lib/ministers";
 import { queueOutbox } from "../local/localOutbox";
 import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,12 +42,30 @@ function contractRow(id: string) {
 }
 beforeEach(() => {
   localStorage.clear();
+  cacheMinisters({ ministers: [LEGACY_MINISTER], currentMinisterId: LEGACY_MINISTER.id });
   mock.from.mockReset();
   mock.rpc.mockReset().mockResolvedValue({ data: null, error: null });
   online(true);
 });
 
 describe("offline contract creation and replay", () => {
+  it("replays the minister captured at creation even after the active minister changes", async () => {
+    const successor = { ...LEGACY_MINISTER, id: "successor", fullName: "Marie TEST", gender: "Femme" as const, nif: "111-222-333-4", ninu: "1112223334" };
+    cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: successor.id });
+    online(false);
+    const provider = createSupabaseProvider();
+    const created = await provider.contracts.create(input);
+    cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: LEGACY_MINISTER.id });
+    expect(getPendingOutbox()[0].payload).toMatchObject({ ministerId: successor.id, minister: successor });
+    online(true);
+    const inserted = reply([{ ...contractRow(created.id), ministre_id: successor.id }]);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(inserted);
+    await syncSupabaseOutbox();
+    expect(inserted.insert).toHaveBeenCalledWith([expect.objectContaining({ ministre_id: successor.id })]);
+    expect(getPendingOutbox()).toHaveLength(0);
+    expect(loadDb().contracts.find(c => c.id === created.id)).toMatchObject({ ministerId: successor.id, minister: successor });
+  });
+
   it("queues creation immediately even when online and rejects a second local duplicate", async () => {
     mock.from.mockImplementation(() => { throw new Error("Network must not be awaited"); });
     const provider = createSupabaseProvider();

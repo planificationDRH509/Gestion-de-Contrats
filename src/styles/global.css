@@ -10717,3 +10717,16 @@ body,
 
 .contracts-import-error-filter { display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 8px; font-size: 12px; }
 .contracts-import-preview .contracts-import-optional-cell { white-space: nowrap; }
+.ministers-settings { margin-top: 24px; width: 100%; min-width: 0; }
+.minister-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+.minister-form .form-actions { grid-column: 1 / -1; }
+.minister-table-wrapper { overflow-x: auto; margin-top: 24px; }
+.minister-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.minister-table th, .minister-table td { padding: 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.minister-table th { color: var(--ink-muted); font-weight: 600; white-space: normal; }
+@media (max-width: 600px) { .minister-form { grid-template-columns: 1fr; } }
+.minister-form-title { grid-column: 1 / -1; margin: 0; }
+.contract-mandate-warning { display: flex; align-items: center; gap: 8px; padding: 10px 14px; margin-bottom: 12px; border: 1px solid rgba(234, 179, 8, .4); border-radius: 8px; background: rgba(234, 179, 8, .10); color: var(--warning, #a16207); font-size: 13px; }
+.contract-mandate-warning .material-symbols-rounded { flex-shrink: 0; font-size: 18px; }
+.contract-mandate-badge { color: var(--warning, #a16207); background: rgba(234, 179, 8, .10); border: 1px solid rgba(234, 179, 8, .4); }
+.contracts-sheet-row-wrap .contract-mandate-warning { border-radius: 0; margin: 0; padding: 4px 8px; font-size: 11px; }

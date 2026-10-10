@@ -1,4 +1,6 @@
 import { createElement, type PropsWithChildren } from "react";
+import { cacheMinisters } from "../settings/ministersCache";
+import { LEGACY_MINISTER } from "../../lib/ministers";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
@@ -13,6 +15,7 @@ afterEach(() => { onlineManager.setOnline(true); vi.unstubAllEnvs(); });
 
 it("persists both identity and contract while React Query considers the device offline", async () => {
   localStorage.clear();
+  cacheMinisters({ ministers: [LEGACY_MINISTER], currentMinisterId: LEGACY_MINISTER.id });
   onlineManager.setOnline(false);
   const client = new QueryClient();
   const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);

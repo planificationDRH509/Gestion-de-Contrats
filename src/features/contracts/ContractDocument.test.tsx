@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   variables: vi.fn((contract: { id: string }) => ({ name: contract.id }))
 }));
 vi.mock("../salary-grid/salaryGridApi", () => ({ useSalaryGrid: mocks.salary }));
+vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: undefined }) }));
 vi.mock("../settings/suggestionsApi", () => ({ useInstitutions: mocks.institutions }));
 vi.mock("../institutions/institutionPrepositionsApi", () => ({ useInstitutionPrepositions: mocks.prepositions }));
 vi.mock("../settings/contractTemplate", () => ({

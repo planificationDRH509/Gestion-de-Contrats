@@ -1,3 +1,6 @@
+import { ContractMandateAlert } from "./ContractMandateAlert";
+import { useMinisters } from "../settings/ministersApi";
+import { findContractMinister } from "../../lib/ministers";
 import { readCachedContracts } from "../../data/local/localContractRepository";
 import { DiscardContractSyncButton } from "./DiscardContractSyncButton";
 import { usePendingSync } from "../../lib/usePendingSync";
@@ -328,6 +331,8 @@ export function ContractsSpreadsheetView({
   const editSession = useRef(0);
   const nifRequestVersions = useRef<Record<string, number>>({});
   const [savingBatch, setSavingBatch] = useState(false);
+  const { registry: ministerRegistry } = useMinisters();
+  const currentMinister = ministerRegistry?.ministers.find(minister => minister.id === ministerRegistry.currentMinisterId);
 
 
   const [msppModalOpen, setMsppModalOpen] = useState(false);
@@ -1944,6 +1949,7 @@ export function ContractsSpreadsheetView({
                   </SpreadsheetRow>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+                {hasValues && <ContractMandateAlert contract={{ workspaceId, durationMonths: Number(row.draft.durationMonths.trim() || 12), annee_fiscale: getStoredFiscalYear() }} minister={currentMinister} />}
                 {nifStatus?.type === "renewal" && (
                   <div style={{
                     display: "flex", alignItems: "center", gap: "6px",
@@ -2159,6 +2165,7 @@ export function ContractsSpreadsheetView({
                   </SpreadsheetRow>
                 </div>
                 {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+                <ContractMandateAlert contract={{ ...contract, durationMonths: Number(draft.durationMonths.trim() || 12) }} minister={findContractMinister(contract, ministerRegistry)} />
                 {contract.tags && contract.tags.length > 0 && (
                   <div style={{ 
                     display: "flex", gap: "4px", flexWrap: "wrap",

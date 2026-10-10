@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cacheMinisters } from "../settings/ministersCache";
+import { LEGACY_MINISTER } from "../../lib/ministers";
 import { LocalApplicantRepository } from "../../data/local/localApplicantRepository";
 import { LocalContractRepository } from "../../data/local/localContractRepository";
 import { LocalDossierRepository } from "../../data/local/localDossierRepository";
@@ -19,6 +21,20 @@ const input = (rows = [row(0)]): ImportRunInput => ({
 beforeEach(() => localStorage.clear());
 
 describe("resumable import", () => {
+  it("keeps the same minister for the whole import when the selection changes midway", async () => {
+    const successor = { ...LEGACY_MINISTER, id: "new-minister", fullName: "Marie TEST", gender: "Femme" as const };
+    cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: successor.id });
+    const provider = createLocalProvider();
+    const create = provider.contracts.create.bind(provider.contracts);
+    vi.spyOn(provider.contracts, "create").mockImplementation(async value => {
+      cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: LEGACY_MINISTER.id });
+      return create(value);
+    });
+    const result = await runContractImport(provider, input([row(0), row(1)]));
+    expect(result.failures).toEqual([]);
+    expect(result.contracts.map(c => c.ministerId)).toEqual([successor.id, successor.id]);
+    expect(readImportRequest("w", "import-0")?.ministerId).toBe(successor.id);
+  });
   it("continues after a rejected line, reports exact receipts, and retries only missing contracts", async () => {
     const provider = createLocalProvider();
     const create = provider.contracts.create.bind(provider.contracts);

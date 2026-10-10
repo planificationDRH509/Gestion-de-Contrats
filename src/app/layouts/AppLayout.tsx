@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useMinisters } from "../../features/settings/ministersApi";
 import { Outlet, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
@@ -20,6 +21,7 @@ const MIN_W = 200;
 const MAX_W = 480;
 
 export function AppLayout() {
+  useMinisters();
   const { user, isLocked } = useAuth();
   const isMobile = useIsMobileViewport();
   const location = useLocation();

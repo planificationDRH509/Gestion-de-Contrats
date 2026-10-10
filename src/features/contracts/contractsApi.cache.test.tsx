@@ -74,7 +74,7 @@ describe("useContractsList offline-first loading", () => {
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.isFetching).toBe(true);
-    expect(result.current.data?.items).toEqual([{ ...cachedContract, salaryText: "QUARANTE CINQ MILLE", tags: [] }]);
+    expect(result.current.data?.items).toEqual([{ ...cachedContract, ministerId: "bertrand-sinal", salaryText: "QUARANTE CINQ MILLE", tags: [] }]);
     expect(providerMocks.listContracts).toHaveBeenCalledOnce();
 
     unmount();

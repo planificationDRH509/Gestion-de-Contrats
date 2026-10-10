@@ -1,12 +1,14 @@
+import { LEGACY_MINISTER, type MinisterRegistry } from "../../lib/ministers";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cacheContracts } from "../../data/local/offlineStore";
 import type { Contract } from "../../data/types";
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn(), update: vi.fn(), applicant: vi.fn(), lookup: vi.fn(), empty: [],
+  registry: undefined as MinisterRegistry | undefined, create: vi.fn(), update: vi.fn(), applicant: vi.fn(), lookup: vi.fn(), empty: [],
   comment: vi.fn(), remove: vi.fn(), dossierList: vi.fn(), matches: vi.fn()
 }));
+vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: mocks.registry }) }));
 vi.mock("./contractsApi", () => ({
   useCreateContract: () => ({ mutateAsync: mocks.create }),
   useUpdateContract: () => ({ mutateAsync: mocks.update }),
@@ -22,7 +24,7 @@ vi.mock("../settings/suggestionsApi", () => ({ useAddresses: () => ({ data: mock
 vi.mock("../salary-grid/salaryGridApi", () => ({ useSalaryGrid: () => ({ entries: mocks.empty }) }));
 vi.mock("../auth/auth", () => ({ useAuth: () => ({ user: { id: "me", workspaceId: "w" } }) }));
 vi.mock("../dossiers/dossiersApi", () => ({ useDossiersList: () => ({ data: mocks.dossierList() }), useDossierContractMetrics: () => ({ data: {} }) }));
-vi.mock("../settings/settingsApi", () => ({ getStoredFiscalYear: () => "2025-2026" }));
+vi.mock("../settings/settingsApi", async importOriginal => ({ ...await importOriginal<typeof import("../settings/settingsApi")>(), getStoredFiscalYear: () => "2025-2026" }));
 vi.mock("../../data/local/suggestionsDb", () => ({
   getLastChoice: () => "", saveLastChoice: vi.fn(), learnSuggestions: vi.fn(),
   getPinnedChoices: () => mocks.empty, getRecentChoices: () => mocks.empty,
@@ -50,6 +52,7 @@ function paste(target: HTMLElement, text: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  mocks.registry = undefined;
   mocks.dossierList.mockReturnValue(mocks.empty);
   mocks.matches.mockReturnValue(mocks.empty);
   mocks.lookup.mockResolvedValue({ identification: null, contracts: [] });
@@ -414,4 +417,12 @@ describe("spreadsheet editing", () => {
     expect(cell(1, 0)).toHaveAttribute("aria-invalid", "true");
     expect(mocks.applicant).not.toHaveBeenCalled();
   });
+});
+it("warns for a draft start outside the current mandate without preventing its creation", async () => {
+  mocks.registry = { currentMinisterId: LEGACY_MINISTER.id, ministers: [{ ...LEGACY_MINISTER, mandateStartDate: "2027-01-01" }] };
+  setup();
+  paste(cell(0, 0), validRow());
+  expect(screen.getByRole("alert")).toHaveTextContent("Début du contrat (06/04/2026) hors du mandat");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les lignes collées (1)" }));
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
 });
