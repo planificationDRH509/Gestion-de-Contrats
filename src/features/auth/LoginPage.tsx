@@ -16,13 +16,18 @@ export function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    const ok = await login(username.trim(), password);
-    setLoading(false);
-    if (!ok) {
-      setError("Identifiants invalides. Veuillez vérifier votre nom d'utilisateur et mot de passe.");
-      return;
+    try {
+      const ok = await login(username.trim(), password);
+      if (!ok) {
+        setError("Identifiants invalides. Veuillez vérifier votre nom d'utilisateur et mot de passe.");
+        return;
+      }
+      navigate(from, { replace: true });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Connexion impossible.");
+    } finally {
+      setLoading(false);
     }
-    navigate(from, { replace: true });
   }
 
   return (

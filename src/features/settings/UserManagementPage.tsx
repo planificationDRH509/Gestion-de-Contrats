@@ -15,7 +15,7 @@ import {
 } from "../auth/permissions";
 
 export function UserManagementPage() {
-  const { user, can } = useAuth();
+  const { user, can, logout } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleColumnAvailable, setRoleColumnAvailable] = useState(true);
@@ -56,7 +56,7 @@ export function UserManagementPage() {
   }
 
   const adminCount = useMemo(
-    () => users.filter((item) => item.role === "admin").length,
+    () => users.filter((item) => item.role === "admin" && !item.isSuspended).length,
     [users]
   );
 
@@ -178,6 +178,28 @@ export function UserManagementPage() {
     setUpdatingUserId(null);
   }
 
+  async function toggleSuspension(target: AppUser) {
+    if (!can("users.manage") || !user?.taskSessionToken) return;
+    setUpdatingUserId(target.id);
+    setMessage(null);
+    try {
+      const { data, error } = await getSupabaseClient().rpc("set_app_user_suspended", {
+        p_session_token: user.taskSessionToken,
+        p_user_id: target.id,
+        p_is_suspended: !target.isSuspended
+      });
+      if (error) throw error;
+      if (data !== true) throw new Error("Impossible de modifier le compte.");
+      setUsers((current) => current.map((item) => item.id === target.id
+        ? { ...item, isSuspended: !target.isSuspended } : item));
+      if (target.id === user.id && !target.isSuspended) await logout();
+    } catch (error) {
+      setMessage({ type: "error", text: getAppUserCreationErrorMessage(error) });
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
+
   return (
     <div className="page-container settings-detail-page user-management-page">
       <header className="section-header page-header">
@@ -294,23 +316,34 @@ export function UserManagementPage() {
                   </div>
                   <div className="user-role-copy">
                     <strong>{item.fullName}</strong>
+                    {item.isSuspended ? <span>Suspendu</span> : null}
                     <span>@{item.username}{item.id === user?.id ? " · Vous" : ""}</span>
                   </div>
-                  <select
-                    className="select"
-                    value={item.role}
-                    disabled={!roleColumnAvailable || updatingUserId === item.id || item.id === user?.id}
-                    onChange={(event) =>
-                      void updateRole(item, event.target.value as AppRole)
-                    }
-                    aria-label={`Rôle de ${item.fullName}`}
-                  >
-                    {APP_ROLES.map((roleOption) => (
-                      <option key={roleOption} value={roleOption}>
-                        {APP_ROLE_LABELS[roleOption]}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="user-account-actions">
+                    <select
+                      className="select"
+                      value={item.role}
+                      disabled={!roleColumnAvailable || updatingUserId === item.id || item.id === user?.id}
+                      onChange={(event) =>
+                        void updateRole(item, event.target.value as AppRole)
+                      }
+                      aria-label={`Rôle de ${item.fullName}`}
+                    >
+                      {APP_ROLES.map((roleOption) => (
+                        <option key={roleOption} value={roleOption}>
+                          {APP_ROLE_LABELS[roleOption]}
+                        </option>
+                      ))}
+                    </select>
+                    {can("users.manage") ? (
+                      <button type="button" className="btn btn-secondary"
+                        disabled={updatingUserId !== null || !user?.taskSessionToken}
+                        aria-label={`${item.isSuspended ? "Réactiver" : "Suspendre"} ${item.fullName}`}
+                        onClick={() => void toggleSuspension(item)}>
+                        {item.isSuspended ? "Réactiver" : "Suspendre"}
+                      </button>
+                    ) : null}
+                  </div>
                 </article>
               ))}
             </div>

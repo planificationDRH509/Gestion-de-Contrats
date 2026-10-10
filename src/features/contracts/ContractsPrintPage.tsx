@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
-import { PanelLeftClose, PanelLeftOpen, List } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Printer } from "lucide-react";
 import { printContractList } from "./printContractList";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
@@ -198,20 +198,6 @@ export function ContractsPrintPage() {
           </div>
         </div>
         <div className="toolbar">
-          <button
-            className="btn btn-outline"
-            title={indexVisible ? "Masquer la liste" : "Afficher la liste"}
-            aria-label={indexVisible ? "Masquer la liste" : "Afficher la liste"}
-            aria-expanded={indexVisible}
-            aria-controls="print-contract-index"
-            onClick={() => setIndexVisible(visible => !visible)}
-          >
-            {indexVisible ? <PanelLeftClose size={18} aria-hidden="true" /> : <PanelLeftOpen size={18} aria-hidden="true" />}
-          </button>
-          <button className="btn btn-outline" onClick={handlePrintList} disabled={printableContracts.length === 0}>
-            <List size={17} aria-hidden="true" />
-            Imprimer la liste
-          </button>
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
@@ -222,20 +208,37 @@ export function ContractsPrintPage() {
       </div>
 
       <div className={`print-preview-layout${indexVisible ? "" : " is-index-hidden"}`}>
-        <nav id="print-contract-index" hidden={!indexVisible} ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">
-          <ol>
-            {orderedContracts.map((contract, index) => (
-              <PrintContractIndexItem
-                key={contract.id}
-                contract={contract}
-                index={index}
-                active={activeContractId === contract.id}
-                excluded={excludedIds.has(contract.id)}
-                onToggle={() => toggleContract(contract.id)}
-              />
-            ))}
-          </ol>
-        </nav>
+        <aside className="print-index-panel no-print">
+          <div className="print-index-toolbar">
+            <button
+              className="btn btn-outline"
+              title={indexVisible ? "Masquer la liste" : "Afficher la liste"}
+              aria-label={indexVisible ? "Masquer la liste" : "Afficher la liste"}
+              aria-expanded={indexVisible}
+              aria-controls="print-contract-index"
+              onClick={() => setIndexVisible(visible => !visible)}
+            >
+              {indexVisible ? <PanelLeftClose size={18} aria-hidden="true" /> : <PanelLeftOpen size={18} aria-hidden="true" />}
+            </button>
+            <button className="btn btn-outline" title="Imprimer la liste" aria-label="Imprimer la liste" onClick={handlePrintList} disabled={printableContracts.length === 0}>
+              <Printer size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <nav id="print-contract-index" hidden={!indexVisible} ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">
+            <ol>
+              {orderedContracts.map((contract, index) => (
+                <PrintContractIndexItem
+                  key={contract.id}
+                  contract={contract}
+                  index={index}
+                  active={activeContractId === contract.id}
+                  excluded={excludedIds.has(contract.id)}
+                  onToggle={() => toggleContract(contract.id)}
+                />
+              ))}
+            </ol>
+          </nav>
+        </aside>
         <div ref={documentsRef} className="print-preview-documents">
           <ContractDocuments
             contracts={printableContracts}

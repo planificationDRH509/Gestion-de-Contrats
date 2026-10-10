@@ -53,10 +53,7 @@ begin
   set local role anon;
   perform set_config('request.headers','{"x-app-session":"forged-token","role":"admin"}',true);
   assert (select count(*) from public.contrat) = 0, 'forged session must not read contracts';
-  rejected := false;
-  begin perform public.login_app_user(w||'-admin','wrong-password');
-    exception when others then rejected := true; assert sqlerrm = 'TASK_SESSION_INVALID_CREDENTIALS'; end;
-  assert rejected, 'wrong password must fail';
+  assert (public.login_app_user(w||'-admin','wrong-password')->>'error')='TASK_SESSION_INVALID_CREDENTIALS', 'wrong password must fail';
   login_result := public.login_app_user(w||'-admin','test-password');
   assert not (login_result ? 'password' or login_result ? 'password_hash'), 'login must not return credentials';
   admin_token := login_result->>'taskSessionToken';

@@ -4,6 +4,7 @@ import { AppUser } from "../../data/types";
 import { normalizeAppRole } from "./permissions";
 
 type AppUserRow = {
+  is_suspended?: boolean;
   id: string;
   username: string;
   full_name: string;
@@ -53,6 +54,7 @@ export function getAppUserCreationErrorMessage(error: unknown): string {
 function mapAppUser(item: AppUserRow): AppUser {
   return {
     id: item.id,
+    isSuspended: item.is_suspended ?? false,
     username: item.username,
     fullName: item.full_name,
     role: normalizeAppRole(item.role, item.username),
@@ -65,7 +67,7 @@ export async function fetchAppUsers(): Promise<AppUsersFetchResult> {
   const supabase = getSupabaseClient();
   const withRole = await supabase
     .from("app_users")
-    .select("id, username, full_name, role, created_at, updated_at")
+    .select("id, username, full_name, role, is_suspended, created_at, updated_at")
     .order("full_name", { ascending: true });
 
   if (!withRole.error) {

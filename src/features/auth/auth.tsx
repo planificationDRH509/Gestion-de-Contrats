@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getDefaultWorkspace, listLocalWorkspaces } from "../../data/local/workspaces";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
@@ -15,6 +15,10 @@ import {
   saveOfflineUnlockCredential,
   verifyOfflineUnlockCredential
 } from "./offlineUnlock";
+
+import { authenticatePassword } from "./passwordAuthentication";
+import { ACCOUNT_SUSPENDED_MESSAGE, LOCKOUT_CHANGED_EVENT, readAccountLockout,
+  pendingAccountSuspensions, recordPasswordFailure, recordOfflineSuccess, recordOnlineSuccess, recordServerSuspension } from "./accountLockout";
 
 export type AuthUser = {
   id: string;
@@ -127,11 +131,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const lastActivityAt = loadLastActivityAt();
     const session = loadStoredAuthSession();
     return Boolean(
-      session && (!session.taskSessionToken ||
+      session && (readAccountLockout(session.id).suspended || !session.taskSessionToken ||
         (lastActivityAt && hasSessionInactivityExpired(lastActivityAt)))
     );
   });
   const queryClient = useQueryClient();
+  const unlocking = useRef(false);
+
+  useEffect(() => {
+    const enforceLock = () => {
+      if (user?.id && readAccountLockout(user.id).suspended) setIsLocked(true);
+    };
+    enforceLock();
+    window.addEventListener(LOCKOUT_CHANGED_EVENT, enforceLock);
+    window.addEventListener("storage", enforceLock);
+    return () => {
+      window.removeEventListener(LOCKOUT_CHANGED_EVENT, enforceLock);
+      window.removeEventListener("storage", enforceLock);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const reportPending = () => {
+      if (!navigator.onLine) return;
+      const pending = pendingAccountSuspensions()[0];
+      if (pending?.token) {
+        // The transport flushes every pending report before this idempotent RPC.
+        void Promise.resolve(getSupabaseClient().rpc("report_offline_suspension", {
+          p_session_token: pending.token
+        })).catch(() => undefined);
+      }
+    };
+    reportPending();
+    const timer = window.setInterval(reportPending, 30_000);
+    window.addEventListener("online", reportPending);
+    window.addEventListener(LOCKOUT_CHANGED_EVENT, reportPending);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", reportPending);
+      window.removeEventListener(LOCKOUT_CHANGED_EVENT, reportPending);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?.id || isLocked) return;
@@ -184,12 +224,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from("app_users")
-        .select("role")
+        .select("role, is_suspended")
         .eq("id", user.id)
         .maybeSingle();
       if (!active || error) return;
-      if (!data) {
-        setIsLocked(true);
+      if (!data || data.is_suspended) {
+        clearOfflineUnlockCredential(user.id);
+        saveSession(null);
+        saveLastActivityAt(null);
+        setUser(null);
+        queryClient.clear();
+        setIsLocked(false);
         return;
       }
       const role = normalizeAppRole(data.role, user.username);
@@ -201,17 +246,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     };
-    void refreshRole();
+    const checkAccount = () => { void refreshRole().catch(() => undefined); };
+    checkAccount();
+    const timer = window.setInterval(checkAccount, 30_000);
+    window.addEventListener("focus", checkAccount);
+    window.addEventListener("online", checkAccount);
     return () => {
       active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkAccount);
+      window.removeEventListener("online", checkAccount);
     };
-  }, [user?.id, user?.role, user?.username]);
+  }, [queryClient, user?.id, user?.role, user?.username]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isLocked,
       login: async (username: string, password: string) => {
+        if (!navigator.onLine) throw new Error("Une connexion Internet est requise.");
         const supabase = getSupabaseClient();
         const result = await supabase.rpc("login_app_user", {
           p_username: username,
@@ -219,9 +272,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         const data = result.data as {
           id: string; username: string; full_name: string; role: string;
-          workspaces: string[]; taskSessionToken: string;
+          workspaces: string[]; taskSessionToken: string; error?: string;
         } | null;
 
+        if (data?.error === "APP_ACCOUNT_SUSPENDED") throw new Error(ACCOUNT_SUSPENDED_MESSAGE);
         if (result.error || !data || typeof data.taskSessionToken !== "string") {
           return false;
         }
@@ -241,6 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: normalizeAppRole((data as { role?: unknown }).role, data.username),
           taskSessionToken: data.taskSessionToken
         };
+        if (!recordOnlineSuccess(sessionUser.id, data.taskSessionToken)) throw new Error(ACCOUNT_SUSPENDED_MESSAGE);
         const previous = loadStoredAuthSession();
         if (previous?.id === sessionUser.id && previous.taskSessionToken) await preparePrivateTaskSession(previous.id, previous.taskSessionToken);
         setUser(sessionUser);
@@ -251,72 +306,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return true;
       },
       unlock: async (password: string) => {
-        if (!user?.id) {
-          return {
-            success: false,
-            error: "Votre session a expiré. Veuillez vous reconnecter."
-          };
-        }
-
-        const unlockLocally = async () => {
-          const matches = await verifyOfflineUnlockCredential(user.id, password);
-          if (matches === null) {
+        if (unlocking.current) return { success: false, error: "Vérification en cours." };
+        unlocking.current = true;
+        try {
+          if (!user?.id) {
             return {
-              success: false as const,
-              error: "Une connexion Internet est requise pour activer le déverrouillage hors ligne."
+              success: false,
+              error: "Votre session a expiré. Veuillez vous reconnecter."
             };
           }
-          if (!matches) {
-            return { success: false as const, error: "Mot de passe incorrect." };
+
+          const unlockLocally = async () => {
+            if (readAccountLockout(user.id).suspended) return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+            if (!user.taskSessionToken) return { success: false, error: "Une connexion Internet est requise." };
+            const matches = await verifyOfflineUnlockCredential(user.id, password);
+            if (matches === null) {
+              return {
+                success: false as const,
+                error: "Une connexion Internet est requise pour activer le déverrouillage hors ligne."
+              };
+            }
+            if (!matches) {
+              const state = recordPasswordFailure(user.id, user.taskSessionToken);
+              return { success: false as const, error: state.suspended ? ACCOUNT_SUSPENDED_MESSAGE : "Mot de passe incorrect." };
+            }
+            if (!recordOfflineSuccess(user.id)) return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+            saveLastActivityAt(Date.now());
+            setIsLocked(false);
+            return { success: true as const };
+          };
+
+          if (typeof navigator !== "undefined" && !navigator.onLine) {
+            return await unlockLocally();
           }
+
+          let taskSessionToken: string | undefined;
+          try {
+            const taskSession = await authenticatePassword(user.id, password);
+            if (!taskSession.error && typeof taskSession.data === "string") {
+              taskSessionToken = taskSession.data;
+            } else if (isNetworkAuthenticationError(taskSession.error)) {
+              return await unlockLocally();
+            } else if (/APP_ACCOUNT_SUSPENDED/i.test(taskSession.error?.message ?? "")) {
+              recordServerSuspension(user.id);
+              return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+            } else if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(taskSession.error?.message ?? "")) {
+              const state = recordPasswordFailure(user.id, user.taskSessionToken, taskSession.failedAttempts);
+              return { success: false, error: state.suspended ? ACCOUNT_SUSPENDED_MESSAGE : "Mot de passe incorrect." };
+            }
+          } catch (error) {
+            if (isNetworkAuthenticationError(error)) return await unlockLocally();
+          }
+
+          // Online authentication must fail closed if the server cannot verify it.
+          if (!taskSessionToken) {
+            return { success: false, error: "Impossible de vérifier le mot de passe." };
+          }
+
+          if (!recordOnlineSuccess(user.id, taskSessionToken)) return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+          if (taskSessionToken && user.taskSessionToken) {
+            try {
+              await preparePrivateTaskSession(user.id, user.taskSessionToken);
+            } catch (error) {
+              console.warn("Private task cache could not be prepared:", error);
+              return { success: false, error: "Impossible de déverrouiller les données locales." };
+            }
+          }
+          const nextUser = taskSessionToken
+            ? { ...user, taskSessionToken }
+            : user;
+          setUser(nextUser);
+          saveSession(nextUser);
+          await saveOfflineUnlockCredential(user.id, password);
           saveLastActivityAt(Date.now());
           setIsLocked(false);
-          return { success: true as const };
-        };
-
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          return unlockLocally();
-        }
-
-        let taskSessionToken: string | undefined;
-        try {
-          const taskSession = await getSupabaseClient().rpc("create_task_session", {
-            p_user_id: user.id,
-            p_password: password
-          });
-          if (!taskSession.error && typeof taskSession.data === "string") {
-            taskSessionToken = taskSession.data;
-          } else if (isNetworkAuthenticationError(taskSession.error)) {
-            return unlockLocally();
-          } else if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(taskSession.error?.message ?? "")) {
-            return { success: false, error: "Mot de passe incorrect." };
-          }
-        } catch (error) {
-          if (isNetworkAuthenticationError(error)) return unlockLocally();
-        }
-
-        // Online authentication must fail closed if the server cannot verify it.
-        if (!taskSessionToken) {
-          return { success: false, error: "Impossible de vérifier le mot de passe." };
-        }
-
-        if (taskSessionToken && user.taskSessionToken) {
-          try {
-            await preparePrivateTaskSession(user.id, user.taskSessionToken);
-          } catch (error) {
-            console.warn("Private task cache could not be prepared:", error);
-            return { success: false, error: "Impossible de déverrouiller les données locales." };
-          }
-        }
-        const nextUser = taskSessionToken
-          ? { ...user, taskSessionToken }
-          : user;
-        setUser(nextUser);
-        saveSession(nextUser);
-        await saveOfflineUnlockCredential(user.id, password);
-        saveLastActivityAt(Date.now());
-        setIsLocked(false);
-        return { success: true };
+          return { success: true };
+        } finally { unlocking.current = false; }
       },
       changePassword: async (currentPassword: string, newPassword: string) => {
         if (!user?.id) {
@@ -327,15 +392,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const supabase = getSupabaseClient();
-        const verificationSession = await supabase.rpc("create_task_session", {
-          p_user_id: user.id,
-          p_password: currentPassword
-        });
+        const verificationSession = await authenticatePassword(user.id, currentPassword);
         if (
           verificationSession.error ||
           typeof verificationSession.data !== "string"
         ) {
           const message = verificationSession.error?.message ?? "";
+          if (/APP_ACCOUNT_SUSPENDED/.test(message)) {
+            recordServerSuspension(user.id);
+            return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+          }
           if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(message)) {
             return { success: false, error: "Le mot de passe actuel est incorrect." };
           }
@@ -384,10 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        const taskSession = await supabase.rpc("create_task_session", {
-          p_user_id: user.id,
-          p_password: newPassword
-        });
+        const taskSession = await authenticatePassword(user.id, newPassword);
         const nextUser = {
           ...user,
           taskSessionToken:
@@ -410,16 +473,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        const taskSession = await getSupabaseClient().rpc(
-          "create_task_session",
-          {
-            p_user_id: user.id,
-            p_password: password
-          }
-        );
+        const taskSession = await authenticatePassword(user.id, password);
 
         if (taskSession.error || typeof taskSession.data !== "string") {
           const message = taskSession.error?.message ?? "";
+          if (/APP_ACCOUNT_SUSPENDED/.test(message)) {
+            recordServerSuspension(user.id);
+            return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+          }
           if (/TASK_SESSION_INVALID_CREDENTIALS/i.test(message)) {
             return {
               success: false,

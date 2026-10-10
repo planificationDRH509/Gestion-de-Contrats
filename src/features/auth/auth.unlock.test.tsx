@@ -3,14 +3,17 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./auth";
+import { ACCOUNT_SUSPENDED_MESSAGE, readAccountLockout } from "./accountLockout";
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
+  profile: vi.fn(),
   filter: vi.fn(),
   verifyAccount: vi.fn(),
   prepareTasks: vi.fn(),
   clearTasks: vi.fn(),
-  saveOfflineCredential: vi.fn()
+  saveOfflineCredential: vi.fn(),
+  verifyOfflineCredential: vi.fn()
 }));
 
 vi.mock("../../data/supabase/supabaseClient", () => ({
@@ -23,8 +26,8 @@ vi.mock("../../data/supabase/supabaseClient", () => ({
             mocks.filter(columns, column, value);
             return query;
           },
-          maybeSingle: () => columns === "role"
-            ? Promise.resolve({ data: { role: "admin" }, error: null })
+          maybeSingle: () => columns === "role, is_suspended"
+            ? mocks.profile()
             : mocks.verifyAccount()
         };
         return query;
@@ -40,7 +43,8 @@ vi.mock("../tasks/privateTaskOffline", () => ({
 
 vi.mock("./offlineUnlock", async (importOriginal) => ({
   ...await importOriginal<typeof import("./offlineUnlock")>(),
-  saveOfflineUnlockCredential: mocks.saveOfflineCredential
+  saveOfflineUnlockCredential: mocks.saveOfflineCredential,
+  verifyOfflineUnlockCredential: mocks.verifyOfflineCredential
 }));
 
 function UnlockHarness() {
@@ -64,6 +68,9 @@ function UnlockHarness() {
 describe("automatic session unlock", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    mocks.verifyOfflineCredential.mockResolvedValue(false);
+    mocks.profile.mockResolvedValue({ data: { role: "admin", is_suspended: false }, error: null });
     localStorage.setItem("contribution_auth", JSON.stringify({
       id: "user-1",
       username: "admin",
@@ -80,8 +87,7 @@ describe("automatic session unlock", () => {
 
   afterEach(() => {
     cleanup();
-    localStorage.removeItem("contribution_auth");
-    localStorage.removeItem("contribution_last_activity");
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -135,7 +141,7 @@ describe("automatic session unlock", () => {
   });
 
   it("preserves the encrypted cache and stays locked when it cannot be prepared", async () => {
-    mocks.rpc.mockResolvedValue({ data: "new-task-token", error: null });
+    mocks.rpc.mockResolvedValue({ data: { taskSessionToken: "new-task-token" }, error: null });
     mocks.prepareTasks.mockRejectedValue(new Error("Cache indisponible"));
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mount();
@@ -145,6 +151,56 @@ describe("automatic session unlock", () => {
     await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent("Impossible de déverrouiller les données locales."));
     expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
     expect(screen.getByTestId("task-token")).toHaveTextContent("old-task-token");
+  });
+
+  it("rejects unlocking a suspended account", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "APP_ACCOUNT_SUSPENDED" } });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent(ACCOUNT_SUSPENDED_MESSAGE));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+  });
+
+  it("clears a revoked session on the next account check", async () => {
+    mount();
+    await waitFor(() => expect(mocks.profile).toHaveBeenCalled());
+    mocks.profile.mockResolvedValue({ data: null, error: null });
+    fireEvent(window, new Event("focus"));
+    await waitFor(() => expect(screen.getByTestId("task-token")).toBeEmptyDOMElement());
+    expect(localStorage.getItem("contribution_auth")).toBeNull();
+  });
+
+  it("persists suspension on the eighth offline failure and rejects the correct password afterwards", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mount();
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+      await waitFor(() => expect(readAccountLockout("user-1").failures).toBe(attempt));
+    }
+    expect(screen.getByTestId("unlock-message")).toHaveTextContent(ACCOUNT_SUSPENDED_MESSAGE);
+    expect(readAccountLockout("user-1")).toMatchObject({ suspended: true, pending: true, token: "old-task-token" });
+    cleanup();
+    mocks.verifyOfflineCredential.mockResolvedValue(true);
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent(ACCOUNT_SUSPENDED_MESSAGE));
+    expect(mocks.verifyOfflineCredential).toHaveBeenCalledTimes(8);
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    fireEvent.click(screen.getByRole("button", { name: "Changer de compte" }));
+    await waitFor(() => expect(screen.getByTestId("task-token")).toBeEmptyDOMElement());
+    expect(readAccountLockout("user-1").pending).toBe(true);
+  });
+
+  it("serializes overlapping offline password checks", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    let finish!: (value: boolean) => void;
+    mocks.verifyOfflineCredential.mockImplementation(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    expect(mocks.verifyOfflineCredential).toHaveBeenCalledTimes(1);
+    finish(false);
+    await waitFor(() => expect(readAccountLockout("user-1").failures).toBe(1));
   });
 
   it("can leave the lock screen if the private task cache is unreadable", async () => {

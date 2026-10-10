@@ -32,7 +32,7 @@ test('print index navigates through selected contracts without affecting printed
   const documents = page.locator('.print-preview-documents');
   const target = page.locator('#print-contract-short');
   await expect.poll(() => index.evaluate(el => {
-    const preview = el.parentElement!.querySelector('.print-preview-documents')!;
+    const preview = el.closest('.print-preview-layout')!.querySelector('.print-preview-documents')!;
     return preview.getBoundingClientRect().left - el.getBoundingClientRect().right;
   })).toBeGreaterThan(0);
   await index.getByRole('link', { name: 'Marie JEAN', exact: true }).click();

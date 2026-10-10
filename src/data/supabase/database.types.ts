@@ -16,6 +16,9 @@ export type Database = {
     Tables: {
       app_users: {
         Row: {
+          failed_password_attempts: number
+          suspension_epoch: number
+          is_suspended: boolean
           created_at: string | null
           full_name: string
           id: string
@@ -26,6 +29,7 @@ export type Database = {
           workspaces: string[]
         }
         Insert: {
+          is_suspended?: boolean
           created_at?: string | null
           full_name: string
           id?: string
@@ -36,6 +40,7 @@ export type Database = {
           workspaces?: string[]
         }
         Update: {
+          is_suspended?: boolean
           created_at?: string | null
           full_name?: string
           id?: string
@@ -526,6 +531,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_app_user_suspended: {
+        Args: { p_session_token: string; p_user_id: string; p_is_suspended: boolean }
+        Returns: boolean
+      }
+      authenticate_app_user: {
+        Args: { p_user_id: string; p_password: string }
+        Returns: Json
+      }
+      report_offline_suspension: {
+        Args: { p_session_token: string }
+        Returns: boolean
+      }
       login_app_user: {
         Args: { p_username: string; p_password: string }
         Returns: Json

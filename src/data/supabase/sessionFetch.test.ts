@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { recordPasswordFailure, readAccountLockout } from "../../features/auth/accountLockout";
 import { createSessionFetch } from "./sessionFetch";
 
 const fetchMock = vi.hoisted(() => vi.fn().mockResolvedValue(new Response("[]")));
@@ -30,6 +31,25 @@ describe("application session transport", () => {
       await request(url, { headers: { "x-app-session": "stale" } });
       expect(fetchMock.mock.lastCall?.[1].headers.has("x-app-session")).toBe(false);
     }
+  });
+
+  it("reports suspension before queued requests and never sends the suspended session", async () => {
+    for (let i=0;i<8;i++) recordPasswordFailure("u","token");
+    localStorage.setItem("contribution_auth", JSON.stringify({ id: "u", taskSessionToken: "token" }));
+    fetchMock.mockResolvedValueOnce(new Response("true")).mockResolvedValueOnce(new Response("[]"));
+    await request("https://project.supabase.co/rest/v1/contrat", { headers: { apikey: "key" } });
+    expect(fetchMock.mock.calls[0][0]).toContain("/rpc/report_offline_suspension");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ p_session_token: "token" });
+    expect(fetchMock.mock.calls[1][1].headers.has("x-app-session")).toBe(false);
+    expect(readAccountLockout("u")).toMatchObject({ suspended: true, pending: false });
+  });
+
+  it("keeps pending suspension and prevents sync when reporting fails", async () => {
+    for (let i=0;i<8;i++) recordPasswordFailure("u","token");
+    fetchMock.mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
+    await expect(request("https://project.supabase.co/rest/v1/contrat")).rejects.toThrow("Suspension non synchronisée");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(readAccountLockout("u").pending).toBe(true);
   });
 
   it("does not trust a locally forged role or user ID as authentication", async () => {

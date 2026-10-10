@@ -276,6 +276,7 @@ export type UpdateDossierInput = {
 };
 
 export type AppUser = {
+  isSuspended?: boolean;
   id: string;
   username: string;
   password?: string;

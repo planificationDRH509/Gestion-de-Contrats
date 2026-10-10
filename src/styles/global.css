@@ -1213,6 +1213,27 @@ img {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .print-index-panel {
+    min-width: 0;
+  }
+
+  .print-index-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .print-index-toolbar .btn {
+    padding: 8px 10px;
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .print-preview-layout.is-index-hidden .print-index-toolbar {
+    margin-bottom: 0;
+  }
+
   .print-contract-index,
   .print-preview-documents {
     max-height: max(280px, calc(100dvh - 230px));
@@ -1221,6 +1242,7 @@ img {
   }
 
   .print-contract-index {
+    max-height: max(230px, calc(100dvh - 280px));
     padding: 6px;
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -8279,7 +8301,8 @@ button {
     grid-template-columns: 42px 1fr;
   }
 
-  .user-role-row .select {
+  .user-role-row .select,
+  .user-role-row .user-account-actions {
     grid-column: 1 / -1;
   }
 
@@ -10730,3 +10753,10 @@ body,
 .contract-mandate-warning .material-symbols-rounded { flex-shrink: 0; font-size: 18px; }
 .contract-mandate-badge { color: var(--warning, #a16207); background: rgba(234, 179, 8, .10); border: 1px solid rgba(234, 179, 8, .4); }
 .contracts-sheet-row-wrap .contract-mandate-warning { border-radius: 0; margin: 0; padding: 4px 8px; font-size: 11px; }
+
+.user-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
