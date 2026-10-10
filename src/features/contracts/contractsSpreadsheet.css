@@ -36,13 +36,13 @@
 }
 
 .contracts-data-sheet .contracts-sheet-input-multiline {
-  /* Editing long values must not resize the row or move adjacent cells. */
-  field-sizing: fixed;
-  height: 44px;
-  overflow: auto;
-  white-space: pre;
-  overflow-wrap: normal;
-  scrollbar-width: none;
+  /* Size to the text, without animating geometry when focus changes. */
+  field-sizing: content;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .contracts-data-sheet .contracts-sheet-nif-field {
@@ -372,4 +372,52 @@
 .contracts-data-sheet .contracts-sheet-scroll {
   /* Keep the fit scale independent of vertical overflow. */
   scrollbar-gutter: stable;
+  max-height: max(280px, calc(100dvh - 240px));
+}
+
+.contracts-sheet-fullscreen-body .contracts-data-sheet .contracts-sheet-scroll {
+  max-height: none;
+}
+
+.contracts-data-sheet .contracts-sheet-row-shell .contracts-sheet-row:focus-within {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+
+.contracts-data-sheet .contracts-sheet-cell:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.contracts-data-sheet .contracts-sheet-head-cell.is-active-column {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+/* The identity columns share offsets with their headers at every zoom. */
+.contracts-data-sheet :is(.contracts-sheet-cell, .contracts-sheet-head-cell):nth-child(-n + 3) {
+  position: sticky;
+  z-index: 2;
+}
+
+.contracts-data-sheet :is(.contracts-sheet-cell, .contracts-sheet-head-cell):nth-child(1) { left: var(--sheet-nif-left); }
+.contracts-data-sheet :is(.contracts-sheet-cell, .contracts-sheet-head-cell):nth-child(2) { left: var(--sheet-first-name-left); }
+.contracts-data-sheet :is(.contracts-sheet-cell, .contracts-sheet-head-cell):nth-child(3) { left: var(--sheet-last-name-left); }
+
+.contracts-data-sheet .contracts-sheet-cell:nth-child(-n + 3) {
+  background-color: inherit;
+}
+
+.contracts-data-sheet .contracts-sheet-head-cell:nth-child(-n + 3):not(.is-active-column) {
+  background-color: var(--panel-muted);
+}
+
+.contracts-data-sheet :is(.contracts-sheet-state-cell, .contracts-sheet-state-head, .contracts-sheet-menu-cell, .contracts-sheet-menu-head) {
+  position: sticky;
+  z-index: 3;
+  left: 0;
+}
+
+.contracts-data-sheet :is(.contracts-sheet-menu-cell, .contracts-sheet-menu-head) {
+  left: var(--sheet-state-width);
 }

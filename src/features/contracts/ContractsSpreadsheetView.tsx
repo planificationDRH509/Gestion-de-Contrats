@@ -310,6 +310,7 @@ export function ContractsSpreadsheetView({
   const [defaultsOpen, setDefaultsOpen] = useState(preferences.defaultsOpen ?? false);
   const [recentOpen, setRecentOpen] = useState(preferences.recentOpen ?? true);
   const [phoneVisible, setPhoneVisible] = useState(preferences.phoneVisible ?? false);
+  const [activeColumn, setActiveColumn] = useState<number | null>(null);
   const visibleColumns = useMemo(() => COLUMNS.filter(column => column.key !== "phone" || phoneVisible), [phoneVisible]);
   const navigableColumnCount = visibleColumns.length;
   const [pasteError, setPasteError] = useState("");
@@ -1586,7 +1587,12 @@ export function ContractsSpreadsheetView({
       ref={sheetRootRef}
       onPaste={handleSheetPaste}
       onFocusCapture={event => {
-        if ((event.target as HTMLElement).dataset.sheetRow) editSession.current++;
+        const target = event.target as HTMLElement;
+        if (target.dataset.sheetRow) editSession.current++;
+        setActiveColumn(target.dataset.sheetCol === undefined ? null : Number(target.dataset.sheetCol));
+      }}
+      onBlurCapture={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActiveColumn(null);
       }}
       onKeyDownCapture={event => {
         if (!(event.target as HTMLElement).dataset.sheetRow || !(event.ctrlKey || event.metaKey) || event.altKey) return;
@@ -1596,7 +1602,13 @@ export function ContractsSpreadsheetView({
           restoreHistory(event.shiftKey || event.key.toLowerCase() === "y");
         }
       }}
-      style={{ "--sheet-state-width": `${STATUS_COLUMN_WIDTH}px`, "--sheet-actions-width": `${ACTIONS_COLUMN_WIDTH}px` } as React.CSSProperties}
+      style={{
+        "--sheet-state-width": `${STATUS_COLUMN_WIDTH}px`,
+        "--sheet-actions-width": `${ACTIONS_COLUMN_WIDTH}px`,
+        "--sheet-nif-left": `${STATUS_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH}px`,
+        "--sheet-first-name-left": `${STATUS_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + columnWidths.nif}px`,
+        "--sheet-last-name-left": `${STATUS_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + columnWidths.nif + columnWidths.firstName}px`
+      } as React.CSSProperties}
     >
       <div className="sheet-edit-toolbar" role="toolbar" aria-label="Actions du tableur">
         <div className="sheet-edit-actions">
@@ -1678,8 +1690,8 @@ export function ContractsSpreadsheetView({
             </div>
             <div className="contracts-sheet-menu-head" aria-hidden="true" />
             <div className="contracts-sheet-header" style={{ gridTemplateColumns }}>
-              {visibleColumns.map((column) => (
-                <div key={column.key} className="contracts-sheet-head-cell">
+              {visibleColumns.map((column, index) => (
+                <div key={column.key} className={`contracts-sheet-head-cell${activeColumn === index ? " is-active-column" : ""}`}>
                   <span>{column.label}</span>
                   <button
                     type="button"

@@ -15,10 +15,22 @@ async function expectStableEditing(page: Page) {
       }))
     };
   });
-  const before = await geometry();
   const name = sheet.locator('.contracts-sheet-row-new [data-sheet-col="1"]').first();
   const original = await name.inputValue();
   await name.fill('Marie Stéphanie Alexandra Jean Baptiste Pierre Louis');
+  const expectFullText = async () => {
+    const size = await name.evaluate(field => ({
+      height: field.clientHeight,
+      contentHeight: field.scrollHeight,
+      contentWidth: field.scrollWidth,
+      width: field.clientWidth
+    }));
+    expect(size.height).toBeGreaterThan(44);
+    expect(size.contentHeight).toBeLessThanOrEqual(size.height + 1);
+    expect(size.contentWidth).toBeLessThanOrEqual(size.width + 1);
+  };
+  await expectFullText();
+  const before = await geometry();
   for (let index = 0; index < 5; index++) {
     await page.keyboard.press('Tab');
     expect(await geometry()).toEqual(before);
@@ -26,7 +38,12 @@ async function expectStableEditing(page: Page) {
   await name.focus();
   await name.press('End');
   await name.pressSequentially(' Alexandra', { delay: 30 });
-  expect(await geometry()).toEqual(before);
+  await expectFullText();
+  const afterTyping = await geometry();
+  await name.press('Tab');
+  expect(await geometry()).toEqual(afterTyping);
+  await name.focus();
+  expect(await geometry()).toEqual(afterTyping);
   await name.fill(original);
 }
 
@@ -216,4 +233,37 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   await expect(page.locator('.defaults-input-mini')).toHaveValue('6');
   await expect(page.getByPlaceholder('Adresse par défaut')).toHaveValue('Delmas');
   await expect(page.locator('.contracts-sheet-row-new [data-sheet-col="1"]').first()).toHaveValue('Marie Stéphanie Alexandra');
+
+  // Focus highlights the cell and its header without changing their geometry.
+  const focusedName = page.locator('.contracts-sheet-row-new [data-sheet-col="1"]').first();
+  await focusedName.focus();
+  await expect(page.locator('.contracts-sheet-head-cell').nth(1)).toHaveClass(/is-active-column/);
+  expect(await focusedName.locator('..').evaluate(cell => getComputedStyle(cell).outlineStyle)).toBe('solid');
+  await focusedName.press('Tab');
+  await expect(page.locator('.contracts-sheet-head-cell').nth(2)).toHaveClass(/is-active-column/);
+  await expect(page.locator('.contracts-sheet-head-cell').nth(1)).not.toHaveClass(/is-active-column/);
+
+  await page.setViewportSize({width: 1000, height: 600});
+  await page.getByRole('combobox', {name:'Zoom du tableur', exact:true}).selectOption('100');
+  for (let index = 0; index < 10; index++) await page.getByRole('button', {name:'Ligne', exact:true}).click();
+  const lastNif = page.locator('.contracts-sheet-row-new [data-sheet-col="0"]').last();
+  await expect(lastNif).toBeFocused();
+  await lastNif.blur();
+  const scroll = page.locator('.contracts-data-sheet .contracts-sheet-scroll');
+  await scroll.evaluate(element => { element.scrollLeft = 0; element.scrollTop = 0; });
+  const positions = () => page.locator('.contracts-data-sheet').evaluate(root => ({
+    headers: [...root.querySelectorAll('.contracts-sheet-head-cell')].slice(0, 4).map(cell => cell.getBoundingClientRect().x),
+    cells: [...root.querySelector('.contracts-sheet-row-new')!.children].slice(0, 4).map(cell => cell.getBoundingClientRect().x),
+    headerTop: root.querySelector('.contracts-sheet-header-shell')!.getBoundingClientRect().top - root.querySelector('.contracts-sheet-scroll')!.getBoundingClientRect().top
+  }));
+  const initial = await positions();
+  await scroll.evaluate(element => { element.scrollLeft = 300; element.scrollTop = 120; });
+  await expect.poll(() => scroll.evaluate(element => element.scrollLeft)).toBe(300);
+  await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBe(120);
+  const scrolled = await positions();
+  expect(scrolled.headers.slice(0, 3)).toEqual(initial.headers.slice(0, 3));
+  expect(scrolled.cells.slice(0, 3)).toEqual(initial.cells.slice(0, 3));
+  expect(scrolled.headers[3]).toBeCloseTo(initial.headers[3] - 300, 1);
+  expect(scrolled.headerTop).toBeCloseTo(initial.headerTop, 1);
+  await page.screenshot({path:'/tmp/contract-sheet-frozen-columns.png',fullPage:true});
 });
