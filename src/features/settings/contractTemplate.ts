@@ -16,6 +16,7 @@ import { referenceContractTemplate } from "./referenceContractTemplate";
 import { getStoredContractStartDate } from "./settingsApi";
 import {
   getContractFiscalYear,
+  getContractStartDate,
   getFiscalYearEndYear
 } from "../../lib/contractDateFilters";
 
@@ -601,11 +602,7 @@ export function buildTemplateVariables(
   const endDate = new Date(endYear, 8, 30);
 
   const d = contract.durationMonths ?? 12;
-  const targetStartMonth = 8 - d + 1;
-  const automaticStartDate = new Date(endYear, targetStartMonth, 1);
-  while (automaticStartDate.getDay() !== 1) {
-    automaticStartDate.setDate(automaticStartDate.getDate() + 1);
-  }
+  const automaticStartDate = getContractStartDate(contract);
   const configuredStartDate = getStoredContractStartDate(contract.workspaceId, d);
   const startDate = configuredStartDate
     ? new Date(

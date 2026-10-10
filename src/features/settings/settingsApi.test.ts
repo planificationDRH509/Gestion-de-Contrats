@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  getStoredContractStartDates,
+  setStoredContractStartDates,
   getStoredFiscalYear,
   getStoredFiscalYearMode,
   getStoredLocalFiscalYear,
@@ -12,6 +14,12 @@ const NOW = new Date(2026, 7, 26, 12, 0, 0);
 describe("fiscal year settings", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it("discards annual date overrides while preserving other durations", () => {
+    setStoredContractStartDates("w", { 12: "2026-01-12", 9: "2026-01-12" });
+    expect(getStoredContractStartDates("w")).toEqual({ 9: "2026-01-12" });
+    expect(JSON.parse(localStorage.getItem("contribution_contract_start_dates:w")!)).toEqual({ 9: "2026-01-12" });
   });
 
   it("uses the actual fiscal year in online mode", () => {

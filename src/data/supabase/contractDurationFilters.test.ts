@@ -45,3 +45,30 @@ it("filters durations before pagination with the same totals online and offline"
   expect((await provider.contracts.list({ workspaceId, durations: [3] })).total).toBe(0);
   expect((await provider.contracts.list({ workspaceId, durations: [] })).total).toBe(4);
 });
+
+it("filters fiscal years before pagination online and offline, including legacy contracts", async () => {
+  localStorage.clear();
+  vi.stubGlobal("navigator", { onLine: true });
+  const fiscalRows = rows.map((row, index) => ({
+    ...row,
+    annee_fiscale: index === 0 ? "2024-2025" : index === 1 ? "2025-2026" : null,
+    created_at: index === 2 ? "2025-01-01T00:00:00Z" : row.created_at
+  }));
+  mocks.from.mockImplementation(() => {
+    const query = {
+      select: () => query, eq: () => query, is: () => query, order: () => query,
+      range: async (from: number, to: number) => ({ data: fiscalRows.slice(from, to + 1), count: fiscalRows.length, error: null })
+    };
+    return query;
+  });
+  const provider = createSupabaseProvider();
+  await provider.contracts.list({ workspaceId, pageSize: 25 });
+  const params = { workspaceId, fiscalYear: "2024-2025", pageSize: 1, page: 2 };
+  const connected = await provider.contracts.list(params);
+  expect(connected.total).toBe(2);
+  expect(connected.items.map(contract => contract.id)).toEqual(["contract-2"]);
+  expect((await provider.contracts.list({ workspaceId, fiscalYear: "2023-2024" })).total).toBe(0);
+  vi.stubGlobal("navigator", { onLine: false });
+  expect(await provider.contracts.list(params)).toEqual(connected);
+  expect((await provider.contracts.list({ workspaceId, fiscalYear: "2023-2024" })).total).toBe(0);
+});

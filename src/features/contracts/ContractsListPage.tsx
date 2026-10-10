@@ -26,7 +26,7 @@ import { useAssignTagToContract, useCreateTag, useTags } from "./tagsApi";
 import { useAddresses, useInstitutions } from "../settings/suggestionsApi";
 import {
   getContractFiscalYear,
-  getCurrentFiscalYearStart,
+  getFiscalYearOptions,
   getFiscalYearForDate,
   getTodayDateInputValue,
   isPastFiscalYear
@@ -143,6 +143,7 @@ export function ContractsListPage() {
   const [showAll, setShowAll] = useState(() => localStorage.getItem("contracts_view_all") === "true");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | "all">("all");
   const [dossierFilterId, setDossierFilterId] = useState<string | null>(null);
+  const [fiscalYearFilter, setFiscalYearFilter] = useState(currentFiscalYear);
   const [dateFilterMode, setDateFilterMode] = useState<ContractDateFilterMode>("all");
   const [dateFilterDate, setDateFilterDate] = useState(() => getTodayDateInputValue());
   const [dateFilterStart, setDateFilterStart] = useState(() => getTodayDateInputValue());
@@ -282,6 +283,7 @@ export function ContractsListPage() {
     userId,
     status: statusFilter !== "all" ? statusFilter : undefined,
     dossierId: dossierFilterId ?? undefined,
+    fiscalYear: fiscalYearFilter,
     dateFilterMode: dateFilterMode !== "all" ? dateFilterMode : undefined,
     dateFilterDate: dateFilterMode === "day" ? dateFilterDate : undefined,
     dateFilterStart: dateFilterMode === "range" ? dateFilterStart : undefined,
@@ -291,6 +293,7 @@ export function ContractsListPage() {
     positions: selectedPositions.length > 0 ? selectedPositions : undefined,
     durations: selectedDurations.length > 0 ? selectedDurations.map(value => Number.parseInt(value, 10)) : undefined
   }), [
+    fiscalYearFilter,
     dateFilterDate,
     dateFilterEnd,
     dateFilterMode,
@@ -428,22 +431,19 @@ export function ContractsListPage() {
     [dossiers]
   );
   const dossierGroups = useMemo(() => getUserDossierGroups(dossiers, user?.id, dossierMetrics), [dossiers, user?.id, dossierMetrics]);
-  const fiscalYearStartLabel = useMemo(
-    () => getCurrentFiscalYearStart().toLocaleDateString("fr-FR"),
-    []
-  );
   const isDateRangeInvalid =
     Boolean(dateFilterStart) &&
     Boolean(dateFilterEnd) &&
     dateFilterStart > dateFilterEnd;
   const advancedFilterCount = [selectedAssignments, selectedDepartments, selectedCommunes, selectedPositions, selectedDurations]
-    .filter(values => values.length > 0).length + Number(statusFilter !== "all") + Number(dateFilterMode !== "all");
+    .filter(values => values.length > 0).length + Number(statusFilter !== "all") + Number(dateFilterMode !== "all") + Number(fiscalYearFilter !== currentFiscalYear);
   const isTodayFilterActive = dateFilterMode === "day" && dateFilterDate === getTodayDateInputValue();
   const hasActiveFilters =
     statusFilter !== "all" ||
     Boolean(dossierFilterId) ||
     Boolean(tagFilterId) ||
     dateFilterMode !== "all" ||
+    fiscalYearFilter !== currentFiscalYear ||
     query.trim().length > 0 ||
     selectedAssignments.length > 0 ||
     selectedPositions.length > 0 ||
@@ -460,6 +460,7 @@ export function ContractsListPage() {
     setDossierFilterId(null);
     setTagFilterId(null);
     setDateFilterMode("all");
+    setFiscalYearFilter(currentFiscalYear);
     setDateFilterDate(today);
     setDateFilterStart(today);
     setDateFilterEnd(today);
@@ -1509,6 +1510,16 @@ export function ContractsListPage() {
                   <span className="material-symbols-rounded">event</span><span>Date</span>
                 </button>
                 </div>
+              <select
+                className="select"
+                aria-label="Exercice fiscal"
+                value={fiscalYearFilter}
+                onChange={(event) => { setFiscalYearFilter(event.target.value); setPage(1); }}
+              >
+                {getFiscalYearOptions().map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
               <MultiSelectDropdown
                 fullWidth
                 label="Institution"
@@ -2180,21 +2191,6 @@ export function ContractsListPage() {
                           Mois actuel
                         </button>
 
-                        <button
-                          className="context-menu-item"
-                          onClick={() => {
-                            setDateFilterMode("fiscal_year_current");
-                            setContextMenu(null);
-                            setPage(1);
-                          }}
-                          style={{ color: dateFilterMode === "fiscal_year_current" ? "var(--accent)" : "inherit", fontWeight: dateFilterMode === "fiscal_year_current" ? 600 : 400 }}
-                        >
-                          <span className="material-symbols-rounded" style={{ fontSize: "18px" }}>
-                            {dateFilterMode === "fiscal_year_current" ? "radio_button_checked" : "radio_button_unchecked"}
-                          </span>
-                          Année fiscale actuelle
-                        </button>
-
                         <div style={{ borderTop: "1px solid var(--border)", marginTop: "4px", padding: "10px" }}>
                           <div style={{ fontSize: "11px", color: "var(--ink-muted)", marginBottom: "6px" }}>Période précise (du / au)</div>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
@@ -2234,9 +2230,7 @@ export function ContractsListPage() {
                           </button>
                         </div>
 
-                        <div className="helper-text" style={{ padding: "4px 10px 10px" }}>
-                          Année fiscale actuelle: depuis le {fiscalYearStartLabel}
-                        </div>
+
                       </div>
                     </>
                   ) : contextMenu.id === "tag-filter-trigger" ? (

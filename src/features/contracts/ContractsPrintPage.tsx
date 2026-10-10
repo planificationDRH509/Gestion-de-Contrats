@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen, List } from "lucide-react";
+import { printContractList } from "./printContractList";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import { useChangeContractsStatus, useContractsByIds } from "./contractsApi";
@@ -8,7 +10,7 @@ import {
   type ContractPageSelection
 } from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
-import { orderContractsByIds } from "../../lib/contractSorting";
+import { sortContracts } from "../../lib/contractSorting";
 import { PrintContractIndexItem } from "./PrintContractIndexItem";
 
 export function ContractsPrintPage() {
@@ -18,6 +20,9 @@ export function ContractsPrintPage() {
   const workspaceId = user?.workspaceId ?? "";
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
+  const listPrintInProgressRef = useRef(false);
+  const listPrintCleanupRef = useRef<(() => void) | null>(null);
+  const [indexVisible, setIndexVisible] = useState(true);
   const documentsRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef<HTMLElement>(null);
   const [pageSelection, setPageSelection] = useState<ContractPageSelection>(CONTRACT_PAGES);
@@ -28,13 +33,22 @@ export function ContractsPrintPage() {
   const ids = useMemo(() => idsParam.split(",").map((id) => id.trim()).filter(Boolean), [idsParam]);
   const { data, isLoading } = useContractsByIds(ids, workspaceId);
 
-  const orderedContracts = useMemo(() => orderContractsByIds(data ?? [], ids), [data, ids]);
+  const orderedContracts = useMemo(() => sortContracts(data ?? [], "name_asc"), [data]);
 
   const printableContracts = useMemo(() => orderedContracts.filter(contract => !excludedIds.has(contract.id)), [orderedContracts, excludedIds]);
 
   useEffect(() => {
     setExcludedIds(new Set());
   }, [idsParam, workspaceId]);
+
+  useEffect(() => () => listPrintCleanupRef.current?.(), []);
+
+  function handlePrintList() {
+    if (printableContracts.length === 0) return;
+    listPrintCleanupRef.current?.();
+    listPrintInProgressRef.current = true;
+    listPrintCleanupRef.current = printContractList(printableContracts, () => { listPrintInProgressRef.current = false; });
+  }
 
   function toggleContract(id: string) {
     setExcludedIds(previous => {
@@ -93,7 +107,7 @@ export function ContractsPrintPage() {
   useEffect(() => {
     const index = indexRef.current;
     const activeLink = index?.querySelector('[aria-current="location"]');
-    if (!index || !activeLink) return;
+    if (!index || !activeLink || !indexVisible) return;
     const listBounds = index.getBoundingClientRect();
     const linkBounds = activeLink.getBoundingClientRect();
     if (linkBounds.top < listBounds.top) {
@@ -101,15 +115,17 @@ export function ContractsPrintPage() {
     } else if (linkBounds.bottom > listBounds.bottom) {
       index.scrollTop += linkBounds.bottom - listBounds.bottom + 6;
     }
-  }, [activeContractId]);
+  }, [activeContractId, indexVisible]);
 
   function handlePrint() {
+    listPrintInProgressRef.current = false;
     if (pageSelection.length > 0 && printableContracts.length > 0) window.print();
   }
 
   useEffect(() => {
     if (printableContracts.length === 0 || pageSelection.length === 0 || !workspaceId) return;
     const handleAfterPrint = () => {
+      if (listPrintInProgressRef.current) return;
       const now = Date.now();
       if (lastAfterPrintAtRef.current && now - lastAfterPrintAtRef.current < 1000) {
         return;
@@ -178,6 +194,20 @@ export function ContractsPrintPage() {
           </div>
         </div>
         <div className="toolbar">
+          <button
+            className="btn btn-outline"
+            title={indexVisible ? "Masquer la liste" : "Afficher la liste"}
+            aria-label={indexVisible ? "Masquer la liste" : "Afficher la liste"}
+            aria-expanded={indexVisible}
+            aria-controls="print-contract-index"
+            onClick={() => setIndexVisible(visible => !visible)}
+          >
+            {indexVisible ? <PanelLeftClose size={18} aria-hidden="true" /> : <PanelLeftOpen size={18} aria-hidden="true" />}
+          </button>
+          <button className="btn btn-outline" onClick={handlePrintList} disabled={printableContracts.length === 0}>
+            <List size={17} aria-hidden="true" />
+            Imprimer la liste
+          </button>
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
@@ -187,8 +217,8 @@ export function ContractsPrintPage() {
         </div>
       </div>
 
-      <div className="print-preview-layout">
-        <nav ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">
+      <div className={`print-preview-layout${indexVisible ? "" : " is-index-hidden"}`}>
+        <nav id="print-contract-index" hidden={!indexVisible} ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">
           <ol>
             {orderedContracts.map((contract, index) => (
               <PrintContractIndexItem

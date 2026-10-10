@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   appendPrintHistory: vi.fn(),
+  printList: vi.fn(() => vi.fn()),
   contracts: [
     {
       id: "contract-1",
       workspaceId: "workspace-1",
       status: "saisie"
     }
-  ],
+  ] as { id: string; workspaceId: string; status: string; firstName?: string; lastName?: string }[],
   canChangeStatus: true,
   mutate: vi.fn(),
   navigate: vi.fn(),
@@ -41,6 +42,8 @@ vi.mock("./ContractDocument", () => ({
   ))
 }));
 
+vi.mock("./printContractList", () => ({ printContractList: mocks.printList }));
+
 vi.mock("../../lib/printHistory", () => ({
   appendPrintHistory: mocks.appendPrintHistory
 }));
@@ -58,6 +61,7 @@ describe("ContractsPrintPage", () => {
       }
     ];
     mocks.appendPrintHistory.mockReset();
+    mocks.printList.mockClear();
     mocks.mutate.mockReset();
     mocks.navigate.mockReset();
     mocks.canChangeStatus = true;
@@ -143,18 +147,16 @@ describe("ContractsPrintPage", () => {
     expect(screen.getByRole("button", { name: "Imprimer" })).toBeEnabled();
   });
 
-  it("renders a group in the same order as the requested ids", () => {
-    mocks.searchParams = "ids=contract-2,contract-1";
+  it("sorts both the preview and index by surname, then given name, regardless of requested ids", () => {
+    mocks.searchParams = "ids=contract-1,contract-3,contract-2";
     mocks.contracts = [
-      { id: "contract-1", workspaceId: "workspace-1", status: "saisie" },
-      { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }
+      { id: "contract-1", workspaceId: "workspace-1", status: "saisie", lastName: "Zola", firstName: "Annie" },
+      { id: "contract-3", workspaceId: "workspace-1", status: "saisie", lastName: "Albert", firstName: "Zoé" },
+      { id: "contract-2", workspaceId: "workspace-1", status: "saisie", lastName: "ALBERT", firstName: "Anne" }
     ];
-
     render(<ContractsPrintPage />);
-
-    expect(screen.getAllByTestId("contract-document").map((document) =>
-      document.getAttribute("data-contract-id")
-    )).toEqual(["contract-2", "contract-1"]);
+    expect(screen.getAllByTestId("contract-document").map(document => document.getAttribute("data-contract-id"))).toEqual(["contract-2", "contract-3", "contract-1"]);
+    expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["1Anne ALBERT", "2Zoé ALBERT", "3Annie ZOLA"]);
   });
 
   it("marks a one-page group print as partial", () => {
@@ -196,7 +198,7 @@ describe("ContractsPrintPage", () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ workspaceId: "workspace-1", contractIds: ["contract-1"], status: "imprime" });
     expect(mocks.appendPrintHistory).toHaveBeenCalledWith("user-1", "workspace-1", [mocks.contracts[0]], { partial: false });
     fireEvent.click(screen.getByRole("button", { name: "Réintégrer contract-2" }));
-    expect(screen.getAllByTestId("contract-document").map(element => element.getAttribute("data-contract-id"))).toEqual(["contract-2", "contract-1"]);
+    expect(screen.getAllByTestId("contract-document").map(element => element.getAttribute("data-contract-id"))).toEqual(["contract-1", "contract-2"]);
   });
 
   it("keeps an excluded last contract available for restoration without printing or changing its status", () => {
@@ -227,6 +229,34 @@ describe("ContractsPrintPage", () => {
     fireEvent.keyDown(details, { key: "Escape" });
     expect(details).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("hides and restores the index without changing the print selection", () => {
+    render(<ContractsPrintPage />);
+    const index = screen.getByRole("navigation", { name: "Contrats sélectionnés" });
+    fireEvent.click(screen.getByRole("button", { name: "Masquer la liste" }));
+    expect(index).not.toBeVisible();
+    expect(screen.getByTestId("contract-document")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Afficher la liste" }));
+    expect(index).toBeVisible();
+  });
+
+  it("prints the retained list independently of page selection, status and contract history", () => {
+    mocks.searchParams = "ids=contract-1,contract-2";
+    mocks.contracts = [mocks.contracts[0], { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }];
+    render(<ContractsPrintPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Retirer contract-2 de l’impression" }));
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer la liste" }));
+    expect(mocks.printList).toHaveBeenCalledWith([mocks.contracts[0]], expect.any(Function));
+    act(() => window.dispatchEvent(new Event("afterprint")));
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.appendPrintHistory).not.toHaveBeenCalled();
+    for (const page of [1, 2, 3, 4]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Imprimer la liste" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retirer contract-1 de l’impression" }));
+    expect(screen.getByRole("button", { name: "Imprimer la liste" })).toBeDisabled();
   });
 
   it("asks before changing the contract status after printing", () => {

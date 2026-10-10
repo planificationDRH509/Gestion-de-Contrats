@@ -14,7 +14,7 @@ import {
 import { createId } from "../../lib/uuid";
 import { loadDb, saveDb, selectDb, flushLocalDbWrites, type LocalDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
-import { matchesContractDateFilter } from "../../lib/contractDateFilters";
+import { getContractFiscalYear, matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { matchesContractSearch } from "../../lib/personSearch";
 import {
@@ -100,6 +100,10 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
 
     if (params.durations?.length) {
       items = items.filter((contract) => params.durations!.includes(contract.durationMonths));
+    }
+
+    if (params.fiscalYear) {
+      items = items.filter(contract => getContractFiscalYear(contract) === params.fiscalYear);
     }
 
     if (params.dateFilterMode && params.dateFilterMode !== "all") {

@@ -87,6 +87,7 @@ export function getContractStartDate(contract: ContractDateShape): Date {
   const endYear = getFiscalYearEndYear(contract);
 
   const durationMonths = contract.durationMonths ?? 12;
+  if (durationMonths === 12) return new Date(endYear - 1, 9, 1);
   const targetStartMonth = 8 - durationMonths + 1;
   const startDate = new Date(endYear, targetStartMonth, 1);
   while (startDate.getDay() !== 1) {

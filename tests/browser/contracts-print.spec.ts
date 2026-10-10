@@ -3,13 +3,14 @@ import { expect, test } from '@playwright/test';
 test('print index navigates through selected contracts without affecting printed pages', async ({ page }) => {
   const now = new Date().toISOString();
   await page.addInitScript(() => {
+    window.print = () => { document.documentElement.dataset.printRequested = 'true'; };
     localStorage.setItem('contribution_auth', JSON.stringify({id:'sheet-layout-user',username:'admin',name:'Test',workspaceId:'workspace_default',role:'admin',taskSessionToken:'test-token'}));
     localStorage.setItem('contribution_last_activity',String(Date.now()));
     localStorage.setItem('new_contract_entry_mode','sheet');
   });
   const people = [
     {id:'short',first:'Marie',last:'Jean',address:'Delmas',position:'Infirmière de ligne',assignment:'Direction générale'},
-    {id:'long',first:'Marie Stéphanie Alexandra',last:'Jean Baptiste Pierre Louis',address:'Port-au-Prince, quartier du centre administratif',position:'Technicienne en maintenance informatique',assignment:'Direction départementale de la santé de la Grand’Anse'}
+    {id:'long',first:'Marie Stéphanie Alexandra',last:'Durand',address:'Port-au-Prince, quartier du centre administratif',position:'Technicienne en maintenance informatique',assignment:'Direction départementale de la santé de la Grand’Anse'}
   ];
   await page.route('**/*.supabase.co/**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -22,28 +23,37 @@ test('print index navigates through selected contracts without affecting printed
   });
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('http://127.0.0.1:5179/app/contrats/print?ids=long,short');
+  await page.goto('http://127.0.0.1:5179/app/contrats/print?ids=short,long');
   const index = page.getByRole('navigation', { name: 'Contrats sélectionnés' });
-  await expect(index.getByRole('link')).toHaveText(['1Marie Stéphanie Alexandra JEAN BAPTISTE PIERRE LOUIS', '2Marie JEAN']);
+  await expect(index.getByRole('link')).toHaveText(['1Marie Stéphanie Alexandra DURAND', '2Marie JEAN']);
   const firstLink = index.getByRole('link').first();
   const secondLink = index.getByRole('link').last();
   await expect(firstLink).toHaveAttribute('aria-current', 'location');
   const documents = page.locator('.print-preview-documents');
   const target = page.locator('#print-contract-short');
-  const indexBounds = (await index.boundingBox())!;
-  expect(indexBounds.x + indexBounds.width).toBeLessThan((await documents.boundingBox())!.x);
+  await expect.poll(() => index.evaluate(el => {
+    const preview = el.parentElement!.querySelector('.print-preview-documents')!;
+    return preview.getBoundingClientRect().left - el.getBoundingClientRect().right;
+  })).toBeGreaterThan(0);
   await index.getByRole('link', { name: 'Marie JEAN', exact: true }).click();
   await expect(target).toBeFocused();
   await expect(secondLink).toHaveAttribute('aria-current', 'location');
   await expect(firstLink).not.toHaveAttribute('aria-current');
   await expect.poll(() => documents.evaluate(el => el.scrollTop)).toBeGreaterThan(1000);
   expect(Math.abs((await target.boundingBox())!.y - (await documents.boundingBox())!.y)).toBeLessThan(5);
-  // Wheel scrolling updates the index without clicking a name or moving focus.
+  const previousWidth = (await documents.boundingBox())!.width;
+  await page.getByRole('button', { name: 'Masquer la liste', exact: true }).click();
+  await expect(index).toBeHidden();
+  expect((await documents.boundingBox())!.width).toBeGreaterThan(previousWidth);
+  await page.getByRole('button', { name: 'Afficher la liste', exact: true }).click();
+  await expect(index).toBeVisible();
+  await secondLink.click();
+  await expect(target).toBeFocused();
+  // Wheel scrolling updates the index without clicking a name.
   await documents.hover();
   await page.mouse.wheel(0, -5000);
   await expect(firstLink).toHaveAttribute('aria-current', 'location');
   await expect(secondLink).not.toHaveAttribute('aria-current');
-  await expect(target).toBeFocused();
   await page.mouse.wheel(0, 5000);
   await expect(secondLink).toHaveAttribute('aria-current', 'location');
 
@@ -72,6 +82,26 @@ test('print index navigates through selected contracts without affecting printed
   await expect(firstLink).toHaveAttribute('aria-current', 'location');
   await expect(secondRow.getByRole('button', { name: /Réintégrer/ })).toBeVisible();
   await expect(page.locator('.contract-document')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Imprimer la liste', exact: true }).click();
+  const listFrame = page.frameLocator('iframe[title="Impression de la liste des contrats"]');
+  await expect(listFrame.locator('html')).toHaveAttribute('data-print-requested', 'true');
+  await expect(listFrame.locator('tbody tr')).toHaveCount(1);
+  await expect(listFrame.locator('thead')).toContainText('Nom et prénom');
+  await expect(listFrame.locator('tbody')).toContainText('Marie Stéphanie Alexandra');
+  await expect(listFrame.locator('tbody')).toContainText('6 mois');
+  await expect(listFrame.locator('body')).not.toContainText('35,000.00');
+  await expect(listFrame.locator('thead')).not.toContainText('Salaire');
+  await expect(listFrame.locator('.receipt-checkbox')).toHaveCount(1);
+  await expect(listFrame.locator('.signature-space')).toHaveCount(2);
+  await expect(listFrame.locator('tbody')).toContainText('Technicienne en maintenance informatique');
+  await expect(listFrame.locator('tbody')).toContainText('Direction départementale de la santé de la Grand’Anse');
+  const summary = await page.context().newPage();
+  await summary.setViewportSize({ width: 710, height: 700 });
+  await summary.setContent(await listFrame.locator('html').evaluate(el => el.outerHTML));
+  await summary.screenshot({ path: '/tmp/contracts-list-summary.png' });
+  await summary.close();
+  await listFrame.locator('html').evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await expect(page.locator('iframe[title="Impression de la liste des contrats"]')).toHaveCount(0);
   await page.screenshot({ path: '/tmp/contracts-print-actions.png' });
   await page.emulateMedia({ media: 'print' });
   await expect(index).toBeHidden();

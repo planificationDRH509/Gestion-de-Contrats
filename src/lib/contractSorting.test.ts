@@ -25,6 +25,17 @@ function contract(id: string, nif: string, lastName = id): Contract {
 }
 
 describe("contract sorting", () => {
+  it("compares surnames first, then given names, with French case and accent handling", () => {
+    const contracts = [
+      { ...contract("c", "3", "Jean Baptiste"), firstName: "Anne" },
+      { ...contract("b", "2", "JEAN"), firstName: "Zoé" },
+      { ...contract("a", "1", " jean "), firstName: "Anne" },
+      { ...contract("d", "4", "Durand"), firstName: "Émile" }
+    ];
+    expect(sortContracts(contracts, "name_asc").map(({ id }) => id)).toEqual(["d", "a", "b", "c"]);
+    expect(sortContracts(contracts, "name_desc").map(({ id }) => id)).toEqual(["c", "b", "a", "d"]);
+  });
+
   it("sorts NIF values numerically in both directions", () => {
     const contracts = [contract("b", "100-000-000-0"), contract("a", "020-000-000-0")];
 

@@ -46,7 +46,7 @@ export function getStoredContractStartDates(workspaceId: string): ContractStartD
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return CONTRACT_DURATION_OPTIONS.reduce<ContractStartDates>((dates, durationMonths) => {
       const value = parsed[String(durationMonths)];
-      if (typeof value === "string" && parseContractDateInput(value)) {
+      if (durationMonths !== 12 && typeof value === "string" && parseContractDateInput(value)) {
         dates[durationMonths] = value;
       }
       return dates;
@@ -63,7 +63,7 @@ export function setStoredContractStartDates(
   const sanitized = CONTRACT_DURATION_OPTIONS.reduce<ContractStartDates>(
     (result, durationMonths) => {
       const value = dates[durationMonths];
-      if (value && parseContractDateInput(value)) {
+      if (durationMonths !== 12 && value && parseContractDateInput(value)) {
         result[durationMonths] = value;
       }
       return result;

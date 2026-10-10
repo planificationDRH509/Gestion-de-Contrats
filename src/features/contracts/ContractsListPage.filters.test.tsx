@@ -30,7 +30,7 @@ vi.mock("../lists/listsApi", () => ({ useContractLists: () => ({ data: [] }) }))
 vi.mock("./pinnedContracts", () => ({ usePinnedContracts: () => ({ ids: [] }) }));
 vi.mock("./ContractsImportModal", () => ({ ContractsImportModal: () => null }));
 import { ContractsListPage } from "./ContractsListPage";
-import { getTodayDateInputValue } from "../../lib/contractDateFilters";
+import { getFiscalYearForDate, getTodayDateInputValue } from "../../lib/contractDateFilters";
 
 afterEach(() => {
   cleanup();
@@ -48,6 +48,24 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("selects a fiscal year independently of dates and restores the current year on reset", async () => {
+    setup();
+    const currentYear = getFiscalYearForDate(new Date());
+    expectParams({ fiscalYear: currentYear, dateFilterMode: undefined });
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    const yearSelect = screen.getByRole("combobox", { name: "Exercice fiscal" });
+    expect(yearSelect).toHaveValue(currentYear);
+    await userEvent.selectOptions(yearSelect, "2024-2025");
+    expectParams({ fiscalYear: "2024-2025", dateFilterMode: undefined, page: 1 });
+    await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
+    expectParams({ fiscalYear: "2024-2025", dateFilterMode: "day" });
+    await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
+    expectParams({ fiscalYear: "2024-2025", dateFilterMode: undefined });
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expectParams({ fiscalYear: currentYear, dateFilterMode: undefined, page: 1 });
+    expect(yearSelect).toHaveValue(currentYear);
+  });
+
   it("shows the total across pages and updates it with filters and scope", async () => {
     mocks.list.mockImplementation((params?: { query?: string; onlyMine?: boolean }) => ({
       data: { items: [], total: params?.query ? 0 : params?.onlyMine ? 72 : 130, page: 1, pageSize: 25 },
@@ -65,13 +83,13 @@ describe("contract list filters", () => {
     expect(badge).toHaveTextContent("130");
   });
 
-  it("opens every contract in a dossier without retaining unrelated filters", async () => {
+  it("opens current fiscal year contracts in a dossier without retaining unrelated filters", async () => {
     setup();
     await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
     await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
     await userEvent.click(screen.getByRole("button", { name: /Dossiers/ }));
     await userEvent.click(screen.getByRole("button", { name: "Ouvrir les contrats de Campagne" }));
-    expectParams({ dossierId: "dossier-test", onlyMine: false, query: undefined, dateFilterMode: undefined, page: 1 });
+    expectParams({ dossierId: "dossier-test", onlyMine: false, query: undefined, dateFilterMode: undefined, fiscalYear: getFiscalYearForDate(new Date()), page: 1 });
     expect(screen.getByRole("button", { name: "Tous les contrats" })).toBeInTheDocument();
   });
 
@@ -105,7 +123,7 @@ describe("contract list filters", () => {
     expectParams({ dateFilterMode: "day", dateFilterDate: getTodayDateInputValue(), page: 1 });
     expect(today).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(today);
-    expectParams({ dateFilterMode: undefined, dateFilterDate: undefined, page: 1 });
+    expectParams({ dateFilterMode: undefined, fiscalYear: getFiscalYearForDate(new Date()), dateFilterDate: undefined, page: 1 });
     expect(today).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
     await userEvent.click(screen.getByRole("button", { name: /event Date/ }));

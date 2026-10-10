@@ -25,13 +25,13 @@ export function compareContracts(left: Contract, right: Contract, sort: Contract
       return compareWithIdTieBreak(
         left,
         right,
-        compareText(`${left.lastName} ${left.firstName}`, `${right.lastName} ${right.firstName}`)
+        compareText(left.lastName, right.lastName) || compareText(left.firstName, right.firstName)
       );
     case "name_desc":
       return compareWithIdTieBreak(
         left,
         right,
-        compareText(`${right.lastName} ${right.firstName}`, `${left.lastName} ${left.firstName}`)
+        compareText(right.lastName, left.lastName) || compareText(right.firstName, left.firstName)
       );
     case "nif_asc":
       return compareWithIdTieBreak(left, right, compareText(left.nif, right.nif));

@@ -1209,6 +1209,10 @@ img {
     gap: 20px;
   }
 
+  .print-preview-layout.is-index-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .print-contract-index,
   .print-preview-documents {
     max-height: max(280px, calc(100dvh - 230px));

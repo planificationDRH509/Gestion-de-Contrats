@@ -71,6 +71,7 @@ type ContractListPayload = {
   userId?: string;
   status?: string;
   dossierId?: string | null;
+  fiscalYear?: string;
   dateFilterMode?: ContractDateFilterMode;
   dateFilterDate?: string;
   dateFilterStart?: string;
@@ -2070,6 +2071,17 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (payload.durations?.length) {
       items = items.filter((item) => payload.durations!.includes(item.durationMonths));
+    }
+
+    if (payload.fiscalYear) {
+      items = items.filter(contract => {
+        const createdAt = toValidDate(contract.createdAt) ?? new Date();
+        const startYear = createdAt.getMonth() >= 9 ? createdAt.getFullYear() : createdAt.getFullYear() - 1;
+        const match = /^(\d{4})-(\d{4})$/.exec(contract.annee_fiscale?.trim() ?? "");
+        const year = match && Number(match[2]) === Number(match[1]) + 1
+          ? contract.annee_fiscale!.trim() : `${startYear}-${startYear + 1}`;
+        return year === payload.fiscalYear;
+      });
     }
 
     if (payload.dateFilterMode && payload.dateFilterMode !== "all") {

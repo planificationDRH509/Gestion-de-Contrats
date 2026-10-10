@@ -76,7 +76,7 @@ import {
   normalizeOptionalDate,
   normalizeOptionalText
 } from "../../lib/dossier";
-import { matchesContractDateFilter } from "../../lib/contractDateFilters";
+import { getContractFiscalYear, matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
 import { matchesContractSearch } from "../../lib/personSearch";
 import {
@@ -692,7 +692,7 @@ class SupabaseContractRepository implements ContractRepository {
     const hasDateFilter = Boolean(params.dateFilterMode && params.dateFilterMode !== "all");
     const requiresIdentitySorting = params.sort?.startsWith("name_") || params.sort?.startsWith("nif_");
     const requiresClientFiltering =
-      hasDateFilter || Boolean(params.query?.trim()) || requiresIdentitySorting;
+      Boolean(params.fiscalYear) || hasDateFilter || Boolean(params.query?.trim()) || requiresIdentitySorting;
 
     let query;
     if (params.tagId) {
@@ -772,6 +772,7 @@ class SupabaseContractRepository implements ContractRepository {
 
       const filteredItems = data
         .map(mapContract)
+        .filter(contract => !params.fiscalYear || getContractFiscalYear(contract) === params.fiscalYear)
         .filter((contract) => !params.query?.trim() || matchesContractSearch(contract, params.query))
         .filter((contract) =>
           !hasDateFilter || matchesContractDateFilter(

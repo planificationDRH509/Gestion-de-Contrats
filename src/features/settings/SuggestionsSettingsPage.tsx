@@ -177,8 +177,9 @@ function ContractDatesPanel() {
             </span>
             <input
               className="input"
-              type="date"
-              value={dates[durationMonths] ?? ""}
+              type={durationMonths === 12 ? "text" : "date"}
+              value={durationMonths === 12 ? "1er octobre" : dates[durationMonths] ?? ""}
+              readOnly={durationMonths === 12}
               onChange={(event) => updateDate(durationMonths, event.target.value)}
             />
           </label>

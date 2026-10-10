@@ -203,6 +203,7 @@ export type ContractListParams = {
   userId?: string;
   status?: ContractStatus;
   dossierId?: string | null;
+  fiscalYear?: string;
   dateFilterMode?: ContractDateFilterMode;
   dateFilterDate?: string;
   dateFilterStart?: string;

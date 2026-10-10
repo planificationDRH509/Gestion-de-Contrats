@@ -10,6 +10,8 @@ import {
   renderTemplate
 } from "./contractTemplate";
 import { setStoredContractStartDates } from "./settingsApi";
+import { getContractStartDate } from "../../lib/contractDateFilters";
+import { listContractDates } from "../lists/listExcelExport";
 import { defaultInstitutionPrepositions } from '../institutions/institutionPrepositions';
 
 const printCss = readFileSync(
@@ -38,6 +40,16 @@ const contract: Contract = {
 };
 
 describe("reference contract template", () => {
+  it.each([2023, 2024, 2025, 2026, 2027, 2028, 2029])("starts annual contracts on October 1 of fiscal year %s despite legacy overrides", (year) => {
+    localStorage.setItem(`contribution_contract_start_dates:${contract.workspaceId}`, JSON.stringify({ 12: "2026-01-12" }));
+    const annual = { ...contract, durationMonths: 12, annee_fiscale: `${year}-${year + 1}` };
+    expect(getContractStartDate(annual)).toEqual(new Date(year, 9, 1));
+    const variables = buildTemplateVariables(annual);
+    expect(variables.date_debut).toBe(`01 Octobre ${year}`);
+    expect(variables.created_date_long).toBe(`01 Octobre ${year}`);
+    expect(listContractDates(annual)[0]).toBe((Date.UTC(year, 9, 1) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  });
+
   it("renders the salary from the numeric amount even when legacy text is missing or stale", () => {
     for (const salaryText of ["", "ANCIEN MONTANT"]) {
       const variables = buildTemplateVariables({ ...contract, salaryNumber: 45000.25, salaryText });

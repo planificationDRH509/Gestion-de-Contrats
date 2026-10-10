@@ -1400,6 +1400,17 @@ function handleApiRequest(req, res) {
                     if ((_r = payload_1.durations) === null || _r === void 0 ? void 0 : _r.length) {
                         items = items.filter(function (item) { return payload_1.durations.includes(item.durationMonths); });
                     }
+                    if (payload_1.fiscalYear) {
+                        items = items.filter(function (contract) {
+                            var _a, _b, _c;
+                            var createdAt = (_a = toValidDate(contract.createdAt)) !== null && _a !== void 0 ? _a : new Date();
+                            var startYear = createdAt.getMonth() >= 9 ? createdAt.getFullYear() : createdAt.getFullYear() - 1;
+                            var match = /^(\d{4})-(\d{4})$/.exec((_c = (_b = contract.annee_fiscale) === null || _b === void 0 ? void 0 : _b.trim()) !== null && _c !== void 0 ? _c : "");
+                            var year = match && Number(match[2]) === Number(match[1]) + 1
+                                ? contract.annee_fiscale.trim() : "".concat(startYear, "-").concat(startYear + 1);
+                            return year === payload_1.fiscalYear;
+                        });
+                    }
                     if (payload_1.dateFilterMode && payload_1.dateFilterMode !== "all") {
                         items = items.filter(function (contract) {
                             return matchesContractDateFilter({
