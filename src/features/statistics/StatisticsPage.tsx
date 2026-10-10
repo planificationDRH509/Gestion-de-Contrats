@@ -19,6 +19,7 @@ import {
   Area
 } from "recharts";
 import { MultiSelectDropdown } from "../../app/components/MultiSelectDropdown";
+import { ChartTooltipOverlay } from "../../app/ui/ChartTooltipOverlay";
 import { calculateFinancialStatistics } from "./financialStatistics";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
@@ -483,13 +484,13 @@ export function StatisticsPage() {
   }, [contracts, createdByData, assignmentData, evolutionData, durationData, filterType]);
 
   // Premium Custom Tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label, coordinate }: any) => {
     if (active && payload && payload.length) {
       const isPie = label === undefined || label === null || label === '';
       const displayLabel = isPie ? payload[0].name : label;
       const displayName = isPie ? "Contrats" : (payload[0].name === 'count' ? 'Contrats' : payload[0].name);
       return (
-        <div style={{
+        <ChartTooltipOverlay coordinate={coordinate}><div style={{
           background: 'var(--glass-bg)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
@@ -505,25 +506,25 @@ export function StatisticsPage() {
           <span style={{ fontSize: '15px', color: 'var(--ink)', fontWeight: '800' }}>
             {displayName} : <span style={{ color: payload[0].color || 'var(--accent)' }}>{payload[0].value}</span>
           </span>
-        </div>
+        </div></ChartTooltipOverlay>
       );
     }
     return null;
   };
 
-  const BudgetTooltip = ({ active, payload }: any) => {
+  const BudgetTooltip = ({ active, payload, coordinate }: any) => {
     if (!active || !payload?.length) return null;
 
     const month = payload[0].payload;
     return (
-      <div className="statistics-chart-tooltip">
+      <ChartTooltipOverlay coordinate={coordinate}><div className="statistics-chart-tooltip">
         <span>{month.label}</span>
         <strong>{formatHtg(month.monthlyBudget)}</strong>
         <small>
           {month.activeContracts} contrat{month.activeContracts > 1 ? "s" : ""} actif
           {month.activeContracts > 1 ? "s" : ""}
         </small>
-      </div>
+      </div></ChartTooltipOverlay>
     );
   };
 

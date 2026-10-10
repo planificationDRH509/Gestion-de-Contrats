@@ -51,7 +51,7 @@ describe("contractImport", () => {
 
     expect(mappingIssues.missingFields).toEqual([]);
     expect(previewRows[0].errors).toEqual([]);
-    expect(previewRows[0].values?.address).toBe("Port-au-Prince");
+    expect(previewRows[0].values?.address).toBe("");
   });
 
   it("accepts an empty address value when the column is present", () => {
@@ -66,7 +66,7 @@ describe("contractImport", () => {
     const validatedRows = validateImportEditableRows(rows);
 
     expect(validatedRows[0].errors).toEqual([]);
-    expect(validatedRows[0].values?.address).toBe("Port-au-Prince");
+    expect(validatedRows[0].values?.address).toBe("");
   });
 
   it("imports an optional telephone number", () => {
@@ -83,7 +83,7 @@ describe("contractImport", () => {
     expect(validateImportMapping(mapping).missingFields).toEqual([]);
     expect(previewRows[0].errors).toEqual([]);
     expect(previewRows[0].values).toMatchObject({
-      address: "Port-au-Prince",
+      address: "",
       phone: "+509 37 00 00 00"
     });
   });
@@ -134,7 +134,7 @@ describe("contractImport", () => {
     );
   });
 
-  it("reuses a matching existing identification without overwriting it", () => {
+  it("accepts a matching existing identification", () => {
     const issues = getContractImportIdentityIssues(
       [{ nif: "001-002-003-4", ninu: "1234567890" }],
       [
@@ -154,7 +154,7 @@ describe("contractImport", () => {
     );
   });
 
-  it("reports when an existing NIF has a different NINU", () => {
+  it("accepts a new unclaimed NINU for an existing NIF", () => {
     const issues = getContractImportIdentityIssues(
       [{ nif: "001-002-003-4", ninu: "1234567890" }],
       [
@@ -168,9 +168,7 @@ describe("contractImport", () => {
       ]
     );
 
-    expect(issues[0].errors).toContain(
-      "Le NIF 001-002-003-4 existe déjà dans la base avec le NINU 0987654321 (Jean DOE)."
-    );
+    expect(issues[0].errors).toEqual([]);
   });
 
   it("reports a soft-deleted identification that still owns the NIF", () => {
@@ -263,5 +261,16 @@ describe("contractImport", () => {
     const rows = buildImportEditableRows(table, inferImportMapping(table.headers)).slice(0, MAX_IMPORT_ROWS);
 
     expect(rows).toHaveLength(5_000);
+  });
+});
+
+describe("import duplicate preflight", () => {
+  it("blocks only duplicate NIFs in the selected rows", () => {
+    const table = parsePastedContractTable("NIF\tNom\tPrénom\tSexe\tSalaire\tPoste\tAffectation\n1234567890\tLouis\tJean\tHomme\t30000\tAgent\tMSPP\n1234567890\tLouis\tJean\tHomme\t30000\tAgent\tMSPP");
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
+    const all = validateImportEditableRows(rows);
+    expect(all.every(row => row.errorFields.includes("nif"))).toBe(true);
+    const selected = validateImportEditableRows(rows, { selectedRowIds: [rows[0].id] });
+    expect(selected[0].errors).toEqual([]);
   });
 });

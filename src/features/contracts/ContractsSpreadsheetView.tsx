@@ -1,3 +1,4 @@
+import { readCachedContracts } from "../../data/local/localContractRepository";
 import { DiscardContractSyncButton } from "./DiscardContractSyncButton";
 import { usePendingSync } from "../../lib/usePendingSync";
 import { contractSyncInfo } from "../../data/local/outboxDependencies";
@@ -434,13 +435,17 @@ export function ContractsSpreadsheetView({
     newRowsRef.current = newRows;
   }, [newRows]);
 
-  const visibleContracts = useMemo(
-    () =>
-      [...contracts]
-        .filter((contract) => contract.createdBy === userId)
-        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
-    [contracts, userId]
-  );
+  const [createdContractIds, setCreatedContractIds] = useState<string[]>([]);
+  const visibleContracts = useMemo(() => {
+    const rows = new Map(contracts.map(contract => [contract.id, contract]));
+    const pendingIds = new Set(pendingSync.filter(item => item.workspaceId === workspaceId && item.type === "contract.create").map(item => item.payload.id));
+    for (const contract of readCachedContracts({ workspaceId, all: true }).items) {
+      if (pendingIds.has(contract.id) || createdContractIds.includes(contract.id)) rows.set(contract.id, contract);
+    }
+    return [...rows.values()]
+      .filter(contract => contract.workspaceId === workspaceId && contract.createdBy === userId && !contract.deletedAt)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  }, [contracts, createdContractIds, pendingSync, workspaceId, userId]);
 
   const contractsMap = useMemo(
     () => new Map(visibleContracts.map((contract) => [contract.id, contract])),
@@ -1350,7 +1355,7 @@ export function ContractsSpreadsheetView({
       saveLastChoice("position", candidate.position);
       saveLastChoice("positionSalary", candidate.salaryNumber);
       saveLastChoice("assignment", candidate.assignment);
-      await learnSuggestions(
+      void learnSuggestions(
         candidate.address,
         candidate.position,
         candidate.assignment,
@@ -1361,6 +1366,7 @@ export function ContractsSpreadsheetView({
       const formattedLastName = formatLastName(candidate.lastName);
 
       const applicant = await upsertApplicant.mutateAsync({
+        queueLocally: true,
         workspaceId,
         createdBy: userId,
         gender: candidate.gender as Gender,
@@ -1372,7 +1378,7 @@ export function ContractsSpreadsheetView({
         address: candidate.address
       });
 
-      await createContract.mutateAsync({
+      const created = await createContract.mutateAsync({
         workspaceId,
         createdBy: userId,
         applicantId: applicant.id,
@@ -1392,6 +1398,8 @@ export function ContractsSpreadsheetView({
         commentaire: candidate.comment
       });
 
+      setCreatedContractIds(previous => [...previous, created.id]);
+      setRecentOpen(true);
       saveLastChoice("durationMonths", candidate.durationMonths);
 
       forgetHistory(getNewRowKey(rowId));
@@ -1565,10 +1573,6 @@ export function ContractsSpreadsheetView({
         {cloudEnabled && options.contract && <DiscardContractSyncButton contract={options.contract} pending={pendingSync} online={navigator.onLine} menuItem />}
       </SpreadsheetRowMenu>
     </>;
-  }
-
-  if (isLoading) {
-    return <div className="empty-state">Chargement des contrats…</div>;
   }
 
   const activeCommentContract = commentOpenContractId

@@ -26,15 +26,23 @@
   min-width: 0;
   height: 44px;
   min-height: 44px;
+  max-height: 44px;
   margin: 0;
   padding: 12px 10px !important;
   padding-inline-end: var(--sheet-input-trailing-space, 10px) !important;
   font-size: 13px;
   line-height: 20px;
+  transition: background-color 0.16s ease, color 0.16s ease;
 }
 
 .contracts-data-sheet .contracts-sheet-input-multiline {
-  height: auto;
+  /* Editing long values must not resize the row or move adjacent cells. */
+  field-sizing: fixed;
+  height: 44px;
+  overflow: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  scrollbar-width: none;
 }
 
 .contracts-data-sheet .contracts-sheet-nif-field {
@@ -360,4 +368,8 @@
 @media (max-width: 650px) {
   .contracts-data-sheet .sheet-default-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .contracts-data-sheet .sheet-default-field:last-child { grid-column: 1 / -1; }
+}
+.contracts-data-sheet .contracts-sheet-scroll {
+  /* Keep the fit scale independent of vertical overflow. */
+  scrollbar-gutter: stable;
 }

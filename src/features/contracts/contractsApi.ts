@@ -3,7 +3,6 @@ import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
 import {
   Applicant,
-  Contract,
   ContractListParams,
   ContractListResult,
   ContractStatus,
@@ -12,16 +11,16 @@ import {
   UpsertApplicantInput
 } from "../../data/types";
 import { ContractFormSchema } from "./contractSchema";
-import {
-  getContractImportIdentityIssues,
-  type ContractImportDraft
-} from "./contractImport";
+import { loadImportContracts, runContractImport, type ImportRunInput } from "./contractImportRun";
+export type { ContractImportProgress } from "./contractImportRun";
 import {
   readCachedContract,
   readCachedContracts,
   readCachedContractsByIds
 } from "../../data/local/localContractRepository";
-import { getWorkspaceSyncMetadata, hasWorkspaceOfflineCache } from "../../data/local/offlineStore";
+import { readCachedApplicants } from "../../data/local/localApplicantRepository";
+import { flushLocalDbWrites } from "../../data/local/localDb";
+import { getWorkspaceSyncMetadata, hasWorkspaceOfflineCache, upsertApplicantOffline } from "../../data/local/offlineStore";
 import { getStoredFiscalYear } from "../settings/settingsApi";
 import { identityDigits } from "../../data/contractIdentity";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
@@ -58,9 +57,13 @@ export interface NifLookupResult {
 
 export async function lookupNif(rawNif: string, workspaceId: string): Promise<NifLookupResult> {
   const nif = rawNif.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d)/, "$1-$2-$3-$4");
-  const applicant = await provider.applicants.findByNifOrNinu(workspaceId, nif, null);
+  const applicant = usesSupabase
+    ? readCachedApplicants(workspaceId).find(person => identityDigits(person.nif || person.id) === identityDigits(nif)) ?? null
+    : await provider.applicants.findByNifOrNinu(workspaceId, nif, null);
   // Contract checks never depend on the identification table being cached.
-  const matches = await provider.contracts.list({ workspaceId, query: nif, all: true, sort: "createdAt_desc" });
+  const matches = usesSupabase
+    ? readCachedContracts({ workspaceId, all: true, sort: "createdAt_desc" })
+    : await provider.contracts.list({ workspaceId, query: nif, all: true, sort: "createdAt_desc" });
   const matchingContracts = matches.items.filter((contract) =>
     identityDigits(contract.nif || contract.applicantId) === identityDigits(nif));
   const contracts: NifContractMatch[] = matchingContracts.map((contract) => ({
@@ -171,6 +174,7 @@ export function useCreateContract() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: (input: CreateContractInput) =>
       provider.contracts.create({
         ...input,
@@ -382,12 +386,6 @@ export function useChangeContractsDuration() {
   });
 }
 
-export type ContractImportProgress = {
-  phase: "applicants" | "contracts";
-  completed: number;
-  total: number;
-};
-
 export function useImportApplicantMatches(
   workspaceId: string,
   nifs: string[],
@@ -403,149 +401,24 @@ export function useImportApplicantMatches(
   });
 }
 
-const IMPORT_BATCH_SIZE = 200;
-
-function batchesOf<T>(items: T[], size: number) {
-  const batches: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    batches.push(items.slice(index, index + size));
-  }
-  return batches;
+export function useImportContractHistory(workspaceId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["contract-import", "history", workspaceId],
+    queryFn: () => loadImportContracts(provider, workspaceId),
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: 0,
+    retry: 1
+  });
 }
 
 export function useImportContracts() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      dossierId,
-      responsibleUserId,
-      fiscalYear,
-      rows,
-      onProgress
-    }: {
-      workspaceId: string;
-      dossierId: string | null;
-      responsibleUserId: string;
-      fiscalYear: string;
-      rows: ContractImportDraft[];
-      onProgress?: (progress: ContractImportProgress) => void;
-    }) => {
-      const importedNifs = Array.from(new Set(rows.map((row) => row.nif)));
-      const importedNinus = Array.from(
-        new Set(rows.map((row) => row.ninu).filter((value): value is string => Boolean(value)))
-      );
-      const existingApplicants = await provider.applicants.findManyByNifOrNinu(
-        workspaceId,
-        importedNifs,
-        importedNinus
-      );
-      const identityIssues = getContractImportIdentityIssues(rows, existingApplicants);
-      const conflicts = identityIssues
-        .map((issue, index) => ({ index, errors: issue.errors }))
-        .filter((issue) => issue.errors.length > 0);
-      if (conflicts.length > 0) {
-        const firstConflict = conflicts[0];
-        throw new Error(
-          `Conflit NIF/NINU sur ${conflicts.length} ligne(s). Ligne ${firstConflict.index + 1} de la sélection : ${firstConflict.errors.join(" ")}`
-        );
-      }
-
-      const existingByNif = new Map(
-        existingApplicants.map((applicant) => [
-          (applicant.nif || applicant.id).replace(/\D/g, ""),
-          applicant
-        ])
-      );
-      const applicantInputsByNif = new Map<string, UpsertApplicantInput>();
-      for (const row of rows) {
-        const nifKey = row.nif.replace(/\D/g, "");
-        const existing = existingByNif.get(nifKey);
-        if (!existing) {
-          applicantInputsByNif.set(nifKey, {
-            workspaceId,
-            gender: row.gender,
-            firstName: row.firstName,
-            lastName: row.lastName,
-            nif: row.nif,
-            ninu: row.ninu,
-            phone: row.phone,
-            address: row.address,
-            createdBy: responsibleUserId
-          });
-        } else if (
-          (!existing.ninu && row.ninu) ||
-          (!existing.phone && row.phone) ||
-          !existing.address
-        ) {
-          applicantInputsByNif.set(nifKey, {
-            id: existing.id,
-            workspaceId,
-            gender: existing.gender,
-            firstName: existing.firstName,
-            lastName: existing.lastName,
-            nif: existing.nif || existing.id,
-            ninu: existing.ninu || row.ninu,
-            phone: existing.phone || row.phone,
-            address: existing.address || row.address,
-            createdBy: existing.createdBy
-          });
-        }
-      }
-
-      const applicantInputs = Array.from(applicantInputsByNif.values());
-      let preparedApplicants = 0;
-      onProgress?.({ phase: "applicants", completed: 0, total: applicantInputs.length });
-      for (const batch of batchesOf(applicantInputs, IMPORT_BATCH_SIZE)) {
-        await provider.applicants.upsertMany(batch);
-        preparedApplicants += batch.length;
-        onProgress?.({
-          phase: "applicants",
-          completed: preparedApplicants,
-          total: applicantInputs.length
-        });
-      }
-
-      const contractInputs: CreateContractInput[] = rows.map((row) => ({
-        workspaceId,
-        annee_fiscale: fiscalYear,
-        applicantId: row.nif,
-        dossierId,
-        status: "saisie",
-        gender: row.gender,
-        firstName: row.firstName,
-        lastName: row.lastName,
-        nif: row.nif,
-        ninu: row.ninu,
-        address: row.address,
-        position: row.position,
-        assignment: row.assignment,
-        salaryNumber: row.salaryNumber,
-        salaryText: row.salaryText,
-        durationMonths: row.durationMonths,
-        commentaire: row.commentaire,
-        createdBy: responsibleUserId
-      }));
-      const createdContracts: Contract[] = [];
-      onProgress?.({ phase: "contracts", completed: 0, total: contractInputs.length });
-      for (const batch of batchesOf(contractInputs, IMPORT_BATCH_SIZE)) {
-        try {
-          createdContracts.push(...(await provider.contracts.createMany(batch)));
-        } catch (error) {
-          const detail = error instanceof Error ? ` ${error.message}` : "";
-          throw new Error(
-            `Import interrompu après ${createdContracts.length} contrat(s) enregistré(s).${detail}`
-          );
-        }
-        onProgress?.({
-          phase: "contracts",
-          completed: createdContracts.length,
-          total: contractInputs.length
-        });
-      }
-      return createdContracts;
-    },
+    networkMode: "always",
+    mutationFn: (input: ImportRunInput) => runContractImport(provider, input),
     onSettled: (_contracts, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["dossiers", variables.workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["contract-import"] });
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
@@ -608,8 +481,16 @@ export function useApplicantUpsert() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpsertApplicantInput) => 
-      provider.applicants.upsert({ ...input, createdBy: user?.id }),
+    networkMode: "always",
+    mutationFn: async ({ queueLocally, ...input }: UpsertApplicantInput & { queueLocally?: boolean }) => {
+      const payload = { ...input, createdBy: user?.id };
+      if (queueLocally && usesSupabase) {
+        const applicant = upsertApplicantOffline(payload);
+        await flushLocalDbWrites();
+        return applicant;
+      }
+      return provider.applicants.upsert(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
       queryClient.invalidateQueries({ queryKey: ["identification"] });

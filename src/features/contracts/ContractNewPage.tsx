@@ -477,6 +477,7 @@ export function ContractNewPage() {
     const formattedLastName = formatLastName(values.lastName);
 
     const applicant = await upsertApplicant.mutateAsync({
+      queueLocally: true,
       workspaceId: user.workspaceId,
       gender: values.gender as "Homme" | "Femme",
       firstName: formattedFirstName,

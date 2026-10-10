@@ -72,6 +72,18 @@ describe("LocalApplicantRepository offline mutations", () => {
     expect(cleared.phone).toBeNull();
   });
 
+  it.each(["NIF", "NINU"])("names the conflicting %s, value and owner", async (field) => {
+    const repository = new LocalApplicantRepository();
+    const base = { workspaceId: "w", gender: "Homme" as const, firstName: "Jean", lastName: "Louis", address: "Delmas" };
+    const owner = await repository.upsert({ ...base, nif: "111-222-333-4", ninu: "1234567890" });
+    const other = await repository.upsert({ ...base, nif: "999-888-777-6", ninu: "0987654321" });
+    const value = field === "NIF" ? owner.nif! : owner.ninu!;
+    await expect(repository.upsert({ ...base, id: other.id,
+      nif: field === "NIF" ? owner.nif : other.nif,
+      ninu: field === "NINU" ? owner.ninu : other.ninu
+    })).rejects.toThrow(`Le ${field} ${value} appartient déjà à Jean LOUIS (NIF 111-222-333-4).`);
+  });
+
   it("upserts an import batch", async () => {
     const repository = new LocalApplicantRepository();
     const workspaceId = "workspace_batch_test";

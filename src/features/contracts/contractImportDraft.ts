@@ -15,6 +15,7 @@ export type ContractImportDraftState = {
   bulkValue: string;
   selectedDossierId: string;
   responsibleUserId: string;
+  fiscalYear?: string;
   updatedAt: string;
 };
 
@@ -38,17 +39,9 @@ export function saveContractImportDraft(workspaceId: string, userId: string, sta
   const updatedAt = new Date().toISOString();
   try {
     localStorage.setItem(key, JSON.stringify({ ...state, updatedAt }));
+    return true;
   } catch {
-    // Large imports can exceed the browser storage quota. Preserve the pasted
-    // source and settings when possible; editable rows can be rebuilt.
-    try {
-      localStorage.setItem(
-        key,
-        JSON.stringify({ ...state, editableRows: [], selectedRowIds: [], updatedAt })
-      );
-    } catch {
-      localStorage.removeItem(key);
-    }
+    return false;
   }
 }
 

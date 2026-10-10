@@ -12,5 +12,5 @@ export function assertNoFiscalYearDuplicate(input: CreateContractInput, contract
     contract.id !== input.id && !contract.deletedAt &&
     identityDigits(contract.nif || contract.applicantId) === nif &&
     getContractFiscalYear(contract) === fiscalYear);
-  if (duplicate) throw new Error(`Un contrat existe déjà pour ce NIF dans l’année fiscale ${fiscalYear}. La création est bloquée (contrat ${duplicate.id}).`);
+  if (duplicate) throw new Error(`Un contrat existe déjà pour le NIF ${input.nif || input.applicantId} (${[duplicate.firstName, duplicate.lastName].filter(Boolean).join(" ")}) dans l’année fiscale ${fiscalYear}. La création est bloquée (contrat ${duplicate.id}).`);
 }

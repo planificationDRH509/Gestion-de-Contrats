@@ -1,4 +1,6 @@
-import type { Applicant, Gender } from "../../data/types";
+import { createId } from "../../lib/uuid";
+import { getContractFiscalYear } from "../../lib/contractDateFilters";
+import type { Applicant, Contract, Gender } from "../../data/types";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 
 export type ContractImportFieldId =
@@ -31,6 +33,8 @@ const IMPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
 
 
 export type ContractImportDraft = {
+  sourceRowNumber?: number;
+  contractId?: string;
   gender: Gender;
   firstName: string;
   lastName: string;
@@ -72,6 +76,10 @@ export type ContractImportEditableRow = Record<ContractImportEditableField, stri
   id: string;
   sourceRowNumber: number;
   excluded: boolean;
+  contractId?: string;
+  importedContractId?: string;
+  importError?: string;
+  clearedFields?: ContractImportEditableField[];
 };
 
 export type ContractImportValidatedEditableRow = {
@@ -80,6 +88,7 @@ export type ContractImportValidatedEditableRow = {
   excluded: boolean;
   values: ContractImportDraft | null;
   errors: string[];
+  errorFields: ContractImportEditableField[];
   warnings: string[];
 };
 
@@ -161,7 +170,7 @@ const FIELD_LABELS = new Map(CONTRACT_IMPORT_FIELDS.map((field) => [field.id, fi
 // Keep a safety ceiling for malformed/accidental clipboard pastes while allowing
 // normal operational imports to be handled in a single pass.
 export const MAX_IMPORT_ROWS = 5_000;
-export const DEFAULT_IMPORT_ADDRESS = "Port-au-Prince";
+export const DEFAULT_IMPORT_ADDRESS = "";
 
 function normalizeHeader(value: string) {
   return value
@@ -453,15 +462,10 @@ export function getContractImportIdentityIssues(
     }
 
     if (applicantWithNif) {
-      const storedNinu = normalizeNinuKey(applicantWithNif.ninu);
       if (applicantWithNif.deletedAt) {
         const name = applicantName(applicantWithNif);
         errors.add(
           `Le NIF ${nif} appartient à une fiche supprimée${name ? ` (${name})` : ""}. Restaurez cette fiche avant l'import.`
-        );
-      } else if (ninu && storedNinu && ninu !== storedNinu) {
-        errors.add(
-          `Le NIF ${nif} existe déjà dans la base avec le NINU ${storedNinu}${applicantLabel(applicantWithNif)}.`
         );
       }
       if (errors.size === 0) {
@@ -591,6 +595,7 @@ export function buildImportEditableRows(
 
     return {
       id: `row-${index + 2}`,
+      contractId: createId(),
       sourceRowNumber: index + 2,
       excluded: false,
       nif: normalizedNif ?? getMappedValue(row, mapping, "nif"),
@@ -604,7 +609,7 @@ export function buildImportEditableRows(
       salaryText: parsedSalary ? numberToFrenchWords(parsedSalary) : "",
       position: getMappedValue(row, mapping, "position"),
       assignment: getMappedValue(row, mapping, "assignment"),
-      durationMonths: durationMonths || "12",
+      durationMonths,
       commentaire: getMappedValue(row, mapping, "commentaire")
     };
   });
@@ -615,17 +620,22 @@ export function validateImportEditableRows(
   options: {
     existingNifs?: string[];
     existingApplicants?: ExistingImportApplicant[];
+    existingContracts?: Contract[];
+    fiscalYear?: string;
+    selectedRowIds?: string[];
   } = {}
 ): ContractImportValidatedEditableRow[] {
   const existingNifs = new Set((options.existingNifs ?? []).map(normalizeNifKey).filter(Boolean));
   const importNifCounts = new Map<string, number>();
+  const active = (row: ContractImportEditableRow) => !row.excluded && !row.importedContractId &&
+    (!options.selectedRowIds || options.selectedRowIds.includes(row.id));
   const identityIssues = getContractImportIdentityIssues(
-    rows.map((row) => (row.excluded ? { nif: "", ninu: null } : row)),
+    rows.map((row) => (!active(row) ? { nif: "", ninu: null } : row)),
     options.existingApplicants
   );
 
   rows.forEach((row) => {
-    if (row.excluded) return;
+    if (!active(row)) return;
     const nif = normalizeNif(row.nif);
     if (!nif) return;
     const key = normalizeNifKey(nif);
@@ -633,27 +643,35 @@ export function validateImportEditableRows(
   });
 
   return rows.map((row, index) => {
-    const result = row.excluded
+    const result = row.excluded || row.importedContractId
       ? { values: null, errors: [] }
       : buildDraftFromEditableRow(row);
     const issues = row.excluded ? { errors: [], warnings: [] } : identityIssues[index];
     const warnings = [...issues.warnings];
     const nif = normalizeNif(row.nif);
-    if (!row.excluded && nif) {
+    if (active(row) && nif) {
       const key = normalizeNifKey(nif);
       if ((importNifCounts.get(key) ?? 0) > 1) {
-        warnings.push("Doublon possible: NIF répété dans le collage.");
+        result.errors.push(`Le NIF ${nif} est répété dans les lignes sélectionnées.`);
       }
       if (existingNifs.has(key)) {
         warnings.push("Doublon possible: NIF déjà présent dans les contrats affichés.");
       }
     }
+    if (active(row) && options.fiscalYear) {
+      const duplicate = options.existingContracts?.find((contract) => !contract.deletedAt &&
+        contract.id !== row.contractId && normalizeNifKey(contract.nif || contract.applicantId || "") === normalizeNifKey(row.nif) &&
+        getContractFiscalYear(contract) === options.fiscalYear);
+      if (duplicate) result.errors.push(`Le NIF ${row.nif} possède déjà un contrat pour ${options.fiscalYear} (${duplicate.id}).`);
+    }
+    const errors = Array.from(new Set([...result.errors, ...issues.errors]));
     return {
       id: row.id,
       sourceRowNumber: row.sourceRowNumber,
       excluded: row.excluded,
-      values: result.values,
-      errors: Array.from(new Set([...result.errors, ...issues.errors])),
+      values: result.values ? { ...result.values, contractId: row.contractId, sourceRowNumber: row.sourceRowNumber } : null,
+      errors,
+      errorFields: getImportErrorFields(errors),
       warnings: Array.from(new Set(warnings))
     };
   });
@@ -694,4 +712,75 @@ export function buildImportPreview(
   });
 
   return previews;
+}
+
+export type ContractImportDifference = {
+  field: ContractImportEditableField;
+  oldValue: string;
+  newValue: string;
+};
+
+export function getImportDifferences(
+  rows: ContractImportEditableRow[],
+  applicants: Applicant[],
+  contracts: Contract[]
+): Map<string, ContractImportDifference[]> {
+  const applicantsByNif = new Map(applicants.filter((item) => !item.deletedAt)
+    .map((item) => [normalizeNifKey(item.nif || item.id), item]));
+  const contractsByNif = new Map<string, Contract>();
+  for (const contract of contracts) {
+    if (contract.deletedAt) continue;
+    const key = normalizeNifKey(contract.nif || contract.applicantId || "");
+    const previous = contractsByNif.get(key);
+    if (!previous || contract.createdAt > previous.createdAt) contractsByNif.set(key, contract);
+  }
+  return new Map(rows.map((row) => {
+    const key = normalizeNifKey(row.nif);
+    const applicant = applicantsByNif.get(key);
+    const contract = contractsByNif.get(key);
+    const differences: ContractImportDifference[] = [];
+    for (const { id: field } of CONTRACT_IMPORT_FIELDS) {
+      if (field === "ignore" || field === "nif" || field === "salaryText") continue;
+      const source = applicant && field in applicant ? applicant : contract;
+      if (!source || !(field in source)) continue;
+      const oldValue = String((source as unknown as Record<string, unknown>)[field] ?? "");
+      const newValue = row[field] ?? "";
+      const equal = field === "salaryNumber"
+        ? parseImportMoney(newValue) === Number(oldValue)
+        : field === "ninu"
+          ? newValue.replace(/\D/g, "") === oldValue.replace(/\D/g, "")
+          : newValue.trim() === oldValue.trim();
+      if (!equal) differences.push({ field, oldValue, newValue });
+    }
+    return [row.id, differences];
+  }));
+}
+
+export const CLEARABLE_IMPORT_FIELDS: ContractImportEditableField[] = ["ninu", "address", "phone", "commentaire"];
+
+export function getImportErrorFields(errors: string[]): ContractImportEditableField[] {
+  const fields = new Set<ContractImportEditableField>();
+  for (const error of errors) {
+    if (/NINU/.test(error)) fields.add("ninu");
+    else if (/NIF/.test(error)) fields.add("nif");
+    if (/prénom/i.test(error)) fields.add("firstName");
+    else if (/nom est/i.test(error)) fields.add("lastName");
+    if (/sexe/i.test(error)) fields.add("gender");
+    if (/poste/i.test(error)) fields.add("position");
+    if (/affectation/i.test(error)) fields.add("assignment");
+    if (/salaire/i.test(error)) fields.add("salaryNumber");
+    if (/durée/i.test(error)) fields.add("durationMonths");
+  }
+  return [...fields];
+}
+
+export function resolveImportRows(rows: ContractImportEditableRow[], applicants: Applicant[], contracts: Contract[]) {
+  const previous = getImportDifferences(rows, applicants, contracts);
+  return rows.map((row) => {
+    const resolved = { ...row };
+    for (const { field, oldValue } of previous.get(row.id) ?? []) {
+      if (!row[field]?.trim() && !row.clearedFields?.includes(field)) resolved[field] = oldValue;
+    }
+    return resolved;
+  });
 }

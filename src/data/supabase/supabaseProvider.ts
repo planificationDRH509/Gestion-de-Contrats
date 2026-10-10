@@ -1,3 +1,4 @@
+import { applicantDatabaseConflictMessage } from "../applicantConflict";
 import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
@@ -6,7 +7,6 @@ import { withBrowserLock } from "../../lib/browserLock";
 import { outboxKeys, discardableContractChanges } from "../local/outboxDependencies";
 import { setOutboxError } from "../local/localOutbox";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
-import { readCachedContracts } from "../local/localContractRepository";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { ContractRepository } from "../repositories/ContractRepository";
 import { DossierRepository } from "../repositories/DossierRepository";
@@ -107,29 +107,8 @@ function chunksOf<T>(items: T[], size: number): T[][] {
 }
 
 function applicantImportError(cause: unknown): Error {
-  const details =
-    cause && typeof cause === "object"
-      ? ["message", "details", "hint"]
-          .map((key) => (cause as Record<string, unknown>)[key])
-          .filter((value): value is string => typeof value === "string")
-          .join(" ")
-      : "";
-  const duplicateValue = details.match(/Key \((nif|ninu)\)=\(([^)]+)\)/i);
-  const field = duplicateValue?.[1]?.toUpperCase();
-  const value = duplicateValue?.[2];
-
-  if (field === "NINU") {
-    return repositoryError(
-      `Conflit d'identification : le NINU${value ? ` ${value}` : ""} existe déjà dans la base pour un autre NIF.`,
-      cause
-    );
-  }
-  if (field === "NIF" || /duplicate key|unique constraint|23505/i.test(details)) {
-    return repositoryError(
-      `Conflit d'identification : le ${field ?? "NIF ou NINU"}${value ? ` ${value}` : ""} existe déjà dans la base.`,
-      cause
-    );
-  }
+  const conflictMessage = applicantDatabaseConflictMessage(cause);
+  if (conflictMessage) return repositoryError(conflictMessage, cause);
 
   return repositoryError("Impossible d'enregistrer les fiches d'identification importées.", cause);
 }
@@ -1664,11 +1643,13 @@ function syncPendingOutbox() {
         await flushLocalDbWrites();
         notifySyncState();
       } catch (error) {
+        // A failed transport says nothing about the queued data. Stop this pass
+        // and let the caller retry, without marking the operation as rejected.
+        if (isOfflineFailure(error)) throw error;
         const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
         setOutboxError(item.id, message, error instanceof OfflineConflict ? { fields: error.fields, remote: error.remote } : undefined);
         setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
         notifySyncState();
-        if (isOfflineFailure(error)) return;
         keys.forEach((key) => blockedKeys.add(key));
         console.error("Impossible de synchroniser une action locale.", error);
       }
@@ -1756,6 +1737,7 @@ export function syncSupabaseWorkspace(
   if (
     !options.force &&
     !options.verify &&
+    !metadata.lastError &&
     !hasPendingChanges &&
     Number.isFinite(lastFullSync) &&
     Date.now() - lastFullSync < WORKSPACE_SYNC_MIN_INTERVAL_MS
@@ -2100,22 +2082,9 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
-    input = { ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
-    assertNoFiscalYearDuplicate(input, readCachedContracts({ workspaceId: input.workspaceId, all: true }).items);
-    if (getPendingOutbox().some((item) => item.workspaceId === input.workspaceId &&
-        item.type === "applicant.upsert" && (item.payload.nif === input.nif || item.payload.id === input.applicantId))) {
-      return this.local.create(input);
-    }
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const contract = await this.remote.create(input);
-      cacheContract(contract);
-      return contract;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.create(input);
-    }
+    // Persist before any network work; AppLayout drains the outbox in the background.
+    // Replay performs the authoritative fiscal-year duplicate check before insertion.
+    return this.local.create({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() });
   }
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {

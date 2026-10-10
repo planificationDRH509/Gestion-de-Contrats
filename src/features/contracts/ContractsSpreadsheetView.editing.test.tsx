@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cacheContracts } from "../../data/local/offlineStore";
 import type { Contract } from "../../data/types";
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +60,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("spreadsheet editing", () => {
+  it("keeps new rows usable while recent contracts are still loading", () => {
+    render(<ContractsSpreadsheetView contracts={[]} workspaceId="w" userId="me" isLoading={true} canDelete />);
+    expect(cell(0, 0)).toBeEnabled();
+    expect(screen.queryByText("Chargement des contrats…")).not.toBeInTheDocument();
+  });
+
   it("toggles the phone column for every row and remembers visibility across remounts", () => {
     const view = setup([existing]);
     expect(screen.queryByRole("textbox", { name: "Téléphone" })).not.toBeInTheDocument();
@@ -287,6 +294,22 @@ describe("spreadsheet editing", () => {
     await waitFor(() => expect(cell(0, 0)).toHaveValue(""));
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ firstName: "Marie", salaryNumber: 45000.5, durationMonths: 6 }));
     expect(screen.getByRole("button", { name: "Annuler la saisie" })).toBeDisabled();
+  });
+
+  it("shows the locally saved row below immediately while suggestions never finish", async () => {
+    const { learnSuggestions } = await import("../../data/local/suggestionsDb");
+    vi.mocked(learnSuggestions).mockImplementationOnce(() => new Promise(() => {}));
+    setup();
+    mocks.create.mockImplementationOnce(async payload => {
+      const saved = { ...existing, ...payload, id: "queued-new" };
+      cacheContracts([saved]);
+      return saved;
+    });
+    paste(cell(0, 0), validRow());
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les lignes collées \(1\)/ }));
+    await waitFor(() => expect(cell(0, 0)).toHaveValue(""));
+    expect(mocks.applicant).toHaveBeenCalledWith(expect.objectContaining({ queueLocally: true }));
+    expect(Array.from(document.querySelectorAll<HTMLTextAreaElement>("#sheet-recent-contracts textarea")).some(field => field.value === "Marie")).toBe(true);
   });
 
   it("undoes and redoes a paste, including newly added rows, without saving", () => {

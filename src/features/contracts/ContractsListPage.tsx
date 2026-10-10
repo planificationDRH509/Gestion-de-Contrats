@@ -1414,6 +1414,14 @@ export function ContractsListPage() {
                 showAll={showAll}
                 onSelect={selectContractsScope}
               />
+              <span
+                className="contracts-total-badge"
+                role="status"
+                aria-label="Nombre de contrats"
+                aria-busy={isFetching}
+              >
+                {data ? data.total.toLocaleString("fr-FR") : "…"}
+              </span>
               <button
                 className={`view-pill-unified ${activeView === "dossiers" ? "active" : ""}`}
                 onClick={() => setActiveView("dossiers")}
@@ -1689,7 +1697,17 @@ export function ContractsListPage() {
           ) : (
             <div className="contracts-list">
               {items.length === 0 ? (
-                <div className="empty-state">Aucun contrat trouvé.</div>
+                <>
+                  {can("contracts.import") ? (
+                    <div className="contracts-header">
+                      <button type="button" className="contracts-import" aria-label="Importer" onClick={() => setImportOpen(true)}>
+                        <span className="material-symbols-rounded icon">file_upload</span>
+                        <span>Importer</span>
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="empty-state">Aucun contrat trouvé.</div>
+                </>
               ) : (
                 <>
                   <div className="contracts-header">
@@ -1720,9 +1738,9 @@ export function ContractsListPage() {
                         ) : null}
                       </button>
                     ) : null}
-                    <button type="button" className="contracts-import" aria-label="Collaboration" title="Collaboration">
-                      <span className="material-symbols-rounded icon">group</span>
-                      <span>Collaboration</span>
+                    <button type="button" className="contracts-import" aria-label="Formulaire" title="Formulaire">
+                      <span className="material-symbols-rounded icon">description</span>
+                      <span>Formulaire</span>
                     </button>
                   </div>
                   {items.map((contract) => {
@@ -2907,7 +2925,6 @@ export function ContractsListPage() {
         existingContracts={items}
         onClose={() => setImportOpen(false)}
         onImported={(count) => {
-          setImportOpen(false);
           setActionError(null);
           setActionMessage(`${count} contrat(s) importé(s).`);
           setPage(1);

@@ -3,8 +3,8 @@ import { queueOutbox } from "../local/localOutbox";
 import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreateContractInput, UpsertApplicantInput } from "../types";
-import { createSupabaseProvider, syncSupabaseOutbox, getSupabaseSyncState } from "./supabaseProvider";
-import { cacheApplicant, cacheContracts, getPendingOutbox, isOfflineFailure, replaceWorkspaceCache, upsertApplicantOffline } from "../local/offlineStore";
+import { createSupabaseProvider, syncSupabaseOutbox, syncSupabaseWorkspace, getSupabaseSyncState } from "./supabaseProvider";
+import { cacheApplicant, cacheContracts, getPendingOutbox, isOfflineFailure, replaceWorkspaceCache, setWorkspaceSyncMetadata, upsertApplicantOffline } from "../local/offlineStore";
 import { LocalContractRepository } from "../local/localContractRepository";
 import { mutateContractListOffline } from "../local/localListRepository";
 
@@ -46,6 +46,41 @@ beforeEach(() => {
 });
 
 describe("offline contract creation and replay", () => {
+  it("queues creation immediately even when online and rejects a second local duplicate", async () => {
+    mock.from.mockImplementation(() => { throw new Error("Network must not be awaited"); });
+    const provider = createSupabaseProvider();
+    const created = await provider.contracts.create(input);
+    expect(getPendingOutbox()).toEqual([expect.objectContaining({ type: "contract.create", payload: expect.objectContaining({ id: created.id }) })]);
+    await expect(provider.contracts.create(input)).rejects.toThrow(/existe déjà/);
+    expect(mock.from).not.toHaveBeenCalled();
+  });
+
+  it("rechecks a recent snapshot after failure and clears its error on recovery", async () => {
+    localStorage.setItem("contribution_auth", JSON.stringify({ workspaceId: input.workspaceId, taskSessionToken: "session" }));
+    setWorkspaceSyncMetadata(input.workspaceId, {
+      lastFullSyncedAt: new Date().toISOString(), remoteRevision: "revision", lastError: "Failed to fetch"
+    });
+    mock.rpc.mockResolvedValue({ data: "revision", error: null });
+    await syncSupabaseWorkspace(input.workspaceId);
+    expect(mock.rpc).toHaveBeenCalledWith("get_offline_workspace_revision", expect.anything());
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+  });
+
+  it("keeps network failures pending without marking valid data as rejected, then resumes", async () => {
+    online(false);
+    const created = await new LocalContractRepository().create(input);
+    online(true);
+    mock.from.mockReturnValue(reply(null, { message: "TypeError: Failed to fetch" }));
+    await expect(syncSupabaseOutbox()).rejects.toThrow();
+    expect(getPendingOutbox()).toHaveLength(1);
+    expect(getPendingOutbox()[0].lastError).toBeFalsy();
+    expect(getSupabaseSyncState(input.workspaceId).isSyncing).toBe(false);
+    mock.from.mockReturnValue(reply(contractRow(created.id)));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toHaveLength(0);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+  });
+
   it("uploads an offline contract before the list that contains it", async () => {
     online(false);
     const user = { id: "offline-author", username: "author", name: "Author", role: "admin" as const,
@@ -90,10 +125,12 @@ describe("offline contract creation and replay", () => {
   });
 
   it("keeps the original UUID if the insert response is lost and acknowledges replay without another insert", async () => {
-    const failed = reply(null, { message: "TypeError: Failed to fetch" });
-    mock.from.mockReturnValue(failed);
     const provider = createSupabaseProvider();
     const created = await provider.contracts.create(input);
+    expect(mock.from).not.toHaveBeenCalled();
+    const failed = reply(null, { message: "TypeError: Failed to fetch" });
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(failed);
+    await expect(syncSupabaseOutbox()).rejects.toThrow();
     expect(failed.insert.mock.calls[0][0][0].id_contrat).toBe(created.id);
     expect(failed.insert.mock.calls[0][0][0]).not.toHaveProperty("salaire");
     const remote = reply(contractRow(created.id));
@@ -145,7 +182,7 @@ describe("offline contract creation and replay", () => {
 
   it("rejects a cached NINU attached to another NIF", () => {
     upsertApplicantOffline({ ...applicant, ninu: "12345678901234" });
-    expect(() => upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" })).toThrow("NIF différent");
+    expect(() => upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" })).toThrow("Le NINU 12345678901234 appartient déjà à Jean LOUIS (NIF 123-456-789-0).");
   });
 
   it("replaces a pending identity correction before dependent contracts without overwriting the server", async () => {

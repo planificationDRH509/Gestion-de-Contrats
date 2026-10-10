@@ -602,29 +602,6 @@ img {
   display: none;
 }
 
-/* Tooltip-style hover for collapsed nav items */
-.sidebar.collapsed .nav-item:hover::after {
-  content: attr(title);
-  position: fixed;
-  left: 80px;
-  background: var(--ink);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  z-index: 100;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  animation: tooltip-in 0.15s ease;
-}
-
-@keyframes tooltip-in {
-  from { opacity: 0; transform: translateX(-4px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
 .sidebar-header {
   display: flex;
   flex-direction: column;
@@ -3452,12 +3429,7 @@ img {
   cursor: help;
 }
 
-.has-tooltip::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
+.floating-overlay.app-tooltip {
   background: #0f172a;
   color: #f8fafc;
   padding: 6px 8px;
@@ -3467,28 +3439,13 @@ img {
   text-align: left;
   min-width: 180px;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 20;
-}
-
-.has-tooltip:hover::after,
-.has-tooltip:focus-visible::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* The contracts header is sticky, so upward tooltips can slide underneath it. */
-.contracts-page .has-tooltip::after {
-  top: calc(100% + 8px);
-  bottom: auto;
-  transform: translateX(-50%) translateY(-4px);
-}
-
-.contracts-page .has-tooltip:hover::after,
-.contracts-page .has-tooltip:focus-visible::after {
-  transform: translateX(-50%) translateY(0);
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  line-height: 1.5;
+  border: 0;
 }
 
 /* Status Badges */
@@ -5775,10 +5732,6 @@ button {
     border: 0;
     border-radius: 11px;
     text-align: center;
-  }
-
-  .sidebar.collapsed .nav-item:hover::after {
-    display: none;
   }
 
   .sidebar.collapsed .sidebar-label,
@@ -9667,11 +9620,32 @@ body,
 .contract-sync-indicator > button { padding: 2px 6px; }
 .contract-sync-indicator .material-symbols-rounded { font-size: 17px; }
 .contract-sync-details {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
   display: grid; gap: 10px; width: min(290px, 75vw); padding: 14px;
   white-space: normal; overflow-wrap: anywhere; color: var(--ink);
   background: var(--surface, #fff); border: 1px solid var(--border);
   border-radius: 10px; box-shadow: 0 6px 24px #0002; font-size: 12px;
+}
+
+.floating-overlay {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 10001;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+}
+
+.floating-overlay::backdrop { background: transparent; }
+
+.chart-tooltip-overlay {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow-wrap: anywhere;
 }
 
 .contract-sync-details label { display: grid; gap: 6px; min-width: 0; }
@@ -10055,6 +10029,24 @@ body,
   flex-shrink: 0;
 }
 
+.contracts-total-badge {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  flex-shrink: 0;
+  min-width: 26px;
+  height: 26px;
+  margin-inline: 4px 6px;
+  padding-inline: 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .contracts-scope-menu {
   z-index: 200;
   min-width: 190px;
@@ -10431,3 +10423,23 @@ body,
   .task-composer-toggle > :last-child { transition: none; }
 }
 .note-body-button { white-space: pre-wrap; font-size: 14px; font-weight: 400; line-height: 1.65; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+
+.contracts-import-difference {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 6px;
+}
+
+.contracts-import-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+.contracts-import-cell-input[aria-invalid="true"] {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, .08);
+  color: #b91c1c;
+}
+.contracts-import-clear { border: 0; background: transparent; cursor: pointer; color: var(--ink-muted); padding: 2px 6px; }
+.contracts-import-clear:disabled { cursor: default; opacity: .4; }
+
+.contracts-import-error-filter { display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 8px; font-size: 12px; }
+.contracts-import-preview .contracts-import-optional-cell { white-space: nowrap; }

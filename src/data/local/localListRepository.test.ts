@@ -89,8 +89,9 @@ describe("durable offline lists", () => {
   it("retries the same operation after a network interruption and only removes acknowledged items", async () => {
     await create(); const original = getPendingOutbox()[0];
     sync.replay.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await syncSupabaseOutbox();
+    await expect(syncSupabaseOutbox()).rejects.toThrow("Failed to fetch");
     expect(getPendingOutbox()).toHaveLength(1);
+    expect(getPendingOutbox()[0].lastError).toBeFalsy();
     await syncSupabaseOutbox();
     expect(sync.replay.mock.calls.map(([item]) => item.id)).toEqual([original.id, original.id]);
     expect(getPendingOutbox()).toHaveLength(0);

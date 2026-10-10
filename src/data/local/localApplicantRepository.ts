@@ -1,3 +1,4 @@
+import { applicantConflictMessage } from "../applicantConflict";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
 import { createId } from "../../lib/uuid";
@@ -90,7 +91,8 @@ export class LocalApplicantRepository implements ApplicantRepository {
             Boolean(input.ninu?.trim() && applicant.ninu?.trim() === input.ninu.trim()))
       );
       if (duplicate) {
-        throw new Error("Ce NIF ou ce NINU appartient déjà à une autre personne.");
+        const field = duplicate.id === nextId ? "NIF" : "NINU";
+        throw new Error(applicantConflictMessage(field, field === "NIF" ? nextId : input.ninu!.trim(), duplicate));
       }
       const updated: Applicant = {
         ...existing,

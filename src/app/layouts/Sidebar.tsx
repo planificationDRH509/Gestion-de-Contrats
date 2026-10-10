@@ -127,7 +127,9 @@ function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, 
       to={to}
       end={end}
       className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-      title={collapsed ? label : undefined}
+      data-tooltip={collapsed ? label : undefined}
+      data-tooltip-placement="right"
+      data-tooltip-desktop="true"
     >
       <span className="material-symbols-rounded nav-icon">{icon}</span>
       <span className="sidebar-label sidebar-label-full">{label}</span>

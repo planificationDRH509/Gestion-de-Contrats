@@ -1,5 +1,35 @@
 import { expect, test, type Page } from '@playwright/test';
 
+async function expectStableEditing(page: Page) {
+  const sheet = page.locator('.contracts-data-sheet');
+  const geometry = () => sheet.evaluate(root => {
+    const grid = root.querySelector('.contracts-sheet-grid')!;
+    const scroll = root.querySelector('.contracts-sheet-scroll')!;
+    return {
+      zoom: getComputedStyle(grid).zoom,
+      width: grid.getBoundingClientRect().width,
+      scrollLeft: scroll.scrollLeft,
+      rows: [...root.querySelectorAll('.contracts-sheet-row-new')].map(row => ({
+        top: row.getBoundingClientRect().top,
+        height: row.getBoundingClientRect().height
+      }))
+    };
+  });
+  const before = await geometry();
+  const name = sheet.locator('.contracts-sheet-row-new [data-sheet-col="1"]').first();
+  const original = await name.inputValue();
+  await name.fill('Marie Stéphanie Alexandra Jean Baptiste Pierre Louis');
+  for (let index = 0; index < 5; index++) {
+    await page.keyboard.press('Tab');
+    expect(await geometry()).toEqual(before);
+  }
+  await name.focus();
+  await name.press('End');
+  await name.pressSequentially(' Alexandra', { delay: 30 });
+  expect(await geometry()).toEqual(before);
+  await name.fill(original);
+}
+
 async function expectAlignedSheet(page: Page, fits = false) {
   const sheet = page.locator('.contracts-data-sheet');
   if (fits) {
@@ -62,6 +92,7 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   await page.goto('http://127.0.0.1:5179/app/contrats/nouveau');
   await expect(page.locator('[data-sheet-row="existingRow_long"][data-sheet-col="1"]')).toBeVisible();
   await expectAlignedSheet(page, true);
+  await expectStableEditing(page);
   await page.screenshot({path:'/tmp/contract-sheet-aligned.png',fullPage:true});
 
   await expect(page.locator('.contracts-sheet-head-cell')).toHaveCount(10);
@@ -161,6 +192,7 @@ test('contract spreadsheet aligns headers, cells and row actions across zoom and
   await expect(activeCell).toBeFocused();
   await expect(page.locator('.contracts-sheet-fullscreen')).toBeVisible();
   await expectAlignedSheet(page, true);
+  await expectStableEditing(page);
   await page.getByRole('button', {name:'Actions de la ligne',exact:true}).last().click();
   await expect(page.getByRole('menu')).toBeVisible();
   await expect(page.getByRole('menuitem', {name:'Ajouter un commentaire',exact:true})).toBeVisible();

@@ -1,3 +1,7 @@
+import "./contractsImport.css";
+import { createPortal } from "react-dom";
+import { confirmImportReceipt, readImportRequest } from "./contractImportRun";
+import { createId } from "../../lib/uuid";
 import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { genderedTitle, salaryOutsideGrid } from "../salary-grid/salaryGrid";
@@ -6,9 +10,12 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ClipboardEvent } f
 import type { AppUser, Contract, Dossier } from "../../data/types";
 import {
   CONTRACT_IMPORT_FIELDS,
+  resolveImportRows,
+  getImportErrorFields,
   MAX_IMPORT_ROWS,
   buildImportEditableRows,
   getImportFieldLabel,
+  getImportDifferences,
   inferImportMapping,
   parsePastedContractTable,
   parseImportMoney,
@@ -20,12 +27,12 @@ import {
   type ContractImportMapping
 } from "./contractImport";
 import {
-  clearContractImportDraft,
   loadContractImportDraft,
   saveContractImportDraft
 } from "./contractImportDraft";
 import {
   useImportApplicantMatches,
+  useImportContractHistory,
   useImportContracts,
   type ContractImportProgress
 } from "./contractsApi";
@@ -69,7 +76,6 @@ export function ContractsImportModal({
   currentUserName,
   dossiers,
   appUsers,
-  existingContracts,
   onClose,
   onImported
 }: ContractsImportModalProps) {
@@ -85,18 +91,35 @@ export function ContractsImportModal({
   const [importError, setImportError] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<ContractImportProgress | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
+  const [viewFilter, setViewFilter] = useState<"all" | "errors" | "differences" | "imported">("all");
+  const [sourceOpen, setSourceOpen] = useState(true);
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<() => void>(() => {});
+  const [importFiscalYear, setImportFiscalYear] = useState("");
   const pasteRef = useRef<HTMLTextAreaElement>(null);
   const restoreTimerRef = useRef<number | null>(null);
   const draftSaveTimerRef = useRef<number | null>(null);
   const restoringRef = useRef(false);
-  const hydratedClipboardSignatureRef = useRef<string | null>(null);
+
   const importContracts = useImportContracts();
   const { fiscalYear } = useFiscalYear();
-  const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
+  const targetFiscalYear = importFiscalYear || fiscalYear;
+  const fiscalYearIsPast = isPastFiscalYear(targetFiscalYear);
 
   const table = useMemo(() => parsePastedContractTable(clipboardText), [clipboardText]);
-  const headerSignature = table.headers.join("\u001f");
-  const clipboardSignature = clipboardText;
+  const draftSnapshot = { clipboardText, mapping, editableRows, selectedRowIds, bulkField, bulkValue,
+    selectedDossierId, responsibleUserId, fiscalYear: targetFiscalYear };
+  const draftRef = useRef(draftSnapshot);
+  draftRef.current = draftSnapshot;
+
+  function persistDraft(snapshot = draftRef.current) {
+    if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
+    draftRef.current = snapshot;
+    const saved = saveContractImportDraft(workspaceId, currentUserId, snapshot);
+    if (!saved) setImportError("Impossible de sauvegarder le brouillon. Libérez de l’espace avant l’import.");
+    return saved;
+  }
 
   useEffect(() => {
     if (!isOpen) return;
@@ -105,7 +128,8 @@ export function ContractsImportModal({
     if (draft) {
       setClipboardText(draft.clipboardText);
       setMapping(draft.mapping);
-      setEditableRows(draft.editableRows);
+      setEditableRows((draft.editableRows.length ? draft.editableRows : buildImportEditableRows(parsePastedContractTable(draft.clipboardText), draft.mapping))
+        .map(row => ({ ...row, contractId: row.contractId || createId() })));
       setSelectedRowIds(draft.selectedRowIds);
       setBulkField(draft.bulkField);
       setBulkValue(draft.bulkValue);
@@ -121,12 +145,16 @@ export function ContractsImportModal({
       setSelectedDossierId("");
       setResponsibleUserId(currentUserId);
     }
+    setImportFiscalYear(draft?.fiscalYear || fiscalYear);
+    setViewFilter("all");
+    setActiveRowId(null);
+    setSourceOpen(!draft?.clipboardText);
     setImportError(null);
     setImportProgress(null);
     setPreviewPage(1);
-    hydratedClipboardSignatureRef.current = draft?.clipboardText ?? "";
     restoreTimerRef.current = window.setTimeout(() => {
-      pasteRef.current?.focus();
+      if (!draft?.clipboardText) pasteRef.current?.focus();
+      else dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
       restoringRef.current = false;
     }, 0);
     return () => {
@@ -138,38 +166,10 @@ export function ContractsImportModal({
   }, [currentUserId, isOpen, workspaceId]);
 
   useEffect(() => {
-    if (!isOpen || table.headers.length === 0) return;
-    if (hydratedClipboardSignatureRef.current === clipboardSignature) return;
-    setMapping(inferImportMapping(table.headers));
-    hydratedClipboardSignatureRef.current = clipboardSignature;
-  }, [clipboardSignature, headerSignature, isOpen, table.headers]);
-
-  useEffect(() => {
-    if (!isOpen || table.rows.length === 0 || mapping.length === 0) {
-      setEditableRows([]);
-      setSelectedRowIds([]);
-      return;
-    }
-    const rows = buildImportEditableRows(table, mapping).slice(0, MAX_IMPORT_ROWS);
-    setEditableRows(rows);
-    setSelectedRowIds(rows.map((row) => row.id));
-    setPreviewPage(1);
-  }, [isOpen, mapping, table]);
-
-  useEffect(() => {
     if (!isOpen || restoringRef.current) return;
     if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
     draftSaveTimerRef.current = window.setTimeout(() => {
-      saveContractImportDraft(workspaceId, currentUserId, {
-        clipboardText,
-        mapping,
-        editableRows,
-        selectedRowIds,
-        bulkField,
-        bulkValue,
-        selectedDossierId,
-        responsibleUserId
-      });
+      persistDraft();
     }, 300);
     return () => {
       if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
@@ -185,7 +185,8 @@ export function ContractsImportModal({
     selectedRowIds,
     bulkField,
     bulkValue,
-    workspaceId
+    workspaceId,
+    targetFiscalYear
   ]);
 
   const userOptions = useMemo<UserOption[]>(() => {
@@ -197,10 +198,6 @@ export function ContractsImportModal({
     return options;
   }, [appUsers, currentUserId, currentUserName]);
 
-  const existingNifs = useMemo(
-    () => existingContracts.map((contract) => contract.nif ?? "").filter(Boolean),
-    [existingContracts]
-  );
   const importIdentityKeys = useMemo(() => {
     const nifs = new Set<string>();
     const ninus = new Set<string>();
@@ -228,63 +225,71 @@ export function ContractsImportModal({
     importIdentityKeys.ninus,
     identityCheckEnabled
   );
-  const isCheckingIdentities =
-    identityCheckEnabled && (identityMatches.isPending || identityMatches.isFetching);
+  const history = useImportContractHistory(workspaceId, identityCheckEnabled);
+  const isCheckingIdentities = identityCheckEnabled &&
+    (identityMatches.isPending || identityMatches.isFetching || history.isPending || history.isFetching);
+  const resolvedRows = useMemo(
+    () => resolveImportRows(editableRows, identityMatches.data ?? [], history.data ?? []),
+    [editableRows, identityMatches.data, history.data]
+  );
   const mappingIssues = useMemo(() => validateImportMapping(mapping), [mapping]);
   const validatedRows = useMemo(
     () =>
-      validateImportEditableRows(editableRows, {
-        existingNifs,
+      validateImportEditableRows(resolvedRows, {
+        existingContracts: history.data ?? [],
+        fiscalYear: targetFiscalYear,
+        selectedRowIds,
         existingApplicants: identityMatches.data ?? []
       }),
-    [editableRows, existingNifs, identityMatches.data]
+    [resolvedRows, history.data, identityMatches.data, targetFiscalYear, selectedRowIds]
+  );
+  const differencesById = useMemo(
+    () => getImportDifferences(resolvedRows, identityMatches.data ?? [], history.data ?? []),
+    [resolvedRows, identityMatches.data, history.data]
   );
   const validationById = useMemo(
     () => new Map(validatedRows.map((row) => [row.id, row])),
     [validatedRows]
   );
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
-  const includedRows = validatedRows.filter((row) => !row.excluded);
-  const validRows = includedRows.filter((row) => row.values && row.errors.length === 0);
+  const hasAttempt = (row: ContractImportEditableRow) => Boolean(row.contractId && readImportRequest(workspaceId, row.contractId));
+  const completedIds = new Set(editableRows.filter(row => row.importedContractId).map(row => row.id));
+  const includedRows = validatedRows.filter((row) => !row.excluded && !completedIds.has(row.id));
   const selectedRows = validatedRows.filter(
-    (row) => selectedRowIdSet.has(row.id) && !row.excluded
+    (row) => selectedRowIdSet.has(row.id) && !row.excluded && !completedIds.has(row.id)
   );
   const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
   const selectedErrorRowCount = selectedRows.filter((row) => row.errors.length > 0).length;
-  const errorRowCount = includedRows.filter((row) => row.errors.length > 0).length;
-  const identityConflictRowCount = includedRows.filter((row) =>
-    row.errors.some(
-      (error) =>
-        (error.includes("NIF") || error.includes("NINU")) &&
-        (error.includes("existe déjà") ||
-          error.includes("associé à plusieurs") ||
-          error.includes("fiche supprimée"))
-    )
-  ).length;
-  const warningRowCount = includedRows.filter((row) => row.warnings.length > 0).length;
-  const excludedRowCount = validatedRows.filter((row) => row.excluded).length;
+  const errorRowCount = includedRows.filter((row) => row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError).length;
   const errorRowIds = useMemo(
     () =>
       new Set(
         validatedRows
-          .filter((row) => !row.excluded && row.errors.length > 0)
+          .filter((row) => !row.excluded && !completedIds.has(row.id) && (row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError))
           .map((row) => row.id)
       ),
-    [validatedRows]
+    [validatedRows, editableRows]
   );
-  const allRowsSelected =
-    editableRows.length > 0 && editableRows.every((row) => selectedRowIdSet.has(row.id));
   const isOverflow = table.rows.length > MAX_IMPORT_ROWS;
-  const totalPreviewPages = Math.max(1, Math.ceil(editableRows.length / IMPORT_PREVIEW_PAGE_SIZE));
+  const differenceRowIds = new Set(resolvedRows.filter(row => !row.excluded && !row.importedContractId && (differencesById.get(row.id)?.length ?? 0) > 0).map(row => row.id));
+  const previewRows = resolvedRows.filter(row => viewFilter === "all" ||
+    (viewFilter === "errors" && errorRowIds.has(row.id)) ||
+    (viewFilter === "differences" && differenceRowIds.has(row.id)) ||
+    (viewFilter === "imported" && completedIds.has(row.id)));
+  const selectablePreviewRows = previewRows.filter(row => !row.importedContractId);
+  const allRowsSelected = selectablePreviewRows.length > 0 && selectablePreviewRows.every(row => selectedRowIdSet.has(row.id));
+  const activeRow = resolvedRows.find(row => row.id === activeRowId);
+  const activeDifferences = activeRow ? differencesById.get(activeRow.id) ?? [] : [];
+  const selectedPendingRows = editableRows.filter(row => selectedRowIdSet.has(row.id) && !row.importedContractId);
+  const totalPreviewPages = Math.max(1, Math.ceil(previewRows.length / IMPORT_PREVIEW_PAGE_SIZE));
   const safePreviewPage = Math.min(previewPage, totalPreviewPages);
   const previewStart = (safePreviewPage - 1) * IMPORT_PREVIEW_PAGE_SIZE;
-  const visibleEditableRows = editableRows.slice(
+  const visibleEditableRows = previewRows.slice(
     previewStart,
     previewStart + IMPORT_PREVIEW_PAGE_SIZE
   );
   const canImport =
     selectedValidRows.length > 0 &&
-    Boolean(selectedDossierId) &&
     Boolean(responsibleUserId) &&
     mappingIssues.missingFields.length === 0 &&
     mappingIssues.duplicateFields.length === 0 &&
@@ -292,6 +297,7 @@ export function ContractsImportModal({
     !isOverflow &&
     !isCheckingIdentities &&
     !identityMatches.isError &&
+    !history.isError &&
     !importContracts.isPending;
 
   useEffect(() => {
@@ -304,27 +310,79 @@ export function ContractsImportModal({
       : `Importation ${importProgress.completed}/${importProgress.total}`
     : null;
 
+  closeRef.current = () => {
+    if (activeRowId) setActiveRowId(null);
+    else closeModal();
+  };
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeRef.current(); }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]') ?? [])
+        .filter(element => element.getClientRects().length > 0);
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey, true);
+      previousFocus?.focus();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const text = event.clipboardData.getData("text/plain");
     if (!text) return;
     event.preventDefault();
+    replaceClipboard(text);
+  }
+
+  function replaceClipboard(text: string) {
+    if (importContracts.isPending) return;
+    const nextTable = parsePastedContractTable(text);
+    const nextMapping = inferImportMapping(nextTable.headers);
+    const rows = buildImportEditableRows(nextTable, nextMapping).slice(0, MAX_IMPORT_ROWS);
     setClipboardText(text);
+    setMapping(nextMapping);
+    setEditableRows(rows);
+    setSelectedRowIds(rows.map(row => row.id));
+    setImportFiscalYear(fiscalYear);
+    setActiveRowId(null);
+    setViewFilter("all");
+    const issues = validateImportMapping(nextMapping);
+    setSourceOpen(!rows.length || issues.missingFields.length > 0 || issues.duplicateFields.length > 0);
+    setImportError(null);
+    setPreviewPage(1);
   }
 
   function handleMappingChange(index: number, field: ContractImportFieldId) {
-    setMapping((prev) => {
-      const next = [...prev];
-      next[index] = field;
-      return next;
-    });
+    const next = [...mapping];
+    next[index] = field;
+    const mappedRows = buildImportEditableRows(table, next).slice(0, MAX_IMPORT_ROWS);
+    const changedFields = [mapping[index], field].filter((item): item is ContractImportEditableField => Boolean(item) && item !== "ignore");
+    setMapping(next);
+    setEditableRows(previous => previous.map((row, rowIndex) => {
+      if (row.importedContractId) return row;
+      const updated = { ...row, importError: undefined };
+      for (const changed of changedFields) updated[changed] = mappedRows[rowIndex]?.[changed] ?? "";
+      return updated;
+    }));
+    setPreviewPage(1);
   }
 
-  function updateEditableRow(rowId: string, field: ContractImportEditableField, value: string) {
-    setEditableRows((prev) =>
-      prev.map((row) => (row.id === rowId ? { ...row, [field]: value } : row))
-    );
+  function updateEditableRow(rowId: string, field: ContractImportEditableField, value: string, clear = false) {
+    setEditableRows((prev) => prev.map((row) => row.id === rowId && !row.importedContractId && !hasAttempt(row) ? {
+      ...row, [field]: value, importError: undefined,
+      clearedFields: clear ? [...new Set([...(row.clearedFields ?? []), field])] : row.clearedFields?.filter(item => item !== field)
+    } : row));
   }
 
   function toggleRowSelection(rowId: string) {
@@ -334,15 +392,18 @@ export function ContractsImportModal({
   }
 
   function toggleAllRowsSelection() {
-    setSelectedRowIds(allRowsSelected ? [] : editableRows.map((row) => row.id));
+    const filteredIds = new Set(selectablePreviewRows.map(row => row.id));
+    setSelectedRowIds(previous => allRowsSelected
+      ? previous.filter(id => !filteredIds.has(id))
+      : [...new Set([...previous, ...filteredIds])]);
   }
 
   function applyBulkValue(scope: "selected" | "all") {
     const targetIds = scope === "selected" ? new Set(selectedRowIds) : null;
     setEditableRows((prev) =>
       prev.map((row) => {
-        if (targetIds && !targetIds.has(row.id)) return row;
-        return { ...row, [bulkField]: bulkValue };
+        if (row.importedContractId || hasAttempt(row) || (targetIds && !targetIds.has(row.id))) return row;
+        return { ...row, [bulkField]: bulkValue, importError: undefined, clearedFields: row.clearedFields?.filter(field => field !== bulkField) };
       })
     );
   }
@@ -357,11 +418,12 @@ export function ContractsImportModal({
       );
     }
     setEditableRows((prev) =>
-      prev.map((row) => (targetIds.has(row.id) ? { ...row, excluded } : row))
+      prev.map((row) => (targetIds.has(row.id) && !row.importedContractId ? { ...row, excluded } : row))
     );
   }
 
   function selectErrorRows() {
+    setViewFilter("all");
     setSelectedRowIds(Array.from(errorRowIds));
     const firstProblemIndex = editableRows.findIndex((row) => errorRowIds.has(row.id));
     if (firstProblemIndex >= 0) {
@@ -371,26 +433,13 @@ export function ContractsImportModal({
 
   function closeModal() {
     if (importContracts.isPending) return;
-    saveContractImportDraft(workspaceId, currentUserId, {
-      clipboardText,
-      mapping,
-      editableRows,
-      selectedRowIds,
-      bulkField,
-      bulkValue,
-      selectedDossierId,
-      responsibleUserId
-    });
+    persistDraft();
     onClose();
   }
 
   async function handleImport() {
     setImportError(null);
     setImportProgress(null);
-    if (!selectedDossierId) {
-      setImportError("Sélectionnez un dossier avant l'enregistrement.");
-      return;
-    }
     if (isOverflow) {
       setImportError(`Cet import dépasse la limite de sécurité de ${MAX_IMPORT_ROWS} lignes. Divisez-le en plusieurs lots.`);
       return;
@@ -399,7 +448,7 @@ export function ContractsImportModal({
       setImportError("Attendez la fin de la vérification des NIF et NINU.");
       return;
     }
-    if (identityMatches.isError) {
+    if (identityMatches.isError || history.isError) {
       setImportError("Impossible de vérifier les doublons NIF/NINU dans la base. Réessayez.");
       return;
     }
@@ -414,18 +463,30 @@ export function ContractsImportModal({
       return;
     }
 
+    if (!canImport || !persistDraft()) return;
+    setImportFiscalYear(targetFiscalYear);
     try {
-      const createdContracts = await importContracts.mutateAsync({
+      const result = await importContracts.mutateAsync({
         workspaceId,
-        dossierId: selectedDossierId,
+        dossierId: selectedDossierId || null,
+        onDossierCreated: (id) => {
+          setSelectedDossierId(id);
+          persistDraft({ ...draftRef.current, selectedDossierId: id });
+        },
+        onRowResult: ({ contractId, contract, error }) => {
+          const rows = draftRef.current.editableRows.map(row => row.contractId === contractId
+            ? { ...row, importedContractId: contract?.id, importError: error } : row);
+          setEditableRows(rows);
+          const saved = persistDraft({ ...draftRef.current, editableRows: rows });
+          if (saved && contract) confirmImportReceipt(workspaceId, contractId);
+        },
         responsibleUserId,
-        fiscalYear,
-        rows: selectedValidRows.map((row) => ({ ...row.values!, position: genderedTitle(salaryGrid, row.values!.position, row.values!.gender) })),
+        fiscalYear: targetFiscalYear,
+        rows: selectedValidRows.map((row) => ({ ...row.values!, sourceRowNumber: row.sourceRowNumber, position: genderedTitle(salaryGrid, row.values!.position, row.values!.gender) })),
         onProgress: setImportProgress
       });
-      onImported(createdContracts.length);
-      clearContractImportDraft(workspaceId, currentUserId);
-      onClose();
+      if (result.contracts.length) onImported(result.contracts.length);
+      setImportProgress(null);
     } catch (error) {
       console.error(error);
       setImportProgress(null);
@@ -433,8 +494,8 @@ export function ContractsImportModal({
     }
   }
 
-  return (
-    <div className="contracts-import-modal" role="dialog" aria-modal="true" aria-labelledby="contracts-import-title">
+  return createPortal(
+    <div ref={dialogRef} className="contracts-import-modal import-workspace" role="dialog" aria-modal="true" aria-labelledby="contracts-import-title">
       <div className={`contracts-import-modal-card ${fiscalYearIsPast ? "fiscal-year-past-outline" : ""}`}>
         <div className="contracts-import-modal-head">
           <div>
@@ -448,50 +509,26 @@ export function ContractsImportModal({
             </div>
             <div className={`contract-fiscal-year-badge ${fiscalYearIsPast ? "is-past" : ""}`}>
               <span className="material-symbols-rounded">calendar_month</span>
-              Année fiscale {fiscalYear}
+              Année fiscale {targetFiscalYear}
             </div>
           </div>
-          <button className="icon-btn" type="button" onClick={closeModal} title="Fermer">
-            <span className="material-symbols-rounded">close</span>
-          </button>
-        </div>
-
-        {fiscalYearIsPast ? (
-          <div className="fiscal-year-contract-warning" role="alert">
-            <span className="material-symbols-rounded">warning</span>
-            <div>
-              <strong>Attention : année fiscale passée ({fiscalYear})</strong>
-              <span>Tous les contrats de cet import seront enregistrés dans un exercice déjà terminé.</span>
-            </div>
-          </div>
-        ) : null}
-
-        <textarea
-          ref={pasteRef}
-          className="textarea contracts-import-paste"
-          value={clipboardText}
-          onPaste={handlePaste}
-          onChange={(event) => setClipboardText(event.target.value)}
-          placeholder="Collez les lignes copiées depuis Excel"
-        />
-
-        {table.headers.length > 0 ? (
-          <>
             <div className="contracts-import-meta-grid">
               <label className="form-label">
-                Dossier *
+                Dossier
                 <select
                   className="select"
+                  disabled={importContracts.isPending}
                   value={selectedDossierId}
                   onChange={(event) => setSelectedDossierId(event.target.value)}
                 >
-                  <DossierSelectOptions dossiers={dossiers} emptyLabel="Sélectionner un dossier" />
+                  <DossierSelectOptions dossiers={dossiers} emptyLabel="Créer automatiquement" />
                 </select>
               </label>
               <label className="form-label">
                 Responsable
                 <select
                   className="select"
+                  disabled={importContracts.isPending}
                   value={responsibleUserId}
                   onChange={(event) => setResponsibleUserId(event.target.value)}
                 >
@@ -503,29 +540,74 @@ export function ContractsImportModal({
                 </select>
               </label>
             </div>
+          <button className="icon-btn" type="button" onClick={closeModal} title="Fermer" aria-label="Fermer" disabled={importContracts.isPending}>
+            <span className="material-symbols-rounded">close</span>
+          </button>
+        </div>
 
-            <div className="contracts-import-status-row">
-              <span>{validRows.length} prête(s)</span>
-              <span>{selectedValidRows.length} sélectionnée(s)</span>
-              <span>{errorRowCount} erreur(s)</span>
-              <span>{warningRowCount} alerte(s)</span>
-              <span>{excludedRowCount} retirée(s)</span>
-              {isOverflow ? <span>Maximum {MAX_IMPORT_ROWS} lignes</span> : null}
-              {isCheckingIdentities ? <span>Vérification NIF/NINU…</span> : null}
-              {importProgressLabel ? <span>{importProgressLabel}</span> : null}
+        {fiscalYearIsPast ? (
+          <div className="fiscal-year-contract-warning" role="alert">
+            <span className="material-symbols-rounded">warning</span>
+            <div>
+              <strong>Attention : année fiscale passée ({targetFiscalYear})</strong>
+              <span>Tous les contrats de cet import seront enregistrés dans un exercice déjà terminé.</span>
+            </div>
+          </div>
+        ) : null}
+
+        <fieldset className="contracts-import-controls" disabled={importContracts.isPending}>
+        <details className="import-source" open={sourceOpen}>
+          <summary onClick={event => { event.preventDefault(); setSourceOpen(open => !open); }}>
+            <span className="material-symbols-rounded" aria-hidden="true">content_paste</span>
+            Source Excel <span>{table.rows.length ? `${table.rows.length} lignes · ${table.headers.length} colonnes` : ""}</span>
+            <span className="material-symbols-rounded import-source-chevron" aria-hidden="true">{sourceOpen ? "expand_less" : "expand_more"}</span>
+          </summary>
+          <div className="import-source-content">
+        <textarea
+          ref={pasteRef}
+          className="textarea contracts-import-paste"
+          value={clipboardText}
+          onPaste={handlePaste}
+          onChange={(event) => replaceClipboard(event.target.value)}
+          placeholder="Collez les lignes copiées depuis Excel"
+        />
+            {table.headers.length > 0 ? <div className="contracts-import-section-title">Correspondance des colonnes</div> : null}
+            <div className="contracts-import-mapping">
+              {table.headers.map((header, index) => (
+                <div className="contracts-import-mapping-row" key={`${header}-${index}`}>
+                  <div className="contracts-import-source">
+                    <span>{header}</span>
+                    <small>{table.rows[0]?.[index]?.trim() || "Vide"}</small>
+                  </div>
+                  <select
+                    className="select"
+                    disabled={editableRows.some(row => Boolean(row.importedContractId) || hasAttempt(row))}
+                    value={mapping[index] ?? "ignore"}
+                    onChange={(event) =>
+                      handleMappingChange(index, event.target.value as ContractImportFieldId)
+                    }
+                  >
+                    {CONTRACT_IMPORT_FIELDS.map((field) => (
+                      <option key={field.id} value={field.id}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
 
-            {identityMatches.isError ? (
+          </div>
+        </details>
+
+
+        {table.headers.length > 0 ? (
+          <>
+
+
+            {identityMatches.isError || history.isError ? (
               <div className="form-error">
                 Impossible de vérifier les doublons NIF/NINU dans la base. Corrigez la connexion puis réessayez.
-              </div>
-            ) : null}
-
-            {identityConflictRowCount > 0 ? (
-              <div className="form-error">
-                {identityConflictRowCount} ligne(s) bloquée(s) par un conflit NIF/NINU. Le détail et le propriétaire
-                existant apparaissent dans la colonne « État ». Corrigez ces lignes ou utilisez « Sélectionner les
-                erreurs », puis « Retirer sélection » pour importer le reste.
               </div>
             ) : null}
 
@@ -549,33 +631,24 @@ export function ContractsImportModal({
               </div>
             ) : null}
 
-            <div className="contracts-import-section-title">Correspondance des colonnes</div>
-            <div className="contracts-import-mapping">
-              {table.headers.map((header, index) => (
-                <div className="contracts-import-mapping-row" key={`${header}-${index}`}>
-                  <div className="contracts-import-source">
-                    <span>{header}</span>
-                    <small>{table.rows[0]?.[index]?.trim() || "Vide"}</small>
-                  </div>
-                  <select
-                    className="select"
-                    value={mapping[index] ?? "ignore"}
-                    onChange={(event) =>
-                      handleMappingChange(index, event.target.value as ContractImportFieldId)
-                    }
-                  >
-                    {CONTRACT_IMPORT_FIELDS.map((field) => (
-                      <option key={field.id} value={field.id}>
-                        {field.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+            <div className="import-toolbar">
+              <div className="import-filters" role="group" aria-label="Filtrer les lignes">
+                {([
+                  ["all", "Toutes", resolvedRows.length],
+                  ["errors", "Erreurs", errorRowIds.size],
+                  ["differences", "Différences", differenceRowIds.size],
+                  ["imported", "Importées", completedIds.size]
+                ] as const).map(([id, label, count]) => (
+                  <button type="button" key={id} aria-pressed={viewFilter === id} onClick={() => { setViewFilter(id); setPreviewPage(1); }}>
+                    {label} <span>{count}</span>
+                  </button>
+                ))}
+              </div>
+              <button className="btn btn-outline" type="button" onClick={selectErrorRows} disabled={!errorRowIds.size}>Sélectionner les erreurs</button>
             </div>
-
-            <div className="contracts-import-section-title">Inspection et modifications</div>
+            {selectedPendingRows.length > 0 ? (
             <div className="contracts-import-bulkbar">
+              <strong>{selectedPendingRows.length} sélectionnée(s)</strong>
               <label className="contracts-import-bulk-control">
                 Champ
                 <select
@@ -617,14 +690,6 @@ export function ContractsImportModal({
               <button
                 className="btn btn-outline"
                 type="button"
-                onClick={() => applyBulkValue("all")}
-                disabled={editableRows.length === 0}
-              >
-                Appliquer à tout
-              </button>
-              <button
-                className="btn btn-outline"
-                type="button"
                 onClick={() => setSelectedRowsExcluded(true)}
                 disabled={selectedRowIds.length === 0}
               >
@@ -638,15 +703,10 @@ export function ContractsImportModal({
               >
                 Réintégrer
               </button>
-              <button
-                className="btn btn-outline"
-                type="button"
-                onClick={selectErrorRows}
-                disabled={errorRowIds.size === 0}
-              >
-                Sélectionner les erreurs
-              </button>
             </div>
+            ) : null}
+            <div className="import-body">
+            <div className="import-table-area">
             <div className="contracts-import-preview">
               <table>
                 <thead>
@@ -661,10 +721,10 @@ export function ContractsImportModal({
                       />
                     </th>
                     <th>Ligne</th>
-                    <th>NIF</th>
-                    <th>NINU</th>
                     <th>Nom</th>
                     <th>Prénom</th>
+                    <th>NIF</th>
+                    <th>NINU</th>
                     <th>Sexe</th>
                     <th>Adresse (optionnelle)</th>
                     <th>Téléphone (optionnel)</th>
@@ -679,66 +739,93 @@ export function ContractsImportModal({
                 <tbody>
                   {visibleEditableRows.map((row) => {
                     const validation = validationById.get(row.id);
+                    const fieldErrors = new Set([...(validation?.errorFields ?? []), ...getImportErrorFields(row.importError ? [row.importError] : [])]);
+                    const locked = row.excluded || Boolean(row.importedContractId) || hasAttempt(row);
+                    const clearButton = (field: ContractImportEditableField) => (
+                      <button className="contracts-import-clear" type="button" disabled={locked}
+                        aria-label={`Effacer ${getImportFieldLabel(field)}, ligne ${row.sourceRowNumber}`}
+                        title="Effacer" onClick={() => updateEditableRow(row.id, field, "", true)}>×</button>
+                    );
                     const parsedSalary = parseImportMoney(row.salaryNumber);
                     const outsideGrid = salaryGridData !== undefined && parsedSalary !== null && salaryOutsideGrid(salaryGrid, row.position, parsedSalary);
                     const stateClass = row.excluded
                       ? "excluded"
-                      : validation?.errors.length
+                      : validation?.errors.length || row.importError
                         ? "invalid"
                         : validation?.warnings.length
                           ? "warning"
                           : "";
                     return (
                       <Fragment key={row.id}>
-                        <tr className={`contracts-import-data-row ${stateClass}`}>
+                        <tr className={`contracts-import-data-row ${stateClass} ${activeRowId === row.id ? "is-active" : ""}`}
+                          onClick={event => { if (!(event.target as HTMLElement).closest("input, select, button")) setActiveRowId(row.id); }}>
                           <td>
                             <input
                               type="checkbox"
                               className="checkbox"
+                              disabled={Boolean(row.importedContractId)}
                               checked={selectedRowIdSet.has(row.id)}
                               onChange={() => toggleRowSelection(row.id)}
                               aria-label={`Sélectionner la ligne ${row.sourceRowNumber}`}
                             />
                           </td>
-                          <td>{row.sourceRowNumber}</td>
                           <td>
-                            <input
-                              className="contracts-import-cell-input"
-                              value={row.nif}
-                              onChange={(event) => updateEditableRow(row.id, "nif", event.target.value)}
-                              disabled={row.excluded}
-                            />
+                            <button type="button" className="import-row-open" aria-label={`Voir les différences de la ligne ${row.sourceRowNumber}`} aria-expanded={activeRowId === row.id} onClick={() => setActiveRowId(row.id)}>
+                              {row.sourceRowNumber}
+                              {differenceRowIds.has(row.id) ? <span className="import-difference-dot" /> : null}
+                              {row.importedContractId ? <span aria-label="Importée">✓</span> : null}
+                            </button>
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input"
-                              value={row.ninu}
-                              onChange={(event) => updateEditableRow(row.id, "ninu", event.target.value)}
-                              disabled={row.excluded}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("lastName")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("lastName") || undefined}
                               value={row.lastName}
                               onChange={(event) => updateEditableRow(row.id, "lastName", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("firstName")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("firstName") || undefined}
                               value={row.firstName}
                               onChange={(event) => updateEditableRow(row.id, "firstName", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
+                          </td>
+
+                          <td>
+                            <input
+                              className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("nif")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("nif") || undefined}
+                              value={row.nif}
+                              onChange={(event) => updateEditableRow(row.id, "nif", event.target.value)}
+                              disabled={locked}
+                            />
+                          </td>
+                          <td className="contracts-import-optional-cell">
+                            <input
+                              className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("ninu")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("ninu") || undefined}
+                              value={row.ninu}
+                              onChange={(event) => updateEditableRow(row.id, "ninu", event.target.value)}
+                              disabled={locked}
+                            />
+                            {clearButton("ninu")}
                           </td>
                           <td>
                             <select
                               className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("gender")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("gender") || undefined}
                               value={row.gender}
                               onChange={(event) => updateEditableRow(row.id, "gender", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             >
                               <option value={row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : ""}>
                                 {row.gender && row.gender !== "Homme" && row.gender !== "Femme" ? row.gender : "Choisir"}
@@ -747,93 +834,110 @@ export function ContractsImportModal({
                               <option value="Femme">Femme</option>
                             </select>
                           </td>
-                          <td>
+                          <td className="contracts-import-optional-cell">
                             <input
                               className="contracts-import-cell-input wide"
+                              aria-label={`${getImportFieldLabel("address")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("address") || undefined}
                               value={row.address}
                               onChange={(event) => updateEditableRow(row.id, "address", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
+                            {clearButton("address")}
                           </td>
-                          <td>
+                          <td className="contracts-import-optional-cell">
                             <input
                               className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("phone")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("phone") || undefined}
                               value={row.phone ?? ""}
                               onChange={(event) => updateEditableRow(row.id, "phone", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                               inputMode="tel"
                             />
+                            {clearButton("phone")}
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input number"
+                              aria-label={`${getImportFieldLabel("salaryNumber")}, ligne ${row.sourceRowNumber}`}
                               value={row.salaryNumber}
-                              aria-invalid={outsideGrid || undefined}
+                              aria-invalid={outsideGrid || fieldErrors.has("salaryNumber") || undefined}
                               style={outsideGrid ? {color:"#dc2626", background:"rgba(220,38,38,.08)", borderColor:"#dc2626"} : undefined}
                               onChange={(event) => updateEditableRow(row.id, "salaryNumber", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input wide"
+                              aria-label={`Salaire en lettres, ligne ${row.sourceRowNumber}`}
                               value={row.salaryNumber ? numberToFrenchWords(parseImportMoney(row.salaryNumber) ?? NaN) : ""}
                               readOnly
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input"
+                              aria-label={`${getImportFieldLabel("position")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("position") || undefined}
                               value={row.position}
                               onChange={(event) => updateEditableRow(row.id, "position", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input wide"
+                              aria-label={`${getImportFieldLabel("assignment")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("assignment") || undefined}
                               value={row.assignment}
                               onChange={(event) => updateEditableRow(row.id, "assignment", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
                           <td>
                             <input
                               className="contracts-import-cell-input number"
+                              aria-label={`${getImportFieldLabel("durationMonths")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("durationMonths") || undefined}
                               value={row.durationMonths}
                               onChange={(event) => updateEditableRow(row.id, "durationMonths", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
                           </td>
-                          <td>
+                          <td className="contracts-import-optional-cell">
                             <input
                               className="contracts-import-cell-input wide"
+                              aria-label={`${getImportFieldLabel("commentaire")}, ligne ${row.sourceRowNumber}`}
+                              aria-invalid={fieldErrors.has("commentaire") || undefined}
                               value={row.commentaire}
                               onChange={(event) => updateEditableRow(row.id, "commentaire", event.target.value)}
-                              disabled={row.excluded}
+                              disabled={locked}
                             />
+                            {clearButton("commentaire")}
                           </td>
                         </tr>
-                        <tr className={stateClass}>
-                          <td colSpan={15} className="contracts-import-row-state">
-                            <strong>État de la ligne {row.sourceRowNumber} : </strong>
-                            {row.excluded
-                              ? "Retirée"
-                              : validation?.errors.concat(validation.warnings).join(" ") || "Valide"}
-                          </td>
-                        </tr>
+                        {Boolean(validation?.errors.length || row.importError) && !row.importedContractId ? (
+                          <tr className={stateClass}>
+                            <td colSpan={15} className="contracts-import-row-state">
+                              <span>Ligne {row.sourceRowNumber} · {row.importError || validation?.errors.join(" ")}</span>
+                            </td>
+                          </tr>
+                        ) : null}
                       </Fragment>
                     );
                   })}
+                  {!visibleEditableRows.length ? <tr><td colSpan={15} className="import-empty">Aucune ligne</td></tr> : null}
                 </tbody>
               </table>
             </div>
-            {editableRows.length > IMPORT_PREVIEW_PAGE_SIZE ? (
+            {previewRows.length > IMPORT_PREVIEW_PAGE_SIZE ? (
               <div className="contracts-import-preview-pagination">
                 <span>
-                  Lignes {previewStart + 1}–{Math.min(previewStart + IMPORT_PREVIEW_PAGE_SIZE, editableRows.length)} sur{" "}
-                  {editableRows.length}
+                  Lignes {previewStart + 1}–{Math.min(previewStart + IMPORT_PREVIEW_PAGE_SIZE, previewRows.length)} sur{" "}
+                  {previewRows.length}
                 </span>
                 <div>
                   <button
@@ -856,20 +960,58 @@ export function ContractsImportModal({
                 </div>
               </div>
             ) : null}
+            </div>
+            {activeRow ? (
+              <aside className="import-differences-panel" aria-label={`Différences de la ligne ${activeRow.sourceRowNumber}`}>
+                <div className="import-panel-head">
+                  <div><strong>Différences <span>{activeDifferences.length}</span></strong><div>{activeRow.firstName} {activeRow.lastName} · Ligne {activeRow.sourceRowNumber}</div></div>
+                  <button type="button" className="icon-btn" aria-label="Fermer les différences" onClick={() => {
+                    setActiveRowId(null);
+                    dialogRef.current?.querySelector<HTMLButtonElement>(`[aria-label="Voir les différences de la ligne ${activeRow.sourceRowNumber}"]`)?.focus();
+                  }}><span className="material-symbols-rounded" aria-hidden="true">close</span></button>
+                </div>
+                <div className="import-panel-content">
+                  {!activeDifferences.length ? <div className="import-empty">Aucune différence</div> : null}
+                  {activeDifferences.map(({ field, oldValue, newValue }) => (
+                    <div className="import-difference-card" key={field}>
+                      <strong>{getImportFieldLabel(field)}</strong>
+                      <div className="import-value-pair">
+                        <div><small>Ancienne</small><p>{oldValue || "Vide"}</p></div>
+                        <div><small>Nouvelle</small><p>{newValue || "Vide"}</p></div>
+                      </div>
+                      <button className="btn btn-outline" type="button"
+                        disabled={importContracts.isPending || activeRow.excluded || Boolean(activeRow.importedContractId) || hasAttempt(activeRow)}
+                        onClick={() => updateEditableRow(activeRow.id, field, oldValue, oldValue === "")}
+                        aria-label={`Reprendre l’ancienne valeur : ${getImportFieldLabel(field)}, ligne ${activeRow.sourceRowNumber}`}>
+                        Reprendre l’ancienne
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            ) : null}
+            </div>
           </>
         ) : null}
 
         {importError ? <div className="form-error">{importError}</div> : null}
 
         <div className="contracts-import-actions">
+          <div className="import-summary" aria-live="polite">
+            <span>{completedIds.size} importée(s)</span>
+            <span>{editableRows.filter(row => !row.importedContractId && (row.excluded || !selectedRowIdSet.has(row.id))).length} ignorée(s)</span>
+            <span>{errorRowCount} à corriger</span>
+            {isCheckingIdentities ? <span>Vérification…</span> : null}
+          </div>
           <button className="btn btn-outline" type="button" onClick={closeModal} disabled={importContracts.isPending}>
-            Annuler
+            Fermer
           </button>
           <button className="btn btn-primary" type="button" onClick={() => void handleImport()} disabled={!canImport}>
             {importContracts.isPending ? importProgressLabel ?? "Importation..." : `Importer ${selectedValidRows.length} contrat(s)`}
           </button>
         </div>
+        </fieldset>
       </div>
-    </div>
+    </div>, document.body
   );
 }

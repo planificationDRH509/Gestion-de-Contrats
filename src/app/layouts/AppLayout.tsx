@@ -47,6 +47,8 @@ export function AppLayout() {
   const [isResizing, setIsResizing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncState, setSyncState] = useState(() => getSupabaseSyncState(workspaceId));
+  const synchronizationRunning = useRef(false);
+  const synchronizationNeedsRetry = useRef(false);
 
   useEffect(() => {
     if (!isSupabase || !user?.taskSessionToken || isLocked) return;
@@ -75,6 +77,8 @@ export function AppLayout() {
       refreshSyncState();
       return;
     }
+    if (synchronizationRunning.current) return;
+    synchronizationRunning.current = true;
     try {
       // Upload first; a failure downloading the full snapshot must not hide ACKs.
       await syncSupabaseOutbox();
@@ -84,7 +88,9 @@ export function AppLayout() {
         queryClient.invalidateQueries({ queryKey: ["contract-lists"] }),
         queryClient.invalidateQueries({ queryKey: ["nif-lookup"] })
       ]);
-      const refreshed = await syncSupabaseWorkspace(workspaceId, { force });
+      const refreshed = await syncSupabaseWorkspace(workspaceId, {
+        force, verify: synchronizationNeedsRetry.current
+      });
       if (refreshed) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["contracts"] }),
@@ -94,9 +100,12 @@ export function AppLayout() {
           queryClient.invalidateQueries({ queryKey: ["contract-lists"] })
         ]);
       }
+      synchronizationNeedsRetry.current = false;
     } catch (error) {
+      synchronizationNeedsRetry.current = true;
       console.error("Synchronisation hors ligne impossible.", error);
     } finally {
+      synchronizationRunning.current = false;
       refreshSyncState();
     }
   }, [isSupabase, queryClient, refreshSyncState, workspaceId]);
@@ -118,7 +127,9 @@ export function AppLayout() {
     // A restored network can still fail its first request (Wi-Fi/auth recovery).
     const retryTimer = window.setInterval(() => {
       const state = getSupabaseSyncState(workspaceId);
-      if (navigator.onLine && state.pendingCount > 0 && !state.isSyncing) void synchronize(false);
+      if (navigator.onLine && (state.pendingCount > 0 || state.lastError || synchronizationNeedsRetry.current) && !state.isSyncing) {
+        void synchronize(false);
+      }
     }, 30_000);
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {

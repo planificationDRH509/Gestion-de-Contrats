@@ -8,6 +8,7 @@ import { AuthProvider } from "../features/auth/auth";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { cachePersister } from "./persistence";
 import type { ReactNode } from "react";
+import { TooltipLayer } from "./ui/TooltipLayer";
 
 type ErrorBoundaryState = {
   hasError: boolean;
@@ -107,6 +108,7 @@ export function App() {
           <AuthProvider>
             <BrowserRouter basename={basename}>
               <AppRoutes />
+              <TooltipLayer />
             </BrowserRouter>
           </AuthProvider>
         </ThemeProvider>

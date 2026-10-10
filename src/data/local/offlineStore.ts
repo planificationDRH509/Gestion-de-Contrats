@@ -1,3 +1,4 @@
+import { applicantConflictMessage } from "../applicantConflict";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
   Applicant,
@@ -272,7 +273,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
       });
 
   if (!input.id && existing && normalizedNif && existing.nif !== normalizedNif) {
-    throw new Error("Ce NINU appartient déjà à une autre personne avec un NIF différent.");
+    throw new Error(applicantConflictMessage("NINU", normalizedNinu, existing));
   }
   const nextId = normalizedNif || existing?.id || input.id || createId();
   const duplicate = db.applicants.find(
@@ -284,7 +285,8 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
         Boolean(normalizedNinu && applicant.ninu?.trim() === normalizedNinu))
   );
   if (duplicate) {
-    throw new Error("Ce NIF ou ce NINU appartient déjà à une autre personne.");
+    const field = duplicate.id === nextId ? "NIF" : "NINU";
+    throw new Error(applicantConflictMessage(field, field === "NIF" ? nextId : input.ninu!.trim(), duplicate));
   }
 
   const applicant: Applicant = {

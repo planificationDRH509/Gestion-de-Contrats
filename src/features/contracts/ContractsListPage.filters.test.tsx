@@ -32,7 +32,12 @@ vi.mock("./ContractsImportModal", () => ({ ContractsImportModal: () => null }));
 import { ContractsListPage } from "./ContractsListPage";
 import { getTodayDateInputValue } from "../../lib/contractDateFilters";
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  mocks.list.mockReturnValue({ data: { items: [], total: 0, page: 1, pageSize: 25 }, isLoading: false });
+  localStorage.clear();
+});
 function setup() {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <MemoryRouter><ContractsListPage /></MemoryRouter>
@@ -43,6 +48,23 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("shows the total across pages and updates it with filters and scope", async () => {
+    mocks.list.mockImplementation((params?: { query?: string; onlyMine?: boolean }) => ({
+      data: { items: [], total: params?.query ? 0 : params?.onlyMine ? 72 : 130, page: 1, pageSize: 25 },
+      isLoading: false
+    }));
+    setup();
+    const badge = screen.getByRole("status", { name: "Nombre de contrats" });
+    expect(badge).toHaveTextContent("72");
+    await userEvent.click(screen.getByRole("button", { name: "Mes contrats" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Tous les contrats" }));
+    expect(badge).toHaveTextContent("130");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
+    expect(badge).toHaveTextContent("0");
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expect(badge).toHaveTextContent("130");
+  });
+
   it("opens every contract in a dossier without retaining unrelated filters", async () => {
     setup();
     await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
