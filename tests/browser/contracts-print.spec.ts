@@ -25,20 +25,70 @@ test('print index navigates through selected contracts without affecting printed
   await page.goto('http://127.0.0.1:5179/app/contrats/print?ids=long,short');
   const index = page.getByRole('navigation', { name: 'Contrats sélectionnés' });
   await expect(index.getByRole('link')).toHaveText(['1Marie Stéphanie Alexandra JEAN BAPTISTE PIERRE LOUIS', '2Marie JEAN']);
+  const firstLink = index.getByRole('link').first();
+  const secondLink = index.getByRole('link').last();
+  await expect(firstLink).toHaveAttribute('aria-current', 'location');
   const documents = page.locator('.print-preview-documents');
   const target = page.locator('#print-contract-short');
   const indexBounds = (await index.boundingBox())!;
   expect(indexBounds.x + indexBounds.width).toBeLessThan((await documents.boundingBox())!.x);
   await index.getByRole('link', { name: 'Marie JEAN', exact: true }).click();
   await expect(target).toBeFocused();
+  await expect(secondLink).toHaveAttribute('aria-current', 'location');
+  await expect(firstLink).not.toHaveAttribute('aria-current');
   await expect.poll(() => documents.evaluate(el => el.scrollTop)).toBeGreaterThan(1000);
   expect(Math.abs((await target.boundingBox())!.y - (await documents.boundingBox())!.y)).toBeLessThan(5);
+  // Wheel scrolling updates the index without clicking a name or moving focus.
+  await documents.hover();
+  await page.mouse.wheel(0, -5000);
+  await expect(firstLink).toHaveAttribute('aria-current', 'location');
+  await expect(secondLink).not.toHaveAttribute('aria-current');
+  await expect(target).toBeFocused();
+  await page.mouse.wheel(0, 5000);
+  await expect(secondLink).toHaveAttribute('aria-current', 'location');
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await firstLink.hover();
+  await expect(firstLink).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 3, 0)');
+  await expect(secondLink).toHaveAttribute('aria-current', 'location');
   await page.screenshot({ path: '/tmp/contracts-print-index.png' });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(firstLink).toHaveCSS('transform', 'none');
+
+  // Hover actions change only the print selection; details remain available.
+  const firstRow = firstLink.locator('xpath=../..');
+  const secondRow = secondLink.locator('xpath=../..');
+  await firstRow.hover();
+  await firstRow.getByRole('button', { name: /Détails de/ }).click();
+  const details = firstRow.getByRole('region');
+  await expect(details).toContainText('6 mois');
+  await expect(details).toContainText('35,000.00');
+  await expect(details).toContainText('Technicienne en maintenance informatique');
+  await expect(details).toContainText('Direction départementale de la santé de la Grand’Anse');
+  await secondRow.hover();
+  await secondRow.getByRole('button', { name: /Retirer/ }).click();
+  await expect(secondLink).toHaveAttribute('aria-disabled', 'true');
+  await expect(target).toHaveCount(0);
+  await expect(firstLink).toHaveAttribute('aria-current', 'location');
+  await expect(secondRow.getByRole('button', { name: /Réintégrer/ })).toBeVisible();
+  await expect(page.locator('.contract-document')).toHaveCount(1);
+  await page.screenshot({ path: '/tmp/contracts-print-actions.png' });
+  await page.emulateMedia({ media: 'print' });
+  await expect(index).toBeHidden();
+  await expect(page.locator('.contract-sheet:visible')).toHaveCount(4);
+  await page.emulateMedia({ media: 'screen' });
+  await secondRow.getByRole('button', { name: /Réintégrer/ }).click();
+  await expect(page.locator('.contract-document')).toHaveCount(2);
+  await expect(secondLink).not.toHaveAttribute('aria-disabled');
+  await expect(target).toBeAttached();
+  await firstRow.getByRole('button', { name: /Détails de/ }).press('Escape');
+  await expect(details).toHaveCount(0);
 
   // Nonconsecutive page selections retain their targets and print order.
   for (const number of [1, 3]) await page.getByRole('button', { name: `Page ${number}`, exact: true }).click();
   await index.getByRole('link').first().click();
   await expect(page.locator('#print-contract-long')).toBeFocused();
+  await expect(firstLink).toHaveAttribute('aria-current', 'location');
   await expect(page.locator('.contract-sheet:visible')).toHaveCount(4);
   await page.emulateMedia({ media: 'print' });
   await expect(index).toBeHidden();

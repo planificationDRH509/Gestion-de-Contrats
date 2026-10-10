@@ -184,6 +184,51 @@ describe("ContractsPrintPage", () => {
     );
   });
 
+  it("excludes removed contracts from preview, print status and history, then restores their order", () => {
+    mocks.searchParams = "ids=contract-2,contract-1";
+    mocks.contracts = [mocks.contracts[0], { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }];
+    render(<ContractsPrintPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Retirer contract-2 de l’impression" }));
+    expect(screen.getByRole("link", { name: "contract-2" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getAllByTestId("contract-document")).toHaveLength(1);
+    expect(screen.getByTestId("contract-document")).toHaveAttribute("data-contract-id", "contract-1");
+    act(() => window.dispatchEvent(new Event("afterprint")));
+    expect(mocks.mutate).toHaveBeenCalledWith({ workspaceId: "workspace-1", contractIds: ["contract-1"], status: "imprime" });
+    expect(mocks.appendPrintHistory).toHaveBeenCalledWith("user-1", "workspace-1", [mocks.contracts[0]], { partial: false });
+    fireEvent.click(screen.getByRole("button", { name: "Réintégrer contract-2" }));
+    expect(screen.getAllByTestId("contract-document").map(element => element.getAttribute("data-contract-id"))).toEqual(["contract-2", "contract-1"]);
+  });
+
+  it("keeps an excluded last contract available for restoration without printing or changing its status", () => {
+    render(<ContractsPrintPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Retirer contract-1 de l’impression" }));
+    expect(screen.queryByTestId("contract-document")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer" }));
+    act(() => window.dispatchEvent(new Event("afterprint")));
+    expect(window.print).not.toHaveBeenCalled();
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.appendPrintHistory).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Réintégrer contract-1" }));
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeEnabled();
+    expect(screen.getByTestId("contract-document")).toBeInTheDocument();
+  });
+
+  it("shows the requested details for an excluded contract and closes them with Escape", () => {
+    Object.assign(mocks.contracts[0], { firstName: "Marie", lastName: "Jean", durationMonths: 6, salaryNumber: 35000, assignment: "Direction générale", position: "Infirmière" });
+    render(<ContractsPrintPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Retirer Marie JEAN de l’impression" }));
+    const details = screen.getByRole("button", { name: "Détails de Marie JEAN" });
+    fireEvent.click(details);
+    expect(details).toHaveAttribute("aria-expanded", "true");
+    const region = screen.getByRole("region", { name: "Détails de Marie JEAN" });
+    for (const text of ["6 mois", "35,000.00", "Direction générale", "Infirmière"]) expect(region).toHaveTextContent(text);
+    fireEvent.keyDown(details, { key: "Escape" });
+    expect(details).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
   it("asks before changing the contract status after printing", () => {
     render(<ContractsPrintPage />);
 

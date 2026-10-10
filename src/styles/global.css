@@ -1204,7 +1204,7 @@ img {
 @media screen {
   .print-preview-layout {
     display: grid;
-    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-columns: 270px minmax(0, 1fr);
     align-items: start;
     gap: 20px;
   }
@@ -1230,22 +1230,56 @@ img {
   }
 
   .print-contract-index a {
+    position: relative;
     display: flex;
     align-items: baseline;
     gap: 10px;
-    padding: 10px 8px;
+    padding: 12px 66px 12px 8px;
     border-radius: 7px;
     color: var(--ink);
     font-size: 13px;
     line-height: 1.4;
     text-decoration: none;
     overflow-wrap: anywhere;
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      background-color 180ms ease, color 180ms ease, box-shadow 200ms ease;
+  }
+
+  .print-contract-index a::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--accent);
+    opacity: 0;
+    transform: scaleY(0.4);
+    transition: opacity 180ms ease, transform 200ms ease;
   }
 
   .print-contract-index a:hover,
   .print-contract-index a:focus-visible {
     background: var(--accent-soft);
     color: var(--accent);
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+
+  .print-contract-index a[aria-current="location"] {
+    background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    color: var(--accent);
+  }
+
+  .print-contract-index a[aria-current="location"]::before {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  .print-contract-index a[aria-current="location"] .print-contract-index-number {
+    color: var(--accent);
+    font-weight: 700;
   }
 
   .print-contract-index-number {
@@ -1253,6 +1287,125 @@ img {
     color: var(--ink-muted);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
+  }
+
+  .print-contract-item + .print-contract-item {
+    margin-top: 3px;
+  }
+
+  .print-contract-row {
+    position: relative;
+  }
+
+  .print-contract-index-name {
+    transition: opacity 180ms ease;
+  }
+
+  .print-contract-item.is-excluded a,
+  .print-contract-item.is-excluded a:hover {
+    color: var(--ink-muted);
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    cursor: default;
+  }
+
+  .print-contract-item.is-excluded .print-contract-index-name {
+    opacity: 0.5;
+  }
+
+  .print-contract-actions {
+    position: absolute;
+    right: 4px;
+    top: 9px;
+    display: flex;
+    gap: 3px;
+    opacity: 0;
+    transform: translateX(-4px);
+    pointer-events: none;
+    transition: opacity 180ms ease, transform 200ms ease;
+  }
+
+  .print-contract-item:hover .print-contract-actions,
+  .print-contract-item:focus-within .print-contract-actions,
+  .print-contract-item.is-excluded .print-contract-actions,
+  .print-contract-item.details-open .print-contract-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .print-contract-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 27px;
+    height: 27px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .print-contract-action:hover,
+  .print-contract-action[aria-expanded="true"] {
+    color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+
+  .print-contract-action.is-remove:hover {
+    color: #b42318;
+    background: color-mix(in srgb, #f04438 10%, var(--panel));
+  }
+
+  .print-contract-action.is-restore:hover {
+    color: #16804a;
+    background: color-mix(in srgb, #16a365 10%, var(--panel));
+  }
+
+  .print-contract-details {
+    margin: 3px 4px 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: linear-gradient(145deg, var(--panel-muted), var(--panel));
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ink) 4%, transparent);
+    animation: print-contract-details-reveal 180ms ease-out;
+  }
+
+  .print-contract-details dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    gap: 14px 10px;
+    margin: 0;
+  }
+
+  .print-contract-details dt {
+    margin-bottom: 4px;
+    color: var(--ink-muted);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+  }
+
+  .print-contract-details dd {
+    margin: 0;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .print-contract-detail-wide {
+    grid-column: 1 / -1;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
   }
 
   .print-preview-documents {
@@ -1268,6 +1421,39 @@ img {
   }
 }
 
+@keyframes print-contract-details-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media screen and (hover: none) {
+  .print-contract-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .print-contract-index a,
+  .print-contract-index a:hover,
+  .print-contract-index a:focus-visible,
+  .print-contract-index a::before {
+    transition: none;
+    transform: none;
+  }
+
+  .print-contract-actions,
+  .print-contract-action,
+  .print-contract-index-name {
+    transition: none;
+  }
+
+  .print-contract-details {
+    animation: none;
+  }
+}
+
 @media screen and (max-width: 700px) {
   .print-preview-layout {
     grid-template-columns: 130px minmax(0, 1fr);
@@ -1276,12 +1462,21 @@ img {
 
   .print-contract-index a {
     gap: 5px;
-    padding: 10px 4px;
+    padding: 10px 4px 38px;
     font-size: 12px;
   }
 
   .print-contract-index-number {
     flex-basis: 14px;
+  }
+
+  .print-contract-actions {
+    top: auto;
+    bottom: 5px;
+  }
+
+  .print-contract-details dl {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

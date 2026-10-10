@@ -9,7 +9,7 @@ import {
 } from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
 import { orderContractsByIds } from "../../lib/contractSorting";
-import { formatFirstName, formatLastName } from "../../lib/format";
+import { PrintContractIndexItem } from "./PrintContractIndexItem";
 
 export function ContractsPrintPage() {
   const [searchParams] = useSearchParams();
@@ -18,7 +18,11 @@ export function ContractsPrintPage() {
   const workspaceId = user?.workspaceId ?? "";
   const changeContractsStatus = useChangeContractsStatus();
   const lastAfterPrintAtRef = useRef<number | null>(null);
+  const documentsRef = useRef<HTMLDivElement>(null);
+  const indexRef = useRef<HTMLElement>(null);
   const [pageSelection, setPageSelection] = useState<ContractPageSelection>(CONTRACT_PAGES);
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(() => new Set());
+  const [activeContractId, setActiveContractId] = useState<string | null>(null);
 
   const idsParam = searchParams.get("ids") ?? "";
   const ids = useMemo(() => idsParam.split(",").map((id) => id.trim()).filter(Boolean), [idsParam]);
@@ -26,12 +30,85 @@ export function ContractsPrintPage() {
 
   const orderedContracts = useMemo(() => orderContractsByIds(data ?? [], ids), [data, ids]);
 
-  function handlePrint() {
-    if (pageSelection.length > 0) window.print();
+  const printableContracts = useMemo(() => orderedContracts.filter(contract => !excludedIds.has(contract.id)), [orderedContracts, excludedIds]);
+
+  useEffect(() => {
+    setExcludedIds(new Set());
+  }, [idsParam, workspaceId]);
+
+  function toggleContract(id: string) {
+    setExcludedIds(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   useEffect(() => {
-    if (ids.length === 0 || !workspaceId) return;
+    const root = documentsRef.current;
+    if (!root || pageSelection.length === 0) {
+      setActiveContractId(null);
+      return;
+    }
+    const documents = printableContracts.flatMap(contract => {
+      const element = document.getElementById(`print-contract-${contract.id}`);
+      return element ? [{ id: contract.id, element }] : [];
+    });
+    let frame: number | null = null;
+    const updateActiveContract = () => {
+      frame = null;
+      // Follow the contract occupying the middle of the visible preview. Binary
+      // search keeps scroll work small even when the batch has hundreds of pages.
+      const readingLine = root.getBoundingClientRect().top + root.clientHeight / 2;
+      let left = 0;
+      let right = documents.length - 1;
+      let active = 0;
+      while (left <= right) {
+        const middle = Math.floor((left + right) / 2);
+        if (documents[middle].element.getBoundingClientRect().top <= readingLine) {
+          active = middle;
+          left = middle + 1;
+        } else {
+          right = middle - 1;
+        }
+      }
+      setActiveContractId(documents[active]?.id ?? null);
+    };
+    const scheduleUpdate = () => {
+      if (frame === null) frame = requestAnimationFrame(updateActiveContract);
+    };
+    root.addEventListener("scroll", scheduleUpdate, { passive: true });
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(scheduleUpdate) : null;
+    observer?.observe(root);
+    documents.forEach(({ element }) => observer?.observe(element));
+    scheduleUpdate();
+    return () => {
+      root.removeEventListener("scroll", scheduleUpdate);
+      observer?.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [printableContracts, isLoading, pageSelection]);
+
+  useEffect(() => {
+    const index = indexRef.current;
+    const activeLink = index?.querySelector('[aria-current="location"]');
+    if (!index || !activeLink) return;
+    const listBounds = index.getBoundingClientRect();
+    const linkBounds = activeLink.getBoundingClientRect();
+    if (linkBounds.top < listBounds.top) {
+      index.scrollTop += linkBounds.top - listBounds.top - 6;
+    } else if (linkBounds.bottom > listBounds.bottom) {
+      index.scrollTop += linkBounds.bottom - listBounds.bottom + 6;
+    }
+  }, [activeContractId]);
+
+  function handlePrint() {
+    if (pageSelection.length > 0 && printableContracts.length > 0) window.print();
+  }
+
+  useEffect(() => {
+    if (printableContracts.length === 0 || pageSelection.length === 0 || !workspaceId) return;
     const handleAfterPrint = () => {
       const now = Date.now();
       if (lastAfterPrintAtRef.current && now - lastAfterPrintAtRef.current < 1000) {
@@ -43,27 +120,27 @@ export function ContractsPrintPage() {
       const nextStatusLabel = isPartialPrint ? "Impression partielle" : "Imprimé";
       if (can("contracts.change_status")) {
         const shouldMarkAsPrinted = window.confirm(
-          ids.length === 1
+          printableContracts.length === 1
             ? `Voulez-vous changer l’état de ce contrat en « ${nextStatusLabel} » ?`
-            : `Voulez-vous changer l’état de ces ${ids.length} contrats en « ${nextStatusLabel} » ?`
+            : `Voulez-vous changer l’état de ces ${printableContracts.length} contrats en « ${nextStatusLabel} » ?`
         );
         if (shouldMarkAsPrinted) {
           changeContractsStatus.mutate({
             workspaceId,
-            contractIds: ids,
+            contractIds: printableContracts.map(contract => contract.id),
             status: nextStatus
           });
         }
       }
-      if (user && data && data.length > 0) {
-        appendPrintHistory(user.id, workspaceId, orderContractsByIds(data, ids), {
+      if (user) {
+        appendPrintHistory(user.id, workspaceId, printableContracts, {
           partial: isPartialPrint
         });
       }
     };
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [ids, workspaceId, changeContractsStatus, user, data, can, pageSelection]);
+  }, [printableContracts, workspaceId, changeContractsStatus, user, can, pageSelection]);
 
   if (isLoading) {
     return <div className="card">Chargement des contrats…</div>;
@@ -104,40 +181,30 @@ export function ContractsPrintPage() {
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
             Retour
           </button>
-          <button className="btn btn-primary" onClick={handlePrint} disabled={pageSelection.length === 0}>
+          <button className="btn btn-primary" onClick={handlePrint} disabled={pageSelection.length === 0 || printableContracts.length === 0}>
             Imprimer
           </button>
         </div>
       </div>
 
       <div className="print-preview-layout">
-        <nav className="print-contract-index no-print" aria-label="Contrats sélectionnés">
+        <nav ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">
           <ol>
             {orderedContracts.map((contract, index) => (
-              <li key={contract.id}>
-                <a
-                  href={`#${encodeURIComponent(`print-contract-${contract.id}`)}`}
-                  onClick={event => {
-                    event.preventDefault();
-                    const target = document.getElementById(`print-contract-${contract.id}`);
-                    target?.scrollIntoView({
-                      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
-                      block: "start",
-                      inline: "nearest"
-                    });
-                    target?.focus({ preventScroll: true });
-                  }}
-                >
-                  <span className="print-contract-index-number" aria-hidden="true">{index + 1}</span>
-                  <span>{[formatFirstName(contract.firstName ?? ""), formatLastName(contract.lastName ?? "")].filter(Boolean).join(" ") || contract.nif || contract.id}</span>
-                </a>
-              </li>
+              <PrintContractIndexItem
+                key={contract.id}
+                contract={contract}
+                index={index}
+                active={activeContractId === contract.id}
+                excluded={excludedIds.has(contract.id)}
+                onToggle={() => toggleContract(contract.id)}
+              />
             ))}
           </ol>
         </nav>
-        <div className="print-preview-documents">
+        <div ref={documentsRef} className="print-preview-documents">
           <ContractDocuments
-            contracts={orderedContracts}
+            contracts={printableContracts}
             workspaceId={workspaceId}
             pageSelection={pageSelection}
           />
