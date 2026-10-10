@@ -45,6 +45,28 @@ async function expectStableEditing(page: Page) {
   await name.focus();
   expect(await geometry()).toEqual(afterTyping);
   await name.fill(original);
+
+  // Menus on the right must not enlarge the fitted sheet's scroll area.
+  for (const column of [6, 7, 8]) {
+    const field = sheet.locator(`.contracts-sheet-row-new [data-sheet-col="${column}"]`).first();
+    const savedValue = await field.inputValue();
+    const value = column === 8 ? '35000' : 'Une suggestion très longue pour vérifier les limites du panneau';
+    await field.fill(value);
+    const menu = page.locator('.autocomplete-sheet-overlay .autocomplete-dropdown');
+    await expect(menu).toBeVisible();
+    const bounds = (await menu.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    const sheetBounds = (await sheet.locator('.contracts-sheet-scroll').boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(sheetBounds.x);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(sheetBounds.x + sheetBounds.width);
+    if (column === 8) expect(bounds.x).toBeLessThan((await field.boundingBox())!.x);
+    expect(await sheet.locator('.contracts-sheet-scroll').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await menu.getByRole('option').first().click();
+    await expect(field).toHaveValue(value);
+    await field.fill(savedValue);
+    await name.focus();
+  }
 }
 
 async function expectAlignedSheet(page: Page, fits = false) {

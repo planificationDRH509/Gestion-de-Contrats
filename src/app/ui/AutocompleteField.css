@@ -6,3 +6,26 @@
 .autocomplete-container .contracts-sheet-input[aria-invalid="true"] {
   box-shadow: inset 0 0 0 1px #dc2626 !important;
 }
+.floating-overlay.autocomplete-sheet-overlay {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+}
+
+.autocomplete-sheet-overlay .autocomplete-dropdown {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: min(240px, calc(100vh - 16px));
+  animation: none;
+}
+
+.autocomplete-sheet-overlay .autocomplete-item-label,
+.autocomplete-sheet-overlay .autocomplete-item-sublabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

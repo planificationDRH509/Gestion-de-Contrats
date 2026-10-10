@@ -63,7 +63,7 @@ export function DossierForm({ workspaceId, dossier, onClose, onSaved }: {
               <input className="input" type="number" min="0" step="1" value={target} onChange={e => setTarget(e.target.value)} />
             </label>
             <label className="dossiers-field">Durée par défaut (mois)
-              <input className="input" type="number" min="1" step="1" value={duration} onChange={e => setDuration(e.target.value)} />
+              <input className="input" type="number" min="1" max="12" step="1" value={duration} onChange={e => setDuration(e.target.value)} />
             </label>
             <label className="dossiers-field">Point focal
               <input className="input" value={focalPoint} onChange={e => setFocalPoint(e.target.value)} />

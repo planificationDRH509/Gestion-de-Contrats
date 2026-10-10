@@ -31,7 +31,7 @@ export const contractFormSchema = z.object({
   assignment: z.string().min(1, "L'affectation est obligatoire."),
   address: z.string().min(1, "L'adresse est obligatoire."),
   dossierId: z.string().optional(),
-  durationMonths: z.number().min(1).max(12)
+  durationMonths: z.number().int("La durée doit être un nombre entier de mois.").min(1).max(12)
 });
 
 export type ContractFormSchema = z.input<typeof contractFormSchema>;

@@ -1,4 +1,5 @@
 import "./AutocompleteField.css";
+import { FloatingOverlay } from "./FloatingOverlay";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   getPinnedChoices,
@@ -218,7 +219,7 @@ export function AutocompleteField({
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node) && !listRef.current?.contains(e.target as Node)) {
         setOpen(false);
       }
     }
@@ -231,7 +232,12 @@ export function AutocompleteField({
     if (activeIndex >= 0 && listRef.current) {
       const els = listRef.current.children;
       if (els[activeIndex]) {
-        (els[activeIndex] as HTMLElement).scrollIntoView?.({ block: "nearest" });
+        const item = els[activeIndex] as HTMLElement;
+        const list = listRef.current;
+        if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
+        else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
+          list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+        }
       }
     }
   }, [activeIndex]);
@@ -372,12 +378,70 @@ export function AutocompleteField({
     );
   }
 
+  const dropdown = open && visibleItems.length > 0 ? (
+    <div className="autocomplete-dropdown" ref={listRef}>
+      {visibleItems.map((item, idx) => {
+        const isFeatured = Boolean(item.isFeatured);
+        const shortcutKey = idx < Math.min(maxShortcuts, 10)
+          ? (idx === 9 ? 0 : idx + 1)
+          : null;
+
+        return (
+          <div
+            key={`${item.id}-${idx}`}
+            role="option"
+            aria-selected={idx === activeIndex}
+            className={`autocomplete-item${idx === activeIndex ? " active" : ""}${isFeatured ? " featured" : ""}${item.isCustom ? " custom" : ""}`}
+            onMouseEnter={() => setActiveIndex(idx)}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              selectItem(item);
+            }}
+          >
+            {shortcutKey !== null && (
+              <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Ctrl+{shortcutKey}</span>
+            )}
+
+            <span className="autocomplete-item-label">
+              {isFeatured && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Dernier:</strong>}
+              {item.isCustom && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Utiliser:</strong>}
+              {renderHighlightedLabel(item)}
+            </span>
+
+            {(item.sublabel || (item.isRecent && !isFeatured && !item.isCustom)) && (
+              <span className="autocomplete-item-sublabel">
+                {item.sublabel || "Récent"}
+              </span>
+            )}
+
+            {pinCategory && !isFeatured && !item.isCustom && (
+              <button
+                type="button"
+                className={`autocomplete-pin-btn ${pinnedIds.includes(item.id) ? "active" : ""}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  togglePinnedChoice(pinCategory, item.id);
+                }}
+                title={pinnedIds.includes(item.id) ? "Désépingler" : "Épingler"}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
+                  push_pin
+                </span>
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
   return (
     <div
       className="autocomplete-container"
       ref={containerRef}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        if (!event.currentTarget.contains(event.relatedTarget) && !listRef.current?.contains(event.relatedTarget)) {
           setOpen(false);
           setActiveIndex(-1);
         }
@@ -456,63 +520,15 @@ export function AutocompleteField({
           autoComplete="off"
         />
       )}
-      {open && visibleItems.length > 0 && (
-        <div className="autocomplete-dropdown" ref={listRef}>
-          {visibleItems.map((item, idx) => {
-            const isFeatured = Boolean(item.isFeatured);
-            const shortcutKey = idx < Math.min(maxShortcuts, 10)
-              ? (idx === 9 ? 0 : idx + 1)
-              : null;
-            
-            return (
-              <div
-                key={`${item.id}-${idx}`}
-                role="option"
-                aria-selected={idx === activeIndex}
-                className={`autocomplete-item${idx === activeIndex ? " active" : ""}${isFeatured ? " featured" : ""}${item.isCustom ? " custom" : ""}`}
-                onMouseEnter={() => setActiveIndex(idx)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  selectItem(item);
-                }}
-              >
-                {shortcutKey !== null && (
-                  <span className={`autocomplete-shortcut ${isFeatured ? "featured" : ""}`}>Ctrl+{shortcutKey}</span>
-                )}
-
-                <span className="autocomplete-item-label">
-                  {isFeatured && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Dernier:</strong>}
-                  {item.isCustom && <strong style={{ color: "var(--accent)", marginRight: "8px" }}>Utiliser:</strong>}
-                  {renderHighlightedLabel(item)}
-                </span>
-                
-                {(item.sublabel || (item.isRecent && !isFeatured && !item.isCustom)) && (
-                  <span className="autocomplete-item-sublabel">
-                    {item.sublabel || "Récent"}
-                  </span>
-                )}
-                
-                {pinCategory && !isFeatured && !item.isCustom && (
-                  <button
-                    type="button"
-                    className={`autocomplete-pin-btn ${pinnedIds.includes(item.id) ? "active" : ""}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      togglePinnedChoice(pinCategory, item.id);
-                    }}
-                    title={pinnedIds.includes(item.id) ? "Désépingler" : "Épingler"}
-                  >
-                    <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
-                      push_pin
-                    </span>
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {dropdown && dataSheetRow !== undefined && inputRef.current ? (
+        <FloatingOverlay
+          anchor={inputRef.current}
+          horizontalBoundary={inputRef.current.closest<HTMLElement>(".contracts-sheet-scroll")}
+          className="autocomplete-sheet-overlay"
+        >
+          {dropdown}
+        </FloatingOverlay>
+      ) : dropdown}
     </div>
   );
 }

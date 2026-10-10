@@ -1,3 +1,4 @@
+import { assertContractDuration } from "../../lib/contractDuration";
 import { applicantDatabaseConflictMessage } from "../applicantConflict";
 import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
@@ -848,6 +849,7 @@ class SupabaseContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
+    assertContractDuration(input.durationMonths);
     const created = await this.createMany([input]);
     const contract = created[0];
     if (!contract) {
@@ -857,6 +859,7 @@ class SupabaseContractRepository implements ContractRepository {
   }
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    inputs.forEach(input => assertContractDuration(input.durationMonths));
     if (inputs.length === 0) {
       return [];
     }
@@ -885,6 +888,7 @@ class SupabaseContractRepository implements ContractRepository {
   }
 
   async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
+    if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     const client = getSupabaseClient();
     const existing = expected ?? await this.getById(input.id);
     if (!existing) {
@@ -1017,6 +1021,7 @@ class SupabaseContractRepository implements ContractRepository {
     contractIds: string[],
     durationMonths: number
   ): Promise<number> {
+    assertContractDuration(durationMonths);
     if (contractIds.length === 0) {
       return 0;
     }
@@ -2082,12 +2087,14 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
+    assertContractDuration(input.durationMonths);
     // Persist before any network work; AppLayout drains the outbox in the background.
     // Replay performs the authoritative fiscal-year duplicate check before insertion.
     return this.local.create({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() });
   }
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    inputs.forEach(input => assertContractDuration(input.durationMonths));
     inputs = inputs.map((input) => ({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() }));
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
@@ -2106,6 +2113,7 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 
   async update(input: UpdateContractInput): Promise<Contract> {
+    if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     if (getPendingContractIds().has(input.id)) return this.local.update(input);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
@@ -2160,6 +2168,7 @@ class OfflineFirstContractRepository implements ContractRepository {
     contractIds: string[],
     durationMonths: number
   ): Promise<number> {
+    assertContractDuration(durationMonths);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       await syncPendingOutbox();

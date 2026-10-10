@@ -1,3 +1,4 @@
+import { assertContractDuration } from "../src/lib/contractDuration";
 import { numberToFrenchWords } from "../src/lib/numberToFrenchWords";
 import fs from "node:fs";
 import path from "node:path";
@@ -114,6 +115,15 @@ type TagRow = {
   deleted_at: string | null;
   created_by: string | null;
 };
+
+function readContractDuration(value: unknown): number {
+  try {
+    assertContractDuration(value);
+    return value;
+  } catch (error) {
+    throw new HttpError(400, (error as Error).message);
+  }
+}
 
 class HttpError extends Error {
   status: number;
@@ -2141,7 +2151,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       throw new HttpError(400, "Aucune fiche identification trouvée pour ce NIF.");
     }
 
-    const durationMonths = Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)));
+    const durationMonths = readContractDuration(body.durationMonths === undefined ? 12 : body.durationMonths);
     const salaryNumber = asNumber(body.salaryNumber, 0);
     const position = asString(body.position).trim();
     const assignment = asString(body.assignment).trim();
@@ -2395,7 +2405,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     const contractIds = Array.isArray(body.contractIds)
       ? body.contractIds.map((item) => asString(item)).filter(Boolean)
       : [];
-    const durationMonths = Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)));
+    const durationMonths = readContractDuration(body.durationMonths === undefined ? 12 : body.durationMonths);
 
     if (!workspaceId) {
       throw new HttpError(400, "workspaceId est obligatoire.");
@@ -2580,8 +2590,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     const nextDuration =
       body.durationMonths !== undefined
-        ? Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)))
-        : Math.max(1, Math.min(24, asInteger(current.duree_contrat, 12)));
+        ? readContractDuration(body.durationMonths)
+        : asInteger(current.duree_contrat, 12);
 
     const nextSalaryNumber =
       body.salaryNumber !== undefined

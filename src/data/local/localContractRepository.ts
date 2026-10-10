@@ -1,3 +1,4 @@
+import { assertContractDuration } from "../../lib/contractDuration";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
 import { getStoredFiscalYear } from "../../features/settings/settingsApi";
@@ -157,6 +158,7 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
+    assertContractDuration(input.durationMonths);
     input = { ...input, annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
     const db = loadDb();
     assertNoFiscalYearDuplicate(input, db.contracts);
@@ -181,6 +183,7 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
+    inputs.forEach(input => assertContractDuration(input.durationMonths));
     const created: Contract[] = [];
     for (const input of inputs) {
       created.push(await this.create(input));
@@ -189,6 +192,7 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async update(input: UpdateContractInput): Promise<Contract> {
+    if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     const db = loadDb();
     const contractIndex = db.contracts.findIndex((contract) => contract.id === input.id);
     if (contractIndex === -1) {
@@ -357,6 +361,7 @@ export class LocalContractRepository implements ContractRepository {
     contractIds: string[],
     durationMonths: number
   ): Promise<number> {
+    assertContractDuration(durationMonths);
     return this.applyUpdateDuration(workspaceId, contractIds, durationMonths, true);
   }
 
@@ -366,6 +371,7 @@ export class LocalContractRepository implements ContractRepository {
     durationMonths: number,
     shouldQueue = false
   ): Promise<number> {
+    assertContractDuration(durationMonths);
     if (contractIds.length === 0) {
       return 0;
     }

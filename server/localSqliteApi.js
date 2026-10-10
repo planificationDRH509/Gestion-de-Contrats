@@ -69,6 +69,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
+import { assertContractDuration } from "../src/lib/contractDuration";
 import { numberToFrenchWords } from "../src/lib/numberToFrenchWords";
 import fs from "node:fs";
 import path from "node:path";
@@ -77,6 +78,15 @@ import { DatabaseSync } from "node:sqlite";
 import { migrateSalaryText } from "./salaryTextMigration";
 import { initializeContractLists, readContractLists, mutateContractList } from "./contractLists";
 import { validateInstitution } from "../src/lib/institutions";
+function readContractDuration(value) {
+    try {
+        assertContractDuration(value);
+        return value;
+    }
+    catch (error) {
+        throw new HttpError(400, error.message);
+    }
+}
 var HttpError = /** @class */ (function (_super) {
     __extends(HttpError, _super);
     function HttpError(status, message) {
@@ -1451,7 +1461,7 @@ function handleApiRequest(req, res) {
                     if (!identification) {
                         throw new HttpError(400, "Aucune fiche identification trouvée pour ce NIF.");
                     }
-                    durationMonths = Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)));
+                    durationMonths = readContractDuration(body.durationMonths === undefined ? 12 : body.durationMonths);
                     salaryNumber = asNumber(body.salaryNumber, 0);
                     position = asString(body.position).trim();
                     assignment = asString(body.assignment).trim();
@@ -1605,7 +1615,7 @@ function handleApiRequest(req, res) {
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
                         : [];
-                    durationMonths = Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)));
+                    durationMonths = readContractDuration(body.durationMonths === undefined ? 12 : body.durationMonths);
                     if (!workspaceId) {
                         throw new HttpError(400, "workspaceId est obligatoire.");
                     }
@@ -1707,8 +1717,8 @@ function handleApiRequest(req, res) {
                         throw new HttpError(400, "Statut de contrat invalide.");
                     }
                     nextDuration = body.durationMonths !== undefined
-                        ? Math.max(1, Math.min(24, asInteger(body.durationMonths, 12)))
-                        : Math.max(1, Math.min(24, asInteger(current.duree_contrat, 12)));
+                        ? readContractDuration(body.durationMonths)
+                        : asInteger(current.duree_contrat, 12);
                     nextSalaryNumber = body.salaryNumber !== undefined
                         ? asNumber(body.salaryNumber, 0)
                         : asNumber(current.salaire_en_chiffre, 0);
