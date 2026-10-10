@@ -44,7 +44,7 @@ vi.mock("./offlineUnlock", async (importOriginal) => ({
 }));
 
 function UnlockHarness() {
-  const { isLocked, user, unlock, logout } = useAuth();
+  const { isLocked, user, unlock, logout, login } = useAuth();
   const [message, setMessage] = useState("");
 
   return (
@@ -55,6 +55,7 @@ function UnlockHarness() {
         Déverrouiller
       </button>
       <button type="button" onClick={() => void logout()}>Changer de compte</button>
+      <button type="button" onClick={() => void login("admin", "secret")}>Connexion</button>
       <span data-testid="unlock-message">{message}</span>
     </>
   );
@@ -93,7 +94,7 @@ describe("automatic session unlock", () => {
     );
   }
 
-  it("accepts the account password when the private task RPC is unavailable", async () => {
+  it("fails closed without querying passwords when the authentication RPC is unavailable", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
     mocks.verifyAccount.mockResolvedValue({ data: { id: "user-1" }, error: null });
     mount();
@@ -101,15 +102,29 @@ describe("automatic session unlock", () => {
     expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
     fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
 
-    await waitFor(() => expect(screen.getByTestId("lock-state")).toHaveTextContent("unlocked"));
-    expect(mocks.verifyAccount).toHaveBeenCalledOnce();
-    expect(mocks.filter).toHaveBeenCalledWith("id", "id", "user-1");
-    expect(mocks.filter).toHaveBeenCalledWith("id", "password", "secret");
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent("Impossible de vérifier le mot de passe."));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    expect(mocks.verifyAccount).not.toHaveBeenCalled();
+    expect(mocks.filter).not.toHaveBeenCalledWith("id", "password", "secret");
     expect(screen.getByTestId("task-token")).toHaveTextContent("old-task-token");
   });
 
+  it("authenticates through the login RPC and saves the server-issued session", async () => {
+    mocks.rpc.mockResolvedValue({ data: {
+      id: "user-1", username: "admin", full_name: "Administrateur", role: "admin",
+      workspaces: ["workspace_default"], taskSessionToken: "server-issued-token"
+    }, error: null });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Connexion" }));
+    await waitFor(() => expect(screen.getByTestId("task-token")).toHaveTextContent("server-issued-token"));
+    expect(mocks.rpc).toHaveBeenCalledWith("login_app_user", { p_username: "admin", p_password: "secret" });
+    expect(mocks.verifyAccount).not.toHaveBeenCalled();
+    expect(localStorage.getItem("contribution_auth")).not.toContain("secret");
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("unlocked");
+  });
+
   it("keeps the session locked when the account password is wrong", async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "TASK_SESSION_INVALID_CREDENTIALS" } });
     mocks.verifyAccount.mockResolvedValue({ data: null, error: null });
     mount();
 
@@ -119,7 +134,7 @@ describe("automatic session unlock", () => {
     expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
   });
 
-  it("unlocks even if the private task cache cannot be prepared", async () => {
+  it("preserves the encrypted cache and stays locked when it cannot be prepared", async () => {
     mocks.rpc.mockResolvedValue({ data: "new-task-token", error: null });
     mocks.prepareTasks.mockRejectedValue(new Error("Cache indisponible"));
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -127,7 +142,8 @@ describe("automatic session unlock", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
 
-    await waitFor(() => expect(screen.getByTestId("lock-state")).toHaveTextContent("unlocked"));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent("Impossible de déverrouiller les données locales."));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
     expect(screen.getByTestId("task-token")).toHaveTextContent("old-task-token");
   });
 

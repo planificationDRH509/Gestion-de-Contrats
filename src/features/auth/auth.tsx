@@ -125,10 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredAuthSession());
   const [isLocked, setIsLocked] = useState(() => {
     const lastActivityAt = loadLastActivityAt();
+    const session = loadStoredAuthSession();
     return Boolean(
-      loadStoredAuthSession() &&
-        lastActivityAt &&
-        hasSessionInactivityExpired(lastActivityAt)
+      session && (!session.taskSessionToken ||
+        (lastActivityAt && hasSessionInactivityExpired(lastActivityAt)))
     );
   });
   const queryClient = useQueryClient();
@@ -187,7 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select("role")
         .eq("id", user.id)
         .maybeSingle();
-      if (!active || error || !data) return;
+      if (!active || error) return;
+      if (!data) {
+        setIsLocked(true);
+        return;
+      }
       const role = normalizeAppRole(data.role, user.username);
       if (role === user.role) return;
       setUser((current) => {
@@ -209,15 +213,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLocked,
       login: async (username: string, password: string) => {
         const supabase = getSupabaseClient();
-        const { data, error } = await supabase
-          .from("app_users")
-          .select("*")
-          .eq("username", username)
-          .eq("password", password)
-          .single();
+        const result = await supabase.rpc("login_app_user", {
+          p_username: username,
+          p_password: password
+        });
+        const data = result.data as {
+          id: string; username: string; full_name: string; role: string;
+          workspaces: string[]; taskSessionToken: string;
+        } | null;
 
-        if (error || !data) {
-          console.error("Login error:", error);
+        if (result.error || !data || typeof data.taskSessionToken !== "string") {
           return false;
         }
 
@@ -228,26 +233,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           listLocalWorkspaces().find((item) => legacyWorkspaceIds.includes(item.id)) ||
           getDefaultWorkspace();
 
-        let taskSessionToken: string | undefined;
-        const taskSession = await supabase.rpc("create_task_session", {
-          p_user_id: data.id,
-          p_password: password
-        });
-        if (!taskSession.error && typeof taskSession.data === "string") {
-          taskSessionToken = taskSession.data;
-        } else if (taskSession.error) {
-          // Keep the main application available when the task migration has
-          // not been applied yet. The task page explains how to reconnect.
-          console.warn("Private task session unavailable:", taskSession.error.message);
-        }
-
         const sessionUser: AuthUser = {
           id: data.id,
           username: data.username,
           name: data.full_name,
           workspaceId: dataPartition.id,
           role: normalizeAppRole((data as { role?: unknown }).role, data.username),
-          taskSessionToken
+          taskSessionToken: data.taskSessionToken
         };
         const previous = loadStoredAuthSession();
         if (previous?.id === sessionUser.id && previous.taskSessionToken) await preparePrivateTaskSession(previous.id, previous.taskSessionToken);
@@ -303,36 +295,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (isNetworkAuthenticationError(error)) return unlockLocally();
         }
 
-        // The private task RPC is optional during login. Verify the account
-        // directly when that RPC is unavailable so the lock screen follows
-        // the same rule as the main login form.
+        // Online authentication must fail closed if the server cannot verify it.
         if (!taskSessionToken) {
-          try {
-            const { data, error } = await getSupabaseClient()
-              .from("app_users")
-              .select("id")
-              .eq("id", user.id)
-              .eq("password", password)
-              .maybeSingle();
-            if (isNetworkAuthenticationError(error)) return unlockLocally();
-            if (error) {
-              return { success: false, error: "Impossible de vérifier le mot de passe." };
-            }
-            if (!data) return { success: false, error: "Mot de passe incorrect." };
-          } catch (error) {
-            if (isNetworkAuthenticationError(error)) return unlockLocally();
-            return { success: false, error: "Impossible de vérifier le mot de passe." };
-          }
+          return { success: false, error: "Impossible de vérifier le mot de passe." };
         }
 
         if (taskSessionToken && user.taskSessionToken) {
           try {
             await preparePrivateTaskSession(user.id, user.taskSessionToken);
           } catch (error) {
-            // Keep the old token so an unreadable private task cache is not
-            // replaced by a token that cannot decrypt it.
             console.warn("Private task cache could not be prepared:", error);
-            taskSessionToken = undefined;
+            return { success: false, error: "Impossible de déverrouiller les données locales." };
           }
         }
         const nextUser = taskSessionToken

@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "./database.types";
-import { networkFetch } from "../../lib/networkFetch";
+import { createSessionFetch } from "./sessionFetch";
 
 let client: SupabaseClient<Database> | null = null;
 
@@ -14,7 +14,7 @@ export function getSupabaseClient(): SupabaseClient<Database> {
     );
   }
   client = createClient<Database>(url, anonKey, {
-    global: { fetch: networkFetch },
+    global: { fetch: createSessionFetch(url) },
     auth: {
       persistSession: true,
       autoRefreshToken: true
