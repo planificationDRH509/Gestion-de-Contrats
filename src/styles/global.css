@@ -10789,3 +10789,27 @@ body,
   gap: 8px;
   min-width: 0;
 }
+
+.print-history-batch-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.print-history-batch-open > .material-symbols-rounded {
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.print-history-batch-open strong { display: block; font-size: 13px; }
+.print-history-batch-open time { display: block; margin-top: 3px; font-size: 11px; color: var(--ink-muted); }
+.print-history-batch-open:hover strong { color: var(--accent); }
+.print-history-batch-open:disabled { cursor: default; }

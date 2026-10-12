@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
-import { PanelLeftClose, PanelLeftOpen, Printer } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { printContractList } from "./printContractList";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
@@ -220,8 +220,8 @@ export function ContractsPrintPage() {
             >
               {indexVisible ? <PanelLeftClose size={18} aria-hidden="true" /> : <PanelLeftOpen size={18} aria-hidden="true" />}
             </button>
-            <button className="btn btn-outline" title="Imprimer la liste" aria-label="Imprimer la liste" onClick={handlePrintList} disabled={printableContracts.length === 0}>
-              <Printer size={18} aria-hidden="true" />
+            <button className="btn btn-outline" onClick={handlePrintList} disabled={printableContracts.length === 0}>
+              Imprimer la Liste
             </button>
           </div>
           <nav id="print-contract-index" hidden={!indexVisible} ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">

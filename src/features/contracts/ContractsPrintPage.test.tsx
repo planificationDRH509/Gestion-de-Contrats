@@ -256,7 +256,7 @@ describe("ContractsPrintPage", () => {
     mocks.contracts = [mocks.contracts[0], { id: "contract-2", workspaceId: "workspace-1", status: "saisie" }];
     render(<ContractsPrintPage />);
     fireEvent.click(screen.getByRole("button", { name: "Retirer contract-2 de l’impression" }));
-    fireEvent.click(screen.getByRole("button", { name: "Imprimer la liste" }));
+    fireEvent.click(screen.getByRole("button", { name: "Imprimer la Liste" }));
     expect(mocks.printList).toHaveBeenCalledWith([mocks.contracts[0]], expect.any(Function));
     act(() => window.dispatchEvent(new Event("afterprint")));
     expect(window.confirm).not.toHaveBeenCalled();
@@ -264,9 +264,9 @@ describe("ContractsPrintPage", () => {
     expect(mocks.appendPrintHistory).not.toHaveBeenCalled();
     for (const page of [1, 2, 3, 4]) fireEvent.click(screen.getByRole("button", { name: `Page ${page}` }));
     expect(screen.getByRole("button", { name: "Imprimer" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Imprimer la liste" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Imprimer la Liste" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Retirer contract-1 de l’impression" }));
-    expect(screen.getByRole("button", { name: "Imprimer la liste" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Imprimer la Liste" })).toBeDisabled();
   });
 
   it("asks before changing the contract status after printing", () => {

@@ -39,6 +39,7 @@ import { getUserDossierGroups } from "../../lib/dossier";
 import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import {
   PrintHistoryEntry,
+  groupPrintHistory,
   isPrintHistoryDuplicate,
   loadPrintHistory,
   savePrintHistory
@@ -129,8 +130,9 @@ export function ContractsListPage() {
   const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>(() =>
     loadPrintHistory(userId, workspaceId)
   );
+  const printHistoryGroups = useMemo(() => groupPrintHistory(printHistory), [printHistory]);
   const [undoAction, setUndoAction] = useState<{
-    entry: PrintHistoryEntry;
+    entries: PrintHistoryEntry[];
     index: number;
     label: string;
   } | null>(null);
@@ -592,9 +594,9 @@ export function ContractsListPage() {
     }
   }
 
-  function enqueueUndo(entry: PrintHistoryEntry, index: number, label: string) {
+  function enqueueUndo(entries: PrintHistoryEntry[], index: number, label: string) {
     clearUndoTimer();
-    setUndoAction({ entry, index, label });
+    setUndoAction({ entries, index, label });
     undoTimerRef.current = window.setTimeout(() => {
       setUndoAction(null);
       undoTimerRef.current = null;
@@ -606,22 +608,25 @@ export function ContractsListPage() {
     updatePrintHistory((prev) => {
       const next = [...prev];
       const safeIndex = Math.min(undoAction.index, next.length);
-      next.splice(safeIndex, 0, undoAction.entry);
+      next.splice(safeIndex, 0, ...undoAction.entries);
       return next;
     });
     clearUndoTimer();
     setUndoAction(null);
   }
 
-  function removePrintHistoryEntry(entryId: string, label: string) {
+  function removePrintHistoryEntries(entryIds: string[], label: string) {
     updatePrintHistory((prev) => {
-      const index = prev.findIndex((entry) => entry.id === entryId);
+      const removed = new Set(entryIds);
+      const index = prev.findIndex(entry => removed.has(entry.id));
       if (index === -1) return prev;
-      const entry = prev[index];
-      const next = prev.filter((item) => item.id !== entryId);
-      enqueueUndo(entry, index, label);
-      return next;
+      enqueueUndo(prev.filter(entry => removed.has(entry.id)), index, label);
+      return prev.filter(entry => !removed.has(entry.id));
     });
+  }
+
+  function removePrintHistoryEntry(entryId: string, label: string) {
+    removePrintHistoryEntries([entryId], label);
   }
 
   function handlePrintHistoryPartial(entryId: string) {
@@ -2724,7 +2729,7 @@ export function ContractsListPage() {
           <div className="print-history-header">
             <div>
               <div className="print-history-title">Historique impressions</div>
-              <div className="print-history-subtitle">{printHistory.length} entrée(s)</div>
+              <div className="print-history-subtitle">{printHistoryGroups.length} entrée(s)</div>
             </div>
             <button
               className="icon-btn"
@@ -2741,33 +2746,63 @@ export function ContractsListPage() {
             <div className="print-history-empty">Aucune impression enregistrée.</div>
           ) : (
             <div className="print-history-list">
-              {printHistory.map((entry, index) => (
-                <div key={entry.id} className="print-history-item">
-                  <div className="print-history-line">
-                    <span className="print-history-index">{index + 1}.</span>
-                    {formatPrintHistoryLine(entry)}
-                    {entry.partial ? <span className="print-history-tag">Imp. Part.</span> : null}
-                  </div>
-                  <div className="print-history-actions">
+              {printHistoryGroups.map((group, index) => {
+                if (group.isBatch) return (
+                  <div key={group.id} className="print-history-item print-history-batch">
                     <button
-                      className={`print-history-mini-btn ${entry.partial ? "active" : ""}`}
                       type="button"
-                      onClick={() => handlePrintHistoryPartial(entry.id)}
-                      title="Imp. Part."
+                      className="print-history-batch-open"
+                      disabled={!can("contracts.print")}
+                      onClick={() => navigate(`/app/contrats/print?${new URLSearchParams({ ids: group.entries.map(entry => entry.contractId).join(",") })}`)}
+                      title="Ouvrir le lot"
                     >
-                      Imp. Part.
+                      <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>
+                      <span>
+                        <strong>Lot de {group.entries.length} contrats</strong>
+                        <time dateTime={group.entries[0].printedAt}>{new Date(group.entries[0].printedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+                      </span>
+                      {group.entries.some(entry => entry.partial) && <span className="print-history-tag">Imp. Part.</span>}
                     </button>
                     <button
                       className="print-history-mini-btn danger"
                       type="button"
-                      onClick={() => handleRemovePrintHistoryEntry(entry.id)}
-                      title="Retirer"
+                      aria-label={`Retirer le lot de ${group.entries.length} contrats`}
+                      title="Retirer le lot"
+                      onClick={() => removePrintHistoryEntries(group.entries.map(entry => entry.id), "Lot retiré.")}
                     >
-                      <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>close</span>
+                      <span className="material-symbols-rounded" aria-hidden="true">close</span>
                     </button>
                   </div>
-                </div>
-              ))}
+                );
+                const entry = group.entries[0];
+                return (
+                  <div key={entry.id} className="print-history-item">
+                    <div className="print-history-line">
+                      <span className="print-history-index">{index + 1}.</span>
+                      {formatPrintHistoryLine(entry)}
+                      {entry.partial ? <span className="print-history-tag">Imp. Part.</span> : null}
+                    </div>
+                    <div className="print-history-actions">
+                      <button
+                        className={`print-history-mini-btn ${entry.partial ? "active" : ""}`}
+                        type="button"
+                        onClick={() => handlePrintHistoryPartial(entry.id)}
+                        title="Imp. Part."
+                      >
+                        Imp. Part.
+                      </button>
+                      <button
+                        className="print-history-mini-btn danger"
+                        type="button"
+                        onClick={() => handleRemovePrintHistoryEntry(entry.id)}
+                        title="Retirer"
+                      >
+                        <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>close</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 

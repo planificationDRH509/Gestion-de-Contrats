@@ -82,7 +82,7 @@ test('print index navigates through selected contracts without affecting printed
   await expect(firstLink).toHaveAttribute('aria-current', 'location');
   await expect(secondRow.getByRole('button', { name: /Réintégrer/ })).toBeVisible();
   await expect(page.locator('.contract-document')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Imprimer la liste', exact: true }).click();
+  await page.getByRole('button', { name: 'Imprimer la Liste', exact: true }).click();
   const listFrame = page.frameLocator('iframe[title="Impression de la liste des contrats"]');
   await expect(listFrame.locator('html')).toHaveAttribute('data-print-requested', 'true');
   await expect(listFrame.locator('tbody tr')).toHaveCount(1);
@@ -131,4 +131,22 @@ test('print index navigates through selected contracts without affecting printed
   expect(printLayout.height).toBeGreaterThan(4000);
   expect(printLayout.height).toBe(printLayout.scrollHeight);
   await expect(page.locator('.contract-sheet:visible')).toHaveCount(4);
+  // The home FAB retains the printed batch as one reopenable entry.
+  await page.emulateMedia({ media: 'screen' });
+  await page.getByRole('button', { name: 'Imprimer', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await page.goto('http://127.0.0.1:5179/app/contrats');
+  await page.getByTitle("Historique d'impression", { exact: true }).click();
+  const history = page.locator('.print-history-panel');
+  await expect(history.locator('.print-history-item')).toHaveCount(1);
+  await expect(history.getByRole('button', { name: /Lot de 2 contrats/ })).toBeVisible();
+  await page.screenshot({ path: '/tmp/contracts-print-history-batch.png' });
+  await history.getByRole('button', { name: 'Retirer le lot de 2 contrats' }).click();
+  await expect(history.locator('.print-history-item')).toHaveCount(0);
+  await page.locator('.print-history-undo').getByRole('button', { name: 'Annuler' }).click();
+  await expect(history.locator('.print-history-item')).toHaveCount(1);
+  await history.getByRole('button', { name: /Lot de 2 contrats/ }).click();
+  await expect(page).toHaveURL(/\/app\/contrats\/print\?ids=/);
+  await expect(page.locator('.contract-document')).toHaveCount(2);
+
 });
