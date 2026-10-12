@@ -1,4 +1,5 @@
 import { contractMandateWarning } from "./ContractMandateAlert";
+import { useFiscalYearFilter } from "../../lib/useFiscalYearFilter";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
@@ -82,6 +83,7 @@ function readContractsPageSize() {
 }
 
 const STATUS_FILTER_OPTIONS: { id: ContractStatus; label: string }[] = [
+  { id: "liste", label: "Listé" },
   { id: "saisie", label: "Saisie" },
   { id: "correction", label: "Correction" },
   { id: "impression_partiel", label: "Imp. Part." },
@@ -122,7 +124,7 @@ export function ContractsListPage() {
   const [showAll, setShowAll] = useState(() => localStorage.getItem("contracts_view_all") === "true");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | "all">("all");
   const [dossierFilterId, setDossierFilterId] = useState<string | null>(null);
-  const [fiscalYearFilter, setFiscalYearFilter] = useState(currentFiscalYear);
+  const [fiscalYearFilter, setFiscalYearFilter] = useFiscalYearFilter(workspaceId, userId);
   const [dateFilterMode, setDateFilterMode] = useState<ContractDateFilterMode>("all");
   const [dateFilterDate, setDateFilterDate] = useState(() => getTodayDateInputValue());
   const [dateFilterStart, setDateFilterStart] = useState(() => getTodayDateInputValue());
@@ -981,6 +983,7 @@ export function ContractsListPage() {
 
   function getContractStatusLabel(status: string): string {
     switch (status) {
+      case "liste": return "Listé";
       case "draft": return "Brouillon";
       case "saisie": return "Saisie";
       case "correction": return "Correction";
@@ -1004,6 +1007,7 @@ export function ContractsListPage() {
       case "signe": return "badge-signe";
       case "transfere": return "badge-transfere";
       case "classe": return "badge-classe";
+      case "liste":
       case "final": return "badge-final";
       default: return "";
     }
@@ -1488,6 +1492,7 @@ export function ContractsListPage() {
                     {renderPrintHistoryButton()}
                   </div>
                   {items.map((contract) => {
+                    const displayedStatus = contract.status;
                     const hasComment = Boolean(contract.commentaire?.trim());
                     const contractFiscalYear = getContractFiscalYear(contract);
                     const mandateWarning = contractMandateWarning(contract, findContractMinister(contract, ministerRegistry));
@@ -1625,19 +1630,19 @@ export function ContractsListPage() {
                           )}
                           <button
                             type="button"
-                            className={`badge has-tooltip ${getContractStatusBadgeClass(contract.status)}`}
+                            className={`badge has-tooltip ${getContractStatusBadgeClass(displayedStatus)}`}
                             style={{ fontSize: "11px", padding: "2px 8px" }}
                             onClick={(event) => {
-                              if (can("contracts.change_status")) {
+                              if (displayedStatus !== "liste" && can("contracts.change_status")) {
                                 handleContextFromButton(event, contract.id, "status");
                               }
                             }}
-                            disabled={!can("contracts.change_status")}
+                            disabled={displayedStatus === "liste" || !can("contracts.change_status")}
                             data-tooltip={getStatusTooltip(contract)}
                             tabIndex={0}
                           >
                             <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>monitoring</span>
-                            {getContractStatusLabel(contract.status)}
+                            {getContractStatusLabel(displayedStatus)}
                           </button>
                           
                           {listsByContract.has(contract.id) ? (
@@ -1835,7 +1840,7 @@ export function ContractsListPage() {
                             key={st.id}
                             className="context-menu-item"
                             onClick={() => { 
-                              setStatusFilter(st.id as ContractStatus);
+                              setStatusFilter(st.id);
                               setContextMenu(null); setPage(1);
                             }}
                             style={{ 

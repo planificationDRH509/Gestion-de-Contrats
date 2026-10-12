@@ -1,10 +1,12 @@
+import type { Contract } from "../../data/types";
+import type { ContractList } from "../lists/listModel";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(() => ({ data: { items: [], total: 0, page: 1, pageSize: 25 }, isLoading: false })) }));
+const mocks = vi.hoisted(() => ({ lists: [] as ContractList[], list: vi.fn(() => ({ data: { items: [] as Contract[], total: 0, page: 1, pageSize: 25 }, isLoading: false })) }));
 vi.mock("../auth/auth", () => ({ useAuth: () => ({ user: { id: "u", workspaceId: "w" }, can: () => false }) }));
 vi.mock("./contractsApi", () => ({
   useContractsList: mocks.list,
@@ -14,7 +16,7 @@ vi.mock("./contractsApi", () => ({
 vi.mock("../salary-grid/salaryGridApi", () => ({ useSalaryGrid: () => ({ entries: [
   { id: "nurse", masculine: "Infirmier", feminine: "Infirmière", aliases: ["Soignant"], active: true, salaries: [] }
 ] }) }));
-vi.mock("../settings/settingsApi", () => ({ useFiscalYear: () => ({ fiscalYear: "2025-2026" }) }));
+vi.mock("../settings/settingsApi", () => ({ getStoredContractStartDate: () => null, useFiscalYear: () => ({ fiscalYear: "2025-2026" }) }));
 vi.mock("../settings/suggestionsApi", () => ({ useInstitutions: () => ({ data: [
   { id: "a", label: "Hôpital de Delmas", department: "Ouest", commune: "Delmas" },
   { id: "b", label: "Hôpital du Cap", department: "Nord", commune: "Cap-Haïtien" }
@@ -26,7 +28,7 @@ vi.mock("../dossiers/dossiersApi", () => ({
 vi.mock("./tagsApi", () => ({ useTags: () => ({ data: [{ id: "urgent", name: "Urgent" }] }), useCreateTag: () => ({}), useAssignTagToContract: () => ({}) }));
 vi.mock("../auth/usersApi", () => ({ useAppUsers: () => ({ data: [] }) }));
 vi.mock("../tasks/tasksApi", () => ({ usePrivateTasks: () => ({ data: [] }) }));
-vi.mock("../lists/listsApi", () => ({ useContractLists: () => ({ data: [] }) }));
+vi.mock("../lists/listsApi", () => ({ useContractLists: () => ({ data: mocks.lists }) }));
 vi.mock("./pinnedContracts", () => ({ usePinnedContracts: () => ({ ids: [] }) }));
 vi.mock("./ContractsImportModal", () => ({ ContractsImportModal: () => null }));
 import { ContractsListPage } from "./ContractsListPage";
@@ -36,7 +38,9 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   mocks.list.mockReturnValue({ data: { items: [], total: 0, page: 1, pageSize: 25 }, isLoading: false });
+  mocks.lists = [];
   localStorage.clear();
+  sessionStorage.clear();
 });
 function setup() {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -48,6 +52,44 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("reads the persisted Listé state and filters by status", async () => {
+    const contract = {
+      id: "c1", workspaceId: "w", firstName: "Jean", lastName: "Louis", nif: "1234567890",
+      gender: "Homme", address: "Delmas", position: "Infirmier", assignment: "Hôpital",
+      salaryNumber: 1000, salaryText: "Mille", durationMonths: 6, status: "liste",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    } as Contract;
+    mocks.list.mockReturnValue({ data: { items: [contract], total: 1, page: 1, pageSize: 25 }, isLoading: false });
+    mocks.lists = [{ id: "lot", workspaceId: "w", durationMonths: 6, visaNumber: null, sealedAt: null, version: 1, createdAt: contract.createdAt, history: [], members: [{ ...contract, nif: contract.nif! }] }];
+    setup();
+    expect(screen.getAllByText("Listé")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Listé/ })).toBeDisabled();
+    expect(screen.queryByText("Signé")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /État/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Signé/ }));
+    expectParams({ status: "signe" });
+    mocks.lists = [];
+    mocks.list.mockReturnValue({ data: { items: [{ ...contract, status: "saisie" }], total: 1, page: 1, pageSize: 25 }, isLoading: false });
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expect(screen.queryByText("Listé")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Saisie/ })).toBeInTheDocument();
+  });
+
+  it("filters Listé from the database even when lists are not cached", async () => {
+    mocks.lists = [{ id: "lot", members: [{ id: "c1" }, { id: "c2" }] } as ContractList];
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /État/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Listé/ }));
+    expectParams({ status: "liste", page: 1 });
+    mocks.lists = [];
+    await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
+    expectParams({ status: "liste" });
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expectParams({ status: undefined });
+  });
+
   it("selects a fiscal year independently of dates and restores the current year on reset", async () => {
     setup();
     const currentYear = getFiscalYearForDate(new Date());

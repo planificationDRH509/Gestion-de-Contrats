@@ -27,7 +27,7 @@ import {
   inferAuditAction
 } from "../../lib/contractAudit";
 import { sortContracts } from "../../lib/contractSorting";
-import { updateListedContract } from "./localListRepository";
+import { assertListStatus, updateListedContract } from "./localListRepository";
 
 function now() {
   return new Date().toISOString();
@@ -183,6 +183,7 @@ export class LocalContractRepository implements ContractRepository {
       auditHistory:
         input.auditHistory ?? createContractAuditHistory(undefined, timestamp)
     };
+    assertListStatus(db, contract, contract.status);
     db.contracts.push(contract);
     saveDb(db);
     queueOutbox(input.workspaceId, "contract.create", contract);
@@ -333,6 +334,7 @@ export class LocalContractRepository implements ContractRepository {
         return contract;
       }
 
+      if (shouldQueue) assertListStatus(db, contract, status);
       changesToQueue.push({ id: contract.id, previousStatus: contract.status });
       updatedCount += 1;
       const changes = buildContractAuditChanges(contract, { status });
@@ -457,6 +459,7 @@ export class LocalContractRepository implements ContractRepository {
     db.contracts[contractIndex] = {
       ...previous,
       deletedAt: timestamp,
+      status: previous.status === "liste" ? "saisie" : previous.status,
       updatedAt: timestamp,
       auditHistory: appendContractAuditEntry(previous.auditHistory, {
         action: "deletion",

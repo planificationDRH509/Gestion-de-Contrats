@@ -1,8 +1,12 @@
+import { migrateListedStatus } from "./listedStatusMigration";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 type Row = Record<string, any>;
 export function initializeContractLists(db: DatabaseSync) {
+  migrateListedStatus(db);
+  const updatedAt = db.prepare("PRAGMA table_info(contrat)").all().some(c => c.name === "updated_at")
+    ? ", updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')" : "";
   db.exec(`
     CREATE TABLE IF NOT EXISTS contract_lists (
       id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -62,6 +66,23 @@ export function initializeContractLists(db: DatabaseSync) {
     BEGIN UPDATE contract_lists SET version=version+1 WHERE id=OLD.list_id; END;
     CREATE TRIGGER IF NOT EXISTS list_contract_version AFTER UPDATE ON contrat
     BEGIN UPDATE contract_lists SET version=version+1 WHERE id IN (SELECT list_id FROM contract_list_members WHERE contract_id=NEW.id_contrat); END;
+    CREATE TRIGGER IF NOT EXISTS list_status_added AFTER INSERT ON contract_list_members
+    BEGIN UPDATE contrat SET status='liste'${updatedAt} WHERE id_contrat=NEW.contract_id AND status IS NOT 'liste'; END;
+    CREATE TRIGGER IF NOT EXISTS list_status_removed AFTER DELETE ON contract_list_members
+    BEGIN UPDATE contrat SET status='saisie'${updatedAt} WHERE id_contrat=OLD.contract_id AND status='liste'; END;
+    CREATE TRIGGER IF NOT EXISTS list_status_guard BEFORE UPDATE OF status ON contrat
+    WHEN NEW.deleted_at IS NULL
+    BEGIN
+      SELECT CASE WHEN NEW.status <> 'liste' AND EXISTS(SELECT 1 FROM contract_list_members WHERE contract_id=NEW.id_contrat)
+        THEN RAISE(ABORT, 'Retirez le contrat de sa liste avant de changer son état.') END;
+      SELECT CASE WHEN NEW.status='liste' AND NOT EXISTS(SELECT 1 FROM contract_list_members WHERE contract_id=NEW.id_contrat)
+        THEN RAISE(ABORT, 'Ajoutez le contrat à une liste pour utiliser l’état Listé.') END;
+    END;
+    CREATE TRIGGER IF NOT EXISTS list_status_insert_guard BEFORE INSERT ON contrat
+    WHEN NEW.status='liste'
+    BEGIN SELECT RAISE(ABORT, 'Ajoutez le contrat à une liste pour utiliser l’état Listé.'); END;
+    UPDATE contrat SET status='liste'${updatedAt} WHERE deleted_at IS NULL AND status IS NOT 'liste'
+      AND EXISTS(SELECT 1 FROM contract_list_members WHERE contract_id=id_contrat);
     CREATE TRIGGER IF NOT EXISTS list_identity_version AFTER UPDATE ON identification
     BEGIN UPDATE contract_lists SET version=version+1 WHERE id IN
       (SELECT m.list_id FROM contract_list_members m JOIN contrat c ON c.id_contrat=m.contract_id WHERE c.nif=NEW.nif); END;

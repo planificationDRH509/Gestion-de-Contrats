@@ -1,6 +1,7 @@
 import type { AuthUser } from "../../features/auth/auth";
 import type { ContractList, ListMember, ListOperation } from "../../features/lists/listModel";
 import type { Contract, OutboxItem } from "../types";
+import { appendContractAuditEntry, buildContractAuditChanges } from "../../lib/contractAudit";
 import { createId } from "../../lib/uuid";
 import { flushLocalDbWrites, loadDb, saveDb, selectDb, type LocalDb } from "./localDb";
 
@@ -29,6 +30,21 @@ function memberFromContract(contract: Contract): ListMember {
   };
 }
 
+function setMembershipStatus(contract: Contract, listed: boolean, at: string) {
+  const status = listed ? "liste" : "saisie";
+  if (contract.status === status || (!listed && contract.status !== "liste")) return;
+  const changes = buildContractAuditChanges(contract, { status });
+  contract.status = status;
+  contract.updatedAt = at;
+  contract.auditHistory = appendContractAuditEntry(contract.auditHistory, { action: "status", changes, at });
+}
+
+export function assertListStatus(db: LocalDb, contract: Contract, status: Contract["status"]) {
+  const listed = db.contractLists.some(list => list.workspaceId === contract.workspaceId && list.members.some(m => m.id === contract.id));
+  if (listed && status !== "liste") throw new Error("Retirez le contrat de sa liste avant de changer son état.");
+  if (!listed && status === "liste") throw new Error("Ajoutez le contrat à une liste pour utiliser l’état Listé.");
+}
+
 export function readCachedContractLists(workspaceId: string): ContractList[] {
   return selectDb(db => db.contractLists.filter(list => list.workspaceId === workspaceId));
 }
@@ -49,6 +65,8 @@ export function cacheContractLists(workspaceId: string, lists: ContractList[]) {
 
 /** Keep the same list guards as the server for edits made to offline contracts. */
 export function updateListedContract(db: LocalDb, previous: Contract, next: Contract) {
+  if (!next.deletedAt) assertListStatus(db, previous, next.status);
+  else if (next.status === "liste") next.status = "saisie";
   for (const list of db.contractLists.filter(l => l.workspaceId === previous.workspaceId)) {
     if (!list.members.some(member => member.id === previous.id)) continue;
     if (next.durationMonths !== list.durationMonths || next.workspaceId !== previous.workspaceId) {
@@ -111,6 +129,7 @@ export async function mutateContractListOffline(user: AuthUser, operation: ListO
       if (source?.sealedAt) throw new Error("Faites rouvrir la liste scellée avant de déplacer ses contrats.");
       if (source) { source.members = source.members.filter(member => member.id !== contractId); changed.add(source); }
       if (target) { target.members.push(memberFromContract(contract)); changed.add(target); }
+      setMembershipStatus(contract, Boolean(target), at);
     }
     for (const list of changed) {
       list.version += 1;

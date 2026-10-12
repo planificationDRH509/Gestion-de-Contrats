@@ -5,7 +5,9 @@ export async function listContractsPinnedFirst(
   list: (params: ContractListParams) => Promise<ContractListResult>,
   params: ContractListParams
 ): Promise<ContractListResult> {
-  const pinnedIds = [...new Set(params.pinnedIds ?? [])];
+  const pinnedIds = [...new Set(params.pinnedIds ?? [])].filter(id =>
+    (!params.includeIds || params.includeIds.includes(id)) && !params.excludeIds?.includes(id));
+  const excludedIds = [...new Set([...(params.excludeIds ?? []), ...pinnedIds])];
   if (pinnedIds.length === 0) return list(params);
 
   const page = params.page ?? 1;
@@ -14,7 +16,7 @@ export async function listContractsPinnedFirst(
   const pinned = await list({
     ...base,
     includeIds: pinnedIds,
-    excludeIds: undefined,
+    excludeIds: params.excludeIds,
     // A user may pin a shared contract while viewing "Tous les contrats".
     onlyMine: false,
     offset: undefined,
@@ -24,7 +26,7 @@ export async function listContractsPinnedFirst(
 
   if (params.all) {
     const unpinned = await list({
-      ...base, includeIds: undefined, excludeIds: pinnedIds, offset: undefined, page: 1, all: true
+      ...base, includeIds: params.includeIds, excludeIds: excludedIds, offset: undefined, page: 1, all: true
     });
     return {
       items: [...pinned.items, ...unpinned.items],
@@ -39,8 +41,8 @@ export async function listContractsPinnedFirst(
   const remaining = pageSize - visiblePinned.length;
   const unpinned = await list({
     ...base,
-    includeIds: undefined,
-    excludeIds: pinnedIds,
+    includeIds: params.includeIds,
+    excludeIds: excludedIds,
     offset: Math.max(0, start - pinned.total),
     page: 1,
     pageSize: Math.max(1, remaining),

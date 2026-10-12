@@ -29,6 +29,16 @@ beforeEach(() => {
 });
 afterEach(() => db.close());
 describe("contract lists", () => {
+  it("stores Listé in SQL, keeps it on moves, and resets it on removal", () => {
+    const a=create(), b=create();
+    const state=()=>db.prepare("SELECT status FROM contrat WHERE id_contrat='c1'").get()?.status;
+    assign(a,['c1']); expect(state()).toBe('liste');
+    assign(b,['c1']); expect(state()).toBe('liste');
+    expect(()=>db.prepare("UPDATE contrat SET status='signe' WHERE id_contrat='c1'").run()).toThrow(/Retirez/);
+    assign(null,['c1']); expect(state()).toBe('saisie');
+    expect(()=>db.prepare("UPDATE contrat SET status='liste' WHERE id_contrat='c1'").run()).toThrow(/Ajoutez/);
+  });
+
   it("removes the legacy text without changing amounts and can migrate twice", () => {
     expect(db.prepare("PRAGMA table_info(contrat)").all().map(c => c.name)).not.toContain("salaire");
     expect(db.prepare("SELECT salaire_en_chiffre FROM contrat WHERE id_contrat='c1'").get()?.salaire_en_chiffre).toBe(100.10);
@@ -84,14 +94,14 @@ describe("contract lists", () => {
     act(reopen); assign(b,['c1']);
     expect(get(a).history.some(h => h.action === 'reopen' && h.reason === 'Correction demandée')).toBe(true);
   });
-  it("blocks identity, amount, duration and deletion edits to sealed contracts while allowing workflow status", () => {
+  it("blocks identity, amount, duration and deletion edits to sealed contracts and workflow status", () => {
     const id=create(); assign(id,['c1']); seal(id);
     expect(() => db.prepare("UPDATE contrat SET salaire_en_chiffre=999 WHERE id_contrat='c1'").run()).toThrow(/scellée/);
     expect(() => db.prepare("UPDATE contrat SET deleted_at='today' WHERE id_contrat='c1'").run()).toThrow(/scellée/);
     expect(() => db.prepare("UPDATE contrat SET duree_contrat=12 WHERE id_contrat='c1'").run()).toThrow();
     expect(() => db.prepare("UPDATE identification SET nom='NOUVEAU' WHERE nif='n1'").run()).toThrow(/scellée/);
     expect(() => db.prepare("DELETE FROM contrat WHERE id_contrat='c1'").run()).toThrow();
-    db.prepare("UPDATE contrat SET status='transfere' WHERE id_contrat='c1'").run();
+    expect(() => db.prepare("UPDATE contrat SET status='transfere' WHERE id_contrat='c1'").run()).toThrow(/Retirez/);
     expect(get(id).members).toHaveLength(1);
   });
   it("rejects duration edits within an open lot and removes soft-deleted open contracts", () => {

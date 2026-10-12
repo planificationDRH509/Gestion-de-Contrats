@@ -149,6 +149,7 @@ const ALLOWED_STATUSES = new Set([
   "draft",
   "final",
   "saisie",
+  "liste",
   "correction",
   "impression_partiel",
   "imprime",
@@ -800,7 +801,7 @@ function getDb(): DatabaseSync {
       workspace_id TEXT NOT NULL,
       dossier_id TEXT,
       status TEXT NOT NULL DEFAULT 'draft'
-        CHECK (status IN ('draft','final','saisie','correction','impression_partiel','imprime','signe','transfere','classe')),
+        CHECK (status IN ('draft','final','saisie','liste','correction','impression_partiel','imprime','signe','transfere','classe')),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       deleted_at TEXT,

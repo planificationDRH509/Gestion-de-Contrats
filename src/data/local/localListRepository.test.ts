@@ -27,6 +27,18 @@ beforeEach(() => {
 });
 
 describe("durable offline lists", () => {
+  it("persists Listé across assignment, moves and reloads, and resets after removal", async () => {
+    const a = (await create())!, b = (await create())!;
+    await mutateContractListOffline(user, { action: "assign", listId: a, contractIds: ["c1"] });
+    expect(loadDb().contracts.find(c => c.id === "c1")?.status).toBe("liste");
+    expect(JSON.parse(localStorage.getItem("contribution_local_db")!).contracts.find((c: Contract) => c.id === "c1").status).toBe("liste");
+    await mutateContractListOffline(user, { action: "assign", listId: b, contractIds: ["c1"] });
+    expect(loadDb().contracts.find(c => c.id === "c1")?.status).toBe("liste");
+    await mutateContractListOffline(user, { action: "assign", listId: null, contractIds: ["c1"] });
+    expect(loadDb().contracts.find(c => c.id === "c1")?.status).toBe("saisie");
+    await expect(new LocalContractRepository().updateStatus("w", ["c1"], "liste")).rejects.toThrow(/Ajoutez/);
+  });
+
   it("creates, assigns, moves, sets a visa, seals, reopens and deletes", async () => {
     const a = (await create())!, b = (await create())!;
     await mutateContractListOffline(user, { action: "assign", listId: a, contractIds: ["c1", "c2"] });
@@ -64,7 +76,7 @@ describe("durable offline lists", () => {
     await expect(contracts.update({ id: "c1", salaryNumber: 200 })).rejects.toThrow(/scellée/);
     await expect(contracts.softDelete("c1", "w")).rejects.toThrow(/scellée/);
     expect(() => upsertApplicantOffline({ workspaceId: "w", id: "n1", nif: "n1", firstName: "Autre", lastName: "LOUIS", gender: "Femme", address: "Test" })).toThrow(/scellée/);
-    await expect(contracts.updateStatus("w", ["c1"], "signe")).resolves.toBe(1);
+    await expect(contracts.updateStatus("w", ["c1"], "signe")).rejects.toThrow(/Retirez/);
   });
 
   it("does not overwrite local changes when downloading a server snapshot", async () => {

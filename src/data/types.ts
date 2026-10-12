@@ -92,6 +92,7 @@ export type DossierPriority = "normal" | "urgence";
 export type ContractStatus = 
   | "draft" 
   | "final" 
+  | "liste"
   | "saisie" 
   | "correction" 
   | "impression_partiel" 

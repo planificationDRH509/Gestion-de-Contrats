@@ -20,6 +20,17 @@ async function list(params: ContractListParams): Promise<ContractListResult> {
 }
 
 describe("pinned contract ordering", () => {
+  it.each([false, true])("preserves list membership and exclusions with pins (all=%s)", async all => {
+    const result = await listContractsPinnedFirst(list, {
+      workspaceId: "w", all, pageSize: 25, pinnedIds: ["c03", "c25", "c30"],
+      includeIds: ["c01", "c03", "c25"], excludeIds: ["c25"]
+    });
+    expect(result.items.map(item => item.id)).toEqual(["c03", "c01"]);
+    expect(result.total).toBe(2);
+    const empty = await listContractsPinnedFirst(list, { workspaceId: "w", all, pinnedIds: ["c03"], includeIds: [] });
+    expect(empty.total).toBe(0);
+  });
+
   it("moves pins from later pages to the first page without duplicates or changing the total", async () => {
     const params: ContractListParams = {
       workspaceId: "w", pageSize: 25, pinnedIds: ["c30", "c03", "c25"]

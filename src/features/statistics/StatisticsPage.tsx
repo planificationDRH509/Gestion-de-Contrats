@@ -282,6 +282,7 @@ export function StatisticsPage() {
   const statusLabels: Record<string, string> = {
     draft: "Brouillon",
     saisie: "Saisie",
+    liste: "Listé",
     correction: "Correction",
     impression_partiel: "Impr. partiel",
     imprime: "Imprimé",

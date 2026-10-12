@@ -32,6 +32,7 @@ begin
   a := public.mutate_contract_list(admin_token,w,'{"action":"create","durationMonths":6}');
   b := public.mutate_contract_list(agent_token,w,'{"action":"create","durationMonths":6,"visaNumber":"V-TEST"}');
   perform public.mutate_contract_list(admin_token,w,jsonb_build_object('action','assign','listId',a,'contractIds',jsonb_build_array(w||'-c1',w||'-c2')));
+  assert (select count(*) from public.contrat where workspace_id=w and status='liste')=2, 'membership persists listed state';
   snapshot := public.read_contract_lists(reader_token,w);
   assert jsonb_array_length(snapshot)=2, 'readers can read both lots';
   assert (select jsonb_array_length(l->'members') from jsonb_array_elements(snapshot) l where l->>'id'=a::text)=2, 'members returned';
@@ -111,7 +112,9 @@ begin
   failed := false;
   begin update public.contrat set duree_contrat=12 where id_contrat=w||'-c1'; exception when others then failed:=true; assert sqlerrm like '%durée%'; end;
   assert failed, 'open lot duration protected';
-  update public.contrat set status='transfere' where id_contrat=w||'-c2';
+  failed := false;
+  begin update public.contrat set status='transfere' where id_contrat=w||'-c2'; exception when others then failed:=true; assert sqlerrm like '%Retirez%'; end;
+  assert failed, 'listed state cannot be manually replaced';
   snapshot := public.read_contract_lists(admin_token,w);
   select (l->>'version')::integer into v from jsonb_array_elements(snapshot) l where l->>'id'=b::text;
   failed := false;
@@ -128,6 +131,7 @@ begin
   snapshot := public.read_contract_lists(admin_token,w);
   assert (select sum(jsonb_array_length(l->'members')) from jsonb_array_elements(snapshot) l)=0, 'removed and deleted contracts absent';
   reset role;
+  assert (select count(*) from public.contrat where id_contrat in (w||'-c1',w||'-c2') and status='saisie')=2, 'removal and soft deletion persist saisie';
 end;
 $$;
 rollback;

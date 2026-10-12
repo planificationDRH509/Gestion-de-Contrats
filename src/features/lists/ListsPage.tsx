@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { getFiscalYearForDate } from "../../lib/contractDateFilters";
+import { useFiscalYearFilter } from "../../lib/useFiscalYearFilter";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import { formatCurrency } from "../../lib/format";
@@ -10,7 +12,8 @@ import { ListDetail } from "./ListDetail";
 import "./lists.css";
 
 export function ListsPage() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
+  const [fiscalYear] = useFiscalYearFilter(user?.workspaceId ?? "", user?.id ?? "");
   const isMobile = useIsMobileViewport();
   const canManage = can("contracts.edit") && !isMobile;
   const query = useContractLists();
@@ -19,7 +22,7 @@ export function ListsPage() {
   const [filter, setFilter] = useState<"all" | "open" | "sealed">("all");
   const [duration, setDuration] = useState("");
   const [creating, setCreating] = useState(false);
-  const lists = query.data ?? [];
+  const lists = (query.data ?? []).filter(list => getFiscalYearForDate(new Date(list.createdAt)) === fiscalYear);
   const selectedId = params.get("liste");
   const filtered = lists.filter(list => (filter === "all" || Boolean(list.sealedAt) === (filter === "sealed"))
     && (!duration || list.durationMonths === Number(duration))

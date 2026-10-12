@@ -9,6 +9,7 @@ const STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Brouillon",
   final: "Final",
   saisie: "Saisie",
+  liste: "Listé",
   correction: "Correction",
   impression_partiel: "Impression partielle",
   imprime: "Imprimé",
