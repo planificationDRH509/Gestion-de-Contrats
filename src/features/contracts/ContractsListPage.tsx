@@ -1,11 +1,10 @@
-import { FloatingOverlay } from "../../app/ui/FloatingOverlay";
 import { contractMandateWarning } from "./ContractMandateAlert";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
 import { salaryOutsideGrid, genderedTitle, gridPositions } from "../salary-grid/salaryGrid";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
@@ -38,14 +37,6 @@ import {
 import { useFiscalYear } from "../settings/settingsApi";
 import { getUserDossierGroups } from "../../lib/dossier";
 import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
-import {
-  PrintHistoryEntry,
-  groupPrintHistory,
-  isPrintHistoryDuplicate,
-  loadPrintHistory,
-  savePrintHistory
-} from "../../lib/printHistory";
-import { createId } from "../../lib/uuid";
 import { PersonAttachmentsDialog } from "../attachments/PersonAttachmentsDialog";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { ContractsImportModal } from "./ContractsImportModal";
@@ -127,26 +118,6 @@ export function ContractsListPage() {
   const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
   const currentFiscalYear = getFiscalYearForDate(new Date());
 
-  const [printHistoryAnchor, setPrintHistoryAnchor] = useState<HTMLButtonElement | null>(null);
-  const [printHistoryOpen, setPrintHistoryOpen] = useState(false);
-  const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>(() =>
-    loadPrintHistory(userId, workspaceId)
-  );
-  const printHistoryGroups = useMemo(() => groupPrintHistory(printHistory), [printHistory]);
-  const [undoAction, setUndoAction] = useState<{
-    entries: PrintHistoryEntry[];
-    index: number;
-    label: string;
-  } | null>(null);
-  const undoTimerRef = useRef<number | null>(null);
-  const [manualEntryOpen, setManualEntryOpen] = useState(false);
-  const [manualFirstName, setManualFirstName] = useState("");
-  const [manualLastName, setManualLastName] = useState("");
-  const [manualNif, setManualNif] = useState("");
-  const [manualNinu, setManualNinu] = useState("");
-  const [manualPosition, setManualPosition] = useState("");
-  const [manualError, setManualError] = useState<string | null>(null);
-
   const [activeView, setActiveView] = useState<ContractsView>("contracts");
   const [showAll, setShowAll] = useState(() => localStorage.getItem("contracts_view_all") === "true");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | "all">("all");
@@ -225,18 +196,6 @@ export function ContractsListPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (!userId || !workspaceId) return;
-    setPrintHistory(loadPrintHistory(userId, workspaceId));
-  }, [userId, workspaceId]);
-
-  useEffect(() => {
-    if (!userId || !workspaceId) return;
-    const handleFocus = () => setPrintHistory(loadPrintHistory(userId, workspaceId));
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [userId, workspaceId]);
 
   const selectContractsScope = (nextShowAll: boolean) => {
     setShowAll(nextShowAll);
@@ -524,125 +483,6 @@ export function ContractsListPage() {
     }
     printJob.mutate({ workspaceId, ids: orderedIds });
     navigate(`/app/contrats/print?ids=${orderedIds.join(",")}`);
-  }
-
-  function formatPrintHistoryLine(entry: PrintHistoryEntry) {
-    const firstName = entry.firstName?.trim() ? entry.firstName : "—";
-    const lastName = entry.lastName?.trim() ? entry.lastName.toUpperCase() : "—";
-    const nif = entry.nif?.trim() ? entry.nif : "—";
-    const ninu = entry.ninu?.trim() ? entry.ninu : "—";
-    const position = entry.position?.trim() ? entry.position : "—";
-    return `${firstName}, ${lastName}, ${nif}, ${ninu}, ${position}`;
-  }
-
-  function updatePrintHistory(
-    updater:
-      | PrintHistoryEntry[]
-      | ((prev: PrintHistoryEntry[]) => PrintHistoryEntry[])
-  ) {
-    setPrintHistory((prev) => {
-      const next = typeof updater === "function" ? (updater as (p: PrintHistoryEntry[]) => PrintHistoryEntry[])(prev) : updater;
-      savePrintHistory(userId, workspaceId, next);
-      return next;
-    });
-  }
-
-  function resetManualEntryForm() {
-    setManualFirstName("");
-    setManualLastName("");
-    setManualNif("");
-    setManualNinu("");
-    setManualPosition("");
-    setManualError(null);
-  }
-
-  function openManualEntryForm() {
-    resetManualEntryForm();
-    setManualEntryOpen(true);
-  }
-
-  function handleManualEntrySubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const lastName = manualLastName.trim();
-    if (!lastName) {
-      setManualError("Le nom est obligatoire.");
-      return;
-    }
-    const entry: PrintHistoryEntry = {
-      id: createId(),
-      contractId: `manual-${createId()}`,
-      firstName: manualFirstName.trim(),
-      lastName,
-      nif: manualNif.trim() || null,
-      ninu: manualNinu.trim() || null,
-      position: manualPosition.trim(),
-      printedAt: new Date().toISOString(),
-      partial: false
-    };
-    if (isPrintHistoryDuplicate(printHistory, entry.nif, entry.ninu)) {
-      setManualError("Entrée déjà présente (NIF ou NINU).");
-      return;
-    }
-    updatePrintHistory([...printHistory, entry]);
-    setManualEntryOpen(false);
-    setManualError(null);
-    setActionMessage("Entrée ajoutée.");
-  }
-
-  function clearUndoTimer() {
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-  }
-
-  function enqueueUndo(entries: PrintHistoryEntry[], index: number, label: string) {
-    clearUndoTimer();
-    setUndoAction({ entries, index, label });
-    undoTimerRef.current = window.setTimeout(() => {
-      setUndoAction(null);
-      undoTimerRef.current = null;
-    }, 3000);
-  }
-
-  function handleUndo() {
-    if (!undoAction) return;
-    updatePrintHistory((prev) => {
-      const next = [...prev];
-      const safeIndex = Math.min(undoAction.index, next.length);
-      next.splice(safeIndex, 0, ...undoAction.entries);
-      return next;
-    });
-    clearUndoTimer();
-    setUndoAction(null);
-  }
-
-  function removePrintHistoryEntries(entryIds: string[], label: string) {
-    updatePrintHistory((prev) => {
-      const removed = new Set(entryIds);
-      const index = prev.findIndex(entry => removed.has(entry.id));
-      if (index === -1) return prev;
-      enqueueUndo(prev.filter(entry => removed.has(entry.id)), index, label);
-      return prev.filter(entry => !removed.has(entry.id));
-    });
-  }
-
-  function removePrintHistoryEntry(entryId: string, label: string) {
-    removePrintHistoryEntries([entryId], label);
-  }
-
-  function handlePrintHistoryPartial(entryId: string) {
-    removePrintHistoryEntry(entryId, "Entrée marquée Imp. Part.");
-  }
-
-  function handleRemovePrintHistoryEntry(entryId: string) {
-    removePrintHistoryEntry(entryId, "Entrée retirée.");
-  }
-
-  function resetPrintHistory() {
-    updatePrintHistory([]);
-    clearUndoTimer();
-    setUndoAction(null);
   }
 
   function buildExportRowsFromContracts(
@@ -1190,102 +1030,6 @@ export function ContractsListPage() {
       .replace(/'/g, "&#039;");
   }
 
-  function buildPrintHistoryHtml(entries: PrintHistoryEntry[]) {
-    const dateLabel = new Date().toLocaleDateString("fr-FR");
-    const lines = entries
-      .map((entry, index) => {
-        const line = escapeHtml(formatPrintHistoryLine(entry));
-        const tag = entry.partial ? `<span class="tag">Imp. Part.</span>` : "";
-        return `<div class="line"><span class="num">${index + 1}.</span><span class="text">${line}</span>${tag}</div>`;
-      })
-      .join("");
-
-    return `<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Historique des impressions</title>
-    <style>
-      @page { size: letter; margin: 0.6in; }
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: "Inter", system-ui, sans-serif; color: #0f172a; background: #fff; }
-      h1 { font-size: 18px; margin: 0 0 6px; }
-      .meta { font-size: 12px; color: #475569; margin-bottom: 16px; }
-      .list { display: flex; flex-direction: column; gap: 8px; }
-      .line { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 12px; }
-      .num { width: 22px; flex-shrink: 0; font-weight: 700; color: #1e293b; }
-      .text { flex: 1; }
-      .tag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
-      .toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
-      .toolbar button { border: 1px solid #cbd5f5; background: #eef2ff; color: #1e3a8a; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
-      .signature { margin-top: 32px; display: flex; justify-content: space-between; gap: 24px; }
-      .sig-box { flex: 1; border-top: 1px solid #94a3b8; padding-top: 6px; font-size: 12px; color: #475569; text-align: center; }
-      @media print { .toolbar { display: none; } }
-    </style>
-  </head>
-  <body>
-    <div class="toolbar">
-      <button onclick="window.print()">Imprimer</button>
-    </div>
-    <h1>Historique des impressions</h1>
-    <div class="meta">Date: ${escapeHtml(dateLabel)}</div>
-    <div class="list">
-      ${lines || `<div class="line"><span class="text">Aucune entrée.</span></div>`}
-    </div>
-    <div class="signature">
-      <div class="sig-box">Signature 1</div>
-      <div class="sig-box">Signature 2</div>
-    </div>
-  </body>
-</html>`;
-  }
-
-  function printHtmlWithIframe(html: string, onAfterPrint?: () => void) {
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "0";
-    frame.style.visibility = "hidden";
-    frame.srcdoc = html;
-    document.body.appendChild(frame);
-
-    const cleanup = () => {
-      frame.remove();
-    };
-
-    const contentWindow = frame.contentWindow;
-    if (!contentWindow) {
-      cleanup();
-      return false;
-    }
-
-    let didPrint = false;
-    let finished = false;
-    const triggerPrint = () => {
-      if (didPrint) return;
-      didPrint = true;
-      contentWindow.focus();
-      contentWindow.print();
-    };
-
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      cleanup();
-      onAfterPrint?.();
-    };
-
-    contentWindow.addEventListener("afterprint", finish, { once: true });
-    window.addEventListener("focus", finish, { once: true });
-    frame.onload = triggerPrint;
-    setTimeout(triggerPrint, 600);
-    return true;
-  }
-
   function buildAssignmentLetterHtml(contract: Contract) {
     const fullName = `${contract.lastName} ${contract.firstName}`.trim();
     const title = contract.gender === "Femme" ? "Madame" : "Monsieur";
@@ -1358,44 +1102,6 @@ export function ContractsListPage() {
     letterWindow.document.close();
   }
 
-  function handlePrintHistoryList() {
-    if (printHistory.length === 0) return;
-    const historyHtml = buildPrintHistoryHtml(printHistory);
-    const historyWindow = window.open("", "_blank", "noopener,noreferrer");
-    const confirmReset = () => {
-      const confirmed = window.confirm("Réinitialiser la liste après impression ?");
-      if (confirmed) {
-        resetPrintHistory();
-      }
-    };
-
-    if (!historyWindow) {
-      const printed = printHtmlWithIframe(historyHtml, confirmReset);
-      if (!printed) {
-        setActionError("Impossible d'ouvrir l'historique d'impression.");
-      }
-      return;
-    }
-
-    historyWindow.document.open();
-    historyWindow.document.write(historyHtml);
-    historyWindow.document.close();
-    historyWindow.focus();
-    let didPrint = false;
-    const triggerPrint = () => {
-      if (didPrint) return;
-      didPrint = true;
-      historyWindow.focus();
-      historyWindow.print();
-    };
-    historyWindow.onload = triggerPrint;
-    setTimeout(triggerPrint, 600);
-    historyWindow.onafterprint = () => {
-      historyWindow.close();
-      confirmReset();
-    };
-  }
-
   async function handleDeleteContract(contractId: string) {
     if (!can("contracts.delete")) return;
     if (!contractId) return;
@@ -1417,17 +1123,7 @@ export function ContractsListPage() {
   function renderPrintHistoryButton() {
     if (isMobile) return null;
     return (
-      <button
-        type="button"
-        className="contracts-import"
-        aria-expanded={printHistoryOpen}
-        aria-controls="print-history-panel"
-        aria-haspopup="dialog"
-        onClick={event => {
-          setPrintHistoryAnchor(event.currentTarget);
-          setPrintHistoryOpen(open => !open);
-        }}
-      >
+      <button type="button" className="contracts-import" onClick={() => navigate("/app/contrats/historique-impressions")}>
         <span className="material-symbols-rounded icon" aria-hidden="true">receipt_long</span>
         <span>Historique d'Impressions</span>
       </button>
@@ -2751,206 +2447,6 @@ export function ContractsListPage() {
               </button>
             </div>
           </div>
-
-      {!isMobile && printHistoryOpen && printHistoryAnchor?.isConnected ? (
-        <FloatingOverlay
-          anchor={printHistoryAnchor}
-          className="print-history-panel"
-          id="print-history-panel"
-          role="dialog"
-          aria-label="Historique d'Impressions"
-          onKeyDown={event => {
-            if (event.key === "Escape") {
-              setPrintHistoryOpen(false);
-              printHistoryAnchor.focus();
-            }
-          }}
-        >
-          <div className="print-history-header">
-            <div>
-              <div className="print-history-title">Historique d'Impressions</div>
-              <div className="print-history-subtitle">{printHistoryGroups.length} entrée(s)</div>
-            </div>
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={() => setPrintHistoryOpen(false)}
-              title="Minimiser"
-              style={{ width: "28px", height: "28px" }}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>expand_more</span>
-            </button>
-          </div>
-
-          {printHistory.length === 0 ? (
-            <div className="print-history-empty">Aucune impression enregistrée.</div>
-          ) : (
-            <div className="print-history-list">
-              {printHistoryGroups.map((group, index) => {
-                if (group.isBatch) return (
-                  <div key={group.id} className="print-history-item print-history-batch">
-                    <button
-                      type="button"
-                      className="print-history-batch-open"
-                      disabled={!can("contracts.print")}
-                      onClick={() => navigate(`/app/contrats/print?${new URLSearchParams({ ids: group.entries.map(entry => entry.contractId).join(",") })}`)}
-                      title="Ouvrir le lot"
-                    >
-                      <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>
-                      <span>
-                        <strong>Lot de {group.entries.length} contrats</strong>
-                        <time dateTime={group.entries[0].printedAt}>{new Date(group.entries[0].printedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
-                      </span>
-                      {group.entries.some(entry => entry.partial) && <span className="print-history-tag">Imp. Part.</span>}
-                    </button>
-                    <button
-                      className="print-history-mini-btn danger"
-                      type="button"
-                      aria-label={`Retirer le lot de ${group.entries.length} contrats`}
-                      title="Retirer le lot"
-                      onClick={() => removePrintHistoryEntries(group.entries.map(entry => entry.id), "Lot retiré.")}
-                    >
-                      <span className="material-symbols-rounded" aria-hidden="true">close</span>
-                    </button>
-                  </div>
-                );
-                const entry = group.entries[0];
-                return (
-                  <div key={entry.id} className="print-history-item">
-                    <div className="print-history-line">
-                      <span className="print-history-index">{index + 1}.</span>
-                      {formatPrintHistoryLine(entry)}
-                      {entry.partial ? <span className="print-history-tag">Imp. Part.</span> : null}
-                    </div>
-                    <div className="print-history-actions">
-                      <button
-                        className={`print-history-mini-btn ${entry.partial ? "active" : ""}`}
-                        type="button"
-                        onClick={() => handlePrintHistoryPartial(entry.id)}
-                        title="Imp. Part."
-                      >
-                        Imp. Part.
-                      </button>
-                      <button
-                        className="print-history-mini-btn danger"
-                        type="button"
-                        onClick={() => handleRemovePrintHistoryEntry(entry.id)}
-                        title="Retirer"
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: "14px" }}>close</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="print-history-footer">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={handlePrintHistoryList}
-              disabled={printHistory.length === 0}
-            >
-              Imprimer
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={resetPrintHistory}
-              disabled={printHistory.length === 0}
-            >
-              Réinitialiser
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={openManualEntryForm}
-            >
-              Ajouter
-            </button>
-          </div>
-        </FloatingOverlay>
-      ) : null}
-
-      {!isMobile && undoAction ? (
-        <div className={`print-history-undo ${hasSelection ? "shifted" : ""}`}>
-          <span>{undoAction.label}</span>
-          <button className="print-history-undo-btn" type="button" onClick={handleUndo}>
-            Annuler
-          </button>
-        </div>
-      ) : null}
-
-      {!isMobile && manualEntryOpen ? (
-        <div className="print-history-modal">
-          <div className="print-history-modal-card">
-            <div className="print-history-modal-title">Ajouter à l'historique</div>
-            <form onSubmit={handleManualEntrySubmit}>
-              <div className="print-history-modal-grid">
-                <label className="form-label">
-                  Prénom
-                  <input
-                    className="input"
-                    value={manualFirstName}
-                    onChange={(event) => setManualFirstName(event.target.value)}
-                  />
-                </label>
-                <label className="form-label">
-                  Nom *
-                  <input
-                    className="input"
-                    value={manualLastName}
-                    onChange={(event) => setManualLastName(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="form-label">
-                  NIF
-                  <input
-                    className="input"
-                    value={manualNif}
-                    onChange={(event) => setManualNif(event.target.value)}
-                  />
-                </label>
-                <label className="form-label">
-                  NINU
-                  <input
-                    className="input"
-                    value={manualNinu}
-                    onChange={(event) => setManualNinu(event.target.value)}
-                  />
-                </label>
-                <label className="form-label">
-                  Poste
-                  <input
-                    className="input"
-                    value={manualPosition}
-                    onChange={(event) => setManualPosition(event.target.value)}
-                  />
-                </label>
-              </div>
-              {manualError ? <div className="form-error">{manualError}</div> : null}
-              <div className="print-history-modal-actions">
-                <button
-                  className="btn btn-outline"
-                  type="button"
-                  onClick={() => {
-                    setManualEntryOpen(false);
-                    setManualError(null);
-                  }}
-                >
-                  Annuler
-                </button>
-                <button className="btn btn-primary" type="submit">
-                  Ajouter
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
 
       {attachmentContract && <PersonAttachmentsDialog contract={attachmentContract} onClose={() => setAttachmentContract(null)} />}
       <ContractCommentModal

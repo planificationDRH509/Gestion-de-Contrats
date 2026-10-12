@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { printContractList } from "./printContractList";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/auth";
@@ -13,11 +13,12 @@ import {
 } from "./ContractDocument";
 import { appendPrintHistory } from "../../lib/printHistory";
 import { sortContracts } from "../../lib/contractSorting";
+import { PrintAddContractsDialog } from "./PrintAddContractsDialog";
 import { PrintContractIndexItem } from "./PrintContractIndexItem";
 
 export function ContractsPrintPage() {
   const { registry: ministers } = useMinisters();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, can } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
@@ -25,6 +26,8 @@ export function ContractsPrintPage() {
   const lastAfterPrintAtRef = useRef<number | null>(null);
   const listPrintInProgressRef = useRef(false);
   const listPrintCleanupRef = useRef<(() => void) | null>(null);
+  const [addingContracts, setAddingContracts] = useState(false);
+  const addedBatchRef = useRef<string | null>(null);
   const [indexVisible, setIndexVisible] = useState(true);
   const documentsRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef<HTMLElement>(null);
@@ -42,10 +45,36 @@ export function ContractsPrintPage() {
   const ministersReady = printableContracts.every(contract => findContractMinister(contract, ministers));
 
   useEffect(() => {
-    setExcludedIds(new Set());
+    if (addedBatchRef.current !== `${workspaceId}:${idsParam}`) setExcludedIds(new Set());
+    addedBatchRef.current = null;
   }, [idsParam, workspaceId]);
 
+  function addContracts(addedIds: string[]) {
+    const nextIds = [...new Set([...ids, ...addedIds])].join(",");
+    addedBatchRef.current = `${workspaceId}:${nextIds}`;
+    setExcludedIds(previous => new Set([...previous].filter(id => !addedIds.includes(id))));
+    const params = new URLSearchParams(searchParams);
+    params.set("ids", nextIds);
+    setSearchParams(params, { replace: true });
+    setAddingContracts(false);
+    setIndexVisible(true);
+  }
+
   useEffect(() => () => listPrintCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    const preview = documentsRef.current;
+    if (!preview || typeof ResizeObserver === "undefined") return;
+    const resize = () => {
+      // Letter pages remain full size for printing; only the screen preview shrinks.
+      const scale = Math.min(1, Math.max(1, preview.clientWidth - 8) / 816);
+      preview.style.setProperty("--print-preview-scale", String(scale));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(preview);
+    resize();
+    return () => observer.disconnect();
+  }, [isLoading, data?.length]);
 
   function handlePrintList() {
     if (printableContracts.length === 0) return;
@@ -172,8 +201,8 @@ export function ContractsPrintPage() {
 
   return (
     <div className="print-stack">
-      <div className="section-header no-print">
-        <div>
+      <div className="section-header print-header no-print">
+        <div className="print-heading">
           <div className="section-title">Impression</div>
           <div className="print-page-selection" role="group" aria-label="Pages à imprimer">
             {CONTRACT_PAGES.map(page => (
@@ -188,7 +217,7 @@ export function ContractsPrintPage() {
                   ? selected.filter(value => value !== page)
                   : CONTRACT_PAGES.filter(value => value === page || selected.includes(value)))}
               >
-                <svg width="32" height="40" viewBox="0 0 32 40" fill="none" aria-hidden="true">
+                <svg width="22" height="28" viewBox="0 0 32 40" fill="none" aria-hidden="true">
                   <path d="M5 2h14l8 8v28H5V2Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
                   <path d="M19 2v8h8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
                   <text x="16" y="29" textAnchor="middle" fill="currentColor" fontSize="16" fontWeight="600">{page}</text>
@@ -207,6 +236,7 @@ export function ContractsPrintPage() {
         </div>
       </div>
 
+      {addingContracts && <div className="no-print"><PrintAddContractsDialog workspaceId={workspaceId} contracts={printableContracts} onAdd={addContracts} onClose={() => setAddingContracts(false)} /></div>}
       <div className={`print-preview-layout${indexVisible ? "" : " is-index-hidden"}`}>
         <aside className="print-index-panel no-print">
           <div className="print-index-toolbar">
@@ -222,6 +252,9 @@ export function ContractsPrintPage() {
             </button>
             <button className="btn btn-outline" onClick={handlePrintList} disabled={printableContracts.length === 0}>
               Imprimer la Liste
+            </button>
+            <button type="button" className="btn btn-outline print-add-button" aria-label="Ajouter des contrats" title="Ajouter des contrats" aria-haspopup="dialog" onClick={() => setAddingContracts(true)}>
+              <Plus size={18} aria-hidden="true" />
             </button>
           </div>
           <nav id="print-contract-index" hidden={!indexVisible} ref={indexRef} className="print-contract-index no-print" aria-label="Contrats sélectionnés">

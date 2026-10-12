@@ -7,6 +7,7 @@ import { RequireAuth } from "../features/auth/RequireAuth";
 import { ContractsListPage } from "../features/contracts/ContractsListPage";
 import { ContractNewPage } from "../features/contracts/ContractNewPage";
 import { ContractDetailPage } from "../features/contracts/ContractDetailPage";
+import { PrintHistoryPage } from "../features/contracts/PrintHistoryPage";
 import { ContractsPrintPage } from "../features/contracts/ContractsPrintPage";
 import { ContractPreviewPage } from "../features/contracts/ContractPreviewPage";
 import { ContractEditPage } from "../features/contracts/ContractEditPage";
@@ -43,6 +44,7 @@ export function AppRoutes() {
         }
       >
         <Route path="contrats" element={<ContractsListPage />} />
+        <Route path="contrats/historique-impressions" element={<DesktopOnlyContractFeature><PrintHistoryPage /></DesktopOnlyContractFeature>} />
         <Route path="grille-salariale" element={<Navigate to="/app/parametres/grille-salariale" replace />} />
         <Route path="listes" element={<ListsPage />} />
         <Route path="taches" element={<TasksPage />} />
