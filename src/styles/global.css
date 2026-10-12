@@ -4252,18 +4252,7 @@ img {
   }
 }
 
-/* Print History FAB */
-.print-history-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 950;
-}
-
-.print-history-fab.shifted {
-  bottom: 96px;
-}
-
+/* Print history */
 .print-history-panel {
   position: fixed;
   right: 24px;
@@ -10813,3 +10802,9 @@ body,
 .print-history-batch-open time { display: block; margin-top: 3px; font-size: 11px; color: var(--ink-muted); }
 .print-history-batch-open:hover strong { color: var(--accent); }
 .print-history-batch-open:disabled { cursor: default; }
+
+.print-history-panel.floating-overlay {
+  right: auto;
+  bottom: auto;
+  max-height: min(60vh, calc(100dvh - 16px));
+}

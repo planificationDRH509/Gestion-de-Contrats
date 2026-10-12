@@ -1,3 +1,4 @@
+import { FloatingOverlay } from "../../app/ui/FloatingOverlay";
 import { contractMandateWarning } from "./ContractMandateAlert";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
@@ -126,6 +127,7 @@ export function ContractsListPage() {
   const fiscalYearIsPast = isPastFiscalYear(fiscalYear);
   const currentFiscalYear = getFiscalYearForDate(new Date());
 
+  const [printHistoryAnchor, setPrintHistoryAnchor] = useState<HTMLButtonElement | null>(null);
   const [printHistoryOpen, setPrintHistoryOpen] = useState(false);
   const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>(() =>
     loadPrintHistory(userId, workspaceId)
@@ -1412,6 +1414,26 @@ export function ContractsListPage() {
     }
   }
 
+  function renderPrintHistoryButton() {
+    if (isMobile) return null;
+    return (
+      <button
+        type="button"
+        className="contracts-import"
+        aria-expanded={printHistoryOpen}
+        aria-controls="print-history-panel"
+        aria-haspopup="dialog"
+        onClick={event => {
+          setPrintHistoryAnchor(event.currentTarget);
+          setPrintHistoryOpen(open => !open);
+        }}
+      >
+        <span className="material-symbols-rounded icon" aria-hidden="true">receipt_long</span>
+        <span>Historique d'Impressions</span>
+      </button>
+    );
+  }
+
   return (
     <div className={`page-container contracts-page${activeView === "dossiers" ? " contracts-dossiers-view" : ""}`}>
       {listsQuery.isError && <p className="list-notice" role="status">Listes non actualisées : {listError(listsQuery.error)} <button className="btn btn-outline" onClick={() => void listsQuery.refetch()}>Réessayer</button></p>}
@@ -1718,14 +1740,19 @@ export function ContractsListPage() {
             <div className="contracts-list">
               {items.length === 0 ? (
                 <>
-                  {can("contracts.import") ? (
-                    <div className="contracts-header">
+                  <div className="contracts-header">
+                    {can("contracts.import") ? (
                       <button type="button" className="contracts-import" aria-label="Importer" onClick={() => setImportOpen(true)}>
                         <span className="material-symbols-rounded icon">file_upload</span>
                         <span>Importer</span>
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    <button type="button" className="contracts-import" aria-label="Formulaire" title="Formulaire">
+                      <span className="material-symbols-rounded icon">description</span>
+                      <span>Formulaire</span>
+                    </button>
+                    {renderPrintHistoryButton()}
+                  </div>
                   <div className="empty-state">Aucun contrat trouvé.</div>
                 </>
               ) : (
@@ -1762,6 +1789,7 @@ export function ContractsListPage() {
                       <span className="material-symbols-rounded icon">description</span>
                       <span>Formulaire</span>
                     </button>
+                    {renderPrintHistoryButton()}
                   </div>
                   {items.map((contract) => {
                     const hasComment = Boolean(contract.commentaire?.trim());
@@ -2724,11 +2752,23 @@ export function ContractsListPage() {
             </div>
           </div>
 
-      {!isMobile && printHistoryOpen ? (
-        <div className={`print-history-panel ${hasSelection ? "shifted" : ""}`}>
+      {!isMobile && printHistoryOpen && printHistoryAnchor?.isConnected ? (
+        <FloatingOverlay
+          anchor={printHistoryAnchor}
+          className="print-history-panel"
+          id="print-history-panel"
+          role="dialog"
+          aria-label="Historique d'Impressions"
+          onKeyDown={event => {
+            if (event.key === "Escape") {
+              setPrintHistoryOpen(false);
+              printHistoryAnchor.focus();
+            }
+          }}
+        >
           <div className="print-history-header">
             <div>
-              <div className="print-history-title">Historique impressions</div>
+              <div className="print-history-title">Historique d'Impressions</div>
               <div className="print-history-subtitle">{printHistoryGroups.length} entrée(s)</div>
             </div>
             <button
@@ -2831,22 +2871,8 @@ export function ContractsListPage() {
               Ajouter
             </button>
           </div>
-        </div>
+        </FloatingOverlay>
       ) : null}
-
-      {!isMobile ? <div className={`print-history-fab ${hasSelection ? "shifted" : ""}`}>
-        <button
-          className="icon-btn primary"
-          type="button"
-          onClick={() => setPrintHistoryOpen((prev) => !prev)}
-          title="Historique d'impression"
-          style={{ width: "52px", height: "52px", borderRadius: "50%" }}
-        >
-          <span className="material-symbols-rounded" style={{ fontSize: "22px" }}>
-            {printHistoryOpen ? "close_fullscreen" : "receipt_long"}
-          </span>
-        </button>
-      </div> : null}
 
       {!isMobile && undoAction ? (
         <div className={`print-history-undo ${hasSelection ? "shifted" : ""}`}>

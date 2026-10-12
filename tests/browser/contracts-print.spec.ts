@@ -136,8 +136,10 @@ test('print index navigates through selected contracts without affecting printed
   await page.getByRole('button', { name: 'Imprimer', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   await page.goto('http://127.0.0.1:5179/app/contrats');
-  await page.getByTitle("Historique d'impression", { exact: true }).click();
+  await page.getByRole("button", { name: "Historique d'Impressions", exact: true }).click();
   const history = page.locator('.print-history-panel');
+  await expect(page.locator('.print-history-fab')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Formulaire', exact: true }).locator('..').getByRole('button', { name: "Historique d'Impressions" })).toBeVisible();
   await expect(history.locator('.print-history-item')).toHaveCount(1);
   await expect(history.getByRole('button', { name: /Lot de 2 contrats/ })).toBeVisible();
   await page.screenshot({ path: '/tmp/contracts-print-history-batch.png' });
