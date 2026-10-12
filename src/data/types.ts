@@ -238,12 +238,12 @@ export type CreateContractInput = Omit<
   "id" | "createdAt" | "updatedAt" | "deletedAt" | "salaryText"
 > & { id?: string; salaryText?: string };
 
-export type UpdateContractInput = Partial<CreateContractInput> & { id: string };
+export type UpdateContractInput = Partial<CreateContractInput> & { id: string; createdAt?: string };
 
 export type UpsertApplicantInput = Omit<
   Applicant,
   "id" | "createdAt" | "updatedAt" | "deletedAt"
-> & { id?: string };
+> & { id?: string; expectedUpdatedAt?: string };
 
 export type CreateDossierInput = {
   workspaceId: string;

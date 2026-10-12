@@ -92,6 +92,7 @@ var HttpError = /** @class */ (function (_super) {
     __extends(HttpError, _super);
     function HttpError(status, message) {
         var _this = _super.call(this, message) || this;
+        Object.setPrototypeOf(_this, HttpError.prototype);
         _this.status = status;
         return _this;
     }
@@ -864,10 +865,10 @@ function operatorFromRequest(req) {
 }
 function handleApiRequest(req, res) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, method, url, pathname, input, dump, timestamp, filename, rows, body, id, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, included_1, excluded_1, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextTitle, nextAssignment, nextDossierId, nextComment, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, actor, body, workspaceId, entry, rows, previous, label, prefix, timestamp, version, order, contracts, update, _d, contracts_1, contract, history_7, keywords, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
-        var _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10;
-        return __generator(this, function (_11) {
-            switch (_11.label) {
+        var db, method, url, pathname, input, dump, timestamp, filename, rows, body, id, workspaceId, rows, body, workspaceId, name_2, color, existing, timestamp, id, row, body, workspaceId, contractId, tagId, contract, tag, body, workspaceId, contractId, tagId, workspaceId, rows, body, workspaceId, nifs, ninus, params_1, filters, placeholders, placeholders, rows, body, workspaceId, existingId, nif, ninu, hasPhone, phone, gender, firstName, lastName, address, timestamp, byNif, byNinu, byExistingId, target, previousNif, nifOwner, saved, body, id, workspaceId, workspaceId, nif, ninu, row, applicantByIdMatch, nif, row, workspaceId, rows, body, workspaceId, name_3, existing, timestamp, id, created, body, id, workspaceId, timestamp, dossierDeletion, unassigned, dossierByIdMatch, id, row, id, body, workspaceId, current, nextNameRaw, nextName, duplicate, timestamp, updated, body, payload_1, workspaceId, page, pageSize, items, included_1, excluded_1, q_1, targetDossier_1, total, start, paged, body, workspaceId, ids, idSet_1, items, body, workspaceId, nif, identification, durationMonths, salaryNumber, position, assignment, status_1, timestamp, requestedFiscalYear, _a, id, fiscalYearLabel, fiscalYear, operator, history_1, createdRow, body, workspaceId, contractIds, timestamp, dossierId, operator, statement, updatedCount, _i, contractIds_1, contractId, current, previousDossierId, history_2, result, body, workspaceId, contractIds, status_2, timestamp, operator, statement, updatedCount, _b, contractIds_2, contractId, current, previousStatus, history_3, result, body, workspaceId, contractIds, durationMonths, timestamp, operator, statement, updatedCount, _c, contractIds_3, contractId, current, previousDuration, history_4, result, body, id, workspaceId, timestamp, current, history_5, body, id, workspaceId, result, contractByIdMatch, id, row, id, body, current, nextNif, linkedIdentification, nextStatus, nextDuration, nextSalaryNumber, nextTitle, nextAssignment, nextDossierId, nextComment, nextCreatedAt, timestamp, operator, history_6, changes_1, addChange, action, updatedRow, body, workspaceId, contractIds, timestamp, id, actor, body, workspaceId, entry, rows, previous, label, prefix, timestamp, version, order, contracts, update, _d, contracts_1, contract, history_7, keywords, searchParams, workspaceId, rows, result_1, body, workspaceId_1, data, now_1, insertAuto_2, searchParams, nifParam, rawNif, nifFormatted, msppUrl, formData, msppRes, html, injectedStyle, err_1;
+        var _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11;
+        return __generator(this, function (_12) {
+            switch (_12.label) {
                 case 0:
                     db = getDb();
                     method = ((_e = req.method) !== null && _e !== void 0 ? _e : "GET").toUpperCase();
@@ -889,7 +890,7 @@ function handleApiRequest(req, res) {
                     if (!(method === "POST")) return [3 /*break*/, 2];
                     return [4 /*yield*/, parseBody(req)];
                 case 1:
-                    input = _11.sent();
+                    input = _12.sent();
                     sendJson(res, 200, manageMinisters(db, input, operatorFromRequest(req).role));
                     return [2 /*return*/];
                 case 2:
@@ -924,7 +925,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/lists") && method === "POST")) return [3 /*break*/, 4];
                     return [4 /*yield*/, parseBody(req)];
                 case 3:
-                    body = _11.sent();
+                    body = _12.sent();
                     id = mutateContractList(db, asString(body.workspaceId), body, operatorFromRequest(req));
                     sendJson(res, 200, id);
                     return [2 /*return*/];
@@ -943,7 +944,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags") && method === "POST")) return [3 /*break*/, 6];
                     return [4 /*yield*/, parseBody(req)];
                 case 5:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     name_2 = normalizeTagName(asString(body.name));
                     color = asString(body.color).trim() || tagColor(name_2);
@@ -975,7 +976,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/assign") && method === "POST")) return [3 /*break*/, 8];
                     return [4 /*yield*/, parseBody(req)];
                 case 7:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -1002,7 +1003,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/tags/remove") && method === "POST")) return [3 /*break*/, 10];
                     return [4 /*yield*/, parseBody(req)];
                 case 9:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractId = asString(body.contractId);
                     tagId = asString(body.tagId);
@@ -1031,7 +1032,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/find-many") && method === "POST")) return [3 /*break*/, 12];
                     return [4 /*yield*/, parseBody(req)];
                 case 11:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     nifs = Array.isArray(body.nifs)
                         ? Array.from(new Set(body.nifs.map(asString).map(function (value) { return value.trim(); }).filter(Boolean)))
@@ -1073,7 +1074,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/upsert") && method === "POST")) return [3 /*break*/, 14];
                     return [4 /*yield*/, parseBody(req)];
                 case 13:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     existingId = asNullableString(body.id);
                     nif = asNullableString(body.nif);
@@ -1111,6 +1112,8 @@ function handleApiRequest(req, res) {
                             .get({ nif: existingId })
                         : undefined;
                     target = (_k = byExistingId !== null && byExistingId !== void 0 ? byExistingId : byNif) !== null && _k !== void 0 ? _k : byNinu;
+                    if (body.expectedUpdatedAt !== undefined && (!target || target.workspace_id !== workspaceId || (target.updated_at || target.created_at) !== body.expectedUpdatedAt))
+                        throw new HttpError(409, "La fiche d’identification a changé.");
                     if (target) {
                         previousNif = asString(target.nif);
                         if (previousNif !== nif) {
@@ -1157,7 +1160,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/applicants/soft-delete") && method === "POST")) return [3 /*break*/, 16];
                     return [4 /*yield*/, parseBody(req)];
                 case 15:
-                    body = _11.sent();
+                    body = _12.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1212,7 +1215,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers") && method === "POST")) return [3 /*break*/, 18];
                     return [4 /*yield*/, parseBody(req)];
                 case 17:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     name_3 = asString(body.name).trim();
                     if (!name_3) {
@@ -1255,7 +1258,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/dossiers/delete") && method === "POST")) return [3 /*break*/, 20];
                     return [4 /*yield*/, parseBody(req)];
                 case 19:
-                    body = _11.sent();
+                    body = _12.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
@@ -1296,7 +1299,7 @@ function handleApiRequest(req, res) {
                     id = decodeURIComponent(dossierByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
                 case 21:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     current = db
                         .prepare("\n        SELECT *\n        FROM dossiers\n        WHERE id = :id\n          AND workspace_id = :workspace_id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
@@ -1373,7 +1376,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/list") && method === "POST")) return [3 /*break*/, 24];
                     return [4 /*yield*/, parseBody(req)];
                 case 23:
-                    body = _11.sent();
+                    body = _12.sent();
                     payload_1 = body;
                     workspaceId = asString(payload_1.workspaceId);
                     if (!workspaceId) {
@@ -1456,7 +1459,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/by-ids") && method === "POST")) return [3 /*break*/, 26];
                     return [4 /*yield*/, parseBody(req)];
                 case 25:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     ids = Array.isArray(body.ids) ? body.ids.map(function (item) { return asString(item); }).filter(Boolean) : [];
                     if (!workspaceId) {
@@ -1476,7 +1479,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts") && method === "POST")) return [3 /*break*/, 28];
                     return [4 /*yield*/, parseBody(req)];
                 case 27:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId) || "workspace_default";
                     nif = asNullableString(body.nif);
                     if (!nif) {
@@ -1537,7 +1540,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/assign-dossier") && method === "POST")) return [3 /*break*/, 30];
                     return [4 /*yield*/, parseBody(req)];
                 case 29:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1586,7 +1589,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-status") && method === "POST")) return [3 /*break*/, 32];
                     return [4 /*yield*/, parseBody(req)];
                 case 31:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1638,7 +1641,7 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/update-duration") && method === "POST")) return [3 /*break*/, 34];
                     return [4 /*yield*/, parseBody(req)];
                 case 33:
-                    body = _11.sent();
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1687,17 +1690,19 @@ function handleApiRequest(req, res) {
                     if (!(pathname === "".concat(API_PREFIX, "/contracts/soft-delete") && method === "POST")) return [3 /*break*/, 36];
                     return [4 /*yield*/, parseBody(req)];
                 case 35:
-                    body = _11.sent();
+                    body = _12.sent();
                     id = asString(body.id);
                     workspaceId = asString(body.workspaceId);
                     if (!id || !workspaceId) {
                         throw new HttpError(400, "id et workspaceId sont obligatoires.");
                     }
                     timestamp = nowIso();
-                    current = db.prepare("\n      SELECT historique_saisie\n      FROM contrat\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").get({
+                    current = db.prepare("\n      SELECT historique_saisie, updated_at, created_at\n      FROM contrat\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").get({
                         id_contrat: id,
                         workspace_id: workspaceId
                     });
+                    if (body.expectedUpdatedAt !== undefined && (!current || (current.updated_at || current.created_at) !== body.expectedUpdatedAt))
+                        throw new HttpError(409, "Le contrat a changé.");
                     history_5 = parseHistory(asNullableString(current === null || current === void 0 ? void 0 : current.historique_saisie));
                     appendHistoryEntry(history_5, operatorFromRequest(req), "deletion", [], timestamp);
                     db.prepare("\n      UPDATE contrat\n      SET deleted_at = :deleted_at,\n          historique_saisie = :historique_saisie,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NULL\n    ").run({
@@ -1710,6 +1715,24 @@ function handleApiRequest(req, res) {
                     sendJson(res, 200, { ok: true });
                     return [2 /*return*/];
                 case 36:
+                    if (!(pathname === "".concat(API_PREFIX, "/contracts/permanent-delete") && method === "POST")) return [3 /*break*/, 38];
+                    if (operatorFromRequest(req).role !== "admin") {
+                        throw new HttpError(403, "Suppression définitive réservée aux administrateurs.");
+                    }
+                    return [4 /*yield*/, parseBody(req)];
+                case 37:
+                    body = _12.sent();
+                    id = asString(body.id);
+                    workspaceId = asString(body.workspaceId);
+                    if (!id || !workspaceId)
+                        throw new HttpError(400, "id et workspaceId sont obligatoires.");
+                    result = db.prepare("\n      DELETE FROM contrat\n      WHERE id_contrat = :id\n        AND workspace_id = :workspace_id\n        AND deleted_at IS NOT NULL\n    ").run({ id: id, workspace_id: workspaceId });
+                    if (result.changes === 0) {
+                        throw new HttpError(409, "Ce contrat n’est plus dans la corbeille. Actualisez la page.");
+                    }
+                    sendJson(res, 200, { ok: true });
+                    return [2 /*return*/];
+                case 38:
                     contractByIdMatch = pathname.match(/^\/api\/local\/contracts\/([^/]+)$/);
                     if (contractByIdMatch && method === "GET") {
                         id = decodeURIComponent(contractByIdMatch[1]);
@@ -1719,17 +1742,19 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, row ? mapContract(row) : null);
                         return [2 /*return*/];
                     }
-                    if (!(contractByIdMatch && method === "PATCH")) return [3 /*break*/, 38];
+                    if (!(contractByIdMatch && method === "PATCH")) return [3 /*break*/, 40];
                     id = decodeURIComponent(contractByIdMatch[1]);
                     return [4 /*yield*/, parseBody(req)];
-                case 37:
-                    body = _11.sent();
+                case 39:
+                    body = _12.sent();
                     current = db
                         .prepare("\n        SELECT *\n        FROM contrat\n        WHERE id_contrat = :id\n          AND deleted_at IS NULL\n        LIMIT 1\n      ")
                         .get({ id: id });
                     if (!current) {
                         throw new HttpError(404, "Contrat introuvable.");
                     }
+                    if (body.expectedUpdatedAt !== undefined && (current.updated_at || current.created_at) !== body.expectedUpdatedAt)
+                        throw new HttpError(409, "Le contrat a changé.");
                     nextNif = (_y = asNullableString(body.nif)) !== null && _y !== void 0 ? _y : asString(current.nif);
                     if (!nextNif) {
                         throw new HttpError(400, "Le NIF est obligatoire.");
@@ -1765,6 +1790,9 @@ function handleApiRequest(req, res) {
                     nextComment = body.commentaire !== undefined
                         ? asNullableString(body.commentaire)
                         : asNullableString(current.commentaire);
+                    nextCreatedAt = body.createdAt === undefined ? asString(current.created_at) : (_z = toValidDate(asString(body.createdAt))) === null || _z === void 0 ? void 0 : _z.toISOString();
+                    if (!nextCreatedAt)
+                        throw new HttpError(400, "Date de création invalide.");
                     timestamp = nowIso();
                     operator = operatorFromRequest(req);
                     history_6 = parseHistory(asNullableString(current.historique_saisie));
@@ -1774,6 +1802,7 @@ function handleApiRequest(req, res) {
                             changes_1.push({ field: field, previousValue: previousValue, newValue: newValue });
                         }
                     };
+                    addChange("createdAt", asString(current.created_at), nextCreatedAt);
                     addChange("nif", asString(current.nif), nextNif);
                     addChange("status", asString(current.status), nextStatus);
                     addChange("durationMonths", asInteger(current.duree_contrat, 12), nextDuration);
@@ -1792,7 +1821,7 @@ function handleApiRequest(req, res) {
                                     ? "comment"
                                     : "modification";
                     appendHistoryEntry(history_6, operator, action, changes_1, timestamp);
-                    db.prepare("\n      UPDATE contrat\n      SET nif = :nif,\n          duree_contrat = :duree_contrat,\n          salaire_en_chiffre = :salaire_en_chiffre,\n          titre = :titre,\n          lieu_affectation = :lieu_affectation,\n          historique_saisie = :historique_saisie,\n          commentaire = :commentaire,\n          dossier_id = :dossier_id,\n          status = :status,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n    ").run({
+                    db.prepare("\n      UPDATE contrat\n      SET nif = :nif,\n          duree_contrat = :duree_contrat,\n          salaire_en_chiffre = :salaire_en_chiffre,\n          titre = :titre,\n          lieu_affectation = :lieu_affectation,\n          historique_saisie = :historique_saisie,\n          commentaire = :commentaire,\n          dossier_id = :dossier_id,\n          status = :status,\n          annee_fiscale = :annee_fiscale,\n          created_at = :created_at,\n          updated_at = :updated_at\n      WHERE id_contrat = :id_contrat\n    ").run({
                         id_contrat: id,
                         nif: nextNif,
                         duree_contrat: nextDuration,
@@ -1803,6 +1832,8 @@ function handleApiRequest(req, res) {
                         commentaire: nextComment,
                         dossier_id: nextDossierId,
                         status: nextStatus,
+                        annee_fiscale: body.annee_fiscale !== undefined ? asNullableString(body.annee_fiscale) : asNullableString(current.annee_fiscale),
+                        created_at: nextCreatedAt,
                         updated_at: timestamp
                     });
                     updatedRow = db
@@ -1810,11 +1841,11 @@ function handleApiRequest(req, res) {
                         .get({ id: id });
                     sendJson(res, 200, mapContract(updatedRow));
                     return [2 /*return*/];
-                case 38:
-                    if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 40];
+                case 40:
+                    if (!(pathname === "".concat(API_PREFIX, "/print-jobs") && method === "POST")) return [3 /*break*/, 42];
                     return [4 /*yield*/, parseBody(req)];
-                case 39:
-                    body = _11.sent();
+                case 41:
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     contractIds = Array.isArray(body.contractIds)
                         ? body.contractIds.map(function (item) { return asString(item); }).filter(Boolean)
@@ -1839,14 +1870,14 @@ function handleApiRequest(req, res) {
                         printedAt: timestamp
                     });
                     return [2 /*return*/];
-                case 40:
-                    if (!(pathname === "".concat(API_PREFIX, "/institutions") && method === "POST")) return [3 /*break*/, 42];
+                case 42:
+                    if (!(pathname === "".concat(API_PREFIX, "/institutions") && method === "POST")) return [3 /*break*/, 44];
                     actor = operatorFromRequest(req);
                     if (actor.role !== 'admin')
                         throw new HttpError(403, 'Modification réservée aux administrateurs.');
                     return [4 /*yield*/, parseBody(req)];
-                case 41:
-                    body = _11.sent();
+                case 43:
+                    body = _12.sent();
                     workspaceId = asString(body.workspaceId);
                     entry = body.entry;
                     if (!workspaceId || !entry || typeof entry.id !== 'string' || typeof entry.label !== 'string')
@@ -1861,17 +1892,17 @@ function handleApiRequest(req, res) {
                     previous = db.prepare('SELECT * FROM autocompletion WHERE id=?').get(entry.id);
                     if (previous && (previous.workspace_id !== workspaceId || previous.type !== 'institution'))
                         throw new HttpError(403, 'Institution inaccessible.');
-                    if (Number((_z = previous === null || previous === void 0 ? void 0 : previous.version) !== null && _z !== void 0 ? _z : 0) !== entry.version)
+                    if (Number((_0 = previous === null || previous === void 0 ? void 0 : previous.version) !== null && _0 !== void 0 ? _0 : 0) !== entry.version)
                         throw new HttpError(409, 'Cette institution a changé. Rechargez la liste.');
                     label = entry.label.trim();
-                    prefix = entry.prefix === undefined ? asNullableString(previous === null || previous === void 0 ? void 0 : previous.prefix) : ((_0 = entry.prefix) === null || _0 === void 0 ? void 0 : _0.trim()) || null;
+                    prefix = entry.prefix === undefined ? asNullableString(previous === null || previous === void 0 ? void 0 : previous.prefix) : ((_1 = entry.prefix) === null || _1 === void 0 ? void 0 : _1.trim()) || null;
                     timestamp = nowIso();
-                    version = ((_1 = entry.version) !== null && _1 !== void 0 ? _1 : 0) + 1;
+                    version = ((_2 = entry.version) !== null && _2 !== void 0 ? _2 : 0) + 1;
                     order = previous ? Number(previous.order_index) : rows.reduce(function (m, r) { return Math.max(m, Number(r.order_index)); }, -1) + 1;
                     db.exec('BEGIN TRANSACTION');
                     try {
                         if (previous) {
-                            db.prepare('UPDATE autocompletion SET label=?,prefix=?,department=?,commune=?,institution_type=?,source_url=?,version=?,updated_at=? WHERE id=?').run(label, prefix, (_2 = entry.department) !== null && _2 !== void 0 ? _2 : null, (_3 = entry.commune) !== null && _3 !== void 0 ? _3 : null, (_4 = entry.institutionType) !== null && _4 !== void 0 ? _4 : null, (_5 = entry.source) !== null && _5 !== void 0 ? _5 : null, version, timestamp, entry.id);
+                            db.prepare('UPDATE autocompletion SET label=?,prefix=?,department=?,commune=?,institution_type=?,source_url=?,version=?,updated_at=? WHERE id=?').run(label, prefix, (_3 = entry.department) !== null && _3 !== void 0 ? _3 : null, (_4 = entry.commune) !== null && _4 !== void 0 ? _4 : null, (_5 = entry.institutionType) !== null && _5 !== void 0 ? _5 : null, (_6 = entry.source) !== null && _6 !== void 0 ? _6 : null, version, timestamp, entry.id);
                             if (previous.label !== label) {
                                 contracts = db.prepare('SELECT id_contrat,historique_saisie FROM contrat WHERE workspace_id=? AND lieu_affectation=?').all(workspaceId, asString(previous.label));
                                 update = db.prepare('UPDATE contrat SET lieu_affectation=?,historique_saisie=?,updated_at=? WHERE id_contrat=?');
@@ -1884,7 +1915,7 @@ function handleApiRequest(req, res) {
                             }
                         }
                         else {
-                            db.prepare("INSERT INTO autocompletion(id,type,label,prefix,department,commune,institution_type,source_url,version,address_keywords,order_index,workspace_id,created_at,updated_at) VALUES (?,'institution',?,?,?,?,?,?,?,?,?,?,?,?)").run(entry.id, label, prefix, (_6 = entry.department) !== null && _6 !== void 0 ? _6 : null, (_7 = entry.commune) !== null && _7 !== void 0 ? _7 : null, (_8 = entry.institutionType) !== null && _8 !== void 0 ? _8 : null, (_9 = entry.source) !== null && _9 !== void 0 ? _9 : null, version, JSON.stringify((_10 = entry.addressKeywords) !== null && _10 !== void 0 ? _10 : []), order, workspaceId, timestamp, timestamp);
+                            db.prepare("INSERT INTO autocompletion(id,type,label,prefix,department,commune,institution_type,source_url,version,address_keywords,order_index,workspace_id,created_at,updated_at) VALUES (?,'institution',?,?,?,?,?,?,?,?,?,?,?,?)").run(entry.id, label, prefix, (_7 = entry.department) !== null && _7 !== void 0 ? _7 : null, (_8 = entry.commune) !== null && _8 !== void 0 ? _8 : null, (_9 = entry.institutionType) !== null && _9 !== void 0 ? _9 : null, (_10 = entry.source) !== null && _10 !== void 0 ? _10 : null, version, JSON.stringify((_11 = entry.addressKeywords) !== null && _11 !== void 0 ? _11 : []), order, workspaceId, timestamp, timestamp);
                         }
                         db.exec('COMMIT');
                     }
@@ -1896,10 +1927,10 @@ function handleApiRequest(req, res) {
                     try {
                         keywords = previous ? JSON.parse(asString(previous.address_keywords) || '[]') : entry.addressKeywords;
                     }
-                    catch (_12) { }
+                    catch (_13) { }
                     sendJson(res, 200, __assign(__assign({}, entry), { label: label, prefix: prefix, addressKeywords: keywords, order: order, version: version }));
                     return [2 /*return*/];
-                case 42:
+                case 44:
                     if (pathname === "".concat(API_PREFIX, "/autocompletion") && method === "GET") {
                         searchParams = url.searchParams;
                         workspaceId = searchParams.get("workspaceId") || "workspace_default";
@@ -1959,10 +1990,10 @@ function handleApiRequest(req, res) {
                         sendJson(res, 200, result_1);
                         return [2 /*return*/];
                     }
-                    if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 44];
+                    if (!(pathname === "".concat(API_PREFIX, "/autocompletion/sync") && method === "POST")) return [3 /*break*/, 46];
                     return [4 /*yield*/, parseBody(req)];
-                case 43:
-                    body = _11.sent();
+                case 45:
+                    body = _12.sent();
                     workspaceId_1 = asString(body.workspaceId) || "workspace_default";
                     data = body.data;
                     if (!data || !workspaceId_1)
@@ -2010,8 +2041,8 @@ function handleApiRequest(req, res) {
                         throw new HttpError(500, "Erreur de sync autocompletion." + err.message);
                     }
                     return [2 /*return*/];
-                case 44:
-                    if (!(pathname === "".concat(API_PREFIX, "/mspp/verify") && method === "GET")) return [3 /*break*/, 50];
+                case 46:
+                    if (!(pathname === "".concat(API_PREFIX, "/mspp/verify") && method === "GET")) return [3 /*break*/, 52];
                     searchParams = url.searchParams;
                     nifParam = searchParams.get("nif");
                     if (!nifParam) {
@@ -2020,9 +2051,9 @@ function handleApiRequest(req, res) {
                         res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Le NIF est obligatoire.</p>");
                         return [2 /*return*/];
                     }
-                    _11.label = 45;
-                case 45:
-                    _11.trys.push([45, 48, , 49]);
+                    _12.label = 47;
+                case 47:
+                    _12.trys.push([47, 50, , 51]);
                     rawNif = nifParam.replace(/\D/g, "");
                     nifFormatted = rawNif;
                     if (rawNif.length === 10) {
@@ -2039,11 +2070,11 @@ function handleApiRequest(req, res) {
                                 "User-Agent": "Mozilla/5.0 (compatible)"
                             }
                         })];
-                case 46:
-                    msppRes = _11.sent();
+                case 48:
+                    msppRes = _12.sent();
                     return [4 /*yield*/, msppRes.text()];
-                case 47:
-                    html = _11.sent();
+                case 49:
+                    html = _12.sent();
                     // Convert relative URLs to absolute URLs so CSS and images load correctly
                     html = html.replace(/href="\/(?!\/)/g, 'href="https://mspp.gouv.ht/');
                     html = html.replace(/src="\/(?!\/)/g, 'src="https://mspp.gouv.ht/');
@@ -2060,15 +2091,15 @@ function handleApiRequest(req, res) {
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.setHeader("Cache-Control", "no-store");
                     res.end(html);
-                    return [3 /*break*/, 49];
-                case 48:
-                    err_1 = _11.sent();
+                    return [3 /*break*/, 51];
+                case 50:
+                    err_1 = _12.sent();
                     res.statusCode = 500;
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
                     res.end("<p style='font-family:sans-serif;padding:20px;color:red'>Erreur de connexion au site du MSPP : ".concat(err_1.message, "</p>"));
-                    return [3 /*break*/, 49];
-                case 49: return [2 /*return*/];
-                case 50: throw new HttpError(404, "Route API locale introuvable.");
+                    return [3 /*break*/, 51];
+                case 51: return [2 /*return*/];
+                case 52: throw new HttpError(404, "Route API locale introuvable.");
             }
         });
     });

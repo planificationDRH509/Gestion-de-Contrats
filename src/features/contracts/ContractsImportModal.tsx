@@ -1,3 +1,4 @@
+import { loadImportBatches, type ImportBatch } from "./contractImportBatch";
 import { contractMandateWarning } from "./ContractMandateAlert";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
@@ -13,6 +14,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ClipboardEvent } f
 import type { AppUser, Contract, Dossier } from "../../data/types";
 import {
   CONTRACT_IMPORT_FIELDS,
+  findImportDuplicate,
   resolveImportRows,
   getImportErrorFields,
   MAX_IMPORT_ROWS,
@@ -31,12 +33,15 @@ import {
 } from "./contractImport";
 import {
   loadContractImportDraft,
-  saveContractImportDraft
+  saveContractImportDraft,
+  loadImportMapping,
+  saveImportMapping
 } from "./contractImportDraft";
 import {
   useImportApplicantMatches,
   useImportContractHistory,
   useImportContracts,
+  useUndoContractImport,
   type ContractImportProgress
 } from "./contractsApi";
 import { useFiscalYear } from "../settings/settingsApi";
@@ -83,6 +88,10 @@ export function ContractsImportModal({
   onImported
 }: ContractsImportModalProps) {
   const { entries: salaryGrid, data: salaryGridData } = useSalaryGrid();
+  const [batchId, setBatchId] = useState(() => createId());
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [undoBatchId, setUndoBatchId] = useState("");
+  const undoImport = useUndoContractImport();
   const [clipboardText, setClipboardText] = useState("");
   const [mapping, setMapping] = useState<ContractImportMapping>([]);
   const [editableRows, setEditableRows] = useState<ContractImportEditableRow[]>([]);
@@ -94,7 +103,7 @@ export function ContractsImportModal({
   const [importError, setImportError] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<ContractImportProgress | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
-  const [viewFilter, setViewFilter] = useState<"all" | "errors" | "differences" | "imported">("all");
+  const [viewFilter, setViewFilter] = useState<"all" | "remaining" | "errors" | "differences" | "imported">("all");
   const [sourceOpen, setSourceOpen] = useState(true);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -106,6 +115,7 @@ export function ContractsImportModal({
   const restoringRef = useRef(false);
 
   const importContracts = useImportContracts();
+  const busy = importContracts.isPending || undoImport.isPending;
   const { fiscalYear } = useFiscalYear();
   const { registry: ministerRegistry } = useMinisters();
   const currentMinister = ministerRegistry?.ministers.find(minister => minister.id === ministerRegistry.currentMinisterId);
@@ -114,7 +124,7 @@ export function ContractsImportModal({
 
   const table = useMemo(() => parsePastedContractTable(clipboardText), [clipboardText]);
   const draftSnapshot = { clipboardText, mapping, editableRows, selectedRowIds, bulkField, bulkValue,
-    selectedDossierId, responsibleUserId, fiscalYear: targetFiscalYear };
+    selectedDossierId, responsibleUserId, fiscalYear: targetFiscalYear, batchId };
   const draftRef = useRef(draftSnapshot);
   draftRef.current = draftSnapshot;
 
@@ -130,11 +140,15 @@ export function ContractsImportModal({
     if (!isOpen) return;
     restoringRef.current = true;
     const draft = loadContractImportDraft(workspaceId, currentUserId);
+    const savedBatches = loadImportBatches(workspaceId, currentUserId);
+    const undoneRows = new Set(savedBatches.flatMap(batch => batch.entries.filter(entry => entry.undone).map(entry => entry.rowId)));
     if (draft) {
       setClipboardText(draft.clipboardText);
       setMapping(draft.mapping);
       setEditableRows((draft.editableRows.length ? draft.editableRows : buildImportEditableRows(parsePastedContractTable(draft.clipboardText), draft.mapping))
-        .map(row => ({ ...row, contractId: row.contractId || createId() })));
+        .map(row => row.contractId && undoneRows.has(row.contractId)
+          ? { ...row, contractId: createId(), importedContractId: undefined, importError: undefined, duplicateResolution: undefined }
+          : { ...row, contractId: row.contractId || createId() }));
       setSelectedRowIds(draft.selectedRowIds);
       setBulkField(draft.bulkField);
       setBulkValue(draft.bulkValue);
@@ -150,8 +164,11 @@ export function ContractsImportModal({
       setSelectedDossierId("");
       setResponsibleUserId(currentUserId);
     }
+    setBatchId(draft?.batchId || createId());
+    setBatches(savedBatches);
+    setUndoBatchId(savedBatches.find(batch => batch.entries.some(entry => entry.after && !entry.undone))?.id ?? "");
     setImportFiscalYear(draft?.fiscalYear || fiscalYear);
-    setViewFilter("all");
+    setViewFilter(draft?.editableRows.some(row => row.importedContractId) ? "remaining" : "all");
     setActiveRowId(null);
     setSourceOpen(!draft?.clipboardText);
     setImportError(null);
@@ -191,8 +208,18 @@ export function ContractsImportModal({
     bulkField,
     bulkValue,
     workspaceId,
-    targetFiscalYear
+    targetFiscalYear,
+    batchId
   ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const save = () => { if (!restoringRef.current) persistDraft(); };
+    const onVisibility = () => { if (document.visibilityState === "hidden") save(); };
+    window.addEventListener("pagehide", save);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { save(); window.removeEventListener("pagehide", save); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [isOpen, workspaceId, currentUserId]);
 
   const userOptions = useMemo<UserOption[]>(() => {
     const options = appUsers
@@ -264,7 +291,6 @@ export function ContractsImportModal({
     (row) => selectedRowIdSet.has(row.id) && !row.excluded && !completedIds.has(row.id)
   );
   const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
-  const selectedErrorRowCount = selectedRows.filter((row) => row.errors.length > 0).length;
   const errorRowCount = includedRows.filter((row) => row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError).length;
   const errorRowIds = useMemo(
     () =>
@@ -278,6 +304,7 @@ export function ContractsImportModal({
   const isOverflow = table.rows.length > MAX_IMPORT_ROWS;
   const differenceRowIds = new Set(resolvedRows.filter(row => !row.excluded && !row.importedContractId && (differencesById.get(row.id)?.length ?? 0) > 0).map(row => row.id));
   const previewRows = resolvedRows.filter(row => viewFilter === "all" ||
+    (viewFilter === "remaining" && !row.importedContractId && !row.excluded) ||
     (viewFilter === "errors" && errorRowIds.has(row.id)) ||
     (viewFilter === "differences" && differenceRowIds.has(row.id)) ||
     (viewFilter === "imported" && completedIds.has(row.id)));
@@ -298,12 +325,11 @@ export function ContractsImportModal({
     Boolean(responsibleUserId) &&
     mappingIssues.missingFields.length === 0 &&
     mappingIssues.duplicateFields.length === 0 &&
-    selectedErrorRowCount === 0 &&
     !isOverflow &&
     !isCheckingIdentities &&
     !identityMatches.isError &&
     !history.isError &&
-    !importContracts.isPending;
+    !busy;
 
   useEffect(() => {
     if (previewPage > totalPreviewPages) setPreviewPage(totalPreviewPages);
@@ -351,10 +377,11 @@ export function ContractsImportModal({
   }
 
   function replaceClipboard(text: string) {
-    if (importContracts.isPending) return;
+    if (busy) return;
     const nextTable = parsePastedContractTable(text);
-    const nextMapping = inferImportMapping(nextTable.headers);
+    const nextMapping = loadImportMapping(workspaceId, currentUserId, nextTable.headers) ?? inferImportMapping(nextTable.headers);
     const rows = buildImportEditableRows(nextTable, nextMapping).slice(0, MAX_IMPORT_ROWS);
+    setBatchId(createId());
     setClipboardText(text);
     setMapping(nextMapping);
     setEditableRows(rows);
@@ -374,9 +401,15 @@ export function ContractsImportModal({
     const mappedRows = buildImportEditableRows(table, next).slice(0, MAX_IMPORT_ROWS);
     const changedFields = [mapping[index], field].filter((item): item is ContractImportEditableField => Boolean(item) && item !== "ignore");
     setMapping(next);
+    const issues = validateImportMapping(next);
+    if (!issues.missingFields.length && !issues.duplicateFields.length) {
+      try { saveImportMapping(workspaceId, currentUserId, table.headers, next); }
+      catch { setImportError("Impossible de mémoriser les colonnes."); }
+    }
     setEditableRows(previous => previous.map((row, rowIndex) => {
-      if (row.importedContractId) return row;
+      if (row.importedContractId || hasAttempt(row)) return row;
       const updated = { ...row, importError: undefined };
+      if (changedFields.includes("nif")) updated.duplicateResolution = undefined;
       for (const changed of changedFields) updated[changed] = mappedRows[rowIndex]?.[changed] ?? "";
       return updated;
     }));
@@ -386,8 +419,34 @@ export function ContractsImportModal({
   function updateEditableRow(rowId: string, field: ContractImportEditableField, value: string, clear = false) {
     setEditableRows((prev) => prev.map((row) => row.id === rowId && !row.importedContractId && !hasAttempt(row) ? {
       ...row, [field]: value, importError: undefined,
+      duplicateResolution: field === "nif" ? undefined : row.duplicateResolution,
       clearedFields: clear ? [...new Set([...(row.clearedFields ?? []), field])] : row.clearedFields?.filter(item => item !== field)
     } : row));
+  }
+
+  const selectedDuplicates = selectedPendingRows.filter(row => !row.excluded && !hasAttempt(row) && findImportDuplicate(row, history.data ?? [], targetFiscalYear));
+  function resolveSelectedDuplicates(action: "keep" | "replace") {
+    const ids = new Set(selectedDuplicates.map(row => row.id));
+    setEditableRows(rows => rows.map(row => {
+      const duplicate = ids.has(row.id) ? findImportDuplicate(row, history.data ?? [], targetFiscalYear) : undefined;
+      return duplicate ? { ...row, importError: undefined, duplicateResolution: { contractId: duplicate.id, action } } : row;
+    }));
+  }
+
+  async function handleUndo() {
+    if (busy || !undoBatchId) return;
+    setImportError(null);
+    try {
+      const result = await undoImport.mutateAsync({ workspaceId, userId: currentUserId, batchId: undoBatchId });
+      const ids = new Set(result.undoneRowIds);
+      const rows = draftRef.current.editableRows.map(row => row.contractId && ids.has(row.contractId)
+        ? { ...row, contractId: createId(), importedContractId: undefined, importError: undefined, duplicateResolution: undefined } : row);
+      setEditableRows(rows);
+      persistDraft({ ...draftRef.current, editableRows: rows });
+      setBatches(loadImportBatches(workspaceId, currentUserId));
+      setImportError(result.errors.join("\n") || null);
+      if (result.undoneRowIds.length) { onImported(0); setViewFilter("remaining"); }
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Annulation impossible."); }
   }
 
   function toggleRowSelection(rowId: string) {
@@ -437,7 +496,7 @@ export function ContractsImportModal({
   }
 
   function closeModal() {
-    if (importContracts.isPending) return;
+    if (busy) return;
     persistDraft();
     onClose();
   }
@@ -459,20 +518,20 @@ export function ContractsImportModal({
     }
     if (
       mappingIssues.missingFields.length > 0 ||
-      mappingIssues.duplicateFields.length > 0 ||
-      selectedErrorRowCount > 0
+      mappingIssues.duplicateFields.length > 0
     ) {
-      setImportError(
-        "Corrigez les lignes en erreur, ou sélectionnez les erreurs puis retirez-les de l'import."
-      );
+      setImportError("Vérifiez les correspondances des colonnes.");
       return;
     }
 
     if (!canImport || !persistDraft()) return;
     setImportFiscalYear(targetFiscalYear);
     try {
+      saveImportMapping(workspaceId, currentUserId, table.headers, mapping);
       const result = await importContracts.mutateAsync({
         workspaceId,
+        batchId,
+        userId: currentUserId,
         dossierId: selectedDossierId || null,
         onDossierCreated: (id) => {
           setSelectedDossierId(id);
@@ -490,7 +549,9 @@ export function ContractsImportModal({
         rows: selectedValidRows.map((row) => ({ ...row.values!, sourceRowNumber: row.sourceRowNumber, position: genderedTitle(salaryGrid, row.values!.position, row.values!.gender) })),
         onProgress: setImportProgress
       });
-      if (result.contracts.length) onImported(result.contracts.length);
+      setBatches(loadImportBatches(workspaceId, currentUserId));
+      setUndoBatchId(batchId);
+      if (result.contracts.length) { onImported(result.contracts.length); setViewFilter("remaining"); }
       setImportProgress(null);
     } catch (error) {
       console.error(error);
@@ -522,7 +583,8 @@ export function ContractsImportModal({
                 Dossier
                 <select
                   className="select"
-                  disabled={importContracts.isPending}
+                  disabled={busy}
+                  aria-label="Dossier"
                   value={selectedDossierId}
                   onChange={(event) => setSelectedDossierId(event.target.value)}
                 >
@@ -533,7 +595,7 @@ export function ContractsImportModal({
                 Responsable
                 <select
                   className="select"
-                  disabled={importContracts.isPending}
+                  disabled={busy}
                   value={responsibleUserId}
                   onChange={(event) => setResponsibleUserId(event.target.value)}
                 >
@@ -545,7 +607,7 @@ export function ContractsImportModal({
                 </select>
               </label>
             </div>
-          <button className="icon-btn" type="button" onClick={closeModal} title="Fermer" aria-label="Fermer" disabled={importContracts.isPending}>
+          <button className="icon-btn" type="button" onClick={closeModal} title="Fermer" aria-label="Fermer" disabled={busy}>
             <span className="material-symbols-rounded">close</span>
           </button>
         </div>
@@ -560,7 +622,7 @@ export function ContractsImportModal({
           </div>
         ) : null}
 
-        <fieldset className="contracts-import-controls" disabled={importContracts.isPending}>
+        <fieldset className="contracts-import-controls" disabled={busy}>
         <details className="import-source" open={sourceOpen}>
           <summary onClick={event => { event.preventDefault(); setSourceOpen(open => !open); }}>
             <span className="material-symbols-rounded" aria-hidden="true">content_paste</span>
@@ -640,6 +702,7 @@ export function ContractsImportModal({
               <div className="import-filters" role="group" aria-label="Filtrer les lignes">
                 {([
                   ["all", "Toutes", resolvedRows.length],
+                  ["remaining", "Restantes", includedRows.length],
                   ["errors", "Erreurs", errorRowIds.size],
                   ["differences", "Différences", differenceRowIds.size],
                   ["imported", "Importées", completedIds.size]
@@ -654,6 +717,10 @@ export function ContractsImportModal({
             {selectedPendingRows.length > 0 ? (
             <div className="contracts-import-bulkbar">
               <strong>{selectedPendingRows.length} sélectionnée(s)</strong>
+              {selectedDuplicates.length > 0 ? <div className="import-bulk-duplicates">
+                <button className="btn btn-outline" type="button" onClick={() => resolveSelectedDuplicates("keep")}>Garder les anciens ({selectedDuplicates.length})</button>
+                <button className="btn btn-outline" type="button" onClick={() => resolveSelectedDuplicates("replace")}>Remplacer les anciens ({selectedDuplicates.length})</button>
+              </div> : null}
               <label className="contracts-import-bulk-control">
                 Champ
                 <select
@@ -744,6 +811,7 @@ export function ContractsImportModal({
                 <tbody>
                   {visibleEditableRows.map((row) => {
                     const validation = validationById.get(row.id);
+                    const duplicate = findImportDuplicate(row, history.data ?? [], targetFiscalYear);
                     const fieldErrors = new Set([...(validation?.errorFields ?? []), ...getImportErrorFields(row.importError ? [row.importError] : [])]);
                     const locked = row.excluded || Boolean(row.importedContractId) || hasAttempt(row);
                     const clearButton = (field: ContractImportEditableField) => (
@@ -931,6 +999,22 @@ export function ContractsImportModal({
                             {clearButton("commentaire")}
                           </td>
                         </tr>
+                        {duplicate && !row.importedContractId ? (
+                          <tr><td colSpan={15} className="contracts-import-row-state">
+                            <div className="import-duplicate-actions" role="group" aria-label={`Doublon, ligne ${row.sourceRowNumber}`}>
+                              <strong>Ligne {row.sourceRowNumber} · Doublon</strong>
+                              {(["keep", "replace"] as const).map(action => (
+                                <button key={action} type="button" className="btn btn-outline"
+                                  disabled={locked || busy}
+                                  aria-pressed={row.duplicateResolution?.contractId === duplicate.id && row.duplicateResolution.action === action}
+                                  onClick={() => setEditableRows(current => current.map(item => item.id === row.id
+                                    ? { ...item, importError: undefined, duplicateResolution: { contractId: duplicate.id, action } } : item))}>
+                                  {action === "keep" ? "Garder l’ancien" : "Remplacer par le nouveau"}
+                                </button>
+                              ))}
+                            </div>
+                          </td></tr>
+                        ) : null}
                         {mandateWarning && <tr className="warning"><td colSpan={15}><div className="contract-mandate-warning" role="alert">Ligne {row.sourceRowNumber} · {mandateWarning}</div></td></tr>}
                         {Boolean(validation?.errors.length || row.importError) && !row.importedContractId ? (
                           <tr className={stateClass}>
@@ -993,7 +1077,7 @@ export function ContractsImportModal({
                         <div><small>Nouvelle</small><p>{newValue || "Vide"}</p></div>
                       </div>
                       <button className="btn btn-outline" type="button"
-                        disabled={importContracts.isPending || activeRow.excluded || Boolean(activeRow.importedContractId) || hasAttempt(activeRow)}
+                        disabled={busy || activeRow.excluded || Boolean(activeRow.importedContractId) || hasAttempt(activeRow)}
                         onClick={() => updateEditableRow(activeRow.id, field, oldValue, oldValue === "")}
                         aria-label={`Reprendre l’ancienne valeur : ${getImportFieldLabel(field)}, ligne ${activeRow.sourceRowNumber}`}>
                         Reprendre l’ancienne
@@ -1009,6 +1093,18 @@ export function ContractsImportModal({
 
         {importError ? <div className="form-error">{importError}</div> : null}
 
+        {batches.some(batch => batch.entries.some(entry => entry.after && !entry.undone)) ? <div className="import-batch-actions">
+          <select className="select" aria-label="Lot à annuler" value={undoBatchId} onChange={event => setUndoBatchId(event.target.value)} disabled={busy}>
+            <option value="">Choisir un lot</option>
+            {batches.filter(batch => batch.entries.some(entry => entry.after && !entry.undone)).map(batch => <option key={batch.id} value={batch.id}>
+              {new Date(batch.createdAt).toLocaleString("fr-FR")} · {batch.entries.filter(entry => entry.after && !entry.undone).length} contrat(s)
+            </option>)}
+          </select>
+          <button className="btn btn-outline" type="button" disabled={busy || !batches.find(batch => batch.id === undoBatchId)?.entries.some(entry => entry.after && !entry.undone)} onClick={() => void handleUndo()}>
+            {undoImport.isPending ? "Annulation…" : "Annuler le lot"}
+          </button>
+        </div> : null}
+
         <div className="contracts-import-actions">
           <div className="import-summary" aria-live="polite">
             <span>{completedIds.size} importée(s)</span>
@@ -1016,7 +1112,7 @@ export function ContractsImportModal({
             <span>{errorRowCount} à corriger</span>
             {isCheckingIdentities ? <span>Vérification…</span> : null}
           </div>
-          <button className="btn btn-outline" type="button" onClick={closeModal} disabled={importContracts.isPending}>
+          <button className="btn btn-outline" type="button" onClick={closeModal} disabled={busy}>
             Fermer
           </button>
           <button className="btn btn-primary" type="button" onClick={() => void handleImport()} disabled={!canImport}>

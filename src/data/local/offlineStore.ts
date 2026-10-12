@@ -139,6 +139,16 @@ export function cacheContract(contract: Contract) {
   cacheContracts([contract]);
 }
 
+export function removeCachedContract(id: string, workspaceId: string) {
+  const db = loadDb();
+  db.contracts = db.contracts.filter(contract => contract.id !== id || contract.workspaceId !== workspaceId);
+  db.contractTags = db.contractTags.filter(link => link.contractId !== id);
+  for (const list of db.contractLists.filter(list => list.workspaceId === workspaceId)) {
+    list.members = list.members.filter(member => member.id !== id);
+  }
+  saveDb(db);
+}
+
 export function cacheDossiers(dossiers: Dossier[]) {
   if (dossiers.length === 0) return;
   const db = loadDb();
@@ -308,6 +318,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     createdBy: input.createdBy
   };
 
+  if (input.expectedUpdatedAt !== undefined && (!existing || existing.workspaceId !== input.workspaceId || existing.updatedAt !== input.expectedUpdatedAt)) throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
   if (existing) {
     db.contracts = db.contracts.map(contract => {
       if (contract.workspaceId !== input.workspaceId || !(contract.applicantId === existing.id || (existing.nif && contract.nif === existing.nif))) return contract;

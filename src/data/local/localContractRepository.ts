@@ -1,3 +1,4 @@
+import { sameImportContract } from "../../features/contracts/contractImportBatch";
 import { assertContractDuration } from "../../lib/contractDuration";
 import { bindContractMinister, migrateLegacyContract, readMinistersCache } from "../../features/settings/ministersCache";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
@@ -15,6 +16,7 @@ import {
 import { createId } from "../../lib/uuid";
 import { loadDb, saveDb, selectDb, flushLocalDbWrites, type LocalDb } from "./localDb";
 import { queueOutbox } from "./localOutbox";
+import { getPendingContractIds, removeCachedContract } from "./offlineStore";
 import { getContractFiscalYear, matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { matchesContractSearch } from "../../lib/personSearch";
@@ -197,7 +199,7 @@ export class LocalContractRepository implements ContractRepository {
     return created;
   }
 
-  async update(input: UpdateContractInput): Promise<Contract> {
+  async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
     if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     const db = loadDb();
     const contractIndex = db.contracts.findIndex((contract) => contract.id === input.id);
@@ -205,6 +207,7 @@ export class LocalContractRepository implements ContractRepository {
       throw new Error("Contrat introuvable");
     }
     const previous = db.contracts[contractIndex];
+    if (expected && (previous.workspaceId !== expected.workspaceId || previous.updatedAt !== expected.updatedAt || !sameImportContract(withTags(previous, db), expected))) throw new Error("Le contrat a changé. Actualisez le lot avant de réessayer.");
     if (input.ministerId !== undefined && input.ministerId !== previous.ministerId) throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
     const timestamp = now();
     const nextValues: Partial<Contract> = {
@@ -426,8 +429,18 @@ export class LocalContractRepository implements ContractRepository {
     return updatedCount;
   }
 
-  async softDelete(id: string, workspaceId: string): Promise<void> {
+  async softDelete(id: string, workspaceId: string, expected?: Contract): Promise<void> {
+    const current = readCachedContract(id);
+    if (expected && (!current || current.workspaceId !== workspaceId || current.updatedAt !== expected.updatedAt || !sameImportContract(current, expected))) throw new Error("Le contrat a changé. Actualisez le lot avant de réessayer.");
     await this.applySoftDelete(id, workspaceId, true);
+  }
+
+  async permanentlyDelete(id: string, workspaceId: string): Promise<void> {
+    const contract = loadDb().contracts.find(item => item.id === id && item.workspaceId === workspaceId);
+    if (!contract?.deletedAt) throw new Error("Ce contrat n’est plus dans la corbeille. Actualisez la page.");
+    if (getPendingContractIds().has(id)) throw new Error("Synchronisez les modifications de ce contrat avant de le supprimer définitivement.");
+    removeCachedContract(id, workspaceId);
+    await flushLocalDbWrites();
   }
 
   async applySoftDelete(id: string, workspaceId: string, shouldQueue = false): Promise<void> {

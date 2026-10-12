@@ -33,6 +33,7 @@ const IMPORT_PREFIXED_POSITION = /^(d['’]|de\s|du\s|de la\s|des\s)/i;
 
 
 export type ContractImportDraft = {
+  duplicateResolution?: ImportDuplicateResolution;
   sourceRowNumber?: number;
   contractId?: string;
   gender: Gender;
@@ -73,6 +74,7 @@ export type ContractImportEditableField =
   | "commentaire";
 
 export type ContractImportEditableRow = Record<ContractImportEditableField, string> & {
+  duplicateResolution?: ImportDuplicateResolution;
   id: string;
   sourceRowNumber: number;
   excluded: boolean;
@@ -81,6 +83,24 @@ export type ContractImportEditableRow = Record<ContractImportEditableField, stri
   importError?: string;
   clearedFields?: ContractImportEditableField[];
 };
+
+export type ImportDuplicateResolution = { contractId: string; action: "keep" | "replace" };
+
+export function findImportDuplicate(row: { nif: string; contractId?: string }, contracts: Contract[], fiscalYear: string) {
+  return contracts.find(contract => !contract.deletedAt && contract.id !== row.contractId &&
+    normalizeNifKey(contract.nif || contract.applicantId || "") === normalizeNifKey(row.nif) &&
+    getContractFiscalYear(contract) === fiscalYear);
+}
+
+export function importDraftFromContract(contract: Contract): ContractImportDraft {
+  return {
+    gender: contract.gender, firstName: contract.firstName, lastName: contract.lastName,
+    nif: contract.nif || contract.applicantId || "", ninu: contract.ninu ?? null,
+    address: contract.address, phone: null, position: contract.position, assignment: contract.assignment,
+    salaryNumber: contract.salaryNumber, salaryText: contract.salaryText,
+    durationMonths: contract.durationMonths, commentaire: contract.commentaire ?? null
+  };
+}
 
 export type ContractImportValidatedEditableRow = {
   id: string;
@@ -307,7 +327,7 @@ export function validateImportMapping(mapping: ContractImportMapping) {
 
 function getMappedValue(row: string[], mapping: ContractImportMapping, field: DestinationFieldId) {
   const index = mapping.findIndex((mappedField) => mappedField === field);
-  const value = index >= 0 ? (row[index] ?? "").trim() : "";
+  const value = index >= 0 ? (row[index] ?? "").trim().replace(/[ \t\u00a0\u202f]+/g, " ") : "";
 
   if (field === "position") {
     return value.replace(IMPORT_PREFIXED_POSITION, "");
@@ -322,6 +342,7 @@ function getMappedValue(row: string[], mapping: ContractImportMapping, field: De
 }
 
 function normalizeNif(value: string) {
+  if (!/^[\d\s.\-]+$/.test(value.trim())) return null;
   const digits = value.replace(/\D/g, "");
   if (digits.length !== 10) return null;
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9)}`;
@@ -331,7 +352,7 @@ function normalizeNinu(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return { value: null, error: null };
   const digits = trimmed.replace(/\D/g, "");
-  if (digits.length !== 10) {
+  if (!/^[\d\s.\-]+$/.test(trimmed) || digits.length !== 10) {
     return { value: null, error: "Le NINU doit comporter exactement 10 chiffres." };
   }
   return { value: digits, error: null };
@@ -345,31 +366,23 @@ function normalizeGender(value: string): Gender | null {
 }
 
 export function parseImportMoney(value: string) {
-  const compact = value.trim().replace(/\s|\u00a0/g, "").replace(/[^\d,.-]/g, "");
-  if (!compact) return null;
-
-  const lastComma = compact.lastIndexOf(",");
-  const lastDot = compact.lastIndexOf(".");
+  // Accept recognised currency labels and full numeric formats, never a numeric prefix of junk.
+  const compact = value.trim().replace(/(?:HTG|GDES?|GOURDES?|USD|US\$)/gi, "").replace(/[$€\s\u00a0\u202f]/g, "");
+  if (!/^-?\d[\d.,]*$/.test(compact)) return null;
   let normalized = compact;
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    normalized =
-      lastComma > lastDot
-        ? compact.replace(/\./g, "").replace(",", ".")
-        : compact.replace(/,/g, "");
-  } else if (lastComma >= 0) {
-    const digitsAfterComma = compact.length - lastComma - 1;
-    normalized = digitsAfterComma > 0 && digitsAfterComma <= 2
-      ? compact.replace(",", ".")
-      : compact.replace(/,/g, "");
-  } else if (lastDot >= 0) {
-    const digitsAfterDot = compact.length - lastDot - 1;
-    normalized = digitsAfterDot === 3 ? compact.replace(/\./g, "") : compact;
-  }
-
-  const parsed = Number.parseFloat(normalized);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed;
+  if (/^-?\d{1,3}(?:[.,]\d{3})+$/.test(compact)) {
+    const separators = compact.match(/[.,]/g) ?? [];
+    if (new Set(separators).size !== 1) return null;
+    normalized = compact.replace(/[.,]/g, "");
+  } else if (/^-?\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(compact)) {
+    normalized = compact.replace(/\./g, "").replace(",", ".");
+  } else if (/^-?\d{1,3}(?:,\d{3})+\.\d{1,2}$/.test(compact)) {
+    normalized = compact.replace(/,/g, "");
+  } else if (/^-?\d+(?:[.,]\d{1,2})?$/.test(compact)) {
+    normalized = compact.replace(",", ".");
+  } else return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseDurationMonths(value: string) {
@@ -599,13 +612,13 @@ export function buildImportEditableRows(
       sourceRowNumber: index + 2,
       excluded: false,
       nif: normalizedNif ?? getMappedValue(row, mapping, "nif"),
-      ninu: getMappedValue(row, mapping, "ninu"),
+      ninu: normalizeNinu(getMappedValue(row, mapping, "ninu")).value ?? getMappedValue(row, mapping, "ninu"),
       lastName: getMappedValue(row, mapping, "lastName"),
       firstName: getMappedValue(row, mapping, "firstName"),
       gender: normalizedGender ?? getMappedValue(row, mapping, "gender"),
       address: getMappedValue(row, mapping, "address") || DEFAULT_IMPORT_ADDRESS,
       phone: getMappedValue(row, mapping, "phone"),
-      salaryNumber,
+      salaryNumber: parsedSalary === null ? salaryNumber : String(parsedSalary),
       salaryText: parsedSalary ? numberToFrenchWords(parsedSalary) : "",
       position: getMappedValue(row, mapping, "position"),
       assignment: getMappedValue(row, mapping, "assignment"),
@@ -630,7 +643,9 @@ export function validateImportEditableRows(
   const active = (row: ContractImportEditableRow) => !row.excluded && !row.importedContractId &&
     (!options.selectedRowIds || options.selectedRowIds.includes(row.id));
   const identityIssues = getContractImportIdentityIssues(
-    rows.map((row) => (!active(row) ? { nif: "", ninu: null } : row)),
+    rows.map((row) => (!active(row) || (row.duplicateResolution?.action === "keep" &&
+      findImportDuplicate(row, options.existingContracts ?? [], options.fiscalYear ?? "")?.id === row.duplicateResolution.contractId)
+      ? { nif: "", ninu: null } : row)),
     options.existingApplicants
   );
 
@@ -643,8 +658,12 @@ export function validateImportEditableRows(
   });
 
   return rows.map((row, index) => {
+    const duplicate = findImportDuplicate(row, options.existingContracts ?? [], options.fiscalYear ?? "");
+    const resolution = duplicate?.id === row.duplicateResolution?.contractId ? row.duplicateResolution : undefined;
     const result = row.excluded || row.importedContractId
       ? { values: null, errors: [] }
+      : resolution?.action === "keep" && duplicate
+      ? { values: importDraftFromContract(duplicate), errors: [] as string[] }
       : buildDraftFromEditableRow(row);
     const issues = row.excluded ? { errors: [], warnings: [] } : identityIssues[index];
     const warnings = [...issues.warnings];
@@ -659,17 +678,15 @@ export function validateImportEditableRows(
       }
     }
     if (active(row) && options.fiscalYear) {
-      const duplicate = options.existingContracts?.find((contract) => !contract.deletedAt &&
-        contract.id !== row.contractId && normalizeNifKey(contract.nif || contract.applicantId || "") === normalizeNifKey(row.nif) &&
-        getContractFiscalYear(contract) === options.fiscalYear);
-      if (duplicate) result.errors.push(`Le NIF ${row.nif} possède déjà un contrat pour ${options.fiscalYear} (${duplicate.id}).`);
+      if (duplicate && !resolution) result.errors.push(`Le NIF ${row.nif} possède déjà un contrat pour ${options.fiscalYear} (${duplicate.id}).`);
+      if (row.duplicateResolution && !resolution) result.errors.push("Le contrat en doublon a changé. Choisissez à nouveau le contrat à conserver.");
     }
     const errors = Array.from(new Set([...result.errors, ...issues.errors]));
     return {
       id: row.id,
       sourceRowNumber: row.sourceRowNumber,
       excluded: row.excluded,
-      values: result.values ? { ...result.values, contractId: row.contractId, sourceRowNumber: row.sourceRowNumber } : null,
+      values: result.values ? { ...result.values, duplicateResolution: resolution, contractId: row.contractId, sourceRowNumber: row.sourceRowNumber } : null,
       errors,
       errorFields: getImportErrorFields(errors),
       warnings: Array.from(new Set(warnings))

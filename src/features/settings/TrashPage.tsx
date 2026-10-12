@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { ContractStatus } from "../../data/types";
+import type { Contract, ContractStatus } from "../../data/types";
 import { formatCurrency } from "../../lib/format";
 import { useAuth } from "../auth/auth";
-import { useContractsList } from "../contracts/contractsApi";
+import { useContractsList, usePermanentlyDeleteContract } from "../contracts/contractsApi";
 
 const STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Brouillon",
@@ -28,9 +28,10 @@ function formatDeletedAt(value?: string | null) {
 }
 
 export function TrashPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const workspaceId = user?.workspaceId ?? "";
   const [query, setQuery] = useState("");
+  const deleteContract = usePermanentlyDeleteContract();
   const { data, isLoading, isError, refetch } = useContractsList(
     {
       workspaceId,
@@ -62,15 +63,18 @@ export function TrashPage() {
       .sort((left, right) => (right.deletedAt ?? "").localeCompare(left.deletedAt ?? ""));
   }, [data?.items, query]);
 
+  function handleDelete(contract: Contract) {
+    if (!can("contracts.delete") || deleteContract.isPending) return;
+    if (!window.confirm(`Supprimer définitivement le contrat de ${contract.firstName} ${contract.lastName} (${contract.id}) ? Cette action est irréversible.`)) return;
+    deleteContract.mutate({ id: contract.id, workspaceId });
+  }
+
   return (
     <div className="page-container settings-detail-page trash-page">
       <header className="section-header page-header trash-page-header">
         <div>
           <span className="page-eyebrow">Paramètres</span>
           <h1 className="section-title">Corbeille</h1>
-          <div className="section-subtitle">
-            Contrats supprimés conservés dans l’historique.
-          </div>
         </div>
         <div className="trash-header-actions">
           <div className="trash-count" aria-label={`${data?.total ?? 0} contrats supprimés`}>
@@ -96,6 +100,12 @@ export function TrashPage() {
             />
           </label>
         </div>
+
+        {deleteContract.isError && (
+          <div className="trash-error" role="alert">
+            {deleteContract.error instanceof Error ? deleteContract.error.message : "Impossible de supprimer définitivement le contrat."}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="trash-empty" role="status">Chargement de la corbeille…</div>
@@ -135,9 +145,23 @@ export function TrashPage() {
                         {contract.ninu ? <> · NINU {contract.ninu}</> : null}
                       </p>
                     </div>
-                    <span className="badge trash-status-badge">
-                      {STATUS_LABELS[contract.status]}
-                    </span>
+                    <div className="trash-contract-actions">
+                      <span className="badge trash-status-badge">
+                        {STATUS_LABELS[contract.status]}
+                      </span>
+                      {can("contracts.delete") && (
+                        <button
+                          type="button"
+                          className="button button-danger"
+                          aria-label={`Supprimer définitivement le contrat de ${contract.firstName} ${contract.lastName} (${contract.id})`}
+                          disabled={deleteContract.isPending}
+                          onClick={() => handleDelete(contract)}
+                        >
+                          <span className="material-symbols-rounded icon" aria-hidden="true">delete_forever</span>
+                          {deleteContract.isPending && deleteContract.variables?.id === contract.id ? "Suppression…" : "Supprimer définitivement"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="trash-contract-details">
                     <span>

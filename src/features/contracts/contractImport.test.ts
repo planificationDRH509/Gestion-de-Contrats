@@ -274,3 +274,19 @@ describe("import duplicate preflight", () => {
     expect(selected[0].errors).toEqual([]);
   });
 });
+
+
+describe("safe format normalization", () => {
+  it("normalizes spaces, fiscal identifiers, gender and common money formats", () => {
+    const table = parsePastedContractTable("NIF\tNINU\tNom\tPrénom\tSexe\tSalaire\tPoste\tAffectation\n001 002 003 4\t123 456 789 0\t  Jean   Louis  \t Anne   Marie \tFÉMININ\t30.000\t Agent \tMSPP");
+    const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
+    expect(rows[0]).toMatchObject({ nif: "001-002-003-4", ninu: "1234567890", lastName: "Jean Louis", firstName: "Anne Marie", gender: "Femme", salaryNumber: "30000" });
+    for (const value of ["30 000", "30.000", "30,000", "30 000 HTG"]) expect(parseImportMoney(value)).toBe(30000);
+    expect(parseImportMoney("30 000,50 HTG")).toBe(30000.5);
+  });
+  it("keeps ambiguous IDs and malformed numbers invalid instead of guessing", () => {
+    for (const value of ["30.00.0", "30,12,5", "30000abc", "1e4", "30-000"]) expect(parseImportMoney(value)).toBeNull();
+    const table = parsePastedContractTable("NIF\tNom\tPrénom\tSexe\tSalaire\tPoste\tAffectation\n1234567890abc\tLouis\tJean\tH\t30000\tAgent\tMSPP");
+    expect(validateImportEditableRows(buildImportEditableRows(table, inferImportMapping(table.headers)))[0].errors).toContain("Le NIF doit contenir 10 chiffres.");
+  });
+});

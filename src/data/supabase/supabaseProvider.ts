@@ -68,6 +68,7 @@ import {
   replaceLocalTagId,
   replaceWorkspaceCache,
   removeOutboxItem,
+  removeCachedContract,
   setWorkspaceSyncMetadata,
   upsertApplicantOffline
 } from "../local/offlineStore";
@@ -236,7 +237,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       for (const [column, field] of Object.entries(fields)) {
         const next = desired[column as keyof typeof desired];
         // Match online upsert semantics: absent optional values preserve remote data.
-        if (next === undefined || (column !== "telephone" && !next)) continue;
+        if (next === undefined) continue;
         if (normalize(next) === normalize(existing[field])) continue;
         if (!input.baseApplicant || normalize(existing[field]) !== normalize(input.baseApplicant[field])) throw conflict();
         changes[column] = next;
@@ -375,6 +376,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       throw repositoryError("Impossible de vérifier le postulant.", existingError);
     }
 
+    if (input.expectedUpdatedAt !== undefined && (!existing || existing.workspace_id !== input.workspaceId || (existing.updated_at || existing.created_at) !== input.expectedUpdatedAt)) throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
     if (!existing) {
       // ── 2a. NIF not found → INSERT ────────────────────────────────────
       const payload = buildApplicantInsertPayload(
@@ -408,7 +410,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       changes.sexe = input.gender;
     }
     // For ninu: only update if a new value is provided AND it differs
-    if (input.ninu && input.ninu !== existing.ninu) {
+    if (input.ninu !== undefined && input.ninu !== existing.ninu) {
       changes.ninu = input.ninu;
     }
     if (input.phone !== undefined) {
@@ -417,7 +419,7 @@ class SupabaseApplicantRepository implements ApplicantRepository {
         changes.telephone = phone;
       }
     }
-    if (input.address && input.address !== existing.adresse) {
+    if (input.address !== undefined && input.address !== existing.adresse) {
       changes.adresse = input.address;
     }
     if (nif !== existing.nif) {
@@ -431,13 +433,11 @@ class SupabaseApplicantRepository implements ApplicantRepository {
 
     changes.updated_at = new Date().toISOString();
 
-    const { data: updated, error: updateError } = await (client
-      .from("identification")
-      .update(changes as any) as any)
-      .eq("nif", existingNif)
-      .eq("workspace_id", input.workspaceId)
-      .select("*")
-      .single();
+    let update = client.from("identification").update(changes as any)
+      .eq("nif", existingNif).eq("workspace_id", input.workspaceId);
+    if (input.expectedUpdatedAt !== undefined) update = existing.updated_at == null
+      ? update.is("updated_at", null) : update.eq("updated_at", existing.updated_at);
+    const { data: updated, error: updateError } = await update.select("*").single();
 
     if (updateError || !updated) {
       throw repositoryError("Impossible de mettre à jour le postulant.", updateError);
@@ -906,6 +906,8 @@ class SupabaseContractRepository implements ContractRepository {
     }
     const payload: Record<string, any> = {};
     if (input.status !== undefined) payload.status = input.status;
+    if (input.createdAt !== undefined) payload.created_at = input.createdAt;
+    if (input.annee_fiscale !== undefined) payload.annee_fiscale = input.annee_fiscale;
     if (input.position !== undefined) payload.titre = input.position;
     if (input.assignment !== undefined) payload.lieu_affectation = input.assignment;
     if (input.salaryNumber !== undefined) payload.salaire_en_chiffre = input.salaryNumber;
@@ -1072,6 +1074,19 @@ class SupabaseContractRepository implements ContractRepository {
     if (error) {
       throw repositoryError("Impossible de supprimer le contrat.", error);
     }
+  }
+
+  async permanentlyDelete(id: string, workspaceId: string): Promise<void> {
+    const { data, error } = await getSupabaseClient()
+      .from("contrat")
+      .delete()
+      .eq("id_contrat", id)
+      .eq("workspace_id", workspaceId)
+      .not("deleted_at", "is", null)
+      .select("id_contrat")
+      .maybeSingle();
+    if (error) throw repositoryError("Impossible de supprimer définitivement le contrat.", error);
+    if (!data) throw new Error("Ce contrat n’est plus dans la corbeille ou vous n’avez pas le droit de le supprimer.");
   }
 
   private async updateManyWithAudit(
@@ -1854,6 +1869,7 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
   }
 
   async getById(id: string): Promise<Applicant | null> {
+    if (getPendingOutbox().some(item => item.type === "applicant.upsert" && (item.payload.id === id || item.payload.nif === id))) return this.local.getById(id);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       const applicant = await this.remote.getById(id);
@@ -2124,18 +2140,18 @@ class OfflineFirstContractRepository implements ContractRepository {
     }
   }
 
-  async update(input: UpdateContractInput): Promise<Contract> {
+  async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
     if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
-    if (getPendingContractIds().has(input.id)) return this.local.update(input);
+    if (getPendingContractIds().has(input.id)) return this.local.update(input, expected);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       await syncPendingOutbox();
-      const contract = await this.remote.update(input);
+      const contract = await this.remote.update(input, expected);
       cacheContract(contract);
       return contract;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
-      return this.local.update(input);
+      return this.local.update(input, expected);
     }
   }
 
@@ -2194,17 +2210,33 @@ class OfflineFirstContractRepository implements ContractRepository {
     }
   }
 
-  async softDelete(id: string, workspaceId: string): Promise<void> {
+  async softDelete(id: string, workspaceId: string, expected?: Contract): Promise<void> {
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       await syncPendingOutbox();
-      if (getPendingContractIds().has(id)) return this.local.softDelete(id, workspaceId);
-      await this.remote.softDelete(id, workspaceId);
+      if (getPendingContractIds().has(id)) return this.local.softDelete(id, workspaceId, expected);
+      await this.remote.softDelete(id, workspaceId, expected);
       await this.local.applySoftDelete(id, workspaceId);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
-      await this.local.softDelete(id, workspaceId);
+      await this.local.softDelete(id, workspaceId, expected);
     }
+  }
+
+  async permanentlyDelete(id: string, workspaceId: string): Promise<void> {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      throw new Error("Une connexion est nécessaire pour supprimer définitivement ce contrat.");
+    }
+    await syncPendingOutbox();
+    await withBrowserLock("outbox-sync", async () => {
+      await refreshLocalDb();
+      if (getPendingContractIds().has(id)) {
+        throw new Error("Synchronisez les modifications de ce contrat avant de le supprimer définitivement.");
+      }
+      await this.remote.permanentlyDelete(id, workspaceId);
+      removeCachedContract(id, workspaceId);
+      await flushLocalDbWrites();
+    });
   }
 }
 

@@ -133,6 +133,7 @@ class HttpError extends Error {
 
   constructor(status: number, message: string) {
     super(message);
+    Object.setPrototypeOf(this, HttpError.prototype);
     this.status = status;
   }
 }
@@ -1565,6 +1566,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           .get({ nif: existingId }) as RawRecord | undefined)
       : undefined;
     const target = byExistingId ?? byNif ?? byNinu;
+    if (body.expectedUpdatedAt !== undefined && (!target || target.workspace_id !== workspaceId || (target.updated_at || target.created_at) !== body.expectedUpdatedAt)) throw new HttpError(409, "La fiche d’identification a changé.");
 
     if (target) {
       const previousNif = asString(target.nif);
@@ -2503,7 +2505,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
 
     const timestamp = nowIso();
     const current = db.prepare(`
-      SELECT historique_saisie
+      SELECT historique_saisie, updated_at, created_at
       FROM contrat
       WHERE id_contrat = :id_contrat
         AND workspace_id = :workspace_id
@@ -2512,6 +2514,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       id_contrat: id,
       workspace_id: workspaceId
     }) as RawRecord | undefined;
+    if (body.expectedUpdatedAt !== undefined && (!current || (current.updated_at || current.created_at) !== body.expectedUpdatedAt)) throw new HttpError(409, "Le contrat a changé.");
     const history = parseHistory(asNullableString(current?.historique_saisie));
     appendHistoryEntry(history, operatorFromRequest(req), "deletion", [], timestamp);
     db.prepare(`
@@ -2530,6 +2533,28 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       workspace_id: workspaceId
     });
 
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (pathname === `${API_PREFIX}/contracts/permanent-delete` && method === "POST") {
+    if (operatorFromRequest(req).role !== "admin") {
+      throw new HttpError(403, "Suppression définitive réservée aux administrateurs.");
+    }
+    const body = await parseBody(req);
+    const id = asString(body.id);
+    const workspaceId = asString(body.workspaceId);
+    if (!id || !workspaceId) throw new HttpError(400, "id et workspaceId sont obligatoires.");
+
+    const result = db.prepare(`
+      DELETE FROM contrat
+      WHERE id_contrat = :id
+        AND workspace_id = :workspace_id
+        AND deleted_at IS NOT NULL
+    `).run({ id, workspace_id: workspaceId });
+    if (result.changes === 0) {
+      throw new HttpError(409, "Ce contrat n’est plus dans la corbeille. Actualisez la page.");
+    }
     sendJson(res, 200, { ok: true });
     return;
   }
@@ -2592,6 +2617,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       throw new HttpError(404, "Contrat introuvable.");
     }
 
+    if (body.expectedUpdatedAt !== undefined && (current.updated_at || current.created_at) !== body.expectedUpdatedAt) throw new HttpError(409, "Le contrat a changé.");
+
     const nextNif = asNullableString(body.nif) ?? asString(current.nif);
     if (!nextNif) {
       throw new HttpError(400, "Le NIF est obligatoire.");
@@ -2650,6 +2677,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         ? asNullableString(body.commentaire)
         : asNullableString(current.commentaire);
 
+    const nextCreatedAt = body.createdAt === undefined ? asString(current.created_at) : toValidDate(asString(body.createdAt))?.toISOString();
+    if (!nextCreatedAt) throw new HttpError(400, "Date de création invalide.");
     const timestamp = nowIso();
     const operator = operatorFromRequest(req);
     const history = parseHistory(asNullableString(current.historique_saisie));
@@ -2660,6 +2689,7 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
         changes.push({ field, previousValue, newValue });
       }
     };
+    addChange("createdAt", asString(current.created_at), nextCreatedAt);
     addChange("nif", asString(current.nif), nextNif);
     addChange("status", asString(current.status), nextStatus);
     addChange("durationMonths", asInteger(current.duree_contrat, 12), nextDuration);
@@ -2699,6 +2729,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
           commentaire = :commentaire,
           dossier_id = :dossier_id,
           status = :status,
+          annee_fiscale = :annee_fiscale,
+          created_at = :created_at,
           updated_at = :updated_at
       WHERE id_contrat = :id_contrat
     `).run({
@@ -2712,6 +2744,8 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
       commentaire: nextComment,
       dossier_id: nextDossierId,
       status: nextStatus,
+      annee_fiscale: body.annee_fiscale !== undefined ? asNullableString(body.annee_fiscale) : asNullableString(current.annee_fiscale),
+      created_at: nextCreatedAt,
       updated_at: timestamp
     });
 

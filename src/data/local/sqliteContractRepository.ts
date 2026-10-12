@@ -51,11 +51,12 @@ export class SqliteContractRepository implements ContractRepository {
     return created;
   }
 
-  async update(input: UpdateContractInput): Promise<Contract> {
+  async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
     return sqliteApiRequest<Contract>(`/contracts/${encodeURIComponent(input.id)}`, {
       method: "PATCH",
       body: {
         ...input,
+        expectedUpdatedAt: expected?.updatedAt,
         firstName: input.firstName ? formatFirstName(input.firstName) : undefined,
         lastName: input.lastName ? formatLastName(input.lastName) : undefined
       }
@@ -107,13 +108,21 @@ export class SqliteContractRepository implements ContractRepository {
     });
   }
 
-  async softDelete(id: string, workspaceId: string): Promise<void> {
+  async softDelete(id: string, workspaceId: string, expected?: Contract): Promise<void> {
     await sqliteApiRequest<{ ok: boolean }>("/contracts/soft-delete", {
       method: "POST",
       body: {
         id,
-        workspaceId
+        workspaceId,
+        expectedUpdatedAt: expected?.updatedAt
       }
+    });
+  }
+
+  async permanentlyDelete(id: string, workspaceId: string): Promise<void> {
+    await sqliteApiRequest<{ ok: boolean }>("/contracts/permanent-delete", {
+      method: "POST",
+      body: { id, workspaceId }
     });
   }
 }

@@ -83,7 +83,7 @@ describe("automatic import dossier", () => {
     const input = { workspaceId: "w", dossierId: null, responsibleUserId: "u", fiscalYear: "2026-2027" };
     await result.current.mutateAsync({ ...input, rows: [] });
     mocks.find.mockResolvedValue([{ ...applicant, deletedAt: "2026-01-01" }]);
-    await expect(result.current.mutateAsync({ ...input, rows: [validateImportEditableRows(importedRows())[0].values!] })).rejects.toThrow("fiche supprimée");
+    expect((await result.current.mutateAsync({ ...input, rows: [validateImportEditableRows(importedRows())[0].values!] })).failures[0].error).toContain("fiche supprimée");
     expect(mocks.createDossier).not.toHaveBeenCalled();
     expect(mocks.upsert).not.toHaveBeenCalled();
     unmount();

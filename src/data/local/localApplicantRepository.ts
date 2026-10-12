@@ -81,6 +81,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
       ? db.applicants.find((applicant) => applicant.id === input.id)
       : await this.findByNifOrNinu(input.workspaceId, input.nif, input.ninu);
 
+    if (input.expectedUpdatedAt !== undefined && (!existing || existing.workspaceId !== input.workspaceId || existing.updatedAt !== input.expectedUpdatedAt)) throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
     if (existing) {
       const nextId = input.nif?.trim() || existing.id;
       const duplicate = db.applicants.find(

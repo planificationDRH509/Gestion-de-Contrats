@@ -10117,6 +10117,31 @@ body,
   flex: 0 0 auto;
 }
 
+.trash-contract-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.trash-contract-actions .button-danger {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+}
+
+.trash-contract-actions .button-danger:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.trash-error {
+  padding: 16px 20px;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .trash-contract-details {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -10194,6 +10219,10 @@ body,
 
   .trash-status-badge {
     width: fit-content;
+  }
+
+  .trash-contract-actions {
+    justify-content: flex-start;
   }
 }
 

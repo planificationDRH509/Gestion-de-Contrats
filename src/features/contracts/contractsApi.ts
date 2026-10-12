@@ -1,3 +1,4 @@
+import { undoContractImport } from "./contractImportBatch";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/auth";
 import { getDataProvider } from "../../data/dataProvider";
@@ -419,12 +420,25 @@ export function useImportContracts() {
     onSettled: (_contracts, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["dossiers", variables.workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["contract-import"] });
+      queryClient.invalidateQueries({ queryKey: ["contract"] });
+      queryClient.invalidateQueries({ queryKey: ["identification"] });
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
+    }
+  });
+}
+
+export function useUndoContractImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: "always",
+    mutationFn: ({ workspaceId, userId, batchId }: { workspaceId: string; userId: string; batchId: string }) => undoContractImport(provider, workspaceId, userId, batchId),
+    onSettled: () => {
+      for (const key of ["contracts", "contract", "contract-import", "dossiers", "contract-lists", "nif-lookup", "identification"]) queryClient.invalidateQueries({ queryKey: [key] });
     }
   });
 }
@@ -462,6 +476,28 @@ export function useDeleteContract() {
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
+    }
+  });
+}
+
+export function usePermanentlyDeleteContract() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: "always",
+    mutationFn: ({ id, workspaceId }: { id: string; workspaceId: string }) =>
+      provider.contracts.permanentlyDelete(id, workspaceId),
+    onMutate: () => queryClient.cancelQueries({ queryKey: ["contracts"] }),
+    onSuccess: (_data, { id, workspaceId }) => {
+      queryClient.setQueriesData<ContractListResult>({ queryKey: ["contracts"] }, previous => {
+        if (!previous?.items) return previous;
+        const items = previous.items.filter(contract => contract.id !== id || contract.workspaceId !== workspaceId);
+        return { ...previous, items, total: previous.total - (previous.items.length - items.length) };
+      });
+      queryClient.removeQueries({ queryKey: ["contract", id] });
+      for (const key of ["contracts", "contract-lists", "pinned-contracts", "nif-lookup", "contract-import"]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["dossiers", "metrics", workspaceId] });
     }
   });
 }

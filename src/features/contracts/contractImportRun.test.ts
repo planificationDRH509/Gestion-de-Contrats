@@ -21,6 +21,76 @@ const input = (rows = [row(0)]): ImportRunInput => ({
 beforeEach(() => localStorage.clear());
 
 describe("resumable import", () => {
+  it("keeps the old data, moves the duplicate and refreshes its creation date", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input())).contracts;
+    await provider.contracts.update({ id: old.id, createdAt: "2026-10-01T00:00:00.000Z", status: "signe" });
+    const applicant = vi.spyOn(provider.applicants, "upsert");
+    const destination = await provider.dossiers.create({ workspaceId: "w", name: "Destination" });
+    const result = await runContractImport(provider, { ...input([{
+      ...row(0), contractId: "new-import", salaryNumber: 50000, firstName: "Autre",
+      duplicateResolution: { contractId: old.id, action: "keep" }
+    }]), dossierId: destination.id });
+    expect(result.failures).toEqual([]);
+    expect(result.contracts[0]).toMatchObject({ id: old.id, salaryNumber: 30000, firstName: "Jean", status: "signe", dossierId: destination.id });
+    expect(result.contracts[0].createdAt).not.toBe("2026-10-01T00:00:00.000Z");
+    expect(applicant).not.toHaveBeenCalled();
+    expect(loadDb().contracts.filter(c => c.workspaceId === "w")).toHaveLength(1);
+  });
+
+  it("replaces the duplicate with new data and preserves the old contract in a note", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input([{ ...row(0), commentaire: "Ancienne remarque" }]))).contracts;
+    const result = await runContractImport(provider, input([{
+      ...row(0), contractId: "replacement", salaryNumber: 50000, position: "Directeur", address: "Jacmel", commentaire: "Nouvelle remarque",
+      duplicateResolution: { contractId: old.id, action: "replace" }
+    }]));
+    expect(result.failures).toEqual([]);
+    expect(result.contracts[0]).toMatchObject({ id: old.id, salaryNumber: 50000, position: "Directeur", address: "Jacmel" });
+    const note = result.contracts[0].commentaire;
+    for (const text of ["Nouvelle remarque", "Ancienne remarque", "Salaire : 30000", "Poste : Agent", "Adresse : Delmas", old.createdAt]) expect(note).toContain(text);
+    expect(loadDb().contracts.filter(c => c.workspaceId === "w")).toHaveLength(1);
+  });
+
+  it("does not confuse a rejected update with the existing contract and retries the original note", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input())).contracts;
+    const update = vi.spyOn(provider.contracts, "update").mockRejectedValueOnce(new Error("Refusé"));
+    const attempt = input([{ ...row(0), address: "Jacmel", contractId: "replacement", duplicateResolution: { contractId: old.id, action: "replace" } }]);
+    const first = await runContractImport(provider, attempt);
+    expect(first.contracts).toHaveLength(0);
+    expect(first.failures[0].error).toContain("Refusé");
+    expect(readImportRequest("w", "replacement")?.duplicateUpdate?.commentaire).toContain("Adresse : Delmas");
+    const retry = await runContractImport(provider, attempt);
+    expect(retry.failures).toEqual([]);
+    expect(retry.contracts[0].commentaire).toContain("Adresse : Delmas");
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers a lost update response without replacing twice or duplicating the note", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input())).contracts;
+    const original = provider.contracts.update.bind(provider.contracts);
+    const update = vi.spyOn(provider.contracts, "update").mockImplementation(async value => {
+      await original(value);
+      throw new Error("Connection lost");
+    });
+    const attempt = input([{ ...row(0), contractId: "replacement", duplicateResolution: { contractId: old.id, action: "replace" } }]);
+    const result = await runContractImport(provider, attempt);
+    expect(result.failures).toEqual([]);
+    const retry = await runContractImport(provider, attempt);
+    expect(retry.contracts[0].commentaire).toBe(result.contracts[0].commentaire);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+  it("skips a new database conflict and imports the independent rows", async () => {
+    const p = createLocalProvider();
+    await runContractImport(p, input());
+    const result = await runContractImport(p, input([{ ...row(0), contractId: "duplicate" }, row(1)]));
+    expect(result.contracts).toHaveLength(1);
+    expect(result.contracts[0].nif).toBe(row(1).nif);
+    expect(result.failures[0].contractId).toBe("duplicate");
+  });
+
   it("keeps the same minister for the whole import when the selection changes midway", async () => {
     const successor = { ...LEGACY_MINISTER, id: "new-minister", fullName: "Marie TEST", gender: "Femme" as const };
     cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: successor.id });
@@ -96,12 +166,12 @@ describe("resumable import", () => {
     const provider = createLocalProvider();
     const dossier = vi.spyOn(provider.dossiers, "create");
     const applicant = vi.spyOn(provider.applicants, "upsert");
-    await expect(runContractImport(provider, input([row(0), { ...row(0), contractId: "other" }]))).rejects.toThrow("répété");
+    expect((await runContractImport(provider, input([row(0), { ...row(0), contractId: "other" }]))).failures[0].error).toContain("répété");
     expect(dossier).not.toHaveBeenCalled();
     expect(applicant).not.toHaveBeenCalled();
     await runContractImport(provider, input());
     dossier.mockClear(); applicant.mockClear();
-    await expect(runContractImport(provider, input([{ ...row(0), contractId: "another-import" }]))).rejects.toThrow("2026-2027");
+    expect((await runContractImport(provider, input([{ ...row(0), contractId: "another-import" }]))).failures[0].error).toContain("2026-2027");
     expect(dossier).not.toHaveBeenCalled();
     expect(applicant).not.toHaveBeenCalled();
   });

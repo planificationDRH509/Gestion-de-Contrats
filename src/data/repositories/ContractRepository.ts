@@ -13,7 +13,7 @@ export interface ContractRepository {
   getByIds(ids: string[], workspaceId: string): Promise<Contract[]>;
   create(input: CreateContractInput): Promise<Contract>;
   createMany(inputs: CreateContractInput[]): Promise<Contract[]>;
-  update(input: UpdateContractInput): Promise<Contract>;
+  update(input: UpdateContractInput, expected?: Contract): Promise<Contract>;
   assignToDossier(
     workspaceId: string,
     contractIds: string[],
@@ -29,5 +29,6 @@ export interface ContractRepository {
     contractIds: string[],
     durationMonths: number
   ): Promise<number>;
-  softDelete(id: string, workspaceId: string): Promise<void>;
+  softDelete(id: string, workspaceId: string, expected?: Contract): Promise<void>;
+  permanentlyDelete(id: string, workspaceId: string): Promise<void>;
 }

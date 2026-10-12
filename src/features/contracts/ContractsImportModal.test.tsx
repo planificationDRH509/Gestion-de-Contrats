@@ -1,16 +1,18 @@
+import { recordImportEntry } from "./contractImportBatch";
 import { LEGACY_MINISTER, type MinisterRegistry } from "../../lib/ministers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ContractsImportModal } from "./ContractsImportModal";
-import { loadContractImportDraft, saveContractImportDraft } from "./contractImportDraft";
+import { loadContractImportDraft, saveContractImportDraft, saveImportMapping } from "./contractImportDraft";
 import { buildImportEditableRows, inferImportMapping, parsePastedContractTable } from "./contractImport";
 import type { Applicant, Contract } from "../../data/types";
 
-const mocks = vi.hoisted(() => ({ registry: undefined as MinisterRegistry | undefined, applicants: [] as Applicant[], contracts: [] as Contract[], mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ registry: undefined as MinisterRegistry | undefined, applicants: [] as Applicant[], contracts: [] as Contract[], mutate: vi.fn(), undo: vi.fn() }));
 vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: mocks.registry }) }));
 vi.mock("./contractsApi", () => ({
   useImportApplicantMatches: () => ({ data: mocks.applicants, isPending: false, isFetching: false, isError: false }),
   useImportContractHistory: () => ({ data: mocks.contracts, isPending: false, isFetching: false, isError: false }),
+  useUndoContractImport: () => ({ mutateAsync: mocks.undo, isPending: false }),
   useImportContracts: () => ({ mutateAsync: mocks.mutate, isPending: false })
 }));
 vi.mock("../auth/auth", () => ({ useAuth: () => ({ user: { id: "u", workspaceId: "w" } }) }));
@@ -74,6 +76,7 @@ describe("import review", () => {
     await waitFor(() => expect(screen.getByText("1 importée(s)")).toBeInTheDocument());
     expect(screen.getByText("1 à corriger")).toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Toutes 2" }));
     expect(screen.getByLabelText("NIF, ligne 2")).toBeDisabled();
     expect(loadContractImportDraft("w", "u")?.editableRows[0].importedContractId).toBeTruthy();
     expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
@@ -84,9 +87,96 @@ describe("import review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Voir les différences de la ligne 2" }));
     expect(screen.getByText("Directeur", { selector: "p" })).toBeInTheDocument();
     expect(screen.getByLabelText("NIF, ligne 2")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
     fireEvent.click(screen.getByLabelText("Sélectionner la ligne 2"));
     expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
+  });
+
+  it("persists the duplicate choice and submits keep even when new values are invalid", async () => {
+    mocks.contracts = [{ id: "old", workspaceId: "w", applicantId: "123-456-789-0", nif: "123-456-789-0", firstName: "Jean", lastName: "Louis", gender: "Homme", address: "Delmas", status: "saisie", position: "Directeur", assignment: "Nord", salaryNumber: 40000, salaryText: "", durationMonths: 6, annee_fiscale: "2026-2027", createdAt: "2026-10-01", updatedAt: "2026-10-01" }];
+    mocks.mutate.mockResolvedValue({ contracts: [], failures: [] });
+    const view = render(<ContractsImportModal {...props} />); paste();
+    fireEvent.change(screen.getByLabelText("Salaire, ligne 2"), { target: { value: "incorrect" } });
+    fireEvent.click(screen.getByRole("button", { name: "Garder l’ancien" }));
+    expect(screen.getByRole("button", { name: "Importer 2 contrat(s)" })).toBeEnabled();
+    fireEvent.click(screen.getByText("Fermer", { selector: "button" }));
+    view.rerender(<ContractsImportModal {...props} isOpen={false} />);
+    view.rerender(<ContractsImportModal {...props} />);
+    expect(screen.getByRole("button", { name: "Garder l’ancien" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Importer 2 contrat(s)" }));
+    await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
+    expect(mocks.mutate.mock.calls[0][0].rows[0]).toMatchObject({ duplicateResolution: { contractId: "old", action: "keep" }, salaryNumber: 40000 });
+    fireEvent.click(screen.getByRole("button", { name: "Remplacer par le nouveau" }));
+    expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Salaire, ligne 2"), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Importer 2 contrat(s)" }));
+    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(2));
+    expect(mocks.mutate.mock.calls[1][0].rows[0]).toMatchObject({ duplicateResolution: { contractId: "old", action: "replace" }, salaryNumber: 50000 });
+  });
+
+  it("imports valid selected rows while keeping invalid rows for later", async () => {
+    mocks.mutate.mockImplementation(async input => {
+      const contract = { id: input.rows[0].contractId };
+      input.onRowResult({ contractId: contract.id, contract });
+      return { contracts: [contract], failures: [] };
+    });
+    const view = render(<ContractsImportModal {...props} />); paste(text.replace("1234567891", "123"));
+    expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Importer 1 contrat(s)" }));
+    await waitFor(() => expect(screen.getByText("1 importée(s)")).toBeInTheDocument());
+    expect(mocks.mutate.mock.calls[0][0].rows).toHaveLength(1);
+    expect(screen.queryByLabelText("NIF, ligne 2")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("NIF, ligne 3")).toHaveValue("123");
+    fireEvent.click(screen.getByText("Fermer", { selector: "button" }));
+    view.rerender(<ContractsImportModal {...props} isOpen={false} />);
+    view.rerender(<ContractsImportModal {...props} />);
+    expect(screen.getByRole("button", { name: "Restantes 1" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(screen.getByLabelText("NIF, ligne 3"), { target: { value: "1234567891" } });
+    fireEvent.click(screen.getByRole("button", { name: "Importer 1 contrat(s)" }));
+    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(2));
+    expect(mocks.mutate.mock.calls[1][0].rows).toHaveLength(1);
+    expect(mocks.mutate.mock.calls[1][0].rows[0].nif).toBe("123-456-789-1");
+  });
+
+  it("applies a duplicate decision only to selected unresolved rows", () => {
+    mocks.contracts = [0, 1].map(i => ({ id: `old-${i}`, workspaceId: "w", applicantId: `123-456-789-${i}`, nif: `123-456-789-${i}`, firstName: "Jean", lastName: "Louis", gender: "Homme", address: "Delmas", status: "saisie", position: "Agent", assignment: "MSPP", salaryNumber: 30000, salaryText: "", durationMonths: 12, annee_fiscale: "2026-2027", createdAt: "2026-10-01", updatedAt: "2026-10-01" }));
+    render(<ContractsImportModal {...props} />); paste();
+    fireEvent.click(screen.getByLabelText("Sélectionner la ligne 3"));
+    fireEvent.click(screen.getByRole("button", { name: "Garder les anciens (1)" }));
+    const choices = screen.getAllByRole("button", { name: "Garder l’ancien" });
+    expect(choices[0]).toHaveAttribute("aria-pressed", "true");
+    expect(choices[1]).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByLabelText("Sélectionner la ligne 3"));
+    fireEvent.click(screen.getByRole("button", { name: "Remplacer les anciens (2)" }));
+    screen.getAllByRole("button", { name: "Remplacer par le nouveau" }).forEach(button => expect(button).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("uses the saved column mapping for the next paste", () => {
+    const custom = text.replace("NIF", "Identifiant personnel");
+    const table = parsePastedContractTable(custom);
+    const mapping = inferImportMapping(table.headers); mapping[0] = "nif";
+    saveImportMapping("w", "u", table.headers, mapping);
+    render(<ContractsImportModal {...props} />); paste(custom);
+    expect(screen.getByLabelText("NIF, ligne 2")).toHaveValue("123-456-789-0");
+    expect(screen.getByRole("button", { name: "Importer 2 contrat(s)" })).toBeEnabled();
+  });
+
+  it("offers saved batches for undo and resets the cancelled row for a fresh import", async () => {
+    const table = parsePastedContractTable(text); const mapping = inferImportMapping(table.headers);
+    const rows = buildImportEditableRows(table, mapping); rows[0].importedContractId = "saved";
+    saveContractImportDraft("w", "u", { clipboardText: text, mapping, editableRows: rows, selectedRowIds: rows.map(row => row.id), bulkField: "assignment", bulkValue: "", selectedDossierId: "", responsibleUserId: "u", batchId: "batch" });
+    recordImportEntry("w", "u", "batch", rows[0].contractId!, { after: { id: "saved", firstName: "Jean", lastName: "Louis" } as Contract });
+    mocks.undo.mockImplementation(async () => {
+      recordImportEntry("w", "u", "batch", rows[0].contractId!, { undone: true });
+      return { undoneRowIds: [rows[0].contractId], errors: [] };
+    });
+    render(<ContractsImportModal {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Annuler le lot" }));
+    await waitFor(() => expect(screen.getByLabelText("NIF, ligne 2")).toBeEnabled());
+    expect(mocks.undo).toHaveBeenCalledWith({ workspaceId: "w", userId: "u", batchId: "batch" });
+    const restored = loadContractImportDraft("w", "u")?.editableRows[0];
+    expect(restored?.importedContractId).toBeUndefined();
+    expect(restored?.contractId).not.toBe(rows[0].contractId);
   });
 
   it("collapses the source, exposes counted filters and hides bulk actions without a selection", () => {

@@ -31,6 +31,7 @@ export const CONTRACT_AUDIT_FIELD_LABELS: Record<string, string> = {
   dossier_id: "Dossier",
   status: "Statut",
   commentaire: "Commentaire",
+  createdAt: "Date de création",
   deletedAt: "Suppression"
 };
 

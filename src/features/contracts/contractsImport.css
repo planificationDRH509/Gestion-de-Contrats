@@ -174,3 +174,11 @@
 .import-workspace .contracts-import-preview th:nth-child(9) { width: 170px; }
 .import-workspace .contracts-import-preview th:nth-child(8),
 .import-workspace .contracts-import-preview th:nth-child(15) { width: 236px; }
+
+.import-workspace .import-duplicate-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; left: 12px; width: fit-content; max-width: calc(100vw - 48px); padding: 6px 0; }
+.import-workspace .import-duplicate-actions .btn[aria-pressed="true"] { background: var(--primary, #2563eb); color: #fff; border-color: transparent; }
+
+.import-bulk-duplicates, .import-batch-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.import-batch-actions { padding: 8px 16px; border-top: 1px solid var(--border); flex: 0 0 auto; }
+.import-batch-actions .select { width: auto; max-width: 100%; flex: 1; min-width: 0; }
+.import-workspace .import-filters { flex-wrap: wrap; }

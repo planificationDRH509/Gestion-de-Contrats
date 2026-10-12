@@ -23,6 +23,6 @@ export function mergeOfflinePatch<T extends object>(
 }
 
 export const contractEditFields = ["status", "position", "assignment", "salaryNumber",
-  "durationMonths", "dossierId", "applicantId", "nif", "commentaire"] as const;
+  "durationMonths", "dossierId", "applicantId", "nif", "commentaire", "createdAt", "annee_fiscale"] as const;
 export const dossierEditFields = ["name", "status", "isEphemeral", "priority", "contractTargetCount",
   "comment", "deadlineDate", "focalPoint", "roadmapSheetNumber", "defaultDurationMonths"] as const;
