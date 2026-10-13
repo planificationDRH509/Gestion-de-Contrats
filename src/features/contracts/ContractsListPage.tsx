@@ -62,8 +62,9 @@ import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { ContractTaskIndicator } from "./ContractTaskIndicator";
 import {
   combineAssignmentAndInstitutionLocationFilters,
-  getInstitutionCommuneOptions,
-  getInstitutionDepartmentOptions
+  getLinkedInstitutionFilters,
+  updateInstitutionFilterSelection,
+  type InstitutionFilterSelection
 } from "./institutionLocationFilters";
 import { sortContracts } from "../../lib/contractSorting";
 
@@ -225,15 +226,19 @@ export function ContractsListPage() {
     .flatMap(entry => [entry.masculine, entry.feminine, ...entry.aliases])
     .map(value => value.trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "fr")), [salaryGrid]);
-  const institutionOptions = useMemo(() => institutionsData.map(i => i.label), [institutionsData]);
-  const departmentOptions = useMemo(
-    () => getInstitutionDepartmentOptions(institutionsData),
-    [institutionsData]
-  );
-  const communeOptions = useMemo(
-    () => getInstitutionCommuneOptions(institutionsData, selectedDepartments),
-    [institutionsData, selectedDepartments]
-  );
+  const locationSelection: InstitutionFilterSelection = {
+    institution: selectedAssignments,
+    department: selectedDepartments,
+    commune: selectedCommunes
+  };
+  const linkedLocationFilters = getLinkedInstitutionFilters(institutionsData, locationSelection);
+  function changeLocationFilter(key: keyof InstitutionFilterSelection, values: string[]) {
+    const next = updateInstitutionFilterSelection(institutionsData, locationSelection, key, values);
+    setSelectedAssignments(next.institution);
+    setSelectedDepartments(next.department);
+    setSelectedCommunes(next.commune);
+    setPage(1);
+  }
   const effectiveAssignments = useMemo(
     () => combineAssignmentAndInstitutionLocationFilters(
       institutionsData,
@@ -1253,66 +1258,78 @@ export function ContractsListPage() {
             {showAdvancedFilters && (
               <div id="contract-advanced-filters" className="contracts-filter-grid">
                 <div className="contracts-filter-shortcuts">
-                <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
-                  <span className="material-symbols-rounded">filter_list</span><span>État</span>
-                </button>
-                <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
-                  <span className="material-symbols-rounded">event</span><span>Date</span>
-                </button>
+                  <div className={`toolbar-action-button contracts-fiscal-filter ${fiscalYearFilter !== currentFiscalYear ? "active" : ""}`}>
+                    <span className="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+                    <span>{fiscalYearFilter}</span>
+                    <select
+                      aria-label="Exercice fiscal"
+                      value={fiscalYearFilter}
+                      onChange={(event) => { setFiscalYearFilter(event.target.value); setPage(1); }}
+                    >
+                      {getFiscalYearOptions().map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className={`toolbar-action-button ${statusFilter !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "filter-trigger")}>
+                    <span className="material-symbols-rounded">filter_list</span><span>État</span>
+                  </button>
+                  <button className={`toolbar-action-button ${dateFilterMode !== "all" ? "active" : ""}`} onClick={(e) => handleContextFromButton(e, "date-filter-trigger")}>
+                    <span className="material-symbols-rounded">event</span><span>Date</span>
+                  </button>
+                  <MultiSelectDropdown
+                    toolbarIcon="schedule"
+                    label="Durée"
+                    options={DURATION_FILTER_OPTIONS}
+                    selectedValues={selectedDurations}
+                    onChange={(values) => { setSelectedDurations(values); setPage(1); }}
+                    placeholder="Toutes les durées"
+                  />
+                  <MultiSelectDropdown
+                    toolbarIcon="group"
+                    label="Utilisateurs"
+                    options={userFilterOptions.map(option => option.id)}
+                    getOptionLabel={userFilterLabel}
+                    allOptionsLabel="Tous"
+                    selectedValues={selectedUserIds}
+                    onChange={(values) => {
+                      setSelectedUserIds(values);
+                      if (values.length > 0) selectContractsScope(true);
+                      setPage(1);
+                    }}
+                    placeholder="Tous les utilisateurs"
+                    searchable
+                  />
                 </div>
-              <select
-                className="select"
-                aria-label="Exercice fiscal"
-                value={fiscalYearFilter}
-                onChange={(event) => { setFiscalYearFilter(event.target.value); setPage(1); }}
-              >
-                {getFiscalYearOptions().map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-              <MultiSelectDropdown
-                fullWidth
-                label="Utilisateurs"
-                options={userFilterOptions.map(option => option.id)}
-                getOptionLabel={userFilterLabel}
-                allOptionsLabel="Tous"
-                selectedValues={selectedUserIds}
-                onChange={(values) => {
-                  setSelectedUserIds(values);
-                  if (values.length > 0) selectContractsScope(true);
-                  setPage(1);
-                }}
-                placeholder="Tous les utilisateurs"
-                searchable
-              />
               <MultiSelectDropdown
                 fullWidth
                 label="Institution"
-                options={institutionOptions}
-                selectedValues={selectedAssignments}
-                onChange={(values) => { setSelectedAssignments(values); setPage(1); }}
+                options={linkedLocationFilters.institution.options}
+                disabled={linkedLocationFilters.institution.disabled}
+                displayValue={linkedLocationFilters.institution.disabled ? linkedLocationFilters.institution.values.join(", ") : undefined}
+                selectedValues={linkedLocationFilters.institution.values}
+                onChange={values => changeLocationFilter("institution", values)}
                 placeholder="Toutes les institutions"
                 searchable
               />
               <MultiSelectDropdown
                 fullWidth
                 label="Département"
-                options={departmentOptions}
-                selectedValues={selectedDepartments}
-                onChange={(values) => {
-                  setSelectedDepartments(values);
-                  const availableCommunes = getInstitutionCommuneOptions(institutionsData, values);
-                  setSelectedCommunes(current => current.filter(value => availableCommunes.includes(value)));
-                  setPage(1);
-                }}
+                options={linkedLocationFilters.department.options}
+                disabled={linkedLocationFilters.department.disabled}
+                displayValue={linkedLocationFilters.department.disabled ? linkedLocationFilters.department.values.join(", ") : undefined}
+                selectedValues={linkedLocationFilters.department.values}
+                onChange={values => changeLocationFilter("department", values)}
                 placeholder="Tous les départements"
               />
               <MultiSelectDropdown
                 fullWidth
                 label="Commune"
-                options={communeOptions}
-                selectedValues={selectedCommunes}
-                onChange={(values) => { setSelectedCommunes(values); setPage(1); }}
+                options={linkedLocationFilters.commune.options}
+                disabled={linkedLocationFilters.commune.disabled}
+                displayValue={linkedLocationFilters.commune.disabled ? linkedLocationFilters.commune.values.join(", ") : undefined}
+                selectedValues={linkedLocationFilters.commune.values}
+                onChange={values => changeLocationFilter("commune", values)}
                 placeholder="Toutes les communes"
                 searchable
               />
@@ -1324,14 +1341,6 @@ export function ContractsListPage() {
                 onChange={(values) => { setSelectedPositions(values); setPage(1); }}
                 placeholder="Toutes les fonctions"
                 searchable
-              />
-              <MultiSelectDropdown
-                fullWidth
-                label="Durée"
-                options={DURATION_FILTER_OPTIONS}
-                selectedValues={selectedDurations}
-                onChange={(values) => { setSelectedDurations(values); setPage(1); }}
-                placeholder="Toutes les durées"
               />
               </div>
             )}

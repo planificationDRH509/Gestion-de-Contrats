@@ -1,7 +1,9 @@
 import { discardContractSyncChanges } from "./supabaseProvider";
 import { cacheMinisters } from "../../features/settings/ministersCache";
 import { LEGACY_MINISTER } from "../../lib/ministers";
-import { queueOutbox } from "../local/localOutbox";
+import { isContractCorrection } from "../local/syncFailures";
+import { resolveOfflineConflict } from "../local/resolveConflict";
+import { queueOutbox, setOutboxError } from "../local/localOutbox";
 import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreateContractInput, Dossier, UpsertApplicantInput } from "../types";
@@ -319,9 +321,9 @@ describe("offline status changes", () => {
     const id = seed();
     await new LocalContractRepository().updateStatus(input.workspaceId, [id], "imprime");
     mock.from.mockReturnValueOnce(reply(contractRow(id))).mockReturnValueOnce(reply(null));
-    await syncSupabaseOutbox();
+    await expect(syncSupabaseOutbox()).rejects.toThrow("pendant la synchronisation");
     expect(getPendingOutbox()).toHaveLength(1);
-    expect(getSupabaseSyncState(input.workspaceId).lastError).toContain("pendant la synchronisation");
+    expect(getPendingOutbox()[0]).toMatchObject({ failureKind: "temporary", lastError: null });
   });
 
   it("acknowledges an already applied transition without repeating it", async () => {
@@ -513,4 +515,122 @@ describe("local-first operations with Internet available", () => {
     expect(getPendingOutbox()).toEqual([]);
     expect(JSON.parse(localStorage.getItem("contribution_pinned_contracts:pin-user")!)).toEqual(["cached"]);
   });
+});
+
+
+describe("contract correction replay", () => {
+  it("repairs a rejected creation in place and removes the correction only on ACK", async () => {
+    const provider = createSupabaseProvider();
+    const created = await provider.contracts.create(input);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply(null, { code: "23514", message: "Salaire hors grille" }));
+    await syncSupabaseOutbox();
+    const rejected = getPendingOutbox()[0];
+    expect(rejected).toMatchObject({ failureKind: "correction", correctionPending: true });
+    expect(rejected.lastError).toContain("Salaire hors grille");
+    await provider.contracts.update({ id: created.id, salaryNumber: 45000 });
+    const pending = getPendingOutbox();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ type: "contract.create", lastError: null, correctionPending: true, payload: { id: created.id, salaryNumber: 45000 } });
+    expect(pending[0].id).not.toBe(rejected.id);
+    expect(isContractCorrection(pending[0], created)).toBe(true);
+    const insert = reply([{ ...contractRow(created.id), salaire_en_chiffre: 45000 }]);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(insert);
+    await syncSupabaseOutbox();
+    expect(insert.insert).toHaveBeenCalledWith([expect.objectContaining({ id_contrat: created.id, salaire_en_chiffre: 45000 })]);
+    expect(getPendingOutbox()).toEqual([]);
+    expect(loadDb().contracts.filter(contract => contract.id === created.id)).toHaveLength(1);
+  });
+
+  it.each([{ status: 503, message: "Service unavailable" }, { code: "40001", message: "serialization failure" }, { status: 429, message: "Too many requests" }])("retries a temporary failure without requiring correction: %j", async error => {
+    const created = await new LocalContractRepository().create(input);
+    mock.from.mockReturnValue(reply(null, error));
+    await expect(syncSupabaseOutbox()).rejects.toThrow();
+    expect(getPendingOutbox()[0].lastError).toBeNull();
+    expect(isContractCorrection(getPendingOutbox()[0], created)).toBe(false);
+    mock.from.mockReturnValue(reply(contractRow(created.id)));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+  });
+
+  it("corrects an already committed creation without inserting a duplicate", async () => {
+    const repo = new LocalContractRepository();
+    const created = await repo.create(input);
+    setOutboxError(getPendingOutbox()[0].id, "Salaire hors grille");
+    await repo.update({ id: created.id, salaryNumber: 45000 });
+    const updated = reply({ ...contractRow(created.id), salaire_en_chiffre: 45000 });
+    mock.from.mockReturnValueOnce(reply(contractRow(created.id))).mockReturnValueOnce(reply(contractRow(created.id)))
+      .mockReturnValueOnce(updated);
+    await syncSupabaseOutbox();
+    expect(updated.insert).not.toHaveBeenCalled();
+    expect(updated.update).toHaveBeenCalledWith(expect.objectContaining({ salaire_en_chiffre: 45000 }));
+    expect(getPendingOutbox()).toEqual([]);
+  });
+
+  it("keeps a correction when an older request completes while the user edits", async () => {
+    const repo = new LocalContractRepository();
+    const created = await repo.create(input);
+    setOutboxError(getPendingOutbox()[0].id, "Salaire hors grille");
+    const remote = reply(contractRow(created.id));
+    let release!: () => void;
+    remote.maybeSingle.mockImplementation(() => new Promise(resolve => { release = () => resolve({ data: contractRow(created.id), error: null }); }));
+    mock.from.mockReturnValue(remote);
+    const syncing = syncSupabaseOutbox();
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    await repo.update({ id: created.id, salaryNumber: 45000 });
+    release();
+    await syncing;
+    expect(getPendingOutbox()).toHaveLength(1);
+    expect((await repo.getById(created.id))?.salaryNumber).toBe(45000);
+    expect(getPendingOutbox()[0].payload.salaryNumber).toBe(45000);
+  });
+
+  it("repairs a failed update against its original server base", async () => {
+    const provider = createSupabaseProvider();
+    mock.from.mockReturnValue(reply(contractRow("existing")));
+    await provider.contracts.getById("existing");
+    await provider.contracts.update({ id: "existing", salaryNumber: 35000 });
+    const original = getPendingOutbox()[0];
+    setOutboxError(original.id, "Salaire hors grille");
+    await provider.contracts.update({ id: "existing", salaryNumber: 45000 });
+    expect(getPendingOutbox()).toHaveLength(1);
+    expect(getPendingOutbox()[0].payload.baseContract).toMatchObject({ salaryNumber: 30000 });
+    const updated = reply({ ...contractRow("existing"), salaire_en_chiffre: 45000 });
+    mock.from.mockReturnValueOnce(reply(contractRow("existing"))).mockReturnValueOnce(updated);
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+  });
+
+  it("resolves an identity conflict from the contract and resumes its dependent creation", async () => {
+    const provider = createSupabaseProvider();
+    const person = await provider.applicants.upsert(applicant);
+    const created = await provider.contracts.create({ ...input, applicantId: person.id });
+    const remotePerson = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Pierre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas" };
+    mock.from.mockReturnValue(reply([remotePerson]));
+    await syncSupabaseOutbox();
+    const identity = getPendingOutbox()[0];
+    expect(identity.conflict?.fields).toEqual(["firstName"]);
+    expect(isContractCorrection(identity, created)).toBe(true);
+    await resolveOfflineConflict(identity.id, { firstName: "remote" });
+    expect((await provider.contracts.getById(created.id))?.firstName).toBe("Pierre");
+    expect(getPendingOutbox().find(item => item.type === "contract.create")?.correctionPending).toBe(true);
+    mock.from.mockReturnValueOnce(reply([remotePerson])).mockReturnValueOnce(reply(null))
+      .mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([contractRow(created.id)]));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+  });
+});
+
+it("places a corrected identity before the rejected update and its queued list", async () => {
+  const user = { id: "me", workspaceId: input.workspaceId, role: "admin", taskSessionToken: "test" };
+  localStorage.setItem("contribution_auth", JSON.stringify(user));
+  const rejected = queueOutbox(input.workspaceId, "contract.update", { id: "contract", applicantId: applicant.nif, nif: applicant.nif, salaryNumber: 45000 });
+  setOutboxError(rejected.id, "Salaire incorrect");
+  const list = queueOutbox(input.workspaceId, "list.operation", { action: "add", contractIds: ["contract"], applicantIds: [applicant.nif] });
+  await createSupabaseProvider().applicants.upsert(applicant);
+  const pending = getPendingOutbox();
+  expect(pending.map(item => item.type)).toEqual(["applicant.upsert", "contract.update", "list.operation"]);
+  const restoredOrder = [...pending].sort((a,b) => a.createdAt.localeCompare(b.createdAt) || (a.sequence ?? 0) - (b.sequence ?? 0));
+  expect(restoredOrder.map(item => item.id)).toEqual(pending.map(item => item.id));
+  expect(pending[2].id).toBe(list.id);
 });

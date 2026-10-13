@@ -350,9 +350,24 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
   } else {
     db.applicants.push(applicant);
   }
-  saveDb(db);
-  const pendingIdentity = !db.outbox.some(item => item.type === "list.operation" && item.workspaceId === input.workspaceId) && db.outbox.find((item) => item.workspaceId === input.workspaceId &&
+  let actorId: string | undefined;
+  try { actorId = JSON.parse(localStorage.getItem("contribution_auth") ?? "null")?.id; } catch { /* no session */ }
+  const pendingIdentity = db.outbox.find((item) => !item.syncedAt && item.workspaceId === input.workspaceId && item.actorId === actorId &&
+    (item.correctionPending || !db.outbox.some(entry => entry.type === "list.operation" && entry.workspaceId === input.workspaceId)) &&
     item.type === "applicant.upsert" && (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)));
+  if (pendingIdentity?.correctionPending) {
+    for (const pending of db.outbox) {
+      if (pending.workspaceId !== input.workspaceId || pending.actorId !== actorId ||
+        !["contract.create", "contract.update"].includes(pending.type) ||
+        !(pending.payload.applicantId && pending.payload.applicantId === pendingIdentity.payload.id || pending.payload.nif && pending.payload.nif === pendingIdentity.payload.nif)) continue;
+      if (pending.type === "contract.create" && !pending.payload.baseContract) pending.payload.baseContract = { ...pending.payload };
+      Object.assign(pending.payload, { applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
+        firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address });
+      pending.id = createId();
+      pending.correctionPending = true;
+    }
+  }
+  saveDb(db);
   queueOutbox(input.workspaceId, "applicant.upsert", {
     ...input,
     baseApplicant: pendingIdentity ? pendingIdentity.payload.baseApplicant ?? null : existing ?? null

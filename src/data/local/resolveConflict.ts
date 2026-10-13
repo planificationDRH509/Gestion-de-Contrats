@@ -7,7 +7,14 @@ export async function resolveOfflineConflict(id: string, choices: Record<string,
   const item = db.outbox.find(entry => entry.id === id);
   if (!item?.conflict) throw new Error("Ce conflit a changé. Actualisez avant de continuer.");
   if (item.conflict.fields.some(field => !choices[field])) throw new Error("Choisissez une valeur pour chaque champ.");
+  let actorId: string | undefined;
+  try { actorId = JSON.parse(localStorage.getItem("contribution_auth") ?? "null")?.id; } catch { /* no session */ }
+  if (item.actorId && item.actorId !== actorId) throw new Error("Reconnectez le compte ayant effectué cette modification.");
+  const originalPayload = { ...item.payload };
   const remote = item.conflict.remote;
+  const identity = item.type === "applicant.upsert";
+  if (item.type === "contract.create") item.type = "contract.update";
+
   if (item.type === "contract.delete" && choices.deletedAt === "remote") {
     db.outbox = db.outbox.filter(entry => entry.id !== item.id);
     const index = db.contracts.findIndex(record => record.id === item.payload.id);
@@ -17,14 +24,15 @@ export async function resolveOfflineConflict(id: string, choices: Record<string,
     return;
   }
   if (item.payload.previousStatus !== undefined) item.payload.previousStatus = remote.status;
-  const baseKey = item.type === "dossier.update" ? "baseDossier" : "baseContract";
+  const baseKey = identity ? "baseApplicant" : item.type === "dossier.update" ? "baseDossier" : "baseContract";
   const originalBase = item.payload[baseKey] as Record<string, unknown> | undefined;
-  for (const field of item.type === "dossier.update" ? dossierEditFields : contractEditFields) {
+  for (const field of identity ? ["firstName", "lastName", "gender", "ninu", "phone", "address"] : item.type === "dossier.update" ? dossierEditFields : contractEditFields) {
     if (originalBase && JSON.stringify(item.payload[field] ?? null) === JSON.stringify(originalBase[field] ?? null)) {
-      delete item.payload[field];
+      if (identity) item.payload[field] = remote[field];
+      else delete item.payload[field];
     }
   }
-  const records = item.type === "dossier.update" ? db.dossiers : db.contracts;
+  const records = identity ? db.applicants : item.type === "dossier.update" ? db.dossiers : db.contracts;
   const record = records.find(entry => (entry.id === item.payload.id || (Array.isArray(item.payload.contractIds) && item.payload.contractIds.includes(entry.id)))) as Record<string, unknown> | undefined;
   for (const field of item.conflict.fields) {
     if (choices[field] !== "remote") continue;
@@ -37,9 +45,30 @@ export async function resolveOfflineConflict(id: string, choices: Record<string,
       if (later.payload.id === item.payload.id && base && base[field] === oldValue) base[field] = remote[field];
     }
   }
+  if (identity) {
+    // Project accepted identity values onto its contracts and their unsent payloads.
+    const related = (value: Record<string, unknown>) => Boolean(
+      value.applicantId && value.applicantId === item.payload.id || value.nif && value.nif === item.payload.nif);
+    for (const contract of db.contracts) {
+      if (contract.workspaceId !== item.workspaceId || !related(contract)) continue;
+      for (const field of ["firstName", "lastName", "gender", "ninu", "address"] as const) {
+        const original = originalBase?.[field];
+        if (choices[field] === "remote" && contract[field] === originalPayload[field] || original !== undefined && contract[field] === original) {
+          (contract as Record<string, unknown>)[field] = item.payload[field];
+        }
+      }
+    }
+    for (const pending of db.outbox) {
+      if (pending.workspaceId !== item.workspaceId || !pending.type.startsWith("contract.") || !related(pending.payload)) continue;
+      for (const field of ["firstName", "lastName", "gender", "ninu", "address"]) {
+        if (pending.payload[field] === originalPayload[field]) pending.payload[field] = item.payload[field];
+      }
+    }
+  }
   item.payload[baseKey] = remote;
   item.id = createId(); // In-flight acknowledgements cannot remove the resolved operation.
   item.lastError = null;
+  item.failureKind = undefined;
   item.conflict = undefined;
   saveDb(db);
   await flushLocalDbWrites();

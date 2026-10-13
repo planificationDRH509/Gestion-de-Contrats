@@ -10541,7 +10541,7 @@ body,
 
 .contracts-filter-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.3fr) minmax(0, .85fr);
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.3fr);
   gap: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -10550,6 +10550,7 @@ body,
 .contracts-filter-shortcuts {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -10558,13 +10559,36 @@ body,
   background: var(--panel-muted);
 }
 
+.contracts-fiscal-filter {
+  position: relative;
+}
+
+.contracts-fiscal-filter select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.contracts-fiscal-filter:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.contracts-filter-shortcuts .multi-select-menu {
+  width: min(280px, calc(100vw - 48px)) !important;
+  left: 0 !important;
+  right: auto;
+}
+
 .contracts-filter-grid .accent-select {
   padding-inline: 10px !important;
   border-radius: 8px !important;
   font-size: 12px !important;
 }
 
-.contracts-filter-grid .multi-select-field:nth-last-child(-n+2) .multi-select-menu {
+.contracts-filter-grid > .multi-select-field:nth-last-child(-n+2) .multi-select-menu {
   left: auto !important;
   right: 0;
 }
@@ -10602,12 +10626,18 @@ body,
   .contracts-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .contracts-filter-grid .multi-select-menu {
+  .contracts-filter-grid > .multi-select-field .multi-select-menu {
     width: 100% !important;
   }
 }
 
 @media (max-width: 540px) {
+  .contracts-filter-shortcuts {
+    position: relative;
+  }
+  .contracts-filter-shortcuts .multi-select-field {
+    position: static !important;
+  }
   .contracts-filter-grid {
     grid-template-columns: minmax(0, 1fr);
   }

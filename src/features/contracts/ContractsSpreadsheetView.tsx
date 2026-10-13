@@ -1,3 +1,6 @@
+import { isContractCorrection, isCorrectionQueued } from "../../data/local/syncFailures";
+import { ContractSyncIndicator } from "./ContractSyncIndicator";
+import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { ContractMandateAlert } from "./ContractMandateAlert";
 import { useMinisters } from "../settings/ministersApi";
 import { findContractMinister } from "../../lib/ministers";
@@ -72,6 +75,7 @@ type SpreadsheetNewRow = {
 type SpreadsheetPersistedDraft = {
   newRows: SpreadsheetNewRow[];
   draftById: Record<string, SpreadsheetDraft>;
+  correctionContractIds?: string[];
   stagedRowKeys?: string[];
   pastedRowKeys?: string[];
 };
@@ -344,6 +348,7 @@ export function ContractsSpreadsheetView({
     const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
     return saved?.draftById ?? {};
   });
+  const [returnedContractIds, setReturnedContractIds] = useState<string[]>(() => loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey)?.correctionContractIds ?? []);
   const [newRows, setNewRows] = useState<SpreadsheetNewRow[]>(() => {
     const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
     return saved?.newRows?.length ? saved.newRows : createDefaultNewRows();
@@ -360,7 +365,7 @@ export function ContractsSpreadsheetView({
     message: string;
   };
   const [nifCheckingRows, setNifCheckingRows] = useState<Record<string, boolean>>({});
-  const [nifStatusByRow, setNifStatusByRow] = useState<Record<string, NifRowStatus>>({}); 
+  const [nifStatusByRow, setNifStatusByRow] = useState<Record<string, NifRowStatus>>({});
 
   const { data: dossiers = [] } = useDossiersList(workspaceId);
 
@@ -442,16 +447,31 @@ export function ContractsSpreadsheetView({
   }, [newRows]);
 
   const [createdContractIds, setCreatedContractIds] = useState<string[]>([]);
+  const correctionItems = useMemo(() => pendingSync.filter(isCorrectionQueued), [pendingSync]);
+  const cachedContracts = useMemo(() => readCachedContracts({ workspaceId, all: true }).items, [workspaceId, pendingSync, contracts, createdContractIds]);
+  function hasUnsavedCorrection(contract: Contract) {
+    const draft = draftById[contract.id];
+    return returnedContractIds.includes(contract.id) && Boolean(savingRows[contract.id] || draft &&
+      !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft({ ...toContractDraft(contract), phone: draft.phone })));
+  }
   const visibleContracts = useMemo(() => {
     const rows = new Map(contracts.map(contract => [contract.id, contract]));
     const pendingIds = new Set(pendingSync.filter(item => item.workspaceId === workspaceId && item.type === "contract.create").map(item => item.payload.id));
-    for (const contract of readCachedContracts({ workspaceId, all: true }).items) {
-      if (pendingIds.has(contract.id) || createdContractIds.includes(contract.id)) rows.set(contract.id, contract);
+    for (const contract of cachedContracts) {
+      if (pendingIds.has(contract.id) || createdContractIds.includes(contract.id) || hasUnsavedCorrection(contract) || correctionItems.some(item => isContractCorrection(item, contract, userId))) rows.set(contract.id, contract);
     }
     return [...rows.values()]
-      .filter(contract => contract.workspaceId === workspaceId && contract.createdBy === userId && !contract.deletedAt)
+      .filter(contract => contract.workspaceId === workspaceId && (contract.createdBy === userId || hasUnsavedCorrection(contract) || correctionItems.some(item => isContractCorrection(item, contract, userId))) && !contract.deletedAt)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [contracts, createdContractIds, pendingSync, workspaceId, userId]);
+  }, [contracts, cachedContracts, createdContractIds, pendingSync, correctionItems, workspaceId, userId, returnedContractIds, draftById, savingRows]);
+
+  const correctionContracts = visibleContracts.filter(contract => hasUnsavedCorrection(contract) || correctionItems.some(item => isContractCorrection(item, contract, userId)));
+  useEffect(() => {
+    const returned = visibleContracts.filter(contract => correctionItems.some(item => isContractCorrection(item, contract, userId))).map(contract => contract.id);
+    setReturnedContractIds(previous => returned.some(id => !previous.includes(id)) ? [...new Set([...previous, ...returned])] : previous);
+  }, [visibleContracts, correctionItems, userId]);
+  const correctionIds = new Set(correctionContracts.map(contract => contract.id));
+  const recentContracts = visibleContracts.filter(contract => !correctionIds.has(contract.id));
 
   const contractsMap = useMemo(
     () => new Map(visibleContracts.map((contract) => [contract.id, contract])),
@@ -479,13 +499,30 @@ export function ContractsSpreadsheetView({
   }
 
   useEffect(() => {
+    const previous = contractsMapRef.current;
     contractsMapRef.current = contractsMap;
+    setDraftById(drafts => {
+      let next = drafts;
+      for (const [id, draft] of Object.entries(drafts)) {
+        const before = previous.get(id), after = contractsMap.get(id);
+        if (!before || !after || before === after) continue;
+        const oldBase = toContractDraft(before), newBase = toContractDraft(after);
+        for (const field of [...SPREADSHEET_FIELDS.filter(field => field !== "phone"), "comment", "salaryText"] as SpreadsheetFieldKey[]) {
+          if (draft[field] === oldBase[field] && oldBase[field] !== newBase[field]) {
+            if (next === drafts) next = { ...drafts };
+            next[id] = { ...next[id], [field]: newBase[field] };
+          }
+        }
+      }
+      return next;
+    });
   }, [contractsMap]);
 
   useEffect(() => {
     draftHydratedRef.current = false;
     const saved = loadDraftValue<SpreadsheetPersistedDraft>(unsavedDraftKey);
     setDraftById(saved?.draftById ?? {});
+    setReturnedContractIds(saved?.correctionContractIds ?? []);
     const staged = new Set(saved?.stagedRowKeys ?? []);
     updatePastedRows(new Set(saved?.pastedRowKeys ?? []));
     stagedRowsRef.current = staged;
@@ -524,10 +561,11 @@ export function ContractsSpreadsheetView({
     saveUnsavedDraft<SpreadsheetPersistedDraft>(unsavedDraftKey, {
       newRows,
       draftById: changedDraftById,
+      correctionContractIds: returnedContractIds.filter(id => id in changedDraftById),
       stagedRowKeys: [...stagedRowKeys],
       pastedRowKeys: [...pastedRowKeys]
     });
-  }, [contractsMap, applicantPhones, draftById, newRows, stagedRowKeys, pastedRowKeys, unsavedDraftKey, userId, workspaceId]);
+  }, [contractsMap, applicantPhones, draftById, newRows, stagedRowKeys, pastedRowKeys, unsavedDraftKey, userId, workspaceId, returnedContractIds]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -661,13 +699,11 @@ export function ContractsSpreadsheetView({
     return Math.max(0.35, Math.min(1, sheetViewportWidth / sheetGridWidth));
   }, [sheetGridWidth, sheetViewportWidth, zoomMode, zoomPercent]);
 
-  const rowOrder = useMemo(
-    () => [
-      ...newRows.map((row) => getNewRowKey(row.id)),
-      ...(recentOpen ? visibleContracts.map((contract) => getExistingRowKey(contract.id)) : [])
-    ],
-    [newRows, visibleContracts, recentOpen]
-  );
+  const rowOrder = [
+    ...newRows.map(row => getNewRowKey(row.id)),
+    ...correctionContracts.map(contract => getExistingRowKey(contract.id)),
+    ...(recentOpen ? recentContracts.map(contract => getExistingRowKey(contract.id)) : [])
+  ];
 
   const sheetBusy = savingBatch || Object.values(creatingRows).some(Boolean) || Object.values(savingRows).some(Boolean);
   const pastedCount = newRows.filter(row => pastedRowKeys.has(getNewRowKey(row.id)) && !isDraftEmpty(row.draft)).length + [...pastedRowKeys].filter(key => key.startsWith("existingRow_")).length;
@@ -1201,6 +1237,7 @@ export function ContractsSpreadsheetView({
     const contract = contractsMapRef.current.get(contractId);
     if (!contract || !workspaceId) return;
 
+    const submittedDraft = draftByIdRef.current[contractId];
     const baseDraft = normalizeDraft(toDraft(contract));
     const editedDraft = normalizeDraft({ ...baseDraft, ...draftByIdRef.current[contractId], phone: draftByIdRef.current[contractId]?.phone ?? baseDraft.phone });
     if (!validateRow(getExistingRowKey(contractId), draftByIdRef.current[contractId] ?? baseDraft, false)) return false;
@@ -1283,7 +1320,7 @@ export function ContractsSpreadsheetView({
       }));
 
       forgetHistory(getExistingRowKey(contractId));
-      setDraftById((prev) => ({ ...prev, [contractId]: editedDraft }));
+      setDraftById(prev => prev[contractId] !== submittedDraft ? prev : { ...prev, [contractId]: editedDraft });
       setRowErrors((prev) => {
         if (!prev[contractId]) return prev;
         const next = { ...prev };
@@ -1573,12 +1610,250 @@ export function ContractsSpreadsheetView({
 
     return <>
       <div className={`contracts-sheet-state-cell ${status.color}`} title={label} aria-label={label}>
-        <span aria-hidden="true" className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>{status.icon}</span>
+        {options.contract && correctionIds.has(options.contract.id) ? <ContractSyncIndicator
+          contract={options.contract} pending={pendingSync} online={navigator.onLine} cloudEnabled={cloudEnabled}
+          onRetry={syncSupabaseOutbox}
+        /> : <span aria-hidden="true" className={`material-symbols-rounded contracts-sheet-state-status-icon ${syncState === "saving" ? "is-spinning" : ""}`}>{status.icon}</span>}
       </div>
       <SpreadsheetRowMenu rowKey={rowKey} hasComment={options.hasComment} actions={actions}>
         {cloudEnabled && options.contract && <DiscardContractSyncButton contract={options.contract} pending={pendingSync} online={navigator.onLine} menuItem />}
       </SpreadsheetRowMenu>
     </>;
+  }
+
+  function syncFieldErrors(contract: Contract, draft: SpreadsheetDraft): SpreadsheetErrors {
+    const errors: SpreadsheetErrors = {};
+    for (const item of pendingSync.filter(item => item.lastError && isContractCorrection(item, contract, userId))) {
+      const fields = [...(item.conflict?.fields ?? [])];
+      // Highlight only fields actually named by the rejection, without guessing.
+      if (!fields.length) {
+        const message = item.lastError ?? "";
+        if (/\bNINU\b/i.test(message)) fields.push("ninu");
+        else if (/\bNIF\b/i.test(message)) fields.push("nif");
+        if (/salaire|salary|salaire_en_chiffre/i.test(message)) fields.push("salaryNumber");
+        if (/durée|duration|duree_contrat/i.test(message)) fields.push("durationMonths");
+      }
+      for (const field of fields) {
+        const key = (field === "commentaire" ? "comment" : field) as SpreadsheetFieldKey;
+        if (SPREADSHEET_FIELDS.includes(key) && draft[key] === toDraft(contract)[key]) errors[key] = item.lastError!;
+      }
+    }
+    return errors;
+  }
+
+  function renderExistingRows(rows: Contract[]) {
+    return rows.map((contract) => {
+      const rowKey = getExistingRowKey(contract.id);
+      const draft = getRowDraft(contract);
+      const rowError = rowErrors[contract.id];
+      const saving = Boolean(savingRows[contract.id]);
+      const hasChanges = !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
+
+      const info = contractSyncInfo(contract, pendingSync, cloudEnabled);
+      let syncState: SyncState = info.error ? "error" : info.pending ? "queued" : cloudEnabled ? "saved" : "local";
+      let label = info.error || info.label;
+
+      if (saving) {
+        syncState = "saving";
+        label = "Enregistrement en cours...";
+      } else if (rowError || Object.keys(fieldErrors(rowKey, draft)).length) {
+        syncState = "error";
+        label = rowError || Object.values(fieldErrors(rowKey, draft))[0] || "Erreur de saisie";
+      } else if (hasChanges) {
+        syncState = "unsaved";
+        label = "Modifications non enregistrées";
+      }
+
+      return (
+        <div key={contract.id} className={`contracts-sheet-row-wrap ${correctionIds.has(contract.id) ? "contracts-sheet-row-correction" : ""}`}>
+          <div className={`contracts-sheet-row-shell ${saving ? "is-saving" : ""}`}>
+            {renderRowStatusIcon(
+              rowKey,
+              syncState,
+              label,
+              {
+                contract,
+                onSaveClick: correctionIds.has(contract.id) ? () => { void saveExistingRow(contract.id); } : undefined,
+                showCommentButton: true,
+                hasComment: Boolean(contract.commentaire?.trim()),
+                onCommentClick: () => openCommentDialog(contract),
+                onDeleteClick: canDelete
+                  ? () => {
+                      if (window.confirm("Supprimer ce contrat ?")) {
+                        deleteContract.mutate({ id: contract.id, workspaceId });
+                      }
+                    }
+                  : undefined
+              }
+            )}
+            <SpreadsheetRow
+              rowKey={rowKey}
+              columns={visibleColumns}
+              errors={{ ...syncFieldErrors(contract, draft), ...fieldErrors(rowKey, draft) }}
+              busy={saving}
+              className={`contracts-sheet-row ${saving ? "is-saving" : ""}`}
+              style={{ gridTemplateColumns }}
+            >
+              {renderNifInput(
+                rowKey,
+                0,
+                draft.nif,
+                (value) => setExistingField(contract.id, "nif", value),
+                () => queueExistingSave(contract.id),
+                "input contracts-sheet-input",
+                draft.position
+              )}
+              <textarea
+                rows={1}
+                data-sheet-row={rowKey}
+                data-sheet-col={1}
+                className="input contracts-sheet-input contracts-sheet-input-multiline"
+                value={draft.firstName}
+                onChange={(event) =>
+                  setExistingField(contract.id, "firstName", event.target.value)
+                }
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 1)}
+                onBlur={() => queueExistingSave(contract.id)}
+              />
+              <textarea
+                rows={1}
+                data-sheet-row={rowKey}
+                data-sheet-col={2}
+                className="input contracts-sheet-input contracts-sheet-input-multiline"
+                value={draft.lastName}
+                onChange={(event) =>
+                  setExistingField(contract.id, "lastName", event.target.value)
+                }
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 2)}
+                onBlur={() => queueExistingSave(contract.id)}
+              />
+              <input
+                data-sheet-row={rowKey}
+                data-sheet-col={3}
+                className="input contracts-sheet-input"
+                value={draft.gender}
+                placeholder="H / F"
+                onChange={(event) => {
+                  const val = event.target.value.toUpperCase();
+                  if (val === "H" || val === "HOMME") setExistingField(contract.id, "gender", "Homme");
+                  else if (val === "F" || val === "FEMME") setExistingField(contract.id, "gender", "Femme");
+                  else setExistingField(contract.id, "gender", val);
+                }}
+                onKeyDown={(event) => {
+                  handleGenderShortcut(event, (value) =>
+                    setExistingField(contract.id, "gender", value)
+                  );
+                  handleGridArrowNavigation(event, rowKey, 3);
+                }}
+                onBlur={() => queueExistingSave(contract.id)}
+              />
+              <input
+                data-sheet-row={rowKey}
+                data-sheet-col={4}
+                className="input contracts-sheet-input"
+                value={draft.ninu}
+                onChange={(event) =>
+                  setExistingField(contract.id, "ninu", event.target.value)
+                }
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 4)}
+                onBlur={() => queueExistingSave(contract.id)}
+              />
+              <AutocompleteField
+                multiline
+                dataSheetRow={rowKey}
+                dataSheetCol={5}
+                className="input contracts-sheet-input contracts-sheet-input-multiline"
+                value={draft.address}
+                onChange={(value) => setExistingField(contract.id, "address", value)}
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 5)}
+                onBlur={() => queueExistingSave(contract.id)}
+                items={addressItems}
+                featuredItem={featuredAddress}
+                pinCategory="address"
+              />
+              <AutocompleteField
+                multiline
+                dataSheetRow={rowKey}
+                dataSheetCol={6}
+                className="input contracts-sheet-input contracts-sheet-input-multiline"
+                value={draft.position}
+                onChange={(value) => setExistingField(contract.id, "position", value)}
+                onSelect={(item) => applyPositionSelection(contract.id, item)}
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 6)}
+                onBlur={() => queueExistingSave(contract.id)}
+                items={draft.gender === "Femme" ? femininePositionItems : positionItems}
+                featuredItem={featuredPosition}
+                pinCategory="position"
+              />
+              <AutocompleteField
+                multiline
+                dataSheetRow={rowKey}
+                dataSheetCol={7}
+                className="input contracts-sheet-input contracts-sheet-input-multiline"
+                value={draft.assignment}
+                onChange={(value) => setExistingField(contract.id, "assignment", value)}
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
+                onBlur={() => queueExistingSave(contract.id)}
+                items={assignmentItemsForAddress(draft.address)}
+                featuredItem={featuredAssignment}
+                pinCategory="assignment"
+              />
+              <AutocompleteField
+                dataSheetRow={rowKey}
+                dataSheetCol={8}
+                className="input contracts-sheet-input"
+                value={draft.salaryNumber}
+                hasError={salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, draft.position, parseMoney(draft.salaryNumber))}
+                placeholder="Ex: 45000"
+                onChange={(value) =>
+                  setExistingField(contract.id, "salaryNumber", value)
+                }
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
+                onBlur={() => queueExistingSave(contract.id)}
+                items={approvedSalaries(salaryGrid, draft.position).map(s => ({ id: s.toString(), label: s.toString() }))}
+                showAllOnFocus={approvedSalaries(salaryGrid, draft.position).length > 1}
+              />
+              <input
+                data-sheet-row={rowKey}
+                data-sheet-col={9}
+                className="input contracts-sheet-input"
+                value={draft.durationMonths}
+                placeholder="12"
+                inputMode="numeric"
+                onChange={(event) => setExistingField(contract.id, "durationMonths", event.target.value)}
+                onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
+                onBlur={() => queueExistingSave(contract.id)}
+              />
+              {phoneVisible && <input
+                type="tel"
+                data-sheet-row={rowKey}
+                data-sheet-col={10}
+                className="input contracts-sheet-input"
+                value={draft.phone ?? ""}
+                onChange={event => setExistingField(contract.id, "phone", event.target.value)}
+                onKeyDown={event => handleGridArrowNavigation(event, rowKey, 10)}
+                onBlur={() => queueExistingSave(contract.id)}
+              />}
+            </SpreadsheetRow>
+          </div>
+          {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
+          <ContractMandateAlert contract={{ ...contract, durationMonths: Number(draft.durationMonths.trim() || 12) }} minister={findContractMinister(contract, ministerRegistry)} />
+          {contract.tags && contract.tags.length > 0 && (
+            <div style={{
+              display: "flex", gap: "4px", flexWrap: "wrap",
+              padding: `4px 8px 4px ${STATUS_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + 10}px`,
+              borderBottom: "1px solid var(--border)",
+              background: "var(--bg)",
+              borderRight: "1px solid var(--border)"
+            }}>
+              {contract.tags.map(tag => (
+                <TagBadge key={tag.id} tag={tag} />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    });
   }
 
   const activeCommentContract = commentOpenContractId
@@ -1725,10 +2000,10 @@ export function ContractsSpreadsheetView({
             const nifChecking = Boolean(nifCheckingRows[row.id]);
             const nifStatus = nifStatusByRow[row.id] ?? null;
             const isBlocked = nifStatus?.type === "blocked";
-            
+
             let syncState: SyncState = "empty";
             let label = "Vide";
-            
+
             if (creating) {
                syncState = "saving";
                label = "Enregistrement en cours...";
@@ -1842,7 +2117,7 @@ export function ContractsSpreadsheetView({
                         let nextGender = val;
                         if (val === "H" || val === "HOMME") nextGender = "Homme";
                         else if (val === "F" || val === "FEMME") nextGender = "Femme";
-                        
+
                         setNewField(row.id, "gender", nextGender as any);
                         checkAutoNext(row.id, 3, "gender", nextGender);
                       }}
@@ -1966,222 +2241,14 @@ export function ContractsSpreadsheetView({
             );
           })}
 
+          {renderExistingRows(correctionContracts)}
+
           <button type="button" className="contracts-sheet-divider sheet-recent-toggle" aria-expanded={recentOpen} aria-controls="sheet-recent-contracts" onClick={() => setRecentOpen(open => !open)}>
             <span className="material-symbols-rounded" aria-hidden="true">{recentOpen ? "expand_more" : "chevron_right"}</span>
-            <strong>Contrats récents</strong><span>{visibleContracts.length}</span>
+            <strong>Contrats récents</strong><span>{recentContracts.length}</span>
           </button>
           <div id="sheet-recent-contracts" hidden={!recentOpen}>
-          {visibleContracts.map((contract) => {
-            const rowKey = getExistingRowKey(contract.id);
-            const draft = getRowDraft(contract);
-            const rowError = rowErrors[contract.id];
-            const saving = Boolean(savingRows[contract.id]);
-            const hasChanges = !areSpreadsheetDraftsEqual(normalizeDraft(draft), normalizeDraft(toDraft(contract)));
-            
-            const info = contractSyncInfo(contract, pendingSync, cloudEnabled);
-            let syncState: SyncState = info.error ? "error" : info.pending ? "queued" : cloudEnabled ? "saved" : "local";
-            let label = info.error || info.label;
-            
-            if (saving) {
-              syncState = "saving";
-              label = "Enregistrement en cours...";
-            } else if (rowError || Object.keys(fieldErrors(rowKey, draft)).length) {
-              syncState = "error";
-              label = rowError || Object.values(fieldErrors(rowKey, draft))[0] || "Erreur de saisie";
-            } else if (hasChanges) {
-              syncState = "unsaved";
-              label = "Modifications non enregistrées";
-            }
-
-            return (
-              <div key={contract.id} className="contracts-sheet-row-wrap">
-                <div className={`contracts-sheet-row-shell ${saving ? "is-saving" : ""}`}>
-                  {renderRowStatusIcon(
-                    rowKey,
-                    syncState,
-                    label,
-                    {
-                      contract,
-                      showCommentButton: true,
-                      hasComment: Boolean(contract.commentaire?.trim()),
-                      onCommentClick: () => openCommentDialog(contract),
-                      onDeleteClick: canDelete
-                        ? () => {
-                            if (window.confirm("Supprimer ce contrat ?")) {
-                              deleteContract.mutate({ id: contract.id, workspaceId });
-                            }
-                          }
-                        : undefined
-                    }
-                  )}
-                  <SpreadsheetRow
-                    rowKey={rowKey}
-                    columns={visibleColumns}
-                    errors={fieldErrors(rowKey, draft)}
-                    busy={saving}
-                    className={`contracts-sheet-row ${saving ? "is-saving" : ""}`}
-                    style={{ gridTemplateColumns }}
-                  >
-                    {renderNifInput(
-                      rowKey,
-                      0,
-                      draft.nif,
-                      (value) => setExistingField(contract.id, "nif", value),
-                      () => queueExistingSave(contract.id),
-                      "input contracts-sheet-input",
-                      draft.position
-                    )}
-                    <textarea
-                      rows={1}
-                      data-sheet-row={rowKey}
-                      data-sheet-col={1}
-                      className="input contracts-sheet-input contracts-sheet-input-multiline"
-                      value={draft.firstName}
-                      onChange={(event) =>
-                        setExistingField(contract.id, "firstName", event.target.value)
-                      }
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 1)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />
-                    <textarea
-                      rows={1}
-                      data-sheet-row={rowKey}
-                      data-sheet-col={2}
-                      className="input contracts-sheet-input contracts-sheet-input-multiline"
-                      value={draft.lastName}
-                      onChange={(event) =>
-                        setExistingField(contract.id, "lastName", event.target.value)
-                      }
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 2)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />
-                    <input
-                      data-sheet-row={rowKey}
-                      data-sheet-col={3}
-                      className="input contracts-sheet-input"
-                      value={draft.gender}
-                      placeholder="H / F"
-                      onChange={(event) => {
-                        const val = event.target.value.toUpperCase();
-                        if (val === "H" || val === "HOMME") setExistingField(contract.id, "gender", "Homme");
-                        else if (val === "F" || val === "FEMME") setExistingField(contract.id, "gender", "Femme");
-                        else setExistingField(contract.id, "gender", val);
-                      }}
-                      onKeyDown={(event) => {
-                        handleGenderShortcut(event, (value) =>
-                          setExistingField(contract.id, "gender", value)
-                        );
-                        handleGridArrowNavigation(event, rowKey, 3);
-                      }}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />
-                    <input
-                      data-sheet-row={rowKey}
-                      data-sheet-col={4}
-                      className="input contracts-sheet-input"
-                      value={draft.ninu}
-                      onChange={(event) =>
-                        setExistingField(contract.id, "ninu", event.target.value)
-                      }
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 4)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />
-                    <AutocompleteField
-                      multiline
-                      dataSheetRow={rowKey}
-                      dataSheetCol={5}
-                      className="input contracts-sheet-input contracts-sheet-input-multiline"
-                      value={draft.address}
-                      onChange={(value) => setExistingField(contract.id, "address", value)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 5)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                      items={addressItems}
-                      featuredItem={featuredAddress}
-                      pinCategory="address"
-                    />
-                    <AutocompleteField
-                      multiline
-                      dataSheetRow={rowKey}
-                      dataSheetCol={6}
-                      className="input contracts-sheet-input contracts-sheet-input-multiline"
-                      value={draft.position}
-                      onChange={(value) => setExistingField(contract.id, "position", value)}
-                      onSelect={(item) => applyPositionSelection(contract.id, item)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 6)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                      items={draft.gender === "Femme" ? femininePositionItems : positionItems}
-                      featuredItem={featuredPosition}
-                      pinCategory="position"
-                    />
-                    <AutocompleteField
-                      multiline
-                      dataSheetRow={rowKey}
-                      dataSheetCol={7}
-                      className="input contracts-sheet-input contracts-sheet-input-multiline"
-                      value={draft.assignment}
-                      onChange={(value) => setExistingField(contract.id, "assignment", value)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 7)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                      items={assignmentItemsForAddress(draft.address)}
-                      featuredItem={featuredAssignment}
-                      pinCategory="assignment"
-                    />
-                    <AutocompleteField
-                      dataSheetRow={rowKey}
-                      dataSheetCol={8}
-                      className="input contracts-sheet-input"
-                      value={draft.salaryNumber}
-                      hasError={salaryGridData !== undefined && salaryOutsideGrid(salaryGrid, draft.position, parseMoney(draft.salaryNumber))}
-                      placeholder="Ex: 45000"
-                      onChange={(value) =>
-                        setExistingField(contract.id, "salaryNumber", value)
-                      }
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 8)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                      items={approvedSalaries(salaryGrid, draft.position).map(s => ({ id: s.toString(), label: s.toString() }))}
-                      showAllOnFocus={approvedSalaries(salaryGrid, draft.position).length > 1}
-                    />
-                    <input
-                      data-sheet-row={rowKey}
-                      data-sheet-col={9}
-                      className="input contracts-sheet-input"
-                      value={draft.durationMonths}
-                      placeholder="12"
-                      inputMode="numeric"
-                      onChange={(event) => setExistingField(contract.id, "durationMonths", event.target.value)}
-                      onKeyDown={(event) => handleGridArrowNavigation(event, rowKey, 9)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />
-                    {phoneVisible && <input
-                      type="tel"
-                      data-sheet-row={rowKey}
-                      data-sheet-col={10}
-                      className="input contracts-sheet-input"
-                      value={draft.phone ?? ""}
-                      onChange={event => setExistingField(contract.id, "phone", event.target.value)}
-                      onKeyDown={event => handleGridArrowNavigation(event, rowKey, 10)}
-                      onBlur={() => queueExistingSave(contract.id)}
-                    />}
-                  </SpreadsheetRow>
-                </div>
-                {rowError ? <div className="contracts-sheet-inline-error">{rowError}</div> : null}
-                <ContractMandateAlert contract={{ ...contract, durationMonths: Number(draft.durationMonths.trim() || 12) }} minister={findContractMinister(contract, ministerRegistry)} />
-                {contract.tags && contract.tags.length > 0 && (
-                  <div style={{ 
-                    display: "flex", gap: "4px", flexWrap: "wrap",
-                    padding: `4px 8px 4px ${STATUS_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + 10}px`,
-                    borderBottom: "1px solid var(--border)", 
-                    background: "var(--bg)",
-                    borderRight: "1px solid var(--border)"
-                  }}>
-                    {contract.tags.map(tag => (
-                      <TagBadge key={tag.id} tag={tag} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {renderExistingRows(recentContracts)}
 
           </div>
         </div>

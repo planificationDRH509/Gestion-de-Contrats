@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { InstitutionSuggestion } from "../../data/local/suggestionsDb";
 import {
   NO_MATCHING_INSTITUTION_ASSIGNMENT,
+  getLinkedInstitutionFilters,
+  updateInstitutionFilterSelection,
   combineAssignmentAndInstitutionLocationFilters,
   contractMatchesInstitutionLocation,
   getInstitutionCommuneOptions,
@@ -90,5 +92,35 @@ describe("institution location filters", () => {
         []
       )
     ).toBe(false);
+  });
+});
+
+
+describe("linked location choices", () => {
+  it("narrows institutions and communes but keeps ambiguous choices editable", () => {
+    const filters = getLinkedInstitutionFilters(institutions, { institution: [], department: ["Ouest"], commune: [] });
+    expect(filters.institution.options).toEqual(["Centre de Pétion-Ville", "Hôpital de Delmas"]);
+    expect(filters.commune.options).toEqual(["Delmas", "Pétion-Ville"]);
+    expect(filters.institution.disabled).toBe(false);
+    expect(filters.commune.disabled).toBe(false);
+    expect(filters.department.disabled).toBe(false);
+  });
+
+  it("transfers a redundant department selection to the commune that determines it", () => {
+    const next = updateInstitutionFilterSelection(institutions,
+      { institution: [], department: ["Ouest"], commune: [] }, "commune", ["Delmas"]);
+    expect(next).toEqual({ institution: [], department: [], commune: ["Delmas"] });
+    const filters = getLinkedInstitutionFilters(institutions, next);
+    expect(filters.department).toMatchObject({ disabled: true, values: ["Ouest"] });
+    expect(filters.institution).toMatchObject({ disabled: true, values: ["Hôpital de Delmas"] });
+    expect(filters.commune.disabled).toBe(false);
+  });
+
+  it("does not infer missing location data and normalizes known values", () => {
+    const incomplete = [...institutions, { ...institutions[0], id: "unknown", label: "Sans commune", commune: "" }];
+    const filters = getLinkedInstitutionFilters(incomplete,
+      { institution: ["HÔPITAL DE DELMAS", "Sans commune"], department: [], commune: [] });
+    expect(filters.department).toMatchObject({ disabled: true, values: ["Ouest"] });
+    expect(filters.commune.disabled).toBe(false);
   });
 });

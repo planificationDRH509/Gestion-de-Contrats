@@ -1,3 +1,4 @@
+import { repairContractOutbox } from "./repairContractOutbox";
 import { projectInstitutionAssignment } from './referenceOverlay';
 import { sameImportContract } from "../../features/contracts/contractImportBatch";
 import { assertContractDuration } from "../../lib/contractDuration";
@@ -244,7 +245,7 @@ export class LocalContractRepository implements ContractRepository {
     updateListedContract(db, previous, updated);
     db.contracts[contractIndex] = updated;
     saveDb(db);
-    queueOutbox(updated.workspaceId, "contract.update", { ...input, baseContract: previous });
+    if (!repairContractOutbox(updated.workspaceId, input)) queueOutbox(updated.workspaceId, "contract.update", { ...input, baseContract: previous });
     await flushLocalDbWrites();
     return updated;
   }

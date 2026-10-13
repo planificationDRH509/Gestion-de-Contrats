@@ -5,7 +5,7 @@ import type { Contract, OutboxItem } from "../../data/types";
 import { contractSyncInfo } from "../../data/local/outboxDependencies";
 import { resolveOfflineConflict } from "../../data/local/resolveConflict";
 
-const fieldLabels: Record<string, string> = { position: "Poste", assignment: "Affectation", salaryNumber: "Salaire",
+const fieldLabels: Record<string, string> = { firstName: "Prénom", lastName: "Nom", gender: "Sexe", ninu: "NINU", address: "Adresse", phone: "Téléphone", position: "Poste", assignment: "Affectation", salaryNumber: "Salaire",
   salaryText: "Salaire en lettres", durationMonths: "Durée", dossierId: "Dossier", status: "État",
   commentaire: "Commentaire", nif: "NIF", applicantId: "Identification", name: "Nom", deletedAt: "Suppression" };
 
@@ -18,7 +18,10 @@ export function ContractSyncIndicator({ contract, pending, online, cloudEnabled,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, "local" | "remote">>({});
-  const conflict = pending.find(item => item.conflict && (item.payload.id === contract.id || item.payload.id === contract.dossierId || (Array.isArray(item.payload.contractIds) && item.payload.contractIds.includes(contract.id))));
+  const conflict = pending.find(item => item.workspaceId === contract.workspaceId && item.conflict && (item.payload.id === contract.id || item.payload.id === contract.dossierId ||
+    item.type === "applicant.upsert" && (item.payload.id === contract.applicantId || item.payload.nif && item.payload.nif === contract.nif) ||
+    (Array.isArray(item.payload.contractIds) && item.payload.contractIds.includes(contract.id))));
+  useEffect(() => setChoices({}), [conflict?.id]);
   const info = contractSyncInfo(contract, pending, cloudEnabled);
   useEffect(() => {
     if (!open) return;
@@ -58,7 +61,7 @@ export function ContractSyncIndicator({ contract, pending, online, cloudEnabled,
         <button type="button" className="btn btn-outline" disabled={busy || conflict.conflict.fields.some(field => !choices[field])}
           onClick={async () => {
             setBusy(true); setError(null);
-            try { await resolveOfflineConflict(conflict.id, choices); setChoices({}); await onRetry(); }
+            try { await resolveOfflineConflict(conflict.id, choices); setChoices({}); if (online) await onRetry(); }
             catch (cause) { setError(cause instanceof Error ? cause.message : "Résolution impossible."); }
             finally { setBusy(false); }
           }}>Appliquer</button>

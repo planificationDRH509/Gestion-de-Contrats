@@ -260,18 +260,42 @@ describe("contract list filters", () => {
     expectParams({ positions: ["Infirmière"], status: "impression_partiel", page: 1 });
   });
 
-  it("removes an incompatible commune when changing departments", async () => {
+  it("locks the location implied by a commune and releases it when removed", async () => {
     setup();
     await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
     await userEvent.click(screen.getByRole("button", { name: /Toutes les communes/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Delmas" }));
     expectParams({ assignments: ["Hôpital de Delmas"] });
+    expect(screen.getByRole("button", { name: /Ouest/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Hôpital de Delmas/ })).toBeDisabled();
+    await userEvent.click(screen.getByTitle("Retirer le filtre commune"));
+    expect(screen.getByRole("button", { name: /Tous les départements/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Toutes les institutions/ })).toBeEnabled();
+    expectParams({ assignments: undefined });
     await userEvent.click(screen.getByRole("button", { name: /Tous les départements/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Nord" }));
     expectParams({ assignments: ["Hôpital du Cap"], page: 1 });
-    expect(screen.queryByTitle("Retirer le filtre commune")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Toutes les communes/ }));
-    expect(screen.queryByRole("checkbox", { name: "Delmas" })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Cap-Haïtien" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Cap-Haïtien/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Hôpital du Cap/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expect(screen.getByRole("button", { name: /Toutes les communes/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Toutes les institutions/ })).toBeEnabled();
+  });
+
+  it("derives commune and department from institutions and permits multiple institutions", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Toutes les institutions/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Hôpital de Delmas" }));
+    expect(screen.getByRole("button", { name: /Ouest/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Delmas expand/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Hôpital du Cap" }));
+    expectParams({ assignments: ["Hôpital de Delmas", "Hôpital du Cap"] });
+    expect(screen.getByRole("button", { name: /Tous les départements/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Toutes les communes/ })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: /Tous les départements/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Nord" }));
+    expectParams({ assignments: ["Hôpital du Cap"] });
+    expect(screen.getByRole("button", { name: /Hôpital du Cap/ })).toBeDisabled();
   });
 });

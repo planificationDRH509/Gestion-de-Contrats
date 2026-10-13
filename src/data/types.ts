@@ -177,6 +177,9 @@ export type OutboxItem = {
   createdAt: string;
   syncedAt?: string | null;
   lastError?: string | null;
+  failureKind?: "temporary" | "correction" | "action" | "dependency";
+  /** Keep the row in the correction area until its server acknowledgement. */
+  correctionPending?: boolean;
   sequence?: number;
   actorId?: string;
   conflict?: { fields: string[]; remote: Record<string, unknown> };

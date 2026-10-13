@@ -1,6 +1,6 @@
 export class OfflineConflict extends Error {
-  constructor(public fields: string[], public remote: Record<string, unknown>) {
-    super(`Conflit sur ${fields.join(", ")} : choisissez les valeurs à conserver.`);
+  constructor(public fields: string[], public remote: Record<string, unknown>, message?: string) {
+    super(message ?? `Conflit sur ${fields.join(", ")} : choisissez les valeurs à conserver.`);
   }
 }
 

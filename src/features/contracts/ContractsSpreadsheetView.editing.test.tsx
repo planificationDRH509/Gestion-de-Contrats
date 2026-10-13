@@ -2,11 +2,14 @@ import { LEGACY_MINISTER, type MinisterRegistry } from "../../lib/ministers";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cacheContracts } from "../../data/local/offlineStore";
-import type { Contract } from "../../data/types";
+import { loadDb, saveDb } from "../../data/local/localDb";
+import { queueOutbox, setOutboxError } from "../../data/local/localOutbox";
+import { getPendingOutbox } from "../../data/local/offlineStore";
+import type { Contract, OutboxItem } from "../../data/types";
 
 const mocks = vi.hoisted(() => ({
   registry: undefined as MinisterRegistry | undefined, create: vi.fn(), update: vi.fn(), applicant: vi.fn(), lookup: vi.fn(), empty: [],
-  comment: vi.fn(), remove: vi.fn(), dossierList: vi.fn(), matches: vi.fn()
+  pending: [] as OutboxItem[], comment: vi.fn(), remove: vi.fn(), dossierList: vi.fn(), matches: vi.fn()
 }));
 vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: mocks.registry }) }));
 vi.mock("./contractsApi", () => ({
@@ -18,7 +21,7 @@ vi.mock("./contractsApi", () => ({
   useImportApplicantMatches: () => ({ data: mocks.matches() }),
   lookupNif: mocks.lookup
 }));
-vi.mock("../../lib/usePendingSync", () => ({ usePendingSync: () => mocks.empty }));
+vi.mock("../../lib/usePendingSync", () => ({ usePendingSync: () => mocks.pending }));
 vi.mock("./DiscardContractSyncButton", () => ({ DiscardContractSyncButton: () => null }));
 vi.mock("../settings/suggestionsApi", () => ({ useAddresses: () => ({ data: mocks.empty }), useInstitutions: () => ({ data: mocks.empty }) }));
 vi.mock("../salary-grid/salaryGridApi", () => ({ useSalaryGrid: () => ({ entries: mocks.empty }) }));
@@ -53,6 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   mocks.registry = undefined;
+  mocks.pending = [];
   mocks.dossierList.mockReturnValue(mocks.empty);
   mocks.matches.mockReturnValue(mocks.empty);
   mocks.lookup.mockResolvedValue({ identification: null, contracts: [] });
@@ -425,4 +429,78 @@ it("warns for a draft start outside the current mandate without preventing its c
   expect(screen.getByRole("alert")).toHaveTextContent("Début du contrat (06/04/2026) hors du mandat");
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer les lignes collées (1)" }));
   await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+});
+
+
+it("returns old corrections once beside new drafts even with recent rows collapsed, through reload and ACK", async () => {
+  localStorage.setItem("contribution_auth", JSON.stringify({ id: "me", workspaceId: "w" }));
+  cacheContracts([existing]);
+  const view = setup();
+  await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  fireEvent.change(cell(0, 1), { target: { value: "Brouillon préservé" } });
+  const toggle = screen.getByRole("button", { name: /Contrats récents/ });
+  if (toggle.getAttribute("aria-expanded") === "true") fireEvent.click(toggle);
+  const first = queueOutbox("w", "contract.update", { id: existing.id, salaryNumber: 45000 });
+  setOutboxError(first.id, "Salaire hors grille");
+  const second = queueOutbox("w", "contract.update", { id: existing.id, position: "Comptable" });
+  setOutboxError(second.id, "Poste incorrect");
+  mocks.pending = getPendingOutbox();
+  view.rerender(<ContractsSpreadsheetView workspaceId="w" userId="me" contracts={[existing]} isLoading={false} canDelete />);
+  const corrections = () => document.querySelectorAll(".contracts-sheet-row-correction");
+  expect(corrections()).toHaveLength(1);
+  expect(corrections()[0]).toBeVisible();
+  expect(corrections()[0].closest("#sheet-recent-contracts")).toBeNull();
+  expect(document.querySelectorAll('[data-sheet-row="existingRow_existing"][data-sheet-col="0"]')).toHaveLength(1);
+  expect(cell(0, 1)).toHaveValue("Brouillon préservé");
+  await waitFor(() => expect(localStorage.getItem("contract_unsaved_draft:spreadsheet:w:me")).toContain("Brouillon préservé"));
+  view.unmount();
+  const reopened = setup();
+  expect(corrections()).toHaveLength(1);
+  expect(cell(0, 1)).toHaveValue("Brouillon préservé");
+  const salary = corrections()[0].querySelector('[data-sheet-col="8"]')!;
+  fireEvent.change(salary, { target: { value: "50000" } });
+  fireEvent.blur(salary);
+  await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ id: existing.id, salaryNumber: 50000 })));
+  expect(mocks.create).not.toHaveBeenCalled();
+  mocks.pending = mocks.pending.map(item => ({ ...item, lastError: null }));
+  reopened.rerender(<ContractsSpreadsheetView workspaceId="w" userId="me" contracts={[]} isLoading={false} canDelete />);
+  expect(corrections()).toHaveLength(1);
+  // Simulate the server acknowledgement of the submitted salary.
+  const acknowledged = loadDb();
+  acknowledged.outbox = [];
+  acknowledged.contracts.find(contract => contract.id === existing.id)!.salaryNumber = 50000;
+  saveDb(acknowledged);
+  mocks.pending = [];
+  reopened.rerender(<ContractsSpreadsheetView workspaceId="w" userId="me" contracts={[]} isLoading={false} canDelete />);
+  expect(corrections()).toHaveLength(0);
+  expect(cell(0, 1)).toHaveValue("Brouillon préservé");
+});
+
+it("does not return another account's errors, reference errors or temporary failures as correction rows", () => {
+  cacheContracts([existing, { ...existing, id: "other-workspace", workspaceId: "elsewhere" }]);
+  mocks.pending = [
+    { id: "other-user", workspaceId: "w", actorId: "someone-else", type: "contract.update", payload: { id: existing.id }, lastError: "Salaire incorrect", correctionPending: true, createdAt: "1" },
+    { id: "temporary", workspaceId: "w", actorId: "me", type: "contract.update", payload: { id: existing.id }, lastError: "Failed to fetch", createdAt: "1" },
+    { id: "reference", workspaceId: "w", actorId: "me", type: "reference.change", payload: { id: existing.id }, lastError: "Salaire incorrect", createdAt: "1" }
+  ];
+  setup();
+  expect(document.querySelectorAll(".contracts-sheet-row-correction")).toHaveLength(0);
+});
+
+
+it("keeps a newer unsaved correction visible if an earlier save is acknowledged", async () => {
+  cacheContracts([existing]);
+  mocks.pending = [{ id: "q", actorId: "me", workspaceId: "w", type: "contract.update", createdAt: "1", correctionPending: true, payload: { id: existing.id } }];
+  const view = setup();
+  await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  const row = () => document.querySelector(".contracts-sheet-row-correction")!;
+  fireEvent.change(row().querySelector('[data-sheet-col="1"]')!, { target: { value: "Nouvelle saisie" } });
+  mocks.pending = [];
+  view.rerender(<ContractsSpreadsheetView workspaceId="w" userId="me" contracts={[]} isLoading={false} canDelete />);
+  expect(row()).toBeVisible();
+  expect(row().querySelector('[data-sheet-col="1"]')).toHaveValue("Nouvelle saisie");
+  view.unmount();
+  setup();
+  expect(row()).toBeVisible();
+  expect(row().querySelector('[data-sheet-col="1"]')).toHaveValue("Nouvelle saisie");
 });

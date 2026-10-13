@@ -8,6 +8,9 @@ export interface MultiSelectDropdownProps {
   placeholder: string;
   searchable?: boolean;
   fullWidth?: boolean;
+  toolbarIcon?: string;
+  disabled?: boolean;
+  displayValue?: string;
   getOptionLabel?: (value: string) => string;
   allOptionsLabel?: string;
 }
@@ -23,7 +26,7 @@ function normalizeSearch(value: string) {
 
 const defaultOptionLabel = (value: string) => value;
 
-export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false, fullWidth = false, getOptionLabel = defaultOptionLabel, allOptionsLabel = "Toutes" }: MultiSelectDropdownProps) {
+export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false, fullWidth = false, toolbarIcon, disabled = false, displayValue, getOptionLabel = defaultOptionLabel, allOptionsLabel = "Toutes" }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,10 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (disabled) setIsOpen(false);
+  }, [disabled]);
 
   const toggleOption = (value: string) => {
     if (selectedValues.includes(value)) {
@@ -87,14 +94,17 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsOpen(false);
       }}
     >
-      <label style={{ fontSize: '13px', color: 'var(--ink-muted)', fontWeight: 600 }}>{label}</label>
+      {!toolbarIcon && <label style={{ fontSize: '13px', color: 'var(--ink-muted)', fontWeight: 600 }}>{label}</label>}
       <button
         ref={triggerRef}
+        disabled={disabled}
         type="button"
         onClick={() => { setSearchQuery(''); setIsOpen(!isOpen); }}
         aria-expanded={isOpen}
-        className="accent-select"
-        style={{
+        aria-label={toolbarIcon ? `${label}: ${displayText}` : undefined}
+        title={toolbarIcon ? displayText : undefined}
+        className={toolbarIcon ? `toolbar-action-button ${selectedValues.length > 0 ? "active" : ""}` : "accent-select"}
+        style={toolbarIcon ? undefined : {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -107,7 +117,8 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           border: '1px solid var(--border)',
           borderRadius: '14px',
           padding: '0 16px',
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : undefined,
           color: selectedValues.length > 0 ? 'var(--ink)' : 'var(--ink-muted)',
           fontSize: '13.5px',
           fontWeight: selectedValues.length > 0 ? '700' : '500',
@@ -115,15 +126,16 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           transition: 'all 0.25s ease'
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px' }}>
-          {displayText}
+        {toolbarIcon && <span className="material-symbols-rounded" aria-hidden="true">{toolbarIcon}</span>}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: toolbarIcon ? undefined : '8px' }}>
+          {displayValue ?? (toolbarIcon ? label : displayText)}
         </span>
-        <span className="material-symbols-rounded" style={{ fontSize: '18px', color: 'var(--ink-muted)' }}>
+        {!toolbarIcon && <span className="material-symbols-rounded" style={{ fontSize: '18px', color: 'var(--ink-muted)' }}>
           {isOpen ? 'expand_less' : 'expand_more'}
-        </span>
+        </span>}
       </button>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="multi-select-menu" style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',

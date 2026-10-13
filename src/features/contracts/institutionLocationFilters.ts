@@ -133,3 +133,53 @@ export function createInstitutionLocationMatcher(
   return (assignment: string) =>
     normalizedAssignments.has(normalizeLocationValue(assignment));
 }
+
+export type InstitutionFilterSelection = {
+  institution: string[];
+  department: string[];
+  commune: string[];
+};
+
+type InstitutionFilterKey = keyof InstitutionFilterSelection;
+const locationKeys: InstitutionFilterKey[] = ["institution", "department", "commune"];
+const locationValue = (institution: InstitutionSuggestion, key: InstitutionFilterKey) =>
+  key === "institution" ? institution.label : institution[key];
+
+function matchesLocationSelection(institution: InstitutionSuggestion, selection: InstitutionFilterSelection, except?: InstitutionFilterKey) {
+  return locationKeys.every(key => key === except || selection[key].length === 0 ||
+    selection[key].some(value => normalizeLocationValue(value) === normalizeLocationValue(locationValue(institution, key))));
+}
+
+export function getLinkedInstitutionFilters(institutions: InstitutionSuggestion[], selection: InstitutionFilterSelection) {
+  const field = (key: InstitutionFilterKey) => {
+    const candidates = institutions.filter(institution => matchesLocationSelection(institution, selection, key));
+    const options = uniqueSortedValues(candidates.map(institution => locationValue(institution, key)));
+    const hasOtherSelection = locationKeys.some(other => other !== key && selection[other].length > 0);
+    const determined = selection[key].length === 0 && hasOtherSelection && options.length === 1 &&
+      candidates.every(institution => Boolean(normalizeLocationValue(locationValue(institution, key))));
+    return { options, disabled: determined, values: determined ? options : selection[key] };
+  };
+  return { institution: field("institution"), department: field("department"), commune: field("commune") };
+}
+
+export function updateInstitutionFilterSelection(
+  institutions: InstitutionSuggestion[], selection: InstitutionFilterSelection, key: InstitutionFilterKey, values: string[]
+): InstitutionFilterSelection {
+  const next = { ...selection, [key]: values };
+  if (values.length === 0) return next;
+  const candidates = institutions.filter(institution => matchesLocationSelection(institution, next));
+  for (const other of locationKeys) {
+    if (other === key) continue;
+    const supported = new Set(candidates.map(institution => normalizeLocationValue(locationValue(institution, other))));
+    next[other] = next[other].filter(value => supported.has(normalizeLocationValue(value)));
+  }
+  // Keep the field just edited as the explicit source; release redundant selections.
+  for (const other of locationKeys) {
+    if (other === key || next[other].length !== 1) continue;
+    const implied = getLinkedInstitutionFilters(institutions, { ...next, [other]: [] })[other];
+    if (implied.disabled && normalizeLocationValue(implied.values[0]) === normalizeLocationValue(next[other][0])) {
+      next[other] = [];
+    }
+  }
+  return next;
+}

@@ -1,3 +1,4 @@
+import { isTransientSyncFailure, syncFailureKind, syncErrorMessage } from "../local/syncFailures";
 import { queueReferenceChange } from '../local/referenceQueue';
 import { referenceWorkspace, type ReferenceEntry } from '../local/referenceOverlay';
 import { syncReferenceChange } from './referenceSync';
@@ -238,14 +239,18 @@ class SupabaseApplicantRepository implements ApplicantRepository {
       const fields = { prenom: "firstName", nom: "lastName", sexe: "gender", ninu: "ninu", telephone: "phone", adresse: "address" } as const;
       const normalize = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
       const changes: Record<string, unknown> = {};
+      const conflictingFields: string[] = [];
       for (const [column, field] of Object.entries(fields)) {
         const next = desired[column as keyof typeof desired];
         // Match online upsert semantics: absent optional values preserve remote data.
         if (next === undefined) continue;
         if (normalize(next) === normalize(existing[field])) continue;
-        if (!input.baseApplicant || normalize(existing[field]) !== normalize(input.baseApplicant[field])) throw conflict();
+        if (input.baseApplicant && normalize(next) === normalize(input.baseApplicant[field])) continue;
+        if (!input.baseApplicant || normalize(existing[field]) !== normalize(input.baseApplicant[field])) conflictingFields.push(field);
         changes[column] = next;
       }
+      if (conflictingFields.length) throw new OfflineConflict(conflictingFields, existing as unknown as Record<string, unknown>,
+        `Conflit d'identification pour le NIF ${nif} : choisissez les valeurs à conserver.`);
       if (Object.keys(changes).length === 0) return existing;
       let update = getSupabaseClient().from("identification")
         .update({ ...changes, updated_at: new Date().toISOString() } as any)
@@ -1548,7 +1553,7 @@ function syncPendingOutbox() {
       const keys = outboxKeys(item);
       if (keys.some((key) => blockedKeys.has(key))) {
         keys.forEach((key) => blockedKeys.add(key));
-        setOutboxError(item.id, "En attente de la résolution d’une action liée à ce contrat.");
+        setOutboxError(item.id, "En attente de la résolution d’une action liée à ce contrat.", undefined, "dependency");
         continue;
       }
       let syncedContract: Contract | undefined;
@@ -1558,6 +1563,13 @@ function syncPendingOutbox() {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
         const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
         if (item.actorId && item.actorId !== actor?.id) throw new Error("Reconnectez le compte ayant effectué cette modification pour la synchroniser.");
+        if ((item.type === "contract.create" || item.type === "contract.update") && getPendingOutbox().some(pending =>
+          pending.workspaceId === item.workspaceId && pending.type === "applicant.upsert" &&
+          (item.payload.nif && pending.payload.nif === item.payload.nif || item.payload.applicantId && pending.payload.id === item.payload.applicantId))) {
+          keys.filter(key => key.includes(":contract:")).forEach(key => blockedKeys.add(key));
+          setOutboxError(item.id, "La fiche d’identification doit être synchronisée avant ce contrat.", undefined, "dependency");
+          continue;
+        }
         if (item.type === "reference.change") {
           await syncReferenceChange(item);
         } else if (item.type === "print.create") {
@@ -1600,18 +1612,23 @@ function syncPendingOutbox() {
             (pending.payload.patches as { id: string; before: unknown }[]).some(patch => patch.id === payload.ministerId && !patch.before))) {
             throw new Error('Le ministre de ce contrat doit être synchronisé avant le contrat.');
           }
-          if (getPendingOutbox().some((pending) => pending.workspaceId === item.workspaceId &&
-              pending.type === "applicant.upsert" && (pending.payload.nif === payload.nif || pending.payload.id === payload.applicantId))) {
-            keys.filter((key) => key.includes(":contract:")).forEach((key) => blockedKeys.add(key));
-            setOutboxError(item.id, "La fiche d’identification doit être synchronisée avant ce contrat.");
-            continue;
-          }
           const existing = await contracts.getById(payload.id);
           if (existing && !sameQueuedContract(existing, payload)) {
-            throw new Error(`Conflit sur le contrat ${payload.id} : une version différente existe sur le serveur. Le contrat local est conservé.`);
+            const base = item.payload.baseContract as Contract | undefined;
+            if (existing.workspaceId !== payload.workspaceId || existing.deletedAt || existing.createdBy !== payload.createdBy || (existing.ministerId || LEGACY_MINISTER.id) !== (payload.ministerId || LEGACY_MINISTER.id)) {
+              throw new Error("Ce contrat n’est plus accessible avec les mêmes références. Le contrat local est conservé.");
+            }
+            if (!base) {
+              const fields = contractEditFields.filter(field => JSON.stringify(existing[field] ?? null) !== JSON.stringify(payload[field] ?? null));
+              throw new OfflineConflict(fields, existing as unknown as Record<string, unknown>, `Conflit sur le contrat ${payload.id} : choisissez les valeurs à conserver.`);
+            }
+            // A previous INSERT may have committed before its response was lost.
+            // Correct that same record with the original base, never INSERT again.
+            syncedContract = await contracts.syncOfflineUpdate({ ...payload, baseContract: base });
+          } else {
+            if (!existing) await contracts.checkFiscalYearDuplicate(payload);
+            syncedContract = existing ?? await contracts.create(payload);
           }
-          if (!existing) await contracts.checkFiscalYearDuplicate(payload);
-          syncedContract = existing ?? await contracts.create(payload);
         } else if (item.type === "contract.update") {
           const payload = item.payload as Partial<UpdateContractInput> & {
             id?: string;
@@ -1692,9 +1709,15 @@ function syncPendingOutbox() {
       } catch (error) {
         // A failed transport says nothing about the queued data. Stop this pass
         // and let the caller retry, without marking the operation as rejected.
-        if (isOfflineFailure(error)) throw error;
-        const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
-        setOutboxError(item.id, message, error instanceof OfflineConflict ? { fields: error.fields, remote: error.remote } : undefined);
+        if (isTransientSyncFailure(error)) {
+          setOutboxError(item.id, null, undefined, "temporary");
+          await flushLocalDbWrites();
+          notifySyncState();
+          throw error;
+        }
+        const message = syncErrorMessage(error);
+        setOutboxError(item.id, message, error instanceof OfflineConflict ? { fields: error.fields, remote: error.remote } : undefined, syncFailureKind(item, error));
+        await flushLocalDbWrites();
         setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
         notifySyncState();
         keys.forEach((key) => blockedKeys.add(key));

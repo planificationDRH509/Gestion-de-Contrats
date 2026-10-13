@@ -56,3 +56,12 @@ Les exports utilisent les références déjà disponibles ; seule une référenc
 La migration `20261013024743_offline_reference_changes.sql`, appliquée au projet Supabase configuré le 13 octobre 2026 et vérifiée avec des tests SQL annulés par `ROLLBACK`, ajoute une synchronisation atomique avec reçus par compte et opération, vérification des droits et contrôle des versions. Une réponse perdue peut être rejouée sans appliquer deux fois une modification. Les conflits restent conservés dans la file avec l'erreur visible par l'indicateur existant. Les pièces jointes ne sont ni téléchargées automatiquement ni ajoutées à cette file.
 
 Vérifications ciblées : `references.localFirst.test.tsx`, exports des listes, parité des instantanés et `supabase/tests/offline_references.sql` (transactions annulées après les tests).
+
+
+### Reprise des contrats à corriger
+
+Les rejets de saisie et les conflits de contrats ou de fiches d’identification sont persistés dans la file locale. Dans « Nouveaux contrats », les contrats concernés apparaissent une seule fois dans la zone de saisie, avant « Contrats récents », indépendamment de sa pagination ou de son repli. Les nouvelles lignes et les brouillons restent intacts. La sélection respecte l’espace et l’auteur de la modification (y compris lorsqu’il corrige un contrat créé par un collègue).
+
+La correction remplace l’opération rejetée à sa position initiale avec un nouvel identifiant de file, mais conserve l’UUID du contrat et sa version serveur de départ. Les réponses d’anciennes requêtes ne peuvent donc pas supprimer une correction plus récente. Une création déjà reçue par le serveur est corrigée sur le même UUID, avec contrôle des conflits. Les lignes restent présentes jusqu’à confirmation serveur, et au-delà si une nouvelle saisie non enregistrée est en cours. Les conflits proposent les valeurs appareil/serveur depuis l’indicateur existant.
+
+Les coupures réseau, délais dépassés, HTTP 408/429/5xx et erreurs transitoires PostgreSQL restent en reprise automatique. Ils ne produisent pas de nouvelle ligne de correction. Les erreurs de session, de droits ou de références partagées restent dans leur circuit de synchronisation. Les pièces jointes restent exclusivement en ligne.
