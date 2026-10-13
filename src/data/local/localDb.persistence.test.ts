@@ -15,7 +15,7 @@ beforeEach(async () => {
   await write(null, { workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [],
     contractTags: [], contractLists: [], cachedListWorkspaces: [], printJobs: [], outbox: [], syncMetadata: {} });
   const existing = (await records.readRecords())!;
-  await write(existing, { ...existing, workspaces: [], outbox: [], contractLists: [], cachedListWorkspaces: [] });
+  await write(existing, { ...existing, workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [], contractTags: [], outbox: [], contractLists: [], cachedListWorkspaces: [] });
   db = await import("./localDb");
   await db.initializeLocalDb();
   const initial = db.loadDb();
@@ -180,3 +180,61 @@ it("recovers the list cache used by the Retry query", async () => {
   expect(lists.readCachedContractLists("w")[0].visaNumber).toBe("Fresh download");
   expect(db.getLocalStorageError()).toBeNull();
 });
+
+
+it("recovers a contract cache refresh without blocking subsequent writes or losing another tab's outbox", async () => {
+  const cache = await import("./offlineStore");
+  const contract = {
+    id: "cache-contract", workspaceId: "w", applicantId: "applicant", status: "saisie" as const,
+    gender: "Homme" as const, firstName: "Jean", lastName: "Louis", nif: "123", ninu: null,
+    address: "Delmas", position: "Analyste", assignment: "Direction", salaryNumber: 45000,
+    salaryText: "", durationMonths: 12, createdAt: "1", updatedAt: "1"
+  };
+  cache.cacheContracts([contract]);
+  await db.flushLocalDbWrites();
+  const base = db.loadDb();
+  const other = structuredClone(base);
+  other.contracts.find(item => item.id === contract.id)!.position = "Other tab edit";
+  other.outbox.push({ id: "other-edit", workspaceId: "w", type: "contract.update", sequence: 0,
+    payload: { id: contract.id, position: "Other tab edit" }, createdAt: "1" });
+  await write(base, other);
+  cache.cacheContracts([{ ...contract, position: "Stale download" }]);
+  await db.flushLocalDbWrites();
+  expect(db.getLocalStorageError()).toBeNull();
+  expect(db.loadDb().contracts.find(item => item.id === contract.id)!.position).toBe("Other tab edit");
+  expect(db.loadDb().outbox).toEqual(other.outbox);
+  cache.cacheContracts([{ ...contract, position: "Another download" }]);
+  await db.flushLocalDbWrites();
+  expect((await records.readRecords())!.contracts.find(item => item.id === contract.id)!.position).toBe("Other tab edit");
+  expect((await records.readRecords())!.outbox).toEqual(other.outbox);
+});
+
+it.each(["cacheApplicant", "cacheApplicants", "cacheDossiers", "cacheTags"] as const)(
+  "recovers conflicting %s downloads", async method => {
+    const cache = await import("./offlineStore");
+    const initial = db.loadDb();
+    initial.applicants.push({ id: "cache-applicant", workspaceId: "w", gender: "Homme", firstName: "Jean",
+      lastName: "Louis", address: "Delmas", createdAt: "1", updatedAt: "1" });
+    initial.dossiers.push({ id: "cache-dossier", workspaceId: "w", name: "Original", status: "active",
+      isEphemeral: false, priority: "normal", contractTargetCount: 0, createdAt: "1", updatedAt: "1" });
+    initial.tags.push({ id: "cache-tag", workspaceId: "w", name: "Original", color: "#64748b", createdAt: "1", updatedAt: "1" });
+    db.saveDb(initial);
+    await db.flushLocalDbWrites();
+    const base = db.loadDb();
+    const other = structuredClone(base);
+    other.applicants.find(item => item.id === "cache-applicant")!.firstName = "Other tab";
+    other.dossiers.find(item => item.id === "cache-dossier")!.name = "Other tab";
+    other.tags.find(item => item.id === "cache-tag")!.name = "Other tab";
+    await write(base, other);
+    const applicant = { ...base.applicants.find(item => item.id === "cache-applicant")!, firstName: "Download" };
+    if (method === "cacheApplicant") cache.cacheApplicant(applicant);
+    if (method === "cacheApplicants") cache.cacheApplicants([applicant]);
+    if (method === "cacheDossiers") cache.cacheDossiers([{ ...base.dossiers.find(item => item.id === "cache-dossier")!, name: "Download" }]);
+    if (method === "cacheTags") cache.cacheTags([{ ...base.tags.find(item => item.id === "cache-tag")!, name: "Download" }]);
+    await db.flushLocalDbWrites();
+    expect(db.getLocalStorageError()).toBeNull();
+    expect(db.loadDb().applicants.find(item => item.id === "cache-applicant")!.firstName).toBe("Other tab");
+    expect(db.loadDb().dossiers.find(item => item.id === "cache-dossier")!.name).toBe("Other tab");
+    expect(db.loadDb().tags.find(item => item.id === "cache-tag")!.name).toBe("Other tab");
+  }
+);

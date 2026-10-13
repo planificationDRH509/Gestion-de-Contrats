@@ -50,7 +50,7 @@ export function cacheApplicant(applicant: Applicant) {
   } else {
     db.applicants.push(applicant);
   }
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function cacheApplicants(applicants: Applicant[]) {
@@ -67,7 +67,7 @@ export function cacheApplicants(applicants: Applicant[]) {
       db.applicants[index] = applicant;
     }
   }
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function replaceLocalApplicantId(
@@ -132,7 +132,7 @@ export function cacheContracts(contracts: Contract[]) {
       }
     }
   }
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function cacheContract(contract: Contract) {
@@ -162,7 +162,7 @@ export function cacheDossiers(dossiers: Dossier[]) {
       db.dossiers[index] = dossier;
     }
   }
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function cacheDossier(dossier: Dossier) {
@@ -181,7 +181,7 @@ export function cacheTags(tags: Tag[]) {
       db.tags[index] = tag;
     }
   }
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function cacheTag(tag: Tag) {
