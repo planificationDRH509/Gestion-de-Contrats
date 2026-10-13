@@ -1,4 +1,5 @@
 import { PersonAttachmentsDialog } from '../attachments/PersonAttachmentsDialog';
+import { PersonAttachmentsButton } from '../attachments/PersonAttachmentsButton';
 import { usePendingSync } from "../../lib/usePendingSync";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
@@ -805,9 +806,13 @@ export function IdentificationSpreadsheetView({
                           </>
                         ) : (
                           <>
-                            <button type="button" className="icon-btn contracts-sheet-action-btn" onClick={() => setAttachmentIdentity(identity)} title="Pièces jointes" aria-label="Pièces jointes">
-                              <span className="material-symbols-rounded">attach_file</span>
-                            </button>
+                            <PersonAttachmentsButton className="contracts-sheet-action-btn" person={{
+                              workspaceId: identity.workspace_id,
+                              applicantId: identity.id || identity.nif,
+                              nif: identity.nif,
+                              firstName: identity.prenom,
+                              lastName: identity.nom
+                            }} onClick={() => setAttachmentIdentity(identity)} />
                             <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
                               <span className="material-symbols-rounded">edit</span>
                             </button>

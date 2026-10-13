@@ -1,10 +1,16 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderView, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { OutboxItem } from "../../data/types";
 import { IdentificationSpreadsheetView } from "./IdentificationSpreadsheetView";
 
 const attachments = vi.hoisted(() => vi.fn(() => null));
+vi.mock('../auth/auth', () => ({useAuth: () => ({user:null})}));
 vi.mock('../attachments/PersonAttachmentsDialog', () => ({PersonAttachmentsDialog: attachments}));
+function render(view: ReactElement) {
+  return renderView(<QueryClientProvider client={new QueryClient()}>{view}</QueryClientProvider>);
+}
 const state = vi.hoisted(() => ({ pending: [] as OutboxItem[] }));
 vi.mock("../../data/local/offlineStore", () => ({ getPendingOutbox: () => state.pending }));
 vi.mock("../settings/suggestionsApi", () => ({ useAddresses: () => ({ data: [] }) }));

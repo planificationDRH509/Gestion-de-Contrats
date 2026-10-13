@@ -25,4 +25,5 @@
 .attachment-submit { width: 100%; justify-content: center; }
 .attachments-error { color: var(--danger, #c53030); margin-top: 12px; font-size: 14px; }
 @media (max-width: 480px) { .attachments-panel { padding: 18px; } .attachments-tabs button { font-size: 12px; } }
-.icon-btn.person-attachments-trigger.has-attachments { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.icon-btn.person-attachments-trigger.has-attachments { color: var(--success); border-color: var(--success); background: var(--success-soft); }
+.identification-sheet-wrapper .contracts-sheet-state-actions:has(.has-attachments) { opacity: 1; transform: none; }
