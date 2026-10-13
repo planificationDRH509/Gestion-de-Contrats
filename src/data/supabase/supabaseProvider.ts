@@ -2018,7 +2018,7 @@ class OfflineFirstContractRepository implements ContractRepository {
       }
       const remoteResult = await this.remote.list(params);
       cacheContracts(remoteResult.items);
-      if (params.deletionState === "deleted" && params.all && !params.query && !params.includeIds && !params.status && !params.dossierId && !params.onlyMine && !params.createdByIds?.length) {
+      if (params.deletionState === "deleted" && params.all && !params.query && !params.includeIds && !params.status && params.dossierId === undefined && !params.onlyMine && !params.createdByIds?.length && !params.fiscalYear && (!params.dateFilterMode || params.dateFilterMode === "all") && !params.tagId && !params.assignments?.length && !params.positions?.length && !params.durations?.length && !params.excludeIds?.length) {
         setWorkspaceSyncMetadata(params.workspaceId, { lastTrashSyncedAt: new Date().toISOString() });
         await flushLocalDbWrites();
       }

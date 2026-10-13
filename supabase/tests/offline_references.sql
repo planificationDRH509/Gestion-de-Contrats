@@ -4,9 +4,9 @@ declare a uuid:=gen_random_uuid(); r uuid:=gen_random_uuid(); g uuid:=gen_random
   at text:=gen_random_uuid()::text; rt text:=gen_random_uuid()::text; gt text:=gen_random_uuid()::text;
 begin
   insert into public.app_users(id,username,full_name,password,role,workspaces) values
-    (a,'ref-admin-'||a,'Test','unused','admin',array['workspace_default']),
-    (r,'ref-reader-'||r,'Test','unused','reader',array['workspace_default']),
-    (g,'ref-agent-'||g,'Test','unused','agent',array['workspace_default']);
+    (a,'ref-admin-'||a,'Test',gen_random_uuid()::text,'admin',array['workspace_default']),
+    (r,'ref-reader-'||r,'Test',gen_random_uuid()::text,'reader',array['workspace_default']),
+    (g,'ref-agent-'||g,'Test',gen_random_uuid()::text,'agent',array['workspace_default']);
   insert into public.app_task_sessions(user_id,token_hash,expires_at) values
     (a,extensions.digest(at,'sha256'),now()+interval '5 minutes'),
     (r,extensions.digest(rt,'sha256'),now()+interval '5 minutes'),

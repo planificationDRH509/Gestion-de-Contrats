@@ -44,4 +44,15 @@ Les créations et modifications courantes, imports, changements d’état/durée
 
 La synchronisation vérifie la révision du serveur toutes les 30 secondes lorsque la page est visible, au retour de la connexion et à la réouverture de l’onglet. Elle ne retélécharge l’instantané que si nécessaire. Les modifications locales en attente, y compris leurs effets sur les contrats et les suppressions de tâches, sont conservées lors d’un téléchargement concurrent. Les conflits restent dans les files de synchronisation existantes.
 
-Restent tributaires du serveur : première connexion, administration des comptes et référentiels partagés, pièces jointes distantes, consultation de la corbeille non téléchargée et suppression définitive. Aucun nouveau libellé n’est ajouté dans l’interface.
+Restent tributaires du serveur : première connexion, administration des comptes, premier chargement des données absentes du cache, pièces jointes et suppression définitive. Aucun nouveau libellé n’est ajouté dans l’interface.
+
+
+## Référentiels, exports et corbeille
+
+Les adresses, postes, institutions, prépositions, grilles salariales et ministres acceptent des modifications persistées dans la file locale en mode Supabase. Les vues projettent les opérations en attente sur le dernier instantané serveur ; une actualisation ou un redémarrage ne doit pas annuler une modification locale. Les caches de suggestions sont séparés par espace de travail. Le cache historique est conservé et attribué une seule fois à l'espace actif lors de la migration.
+
+Les exports utilisent les références déjà disponibles ; seule une référence jamais téléchargée peut encore nécessiter le réseau. L'apprentissage des suggestions ne retarde plus la sauvegarde d'une ligne. La synchronisation des contrats inclut désormais la corbeille, qui est ensuite consultée localement.
+
+La migration `20261013024743_offline_reference_changes.sql`, appliquée au projet Supabase configuré le 13 octobre 2026 et vérifiée avec des tests SQL annulés par `ROLLBACK`, ajoute une synchronisation atomique avec reçus par compte et opération, vérification des droits et contrôle des versions. Une réponse perdue peut être rejouée sans appliquer deux fois une modification. Les conflits restent conservés dans la file avec l'erreur visible par l'indicateur existant. Les pièces jointes ne sont ni téléchargées automatiquement ni ajoutées à cette file.
+
+Vérifications ciblées : `references.localFirst.test.tsx`, exports des listes, parité des instantanés et `supabase/tests/offline_references.sql` (transactions annulées après les tests).
