@@ -460,7 +460,7 @@ export function setWorkspaceSyncMetadata(
     ...db.syncMetadata[workspaceId],
     ...metadata
   };
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function getWorkspaceSyncMetadata(workspaceId: string) {
@@ -577,7 +577,7 @@ export function replaceWorkspaceCache(
     }
   }
 
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 export function buildOfflineContract(input: CreateContractInput): Contract {

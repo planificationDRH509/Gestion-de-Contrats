@@ -238,3 +238,41 @@ it.each(["cacheApplicant", "cacheApplicants", "cacheDossiers", "cacheTags"] as c
     expect(db.loadDb().tags.find(item => item.id === "cache-tag")!.name).toBe("Other tab");
   }
 );
+
+it("recovers a full workspace download followed by synchronization metadata", async () => {
+  const cache = await import("./offlineStore");
+  const initial = db.loadDb();
+  initial.tags.push({ id: "full-cache-tag", workspaceId: "w", name: "Original", color: "#64748b", createdAt: "1", updatedAt: "1" });
+  db.saveDb(initial);
+  await db.flushLocalDbWrites();
+  const base = db.loadDb();
+  const other = structuredClone(base);
+  other.tags[0].name = "Other tab";
+  other.outbox.push({ id: "other-tab-queue", workspaceId: "w", type: "tag.create", payload: { id: "full-cache-tag" }, createdAt: "1", sequence: 0 });
+  await write(base, other);
+  cache.replaceWorkspaceCache("w", { applicants: [], contracts: [], dossiers: [], tags: [{ ...base.tags[0], name: "Stale download" }] });
+  cache.setWorkspaceSyncMetadata("w", { lastFullSyncedAt: "2", remoteRevision: "2", lastError: null });
+  await db.flushLocalDbWrites();
+  expect(db.getLocalStorageError()).toBeNull();
+  expect(db.loadDb().tags[0].name).toBe("Other tab");
+  expect(db.loadDb().outbox).toEqual(other.outbox);
+  // The discarded download must not be advertised as a successful new revision.
+  expect(db.loadDb().syncMetadata.w?.remoteRevision).not.toBe("2");
+});
+
+it("does not block Retry when two tabs update synchronization timestamps", async () => {
+  const cache = await import("./offlineStore");
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "1", lastError: null });
+  await db.flushLocalDbWrites();
+  const base = db.loadDb();
+  const other = structuredClone(base);
+  other.syncMetadata.w.lastSyncedAt = "3";
+  await write(base, other);
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "2" });
+  await db.flushLocalDbWrites();
+  expect(db.getLocalStorageError()).toBeNull();
+  expect(db.loadDb().syncMetadata.w.lastSyncedAt).toBe("3");
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "4" });
+  await db.flushLocalDbWrites();
+  expect((await records.readRecords())!.syncMetadata.w.lastSyncedAt).toBe("4");
+});
