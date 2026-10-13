@@ -1,8 +1,18 @@
 import { get, update } from 'idb-keyval';
 import type { AuthUser } from '../auth/auth';
-import type { Contract } from '../../data/types';
 import { getSupabaseClient } from '../../data/supabase/supabaseClient';
 import type { Json } from '../../data/supabase/database.types';
+
+// Identification data only: attachments never depend on a contract or fiscal period.
+export type AttachmentPerson = {
+  workspaceId: string; applicantId: string | null; nif?: string | null;
+  firstName: string; lastName: string;
+};
+export function attachmentPersonId(person: AttachmentPerson): string {
+  const id = person.applicantId?.trim() || person.nif?.trim();
+  if (!id) throw new Error('Identification de la personne requise.');
+  return id;
+}
 
 export type Attachment = {
   id: string; name: string; kind: 'file' | 'link' | 'path';
@@ -12,7 +22,7 @@ export type AttachmentDraft = Pick<Attachment, 'id' | 'name' | 'kind' | 'locatio
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 export const remoteAttachments = (import.meta.env.VITE_DATA_PROVIDER ?? 'local') === 'supabase';
 
-export function attachmentFileName(nif: Contract['nif'], originalName: string, number?: number): string {
+export function attachmentFileName(nif: AttachmentPerson['nif'], originalName: string, number?: number): string {
   const personNif = nif?.trim();
   if (!personNif) throw new Error('Le NIF de la personne est requis pour nommer le fichier.');
   const basename = originalName.trim().split(/[\\/]/).pop() ?? '';
@@ -22,12 +32,12 @@ export function attachmentFileName(nif: Contract['nif'], originalName: string, n
 }
 
 type AttachmentResult = Attachment[] | {name: string; content: string};
-function nameAttachmentFiles(contract: Contract, items: Attachment[]): Attachment[] {
+function nameAttachmentFiles(person: AttachmentPerson, items: Attachment[]): Attachment[] {
   const files = items.filter(item => item.kind === 'file').sort((left, right) =>
     Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
   const numbers = new Map(files.map((item, index) => [item.id, index + 1]));
   return items.map(item => item.kind === 'file'
-    ? {...item, name: attachmentFileName(contract.nif, item.name, files.length > 1 ? numbers.get(item.id) : undefined)} : item);
+    ? {...item, name: attachmentFileName(person.nif, item.name, files.length > 1 ? numbers.get(item.id) : undefined)} : item);
 }
 
 export function validDocumentLink(value: string): boolean {
@@ -54,29 +64,30 @@ export function readAttachmentFile(file: File): Promise<string> {
 }
 
 type StoredAttachment = Attachment & { content?: string };
-export async function manageAttachments(user: AuthUser, contract: Contract, action: 'list' | 'add' | 'delete' | 'get', document: Partial<AttachmentDraft> = {}): Promise<AttachmentResult> {
+export async function manageAttachments(user: AuthUser, person: AttachmentPerson, action: 'list' | 'add' | 'delete' | 'get', document: Partial<AttachmentDraft> = {}): Promise<AttachmentResult> {
+  const personId = attachmentPersonId(person);
   if (['add', 'delete'].includes(action) && user.role === 'reader') throw new Error('Modification non autorisée.');
   if (action === 'add') {
-    if (document.kind === 'file') document = {...document, name: attachmentFileName(contract.nif, document.name ?? '')};
+    if (document.kind === 'file') document = {...document, name: attachmentFileName(person.nif, document.name ?? '')};
     validateAttachment(document as AttachmentDraft);
   }
   if (remoteAttachments) {
     if (!navigator.onLine) throw new Error('Connectez-vous pour accéder aux pièces jointes.');
     if (!user.taskSessionToken) throw new Error('Reconnectez-vous pour accéder aux pièces jointes.');
-    const {data, error} = await getSupabaseClient().rpc('manage_person_attachments', {
-      p_session_token: user.taskSessionToken, p_contract_id: contract.id, p_action: action, p_document: document as Json
+    const {data, error} = await getSupabaseClient().rpc('manage_identification_attachments', {
+      p_session_token: user.taskSessionToken, p_person_id: person.nif?.trim() || personId, p_action: action, p_document: document as Json
     });
     if (error) throw new Error(error.message);
     if (action === 'get') {
       const file = data as unknown as {name: string; content: string};
-      const items = await manageAttachments(user, contract, 'list') as Attachment[];
+      const items = await manageAttachments(user, person, 'list') as Attachment[];
       const item = items.find(item => item.id === document.id);
       if (!item) throw new Error('Fichier introuvable.');
       return {...file, name: item.name};
     }
-    return nameAttachmentFiles(contract, data as unknown as Attachment[]);
+    return nameAttachmentFiles(person, data as unknown as Attachment[]);
   }
-  const key = `person-attachments:${contract.workspaceId}:${contract.applicantId || contract.nif || contract.id}`;
+  const key = `person-attachments:${person.workspaceId}:${personId}`;
   if (action === 'add' || action === 'delete') {
     await update<StoredAttachment[]>(key, (items = []) => {
       if (action === 'delete') return items.filter(item => item.id !== document.id);
@@ -86,7 +97,7 @@ export async function manageAttachments(user: AuthUser, contract: Contract, acti
     });
   }
   const items = await get<StoredAttachment[]>(key) ?? [];
-  const listed = nameAttachmentFiles(contract, items.map(({content: _content, ...item}) => item));
+  const listed = nameAttachmentFiles(person, items.map(({content: _content, ...item}) => item));
   if (action === 'get') {
     const item = items.find(item => item.id === document.id);
     if (!item?.content) throw new Error('Fichier introuvable.');

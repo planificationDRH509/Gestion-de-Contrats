@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Contract } from '../../data/types';
 import { useAuth } from '../auth/auth';
-import { Attachment, AttachmentDraft, downloadAttachment, manageAttachments, readAttachmentFile, validDocumentLink } from './attachmentsRepository';
+import { Attachment, AttachmentDraft, AttachmentPerson, downloadAttachment, manageAttachments, readAttachmentFile, validDocumentLink } from './attachmentsRepository';
 import './attachments.css';
+import { personAttachmentsQuery } from './attachmentsQuery';
 
-export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract; onClose: () => void}) {
+export function PersonAttachmentsDialog({person, onClose}: {person: AttachmentPerson; onClose: () => void}) {
   const {user, can} = useAuth();
   const queryClient = useQueryClient();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -21,9 +21,9 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
   const [deleting, setDeleting] = useState<string | null>(null);
   // Keep the same UUID across retries if an upload response is lost.
   const pendingDraft = useRef<{fingerprint: string; id: string} | null>(null);
-  const key = ['person-attachments', user?.id, contract.workspaceId, contract.applicantId || contract.nif || contract.id];
-  const query = useQuery({queryKey: key, enabled: !!user, retry: false, networkMode: 'always', queryFn: async () =>
-    await manageAttachments(user!, contract, 'list') as Attachment[]});
+  const options = personAttachmentsQuery(user, person);
+  const key = options.queryKey;
+  const query = useQuery({...options, refetchOnMount: 'always'});
   useEffect(() => { dialog.current?.showModal(); }, []);
 
   async function run(action: () => Promise<void>) {
@@ -38,12 +38,12 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
     if (!user) return;
     void run(async () => {
       if (kind === 'file' && !file) throw new Error('Choisissez un fichier.');
-      const fingerprint = JSON.stringify([contract.nif,kind,name,location,file?.name,file?.size,file?.lastModified]);
+      const fingerprint = JSON.stringify([person.nif,kind,name,location,file?.name,file?.size,file?.lastModified]);
       if (pendingDraft.current?.fingerprint !== fingerprint) pendingDraft.current = {fingerprint,id:crypto.randomUUID()};
       const draft: AttachmentDraft = {id:pendingDraft.current.id,name:kind === 'file' ? file!.name : name.trim(),kind};
       if (kind === 'file') draft.content = await readAttachmentFile(file!);
       else draft.location = location.trim();
-      const items = await manageAttachments(user, contract, 'add', draft);
+      const items = await manageAttachments(user, person, 'add', draft);
       queryClient.setQueryData(key, items);
       pendingDraft.current = null;
       setName(''); setLocation(''); setFile(null);
@@ -55,7 +55,7 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
     onClick={event => {if (event.target === event.currentTarget && !busyRef.current) onClose();}}>
     <div className="attachments-panel">
       <header className="attachments-header">
-        <div><h2 id="attachments-title">Pièces jointes</h2><div className="attachments-person">{contract.firstName} {contract.lastName}</div></div>
+        <div><h2 id="attachments-title">Pièces jointes</h2><div className="attachments-person">{person.firstName} {person.lastName}</div></div>
         <button type="button" className="icon-btn" aria-label="Fermer" onClick={onClose} disabled={busy}><span className="material-symbols-rounded">close</span></button>
       </header>
       <div className="attachments-list" aria-busy={query.isFetching}>
@@ -69,13 +69,13 @@ export function PersonAttachmentsDialog({contract, onClose}: {contract: Contract
             {item.kind === 'link' && validDocumentLink(item.location ?? '') ? <a className="icon-btn" href={item.location!} target="_blank" rel="noopener noreferrer" title="Ouvrir" aria-label={`Ouvrir ${item.name}`}><span className="material-symbols-rounded">open_in_new</span></a> :
               <button type="button" className="icon-btn" disabled={busy} title={item.kind === 'file' ? 'Télécharger' : 'Copier le chemin'} aria-label={`${item.kind === 'file' ? 'Télécharger' : 'Copier le chemin de'} ${item.name}`} onClick={() => void run(async () => {
                 if (item.kind === 'file') {
-                  const data = await manageAttachments(user!,contract,'get',{id:item.id}) as {name: string; content: string};
+                  const data = await manageAttachments(user!,person,'get',{id:item.id}) as {name: string; content: string};
                   downloadAttachment(data.name,data.content);
                 } else { await navigator.clipboard.writeText(item.location ?? ''); setCopied(item.id); }
               })}><span className="material-symbols-rounded">{item.kind === 'file' ? 'download' : copied === item.id ? 'check' : 'content_copy'}</span></button>}
             {can('contracts.edit') && <button type="button" className="icon-btn" disabled={busy} aria-label={`Supprimer ${item.name}`} title="Supprimer" onClick={() => setDeleting(item.id)}><span className="material-symbols-rounded">delete</span></button>}
           </div>
-          {deleting === item.id && <div className="attachment-delete"><span>Supprimer cette pièce jointe ?</span><button className="btn btn-outline" disabled={busy} onClick={() => setDeleting(null)}>Annuler</button><button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {queryClient.setQueryData(key,await manageAttachments(user!,contract,'delete',{id:item.id})); setDeleting(null);})}>Supprimer</button></div>}
+          {deleting === item.id && <div className="attachment-delete"><span>Supprimer cette pièce jointe ?</span><button className="btn btn-outline" disabled={busy} onClick={() => setDeleting(null)}>Annuler</button><button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {queryClient.setQueryData(key,await manageAttachments(user!,person,'delete',{id:item.id})); setDeleting(null);})}>Supprimer</button></div>}
         </div>)}
       </div>
       {can('contracts.edit') && <form className="attachments-form" onSubmit={submit}>

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { createSupabaseProvider } from "./supabaseProvider";
+import { createSupabaseProvider, syncSupabaseWorkspace } from "./supabaseProvider";
 import { replaceWorkspaceCache, getWorkspaceSyncMetadata } from "../local/offlineStore";
 import { calculateFinancialStatistics } from "../../features/statistics/financialStatistics";
 
@@ -20,6 +20,7 @@ function online(value: boolean) {
 function paged(data: unknown[]) {
   const query: any = {};
   for (const method of ["select", "eq", "is", "order"]) query[method] = () => query;
+  query.not = () => { data = []; return query; };
   query.range = vi.fn(async (from: number, to: number) => ({
     data: data.slice(from, Math.min(to + 1, from + 127)), count: data.length, error: null
   }));
@@ -53,6 +54,8 @@ it("removes contracts deleted remotely from the offline snapshot", async () => {
   const first = await provider.contracts.list({ workspaceId, all: true });
   replaceWorkspaceCache(workspaceId, { applicants: [], dossiers: [], tags: [], contracts: first.items });
   mock.from.mockImplementation((table: string) => paged(table === "contrat" ? rows.slice(1) : []));
+  expect((await provider.contracts.list({ workspaceId, all: true })).total).toBe(5207);
+  await syncSupabaseWorkspace(workspaceId, { verify: true });
   const refreshed = await provider.contracts.list({ workspaceId, all: true });
   expect(refreshed.total).toBe(5206);
   online(false);

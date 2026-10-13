@@ -1,3 +1,4 @@
+import { cacheContractLists } from "../../data/local/localListRepository";
 import type { PropsWithChildren } from "react";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -49,7 +50,7 @@ describe('offline list reads',()=>{
     return {client,...renderHook(()=>useContractLists(),{wrapper})};
   }
 
-  it('shows cached lists without an error while offline, then refreshes after reconnecting',async()=>{
+  it('reads locally online and offline, then applies the background snapshot',async()=>{
     vi.spyOn(navigator,'onLine','get').mockReturnValue(false);
     onlineManager.setOnline(false);
     const {result,unmount,client}=mountListQuery([cachedList]);
@@ -60,17 +61,19 @@ describe('offline list reads',()=>{
     vi.spyOn(navigator,'onLine','get').mockReturnValue(true);
     mocks.rpc.mockResolvedValue({data:[],error:null});
     await act(async()=>{onlineManager.setOnline(true);});
-    await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('read_contract_lists',{
-      p_session_token:'test-session',p_workspace_id:'w'
-    }));
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    await act(async()=>{
+      cacheContractLists('w', []);
+      await client.invalidateQueries({queryKey:['contract-lists']});
+    });
     await waitFor(()=>expect(result.current.data).toEqual([]));
     unmount(); client.clear();
   });
 
-  it('keeps the cached lists when a network request fails',async()=>{
+  it('does not wait for a network request when the list cache is available',async()=>{
     mocks.rpc.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const {result,unmount,client}=mountListQuery([cachedList]);
-    await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledOnce());
+    expect(mocks.rpc).not.toHaveBeenCalled();
     await waitFor(()=>expect(result.current.isFetching).toBe(false));
     expect(result.current.isError).toBe(false);
     expect(result.current.data).toEqual([cachedList]);

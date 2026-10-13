@@ -10,10 +10,10 @@ import { sqliteApiRequest } from "./sqliteApiClient";
 
 export class SqliteAutocompleteRepository implements AutocompleteRepository {
   async getAddresses(_workspaceId: string): Promise<AddressSuggestion[]> {
-    return getAddresses();
+    return getAddresses(_workspaceId);
   }
   async getPositions(_workspaceId: string): Promise<PositionSuggestion[]> {
-    return getPositions();
+    return getPositions(_workspaceId);
   }
   async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
     if ((import.meta.env.VITE_DATA_PROVIDER ?? 'local') !== 'supabase' && navigator.onLine) {
@@ -23,7 +23,7 @@ export class SqliteAutocompleteRepository implements AutocompleteRepository {
         return data.institutions;
       } catch { /* The cached references remain readable without the local server. */ }
     }
-    return getInstitutions();
+    return getInstitutions(workspaceId);
   }
   async addAddress(_workspaceId: string, label: string): Promise<AddressSuggestion> {
     return addAddress(label);

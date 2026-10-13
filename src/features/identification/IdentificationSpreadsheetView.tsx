@@ -1,3 +1,4 @@
+import { PersonAttachmentsDialog } from '../attachments/PersonAttachmentsDialog';
 import { usePendingSync } from "../../lib/usePendingSync";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutocompleteField, type AutocompleteItem } from "../../app/ui/AutocompleteField";
@@ -132,7 +133,7 @@ function validateDraft(draft: SpreadsheetDraft): string | null {
 type SyncState = "saved" | "saving" | "unsaved" | "error" | "empty" | "queued" | "local";
 export type IdentificationSpreadsheetZoomMode = "fit" | "custom";
 
-const STATUS_COLUMN_WIDTH = 96;
+const STATUS_COLUMN_WIDTH = 112;
 
 export function IdentificationSpreadsheetView({ 
   workspaceId, 
@@ -162,6 +163,7 @@ export function IdentificationSpreadsheetView({
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [attachmentIdentity, setAttachmentIdentity] = useState<IdentificationRow | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const pageSize = 50;
 
@@ -803,6 +805,9 @@ export function IdentificationSpreadsheetView({
                           </>
                         ) : (
                           <>
+                            <button type="button" className="icon-btn contracts-sheet-action-btn" onClick={() => setAttachmentIdentity(identity)} title="Pièces jointes" aria-label="Pièces jointes">
+                              <span className="material-symbols-rounded">attach_file</span>
+                            </button>
                             <button className="icon-btn contracts-sheet-action-btn edit" onClick={() => startEditing(identity.nif)} title="Modifier" aria-label="Modifier">
                               <span className="material-symbols-rounded">edit</span>
                             </button>
@@ -962,6 +967,13 @@ export function IdentificationSpreadsheetView({
           </div>
         </div>
       </div>
+      {attachmentIdentity && <PersonAttachmentsDialog person={{
+        workspaceId: attachmentIdentity.workspace_id,
+        applicantId: attachmentIdentity.id || attachmentIdentity.nif,
+        nif: attachmentIdentity.nif,
+        firstName: attachmentIdentity.prenom,
+        lastName: attachmentIdentity.nom
+      }} onClose={() => setAttachmentIdentity(null)} />}
     </div>
   );
 }

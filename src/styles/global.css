@@ -6678,6 +6678,11 @@ button {
   overflow-y: auto;
 }
 
+.identification-sheet-wrapper .contracts-sheet-header-shell,
+.identification-sheet-wrapper .contracts-sheet-row-shell {
+  grid-template-columns: 112px auto;
+}
+
 .contracts-sheet-header-shell {
   box-shadow: 0 1px 0 var(--border), 0 5px 14px color-mix(in srgb, var(--ink) 4%, transparent);
 }

@@ -63,10 +63,20 @@ export function AppLayout() {
         }
       } catch (error) { console.error("Synchronisation des tâches impossible.", error); }
     };
+    let queuedTimer: number | undefined;
+    const queued = () => {
+      window.clearTimeout(queuedTimer);
+      queuedTimer = window.setTimeout(() => void flush(), 300);
+    };
     const timer = window.setInterval(() => void flush(), 30_000);
+    window.addEventListener("contribution-private-task-queued", queued);
     window.addEventListener("online", flush);
     void flush();
-    return () => { window.clearInterval(timer); window.removeEventListener("online", flush); };
+    return () => {
+      window.clearInterval(timer); window.clearTimeout(queuedTimer);
+      window.removeEventListener("online", flush);
+      window.removeEventListener("contribution-private-task-queued", queued);
+    };
   }, [isSupabase, isLocked, user?.id, user?.taskSessionToken, queryClient]);
 
   const refreshSyncState = useCallback(() => {
@@ -74,7 +84,7 @@ export function AppLayout() {
     setSyncState(getSupabaseSyncState(workspaceId));
   }, [workspaceId]);
 
-  const synchronize = useCallback(async (force = false) => {
+  const synchronize = useCallback(async (force = false, verify = false) => {
     if (!isSupabase || !workspaceId || !navigator.onLine) {
       refreshSyncState();
       return;
@@ -83,19 +93,32 @@ export function AppLayout() {
     synchronizationRunning.current = true;
     try {
       // Upload first; a failure downloading the full snapshot must not hide ACKs.
+      const hadPendingChanges = getSupabaseSyncState(workspaceId).pendingCount > 0;
       await syncSupabaseOutbox();
-      await Promise.all([
+      if (hadPendingChanges) void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["contracts"] }),
         queryClient.invalidateQueries({ queryKey: ["contract"] }),
         queryClient.invalidateQueries({ queryKey: ["contract-lists"] }),
-        queryClient.invalidateQueries({ queryKey: ["nif-lookup"] })
+        queryClient.invalidateQueries({ queryKey: ["nif-lookup"] }),
+        queryClient.invalidateQueries({ queryKey: ["identification"] }),
+        queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
+        queryClient.invalidateQueries({ queryKey: ["tags"] }),
+        queryClient.invalidateQueries({ queryKey: ["pinned-contracts"] }),
+        queryClient.invalidateQueries({ queryKey: ["suggestions"] }),
+        queryClient.invalidateQueries({ queryKey: ["salary-grid"] }),
+        queryClient.invalidateQueries({ queryKey: ["institution-prepositions"] }),
+        queryClient.invalidateQueries({ queryKey: ["ministers"] })
       ]);
       const refreshed = await syncSupabaseWorkspace(workspaceId, {
-        force, verify: synchronizationNeedsRetry.current
+        force, verify: verify || synchronizationNeedsRetry.current
       });
       if (refreshed) {
-        await Promise.all([
+        void Promise.all([
           queryClient.invalidateQueries({ queryKey: ["contracts"] }),
+          queryClient.invalidateQueries({ queryKey: ["contract"] }),
+          queryClient.invalidateQueries({ queryKey: ["nif-lookup"] }),
+          queryClient.invalidateQueries({ queryKey: ["suggestions"] }),
+          queryClient.invalidateQueries({ queryKey: ["task_contract_suggestions"] }),
           queryClient.invalidateQueries({ queryKey: ["dossiers"] }),
           queryClient.invalidateQueries({ queryKey: ["identification"] }),
           queryClient.invalidateQueries({ queryKey: ["tags"] }),
@@ -115,7 +138,7 @@ export function AppLayout() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      void synchronize(false);
+      void synchronize(false, true);
     };
     const handleOffline = () => refreshSyncState();
     let queuedTimer: number | undefined;
@@ -126,16 +149,17 @@ export function AppLayout() {
         queuedTimer = window.setTimeout(() => void synchronize(false), 1000);
       }
     };
-    // A restored network can still fail its first request (Wi-Fi/auth recovery).
+    // Local reads no longer poll the server. Check its revision even when the
+    // outbox is empty so other devices' changes reach an idle open page.
     const retryTimer = window.setInterval(() => {
       const state = getSupabaseSyncState(workspaceId);
-      if (navigator.onLine && (state.pendingCount > 0 || state.lastError || synchronizationNeedsRetry.current) && !state.isSyncing) {
-        void synchronize(false);
+      if (navigator.onLine && !state.isSyncing && document.visibilityState === "visible") {
+        void synchronize(false, true);
       }
     }, 30_000);
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        void synchronize(false);
+        void synchronize(false, true);
       }
     };
 
@@ -145,10 +169,9 @@ export function AppLayout() {
     document.addEventListener("visibilitychange", handleVisibility);
 
     refreshSyncState();
-    // Let the current page render and refresh its visible queries first. The
-    // heavier full offline download starts shortly afterwards in the background.
+    // Let the local page render before checking for changes on other devices.
     const initialSyncTimer = navigator.onLine
-      ? window.setTimeout(() => void synchronize(false), 750)
+      ? window.setTimeout(() => void synchronize(false, true), 750)
       : null;
 
     return () => {

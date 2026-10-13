@@ -18,13 +18,14 @@ import {
   normalizeOptionalText
 } from "../../lib/dossier";
 import { get, del } from "idb-keyval";
-import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeRecord } from "./recordStore";
+import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeRecord, equalRecords, LocalRecordConflictError } from "./recordStore";
 import type { ContractList } from "../../features/lists/listModel";
 
 export type LocalSyncMetadata = {
   remoteRevision?: string | null;
   lastSyncedAt?: string | null;
   lastFullSyncedAt?: string | null;
+  lastTrashSyncedAt?: string | null;
   lastError?: string | null;
 };
 
@@ -50,6 +51,9 @@ export const DEFAULT_WORKSPACE_ID = "workspace_default";
 let memoryDb: LocalDb | null = null;
 let persistenceQueue: Promise<void> = Promise.resolve();
 let pendingPersistenceSnapshot: LocalDb | null = null;
+let pendingPersistenceBase: LocalDb | null = null;
+let pendingCacheOnly = true;
+let activePersistenceSnapshot: LocalDb | null = null;
 let persistenceDrainScheduled = false;
 let persistedDb: LocalDb | null = null;
 let persistenceError: Error | null = null;
@@ -250,49 +254,64 @@ function loadLegacyDb(): LocalDb | null {
   }
 }
 
-function queueIndexedDbWrite(db: LocalDb): Promise<void> {
+function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
+  if (!pendingPersistenceSnapshot) {
+    pendingPersistenceBase = activePersistenceSnapshot ?? persistedDb;
+    pendingCacheOnly = cacheOnly;
+  } else pendingCacheOnly = pendingCacheOnly && cacheOnly;
   pendingPersistenceSnapshot = db;
   if (persistenceDrainScheduled) return persistenceQueue;
   persistenceDrainScheduled = true;
   persistenceQueue = persistenceQueue.catch(() => undefined).then(async () => {
     while (pendingPersistenceSnapshot) {
       const snapshot = pendingPersistenceSnapshot;
+      const base = pendingPersistenceBase;
+      const cacheOnly = pendingCacheOnly;
       pendingPersistenceSnapshot = null;
+      activePersistenceSnapshot = snapshot;
       try {
         if (typeof indexedDB === "undefined") {
           if (import.meta.env.MODE !== "test") throw new Error("Le stockage sécurisé de cet appareil est indisponible.");
           localStorage.setItem(DB_KEY, JSON.stringify(inflateDatabase(flattenDatabase(snapshot))));
         } else {
-          const merged = await writeRecords(persistedDb, snapshot);
-          const rows = flattenDatabase(snapshot);
+          let merged: Map<string, unknown>;
+          try {
+            merged = await writeRecords(base, snapshot);
+          } catch (error) {
+            if (!cacheOnly || !(error instanceof LocalRecordConflictError)) throw error;
+            // Only explicitly downloaded cache snapshots may be discarded. User
+            // edits and their outbox are never retried against an invented base.
+            const stored = await readRecords();
+            if (!stored) throw error;
+            persistedDb = normalizeDb(stored);
+            if (memoryDb === snapshot) memoryDb = persistedDb;
+            persistenceError = null;
+            continue;
+          }
+          const rows = flattenDatabase(persistedDb ?? snapshot);
           merged.forEach((value, key) => value === undefined ? rows.delete(key) : rows.set(key, value));
           persistedDb = normalizeDb(inflateDatabase(rows));
           if (memoryDb === snapshot) memoryDb = persistedDb;
-          else if (pendingPersistenceSnapshot) {
-            const oldRows = flattenDatabase(snapshot), pendingRows = flattenDatabase(pendingPersistenceSnapshot);
-            const rebased = flattenDatabase(persistedDb);
-            for (const key of new Set([...oldRows.keys(), ...pendingRows.keys()])) {
-              const before = oldRows.get(key), after = pendingRows.get(key);
-              if (JSON.stringify(before) === JSON.stringify(after)) continue;
-              const value = mergeRecord(before, after, rebased.get(key));
-              if (value === undefined) rebased.delete(key); else rebased.set(key, value);
-            }
-            pendingPersistenceSnapshot = normalizeDb(inflateDatabase(rebased));
-            memoryDb = pendingPersistenceSnapshot;
-          }
+          // A newer snapshot keeps its original base. Merging it directly
+          // against IndexedDB preserves concurrent fields without replaying a
+          // batch that has already committed (notably outbox removals).
         }
         persistenceError = null;
         channel?.postMessage("changed");
       } catch (error) {
         pendingPersistenceSnapshot = pendingPersistenceSnapshot ?? snapshot;
+        pendingPersistenceBase = base;
+        pendingCacheOnly = cacheOnly && pendingCacheOnly;
         persistenceError = error instanceof Error ? error : new Error("Enregistrement local impossible.");
         notifyStorage();
         throw persistenceError;
+      } finally {
+        activePersistenceSnapshot = null;
       }
     }
   }).finally(() => {
     persistenceDrainScheduled = false;
-    if (pendingPersistenceSnapshot && !persistenceError) void queueIndexedDbWrite(pendingPersistenceSnapshot);
+    if (pendingPersistenceSnapshot && !persistenceError) void queueIndexedDbWrite(pendingPersistenceSnapshot, pendingCacheOnly);
   });
   // Background cache writes have no caller; mutations observe the same error via flush.
   void persistenceQueue.catch(() => undefined);
@@ -369,12 +388,12 @@ export function selectDb<T>(selector: (db: LocalDb) => T): T {
   return cloneValue(selector(getMemoryDb()));
 }
 
-export function saveDb(db: LocalDb) {
+export function saveDb(db: LocalDb, options: { cacheOnly?: boolean } = {}) {
   const base = snapshotBases.get(db);
   if (base && memoryDb && base !== memoryDb) {
     const before = flattenDatabase(base), after = flattenDatabase(db), current = flattenDatabase(memoryDb);
     for (const key of new Set([...before.keys(), ...after.keys()])) {
-      if (JSON.stringify(before.get(key)) === JSON.stringify(after.get(key))) continue;
+      if (equalRecords(before.get(key), after.get(key))) continue;
       const value = mergeRecord(before.get(key), after.get(key), current.get(key));
       if (value === undefined) current.delete(key); else current.set(key, value);
     }
@@ -383,11 +402,11 @@ export function saveDb(db: LocalDb) {
   memoryRevision += 1;
   memoryDb = normalizeDb(cloneDb(db));
   localStorage.setItem(INIT_MARKER_KEY, "1");
-  void queueIndexedDbWrite(memoryDb);
+  void queueIndexedDbWrite(memoryDb, options.cacheOnly);
 }
 
 export async function flushLocalDbWrites(): Promise<void> {
-  if (pendingPersistenceSnapshot && !persistenceDrainScheduled) void queueIndexedDbWrite(pendingPersistenceSnapshot);
+  if (pendingPersistenceSnapshot && !persistenceDrainScheduled) void queueIndexedDbWrite(pendingPersistenceSnapshot, pendingCacheOnly);
   do { await persistenceQueue; } while (persistenceDrainScheduled || pendingPersistenceSnapshot);
 }
 

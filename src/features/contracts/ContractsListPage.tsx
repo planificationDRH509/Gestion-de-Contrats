@@ -39,6 +39,7 @@ import { useFiscalYear } from "../settings/settingsApi";
 import { getUserDossierGroups } from "../../lib/dossier";
 import { createExcelClipboardText, createExcelWorkbookBlob, type ExcelCellValue } from "../../lib/excelExport";
 import { PersonAttachmentsDialog } from "../attachments/PersonAttachmentsDialog";
+import { PersonAttachmentsButton } from "../attachments/PersonAttachmentsButton";
 import { ContractCommentModal } from "./ContractCommentModal";
 import { ContractsImportModal } from "./ContractsImportModal";
 import { TagBadge } from "./TagBadge";
@@ -133,6 +134,7 @@ export function ContractsListPage() {
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
   const [selectedDurations, setSelectedDurations] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedCommunes, setSelectedCommunes] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -201,6 +203,7 @@ export function ContractsListPage() {
 
   const selectContractsScope = (nextShowAll: boolean) => {
     setShowAll(nextShowAll);
+    if (!nextShowAll) setSelectedUserIds([]);
     localStorage.setItem("contracts_view_all", String(nextShowAll));
     setActiveView("contracts");
     setPage(1);
@@ -250,6 +253,7 @@ export function ContractsListPage() {
     pinnedIds: pinnedContracts.ids,
     onlyMine: !showAll,
     userId,
+    createdByIds: selectedUserIds.length > 0 ? selectedUserIds : undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
     dossierId: dossierFilterId ?? undefined,
     fiscalYear: fiscalYearFilter,
@@ -275,6 +279,7 @@ export function ContractsListPage() {
     query,
     selectedPositions,
     selectedDurations,
+    selectedUserIds,
     showAll,
     sort,
     statusFilter,
@@ -345,6 +350,18 @@ export function ContractsListPage() {
     return map;
   }, [appUsers]);
 
+  const userFilterOptions = useMemo(() => {
+    const names = appUsers.map(u => u.fullName.trim() || u.username);
+    return appUsers.map((u, index) => ({
+      id: u.id,
+      label: names.filter(name => name === names[index]).length > 1
+        ? `${names[index]} (@${u.username})` : names[index]
+    })).sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  }, [appUsers]);
+  const userFilterLabel = useCallback((id: string) =>
+    userFilterOptions.find(option => option.id === id)?.label ?? "Utilisateur inconnu",
+  [userFilterOptions]);
+
   const items = data?.items ?? [];
 
   const openComment = useCallback((contractId: string, currentComment: string | null) => {
@@ -404,7 +421,7 @@ export function ContractsListPage() {
     Boolean(dateFilterStart) &&
     Boolean(dateFilterEnd) &&
     dateFilterStart > dateFilterEnd;
-  const advancedFilterCount = [selectedAssignments, selectedDepartments, selectedCommunes, selectedPositions, selectedDurations]
+  const advancedFilterCount = [selectedAssignments, selectedDepartments, selectedCommunes, selectedPositions, selectedDurations, selectedUserIds]
     .filter(values => values.length > 0).length + Number(statusFilter !== "all") + Number(dateFilterMode !== "all") + Number(fiscalYearFilter !== currentFiscalYear);
   const isTodayFilterActive = dateFilterMode === "day" && dateFilterDate === getTodayDateInputValue();
   const hasActiveFilters =
@@ -417,10 +434,11 @@ export function ContractsListPage() {
     selectedAssignments.length > 0 ||
     selectedPositions.length > 0 ||
     selectedDurations.length > 0 ||
+    selectedUserIds.length > 0 ||
     selectedDepartments.length > 0 ||
     selectedCommunes.length > 0;
   const hasFilterChips = Boolean(dossierFilterId || tagFilterId) ||
-    [selectedAssignments, selectedPositions, selectedDurations, selectedDepartments, selectedCommunes]
+    [selectedAssignments, selectedPositions, selectedDurations, selectedDepartments, selectedCommunes, selectedUserIds]
       .some(values => values.length > 0);
 
   function clearFilters() {
@@ -437,6 +455,7 @@ export function ContractsListPage() {
     setSelectedAssignments([]);
     setSelectedPositions([]);
     setSelectedDurations([]);
+    setSelectedUserIds([]);
     setSelectedDepartments([]);
     setSelectedCommunes([]);
     setPage(1);
@@ -1253,6 +1272,21 @@ export function ContractsListPage() {
               </select>
               <MultiSelectDropdown
                 fullWidth
+                label="Utilisateurs"
+                options={userFilterOptions.map(option => option.id)}
+                getOptionLabel={userFilterLabel}
+                allOptionsLabel="Tous"
+                selectedValues={selectedUserIds}
+                onChange={(values) => {
+                  setSelectedUserIds(values);
+                  if (values.length > 0) selectContractsScope(true);
+                  setPage(1);
+                }}
+                placeholder="Tous les utilisateurs"
+                searchable
+              />
+              <MultiSelectDropdown
+                fullWidth
                 label="Institution"
                 options={institutionOptions}
                 selectedValues={selectedAssignments}
@@ -1303,6 +1337,18 @@ export function ContractsListPage() {
             )}
             {hasFilterChips && (
               <div className="contracts-active-filters" aria-label="Filtres actifs">
+              {selectedUserIds.length > 0 ? (
+                <button
+                  type="button"
+                  className="badge filter-pill"
+                  onClick={() => { setSelectedUserIds([]); setPage(1); }}
+                  title="Retirer le filtre utilisateurs"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px" }}>group</span>
+                  Utilisateurs: {selectedUserIds.length <= 2 ? selectedUserIds.map(userFilterLabel).join(", ") : `${selectedUserIds.length} sél.`}
+                  <span className="material-symbols-rounded" style={{ fontSize: "16px", marginLeft: "4px" }}>close</span>
+                </button>
+              ) : null}
               {dossierFilterId ? (
                 <button
                   type="button"
@@ -1714,9 +1760,7 @@ export function ContractsListPage() {
                       </div>
                       <div className="contracts-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="icon-actions">
-                          <button type="button" className="icon-btn" aria-label="Pièces jointes" title="Pièces jointes" onClick={() => setAttachmentContract(contract)}>
-                            <span className="material-symbols-rounded">attach_file</span>
-                          </button>
+                          <PersonAttachmentsButton person={contract} onClick={() => setAttachmentContract(contract)} />
                           {!isMobile ? (
                             <button
                               className="icon-btn"
@@ -2453,7 +2497,7 @@ export function ContractsListPage() {
             </div>
           </div>
 
-      {attachmentContract && <PersonAttachmentsDialog contract={attachmentContract} onClose={() => setAttachmentContract(null)} />}
+      {attachmentContract && <PersonAttachmentsDialog person={attachmentContract} onClose={() => setAttachmentContract(null)} />}
       <ContractCommentModal
         isOpen={Boolean(activeCommentContract)}
         contractLabel={

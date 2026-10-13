@@ -26,7 +26,12 @@ vi.mock("../dossiers/dossiersApi", () => ({
   useDossierContractMetrics: () => ({ data: {} }), useUpdateDossier: () => ({}), useDeleteDossier: () => ({})
 }));
 vi.mock("./tagsApi", () => ({ useTags: () => ({ data: [{ id: "urgent", name: "Urgent" }] }), useCreateTag: () => ({}), useAssignTagToContract: () => ({}) }));
-vi.mock("../auth/usersApi", () => ({ useAppUsers: () => ({ data: [] }) }));
+vi.mock("../auth/usersApi", () => ({ useAppUsers: () => ({ data: [
+  { id: "u", fullName: "Louise Louis", username: "louise" },
+  { id: "marie", fullName: "Marie Jean", username: "marie" },
+  { id: "jean", fullName: "Jean Pierre", username: "jean" },
+  { id: "other-marie", fullName: "Marie Jean", username: "marie2" }
+] }) }));
 vi.mock("../tasks/tasksApi", () => ({ usePrivateTasks: () => ({ data: [] }) }));
 vi.mock("../lists/listsApi", () => ({ useContractLists: () => ({ data: mocks.lists }) }));
 vi.mock("./pinnedContracts", () => ({ usePinnedContracts: () => ({ ids: [] }) }));
@@ -52,6 +57,46 @@ function expectParams(params: object) {
 }
 
 describe("contract list filters", () => {
+  it("combines multiple creators with the other filters and can remove or reset them", async () => {
+    setup();
+    await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Louis");
+    await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Toutes les durées/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "6 mois" }));
+    await userEvent.click(screen.getByRole("button", { name: /Tous les utilisateurs/ }));
+    await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher dans Utilisateurs" }), "marie");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Marie Jean (@marie)" }));
+    expectParams({ createdByIds: ["marie"], onlyMine: false, query: "Louis", durations: [6], dateFilterMode: "day", page: 1 });
+    expect(screen.getByRole("button", { name: "Tous les contrats" })).toBeInTheDocument();
+    await userEvent.clear(screen.getByRole("searchbox", { name: "Rechercher dans Utilisateurs" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Jean Pierre" }));
+    await userEvent.click(screen.getByRole("button", { name: /État/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Signé/ }));
+    expectParams({ createdByIds: ["marie", "jean"], status: "signe", durations: [6], query: "Louis", dateFilterMode: "day" });
+    await userEvent.click(screen.getByTitle("Retirer le filtre utilisateurs"));
+    expectParams({ createdByIds: undefined, onlyMine: false, status: "signe", durations: [6], page: 1 });
+    await userEvent.click(screen.getByRole("button", { name: /Tous les utilisateurs/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Marie Jean (@marie2)" }));
+    expectParams({ createdByIds: ["other-marie"] });
+    await userEvent.click(screen.getByRole("button", { name: "Réinitialiser" }));
+    expectParams({ createdByIds: undefined, status: undefined, durations: undefined, query: undefined, dateFilterMode: undefined, page: 1 });
+    expect(screen.queryByTitle("Retirer le filtre utilisateurs")).not.toBeInTheDocument();
+  });
+
+  it("clears the creator selection when returning to Mes contrats without clearing other filters", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
+    await userEvent.click(screen.getByRole("button", { name: /Filtres/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Tous les utilisateurs/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Jean Pierre" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tous les contrats" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Mes contrats" }));
+    expectParams({ onlyMine: true, createdByIds: undefined, dateFilterMode: "day", page: 1 });
+    expect(screen.queryByTitle("Retirer le filtre utilisateurs")).not.toBeInTheDocument();
+  });
+
   it("reads the persisted Listé state and filters by status", async () => {
     const contract = {
       id: "c1", workspaceId: "w", firstName: "Jean", lastName: "Louis", nif: "1234567890",

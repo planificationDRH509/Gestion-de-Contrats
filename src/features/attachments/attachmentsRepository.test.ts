@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { get, set } from 'idb-keyval';
 import { describe, expect, it, vi } from 'vitest';
-import { manageAttachments, readAttachmentFile, validDocumentLink, validateAttachment } from './attachmentsRepository';
+import { AttachmentPerson, manageAttachments, readAttachmentFile, validDocumentLink, validateAttachment } from './attachmentsRepository';
 import type { Contract } from '../../data/types';
 import type { AuthUser } from '../auth/auth';
 vi.hoisted(() => { vi.stubEnv('VITE_DATA_PROVIDER', 'local'); });
@@ -13,7 +13,7 @@ describe('person attachments', () => {
     const draft = {id,kind:'file' as const,name:'test.txt',content:'SGVsbG8='};
     await manageAttachments(user,contract,'add',draft);
     await manageAttachments(user,contract,'add',draft);
-    const listed = await manageAttachments(user,{...contract,id:'other'},'list');
+    const listed = await manageAttachments(user,{...contract,id:'other',annee_fiscale:'2027-2028'} as Contract,'list');
     expect(listed).toEqual([expect.objectContaining({id,name:'123-456-789-0.txt',size:5})]);
     expect(await get(`person-attachments:w:person`)).toEqual([expect.objectContaining({name:'123-456-789-0.txt'})]);
     expect(listed).not.toEqual([expect.objectContaining({content:'SGVsbG8='})]);
@@ -22,6 +22,15 @@ describe('person attachments', () => {
     await expect(manageAttachments({...user,role:'reader'},contract,'delete',{id})).rejects.toThrow();
     await manageAttachments(user,contract,'delete',{id});
     expect(await manageAttachments(user,contract,'list')).toEqual([]);
+  });
+  it('manages files from an identification without any contract or period', async () => {
+    const person: AttachmentPerson = {workspaceId:'w',applicantId:'standalone',nif:'111-222-333-4',firstName:'Jean',lastName:'Louis'};
+    await manageAttachments(user,person,'add',{id:'standalone-file',kind:'file',name:'preuve.pdf',content:'SGVsbG8='});
+    const laterContract = {...person,id:'future-contract',annee_fiscale:'2028-2029'} as Contract;
+    expect(await manageAttachments(user,laterContract,'get',{id:'standalone-file'})).toEqual({name:'111-222-333-4.pdf',content:'SGVsbG8='});
+    await manageAttachments(user,laterContract,'delete',{id:'standalone-file'});
+    expect(await manageAttachments(user,person,'list')).toEqual([]);
+    await expect(manageAttachments(user,{...person,applicantId:null,nif:null},'list')).rejects.toThrow('Identification');
   });
   it('uses the current NIF for existing files without renaming links or paths', async () => {
     const legacyContract = {...contract, applicantId:'legacy-person', nif:' 987-654-321-0 '};

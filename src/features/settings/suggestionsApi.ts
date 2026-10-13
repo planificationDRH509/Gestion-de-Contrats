@@ -12,10 +12,11 @@ const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supaba
 
 export function useAddresses(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["suggestions", "addresses", workspaceId],
     queryFn: () => repo().getAddresses(workspaceId),
     enabled: !!workspaceId,
-    initialData: usesSupabase ? readCachedAddresses : undefined,
+    initialData: usesSupabase ? () => readCachedAddresses(workspaceId) : undefined,
     initialDataUpdatedAt: 0,
     staleTime: 0,
     refetchOnMount: "always",
@@ -25,10 +26,11 @@ export function useAddresses(workspaceId: string) {
 
 export function usePositions(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["suggestions", "positions", workspaceId],
     queryFn: () => repo().getPositions(workspaceId),
     enabled: !!workspaceId,
-    initialData: usesSupabase ? readCachedPositions : undefined,
+    initialData: usesSupabase ? () => readCachedPositions(workspaceId) : undefined,
     initialDataUpdatedAt: 0,
     staleTime: 0,
     refetchOnMount: "always",
@@ -38,10 +40,11 @@ export function usePositions(workspaceId: string) {
 
 export function useInstitutions(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["suggestions", "institutions", workspaceId],
     queryFn: () => repo().getInstitutions(workspaceId),
     enabled: !!workspaceId,
-    initialData: usesSupabase ? readCachedInstitutions : undefined,
+    initialData: usesSupabase ? () => readCachedInstitutions(workspaceId) : undefined,
     initialDataUpdatedAt: 0,
     staleTime: 0,
     refetchOnMount: "always",
@@ -53,6 +56,7 @@ export function useAddAddress() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ workspaceId, label }: { workspaceId: string; label: string }) =>
       repo().addAddress(workspaceId, label, user?.id),
     onSuccess: (_, { workspaceId }) => {
@@ -65,6 +69,7 @@ export function useAddPosition() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ workspaceId, label, salaries }: { workspaceId: string; label: string; salaries: number[] }) =>
       repo().addPosition(workspaceId, label, salaries, user?.id),
     onSuccess: (_, { workspaceId }) => {
@@ -77,6 +82,7 @@ export function useAddInstitution() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ workspaceId, label, addressKeywords, department, commune }: {
       workspaceId: string;
       label: string;
@@ -100,6 +106,7 @@ export function useAddInstitution() {
 export function useUpdateAddress() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, label, prefix, labelFeminine }: { id: string; label: string; prefix?: string | null; labelFeminine?: string | null }) =>
       repo().updateAddress(id, label, prefix, labelFeminine),
     onSuccess: () => {
@@ -111,6 +118,7 @@ export function useUpdateAddress() {
 export function useUpdatePosition() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, label, salaries, prefix, labelFeminine }: { id: string; label: string; salaries: number[]; prefix?: string | null; labelFeminine?: string | null }) =>
       repo().updatePosition(id, label, salaries, prefix, labelFeminine),
     onSuccess: () => {
@@ -122,6 +130,7 @@ export function useUpdatePosition() {
 export function useUpdateInstitution() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, label, addressKeywords, prefix, labelFeminine, department, commune }: {
       id: string;
       label: string;

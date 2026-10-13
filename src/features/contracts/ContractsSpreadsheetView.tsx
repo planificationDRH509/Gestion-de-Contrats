@@ -1225,7 +1225,7 @@ export function ContractsSpreadsheetView({
       saveLastChoice("position", editedDraft.position);
       saveLastChoice("positionSalary", editedDraft.salaryNumber);
       saveLastChoice("assignment", editedDraft.assignment);
-      await learnSuggestions(
+      void learnSuggestions(
         editedDraft.address,
         editedDraft.position,
         editedDraft.assignment,

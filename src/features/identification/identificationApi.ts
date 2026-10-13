@@ -71,6 +71,7 @@ export interface UpdateIdentificationInput {
 
 export function useIdentificationList(workspaceId: string) {
   return useQuery<IdentificationRow[]>({
+    networkMode: "always",
     queryKey: ["identification", workspaceId],
     queryFn: async () => (await provider.applicants.list(workspaceId)).map(mapApplicant),
     enabled: !!workspaceId,
@@ -90,6 +91,7 @@ export function useIdentificationList(workspaceId: string) {
 export function useCreateIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: async (input: CreateIdentificationInput) => {
       const existing = await provider.applicants.findByNifOrNinu(
         input.workspace_id,
@@ -121,6 +123,7 @@ export function useCreateIdentification() {
 export function useUpdateIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: async (input: UpdateIdentificationInput) => {
       const current = await provider.applicants.getById(input.oldNif);
       if (!current) throw new Error("Fiche d'identification introuvable.");
@@ -147,6 +150,7 @@ export function useUpdateIdentification() {
 export function useDeleteIdentification() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ nif, workspaceId }: { nif: string; workspaceId: string }) =>
       provider.applicants.softDelete(nif, workspaceId),
     onSuccess: () => {

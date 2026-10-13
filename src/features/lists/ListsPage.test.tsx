@@ -17,6 +17,7 @@ vi.mock('./ListAssignmentDialog', () => ({ListAssignmentDialog: () => <div role=
 vi.mock('./downloadListExcel', () => ({downloadListExcel: mocks.exportExcel}));
 function mount(path = '/app/listes?liste=l1') { return render(<MemoryRouter initialEntries={[path]}><ListsPage /></MemoryRouter>); }
 beforeEach(() => {
+  sessionStorage.setItem('contracts_fiscal_year_filter:w:u', '2025-2026');
   cleanup(); mocks.role='admin'; mocks.mobile=false; mocks.candidates=[]; mocks.error=null;
   mocks.mutate.mockReset().mockResolvedValue('new-list'); mocks.grid.mockReset().mockResolvedValue({data:[]});
   mocks.exportExcel.mockReset().mockResolvedValue(undefined);
@@ -27,7 +28,7 @@ beforeEach(() => {
     {id:'c2',firstName:'Ana',lastName:'Étienne',nif:'222',salaryNumber:200,durationMonths:6,position:'Médecin'}
   ]}];
 });
-afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); sessionStorage.clear(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 describe('ListsPage', () => {
   it('selects the latest list on desktop and shows alphabetical members and duration totals', () => {
     mount('/app/listes');
@@ -155,15 +156,16 @@ describe('ListsPage', () => {
     view.rerender(<MemoryRouter initialEntries={['/app/listes?liste=l1']}><ListsPage /></MemoryRouter>);
     expect(screen.getByRole('button',{name:'Exporter en Excel'})).toBeDisabled();
   });
-  it('shows export errors and retries, but never treats unavailable reference data as absent titles', async () => {
-    mocks.grid.mockResolvedValueOnce({error:new Error('Grille indisponible')});
+  it('exports from the cached grid without waiting for a server refresh and allows retries', async () => {
+    mocks.grid.mockImplementationOnce(() => new Promise(() => {}));
     mount(); await userEvent.click(screen.getByRole('button',{name:'Exporter en Excel'}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Grille indisponible'); expect(mocks.exportExcel).not.toHaveBeenCalled();
+    expect(mocks.grid).not.toHaveBeenCalled();
+    expect(mocks.exportExcel).toHaveBeenCalledOnce();
     mocks.exportExcel.mockRejectedValueOnce(new Error('La liste a changé pendant l’export.'));
     await userEvent.click(screen.getByRole('button',{name:'Exporter en Excel'}));
     expect(await screen.findByRole('alert')).toHaveTextContent('La liste a changé pendant l’export.');
     await userEvent.click(screen.getByRole('button',{name:'Exporter en Excel'}));
-    expect(mocks.exportExcel).toHaveBeenCalledTimes(2); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mocks.exportExcel).toHaveBeenCalledTimes(3); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
   it('uses the available reference data for offline export', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false); mount();

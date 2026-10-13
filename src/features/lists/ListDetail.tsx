@@ -66,7 +66,7 @@ export function ListDetail({ list, onDeleted, onBack }: { list: ContractList; on
     if (exporting || !can("contracts.export")) return;
     setExporting(true); setExportError("");
     try {
-      const reference = navigator.onLine ? await salaryGrid.refetch() : { data: salaryGrid.data, error: null };
+      const reference = salaryGrid.data ? { data: salaryGrid.data, error: null } : await salaryGrid.refetch();
       if (reference.error) throw reference.error;
       if (!reference.data) throw new Error("La grille des titres est indisponible. Réessayez le téléchargement.");
       const { downloadListExcel } = await import("./downloadListExcel");

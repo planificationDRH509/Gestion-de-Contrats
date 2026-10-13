@@ -140,6 +140,7 @@ export function useContractsList(
 export function useContract(contractId: string | undefined) {
   return useQuery({
     queryKey: ["contract", contractId],
+    networkMode: "always",
     queryFn: () => (contractId ? provider.contracts.getById(contractId) : null),
     enabled: Boolean(contractId),
     initialData: usesSupabase && contractId
@@ -156,6 +157,7 @@ export function useContract(contractId: string | undefined) {
 export function useContractsByIds(ids: string[], workspaceId: string) {
   return useQuery({
     queryKey: ["contracts", "byIds", ids, workspaceId],
+    networkMode: "always",
     queryFn: () => provider.contracts.getByIds(ids, workspaceId),
     enabled: ids.length > 0,
     initialData: usesSupabase
@@ -223,6 +225,7 @@ export function useCreateContract() {
 export function useUpdateContract() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: (input: UpdateContractInput) => provider.contracts.update(input),
     onMutate: async (updatedContract) => {
       await queryClient.cancelQueries({ queryKey: ["contracts"] });
@@ -272,6 +275,7 @@ export function useUpdateContract() {
 export function useUpdateContractComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, workspaceId, commentaire }: { id: string; workspaceId: string; commentaire: string | null }) =>
       provider.contracts.update({ id, workspaceId, commentaire }),
     onMutate: async (newComment) => {
@@ -311,6 +315,7 @@ export function useUpdateContractComment() {
 export function useAssignContractsToDossier() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       workspaceId,
       contractIds,
@@ -364,6 +369,7 @@ export function useChangeContractsStatus() {
 export function useChangeContractsDuration() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       workspaceId,
       contractIds,
@@ -395,6 +401,7 @@ export function useImportApplicantMatches(
 ) {
   return useQuery<Applicant[]>({
     queryKey: ["contract-import", "identity-matches", workspaceId, nifs, ninus],
+    networkMode: "always",
     queryFn: () => provider.applicants.findManyByNifOrNinu(workspaceId, nifs, ninus),
     enabled: enabled && Boolean(workspaceId) && (nifs.length > 0 || ninus.length > 0),
     staleTime: 30_000,
@@ -405,6 +412,7 @@ export function useImportApplicantMatches(
 export function useImportContractHistory(workspaceId: string, enabled: boolean) {
   return useQuery({
     queryKey: ["contract-import", "history", workspaceId],
+    networkMode: "always",
     queryFn: () => loadImportContracts(provider, workspaceId),
     enabled: enabled && Boolean(workspaceId),
     staleTime: 0,
@@ -446,6 +454,7 @@ export function useUndoContractImport() {
 export function useDeleteContract() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, workspaceId }: { id: string; workspaceId: string }) =>
       provider.contracts.softDelete(id, workspaceId),
     onMutate: async ({ id }) => {
@@ -505,6 +514,7 @@ export function usePermanentlyDeleteContract() {
 export function usePrintJob() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ workspaceId, ids }: { workspaceId: string; ids: string[] }) =>
       provider.printJobs.create(workspaceId, ids),
     onSuccess: () => {

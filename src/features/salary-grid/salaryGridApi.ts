@@ -1,7 +1,7 @@
+import { queueReferenceChange } from '../../data/local/referenceQueue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../auth/auth';
 import { getSupabaseClient } from '../../data/supabase/supabaseClient';
-import type { Json } from '../../data/supabase/database.types';
 import seed from './salaryGridSeed.json';
 import { SalaryGridEntry, validateGridEntry } from './salaryGrid';
 
@@ -15,17 +15,22 @@ export function useSalaryGrid() {
     queryKey, enabled: Boolean(user),
     initialData: () => cached() ?? (remote ? undefined : seed), initialDataUpdatedAt: 0,
     staleTime: 30_000, refetchOnReconnect: 'always', refetchOnWindowFocus: true,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      const local = cached();
+      if (local) client.setQueryData(queryKey, local);
+      if (!navigator.onLine && local) return local;
       if (!remote) return cached() ?? seed;
       if (!user?.taskSessionToken) throw new Error('Session utilisateur indisponible.');
       const { data, error } = await getSupabaseClient().rpc('read_salary_grid', { p_session_token: user.taskSessionToken });
       if (error) throw error;
       const entries = data as unknown as SalaryGridEntry[];
+      if (signal.aborted) return cached() ?? [];
       cache(entries);
-      return entries;
+      return cached() ?? entries;
     }
   });
   const mutation = useMutation({
+    onMutate: () => client.cancelQueries({ queryKey }),
     networkMode: 'always',
     mutationFn: async (entry: SalaryGridEntry) => {
       if (!can('settings.manage')) throw new Error('Modification réservée aux administrateurs.');
@@ -36,15 +41,13 @@ export function useSalaryGrid() {
         if (previous && previous.version !== entry.version) throw new Error('Cette ligne a changé. Rechargez la grille.');
         return [...entries.filter(e => e.id !== entry.id), {...entry, version: entry.version + 1}];
       }
-      if (!navigator.onLine) throw new Error('Connectez-vous pour modifier la grille salariale.');
-      if (!user?.taskSessionToken) throw new Error('Session utilisateur indisponible.');
-      const { data, error } = await getSupabaseClient().rpc('save_salary_grid_entry', {
-        p_session_token: user.taskSessionToken, p_entry: entry as unknown as Json
-      });
-      if (error) throw error;
-      return data as unknown as SalaryGridEntry[];
+      const previous = cached()?.find(e => e.id === entry.id) ?? null;
+      if ((previous?.version ?? 0) !== entry.version) throw new Error('Cette ligne a changé. Rechargez la grille.');
+      const after = { ...entry, version: entry.version + 1 };
+      await queueReferenceChange(user!.workspaceId, { scope: 'salary', patches: [{ id: entry.id, before: previous, after }] });
+      return cached() ?? [after];
     },
-    onSuccess: entries => { cache(entries); client.setQueryData(queryKey, entries); void client.invalidateQueries({queryKey:['salary-grid']}); }
+    onSuccess: entries => { if (!remote) cache(entries); client.setQueryData(queryKey, entries); void client.invalidateQueries({queryKey:['salary-grid']}); }
   });
   return { ...query, entries: query.data ?? [], save: mutation.mutateAsync, saving: mutation.isPending };
 }

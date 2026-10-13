@@ -12,6 +12,7 @@ async function list(params: ContractListParams): Promise<ContractListResult> {
   if (params.includeIds) items = items.filter(item => params.includeIds!.includes(item.id));
   if (params.excludeIds) items = items.filter(item => !params.excludeIds!.includes(item.id));
   if (params.onlyMine && params.userId) items = items.filter(item => item.createdBy === params.userId);
+  if (params.createdByIds?.length) items = items.filter(item => params.createdByIds!.includes(item.createdBy!));
   if (params.query) items = items.filter(item => item.id.includes(params.query!));
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -20,6 +21,13 @@ async function list(params: ContractListParams): Promise<ContractListResult> {
 }
 
 describe("pinned contract ordering", () => {
+  it("keeps the creator filter for both pinned and unpinned contracts", async () => {
+    const result = await listContractsPinnedFirst(list, {
+      workspaceId: "w", pageSize: 25, createdByIds: ["other"], pinnedIds: ["c01", "c30"]
+    });
+    expect(result.items.map(item => item.id)).toEqual(["c30"]);
+    expect(result.total).toBe(1);
+  });
   it.each([false, true])("preserves list membership and exclusions with pins (all=%s)", async all => {
     const result = await listContractsPinnedFirst(list, {
       workspaceId: "w", all, pageSize: 25, pinnedIds: ["c03", "c25", "c30"],

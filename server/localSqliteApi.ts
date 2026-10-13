@@ -70,6 +70,7 @@ type ContractListPayload = {
   all?: boolean;
   onlyMine?: boolean;
   userId?: string;
+  createdByIds?: string[];
   status?: string;
   dossierId?: string | null;
   fiscalYear?: string;
@@ -2058,6 +2059,11 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     }
     if (payload.onlyMine && payload.userId) {
       items = items.filter((item) => item.createdBy === payload.userId);
+    }
+
+    if (payload.createdByIds?.length) {
+      const creators = new Set(payload.createdByIds);
+      items = items.filter((item) => Boolean(item.createdBy && creators.has(item.createdBy)));
     }
 
     if (payload.query?.trim()) {

@@ -12,6 +12,7 @@ const usesSupabase = (import.meta.env.VITE_DATA_PROVIDER ?? "local") === "supaba
 
 export function useTags(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["tags", workspaceId],
     queryFn: () => provider.tags.list(workspaceId),
     enabled: Boolean(workspaceId),
@@ -30,6 +31,7 @@ export function useCreateTag() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ workspaceId, name, color }: { workspaceId: string; name: string; color?: string }) =>
       provider.tags.create({ workspaceId, name, color, createdBy: user?.id }),
     onSuccess: (tag) => {
@@ -41,6 +43,7 @@ export function useCreateTag() {
 export function useAssignTagToContract() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       workspaceId,
       contractId,
@@ -61,6 +64,7 @@ export function useAssignTagToContract() {
 export function useRemoveTagFromContract() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       workspaceId,
       contractId,

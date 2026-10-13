@@ -1,3 +1,4 @@
+import { projectInstitutionAssignment } from './referenceOverlay';
 import { sameImportContract } from "../../features/contracts/contractImportBatch";
 import { assertContractDuration } from "../../lib/contractDuration";
 import { bindContractMinister, migrateLegacyContract, readMinistersCache } from "../../features/settings/ministersCache";
@@ -42,7 +43,7 @@ function withTags(contract: Contract, db: LocalDb): Contract {
   const tags = links
     .map((link) => db.tags.find((tag) => tag.id === link.tagId && !tag.deletedAt))
     .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
-  return { ...contract, tags: tags.length > 0 ? tags : contract.tags ?? [] };
+  return { ...projectInstitutionAssignment(contract), tags: tags.length > 0 ? tags : contract.tags ?? [] };
 }
 
 /** Returns the immediately available offline page without touching the network. */
@@ -54,7 +55,7 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
     let items = db.contracts.filter((contract) =>
       contract.workspaceId === params.workspaceId &&
       (params.deletionState === "deleted" ? Boolean(contract.deletedAt) : !contract.deletedAt)
-    );
+    ).map(projectInstitutionAssignment);
 
     if (params.includeIds) {
       const included = new Set(params.includeIds);
@@ -67,6 +68,11 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
 
     if (params.onlyMine && params.userId) {
       items = items.filter((contract) => contract.createdBy === params.userId);
+    }
+
+    if (params.createdByIds?.length) {
+      const creators = new Set(params.createdByIds);
+      items = items.filter((contract) => Boolean(contract.createdBy && creators.has(contract.createdBy)));
     }
 
     if (params.query) {

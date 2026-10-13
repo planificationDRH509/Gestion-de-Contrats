@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -18,7 +18,7 @@ beforeEach(() => {
   sync.workspace.mockReset().mockResolvedValue(false);
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); });
 it("retries pending uploads after the first reconnection request fails", async () => {
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
   vi.useFakeTimers(); vi.stubEnv("VITE_DATA_PROVIDER", "supabase");
@@ -35,7 +35,8 @@ it("retries pending uploads after the first reconnection request fails", async (
   expect(sync.outbox).toHaveBeenCalledTimes(2);
   sync.pending = 0;
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
-  expect(sync.outbox).toHaveBeenCalledTimes(2);
+  expect(sync.outbox).toHaveBeenCalledTimes(3);
+  expect(sync.workspace).toHaveBeenLastCalledWith("w", { force: false, verify: true });
   view.unmount();
 });
 
@@ -54,7 +55,7 @@ it("retries a failed snapshot even after all uploads have been acknowledged", as
   expect(sync.workspace).toHaveBeenCalledTimes(2);
   expect(sync.workspace).toHaveBeenLastCalledWith("w", { force: false, verify: true });
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
-  expect(sync.workspace).toHaveBeenCalledTimes(2);
+  expect(sync.workspace).toHaveBeenCalledTimes(3);
   view.unmount();
 });
 

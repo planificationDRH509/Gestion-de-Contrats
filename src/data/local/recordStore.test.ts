@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, expect, it, vi } from "vitest";
 import { clear } from "idb-keyval";
-import { readRecords, writeRecords } from "./recordStore";
+import { readRecords, writeRecords, mergeRecord } from "./recordStore";
 import type { LocalDb } from "./localDb";
 import { openLocalValue, sealLocalValue } from "./deviceVault";
 
@@ -61,7 +61,7 @@ it("rejects a conflicting tab without committing its associated outbox", async (
   second.workspaces[0].name = "Second";
   second.outbox.push({ id: "q", workspaceId: "a", type: "contract.delete", payload: { id: "c" }, createdAt: "1" });
   await writeRecords(initial, first);
-  await expect(writeRecords(initial, second)).rejects.toThrow(/autre onglet/);
+  await expect(writeRecords(initial, second)).rejects.toThrow(/modifications concurrentes/);
   const restored = await readRecords();
   expect(restored?.workspaces[0].name).toBe("First");
   expect(restored?.outbox).toEqual([]);
@@ -110,4 +110,14 @@ it("migrates legacy salaries and queued base versions without losing amounts or 
   expect(await openLocalValue(raw.value)).not.toHaveProperty("salaryText");
   expect(await readRecords()).toEqual(migrated);
   connection.close();
+});
+
+
+it("ignores object key order but preserves meaningful array order", () => {
+  const base = { members: [{ id: "a", name: "A" }], version: 1 };
+  const next = { members: [{ id: "a", name: "B" }], version: 2 };
+  const current = { version: 1, members: [{ name: "A", id: "a" }] };
+  expect(mergeRecord(base, next, current)).toEqual(next);
+  expect(() => mergeRecord(["a", "b"], ["b", "a"], ["a", "c"]))
+    .toThrow(/modifications concurrentes/);
 });

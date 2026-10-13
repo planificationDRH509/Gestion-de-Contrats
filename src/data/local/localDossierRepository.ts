@@ -180,6 +180,7 @@ export class LocalDossierRepository implements DossierRepository {
 
     const timestamp = now();
     let unassignedCount = 0;
+    const contractIds: string[] = [];
     db.contracts = db.contracts.map((contract) => {
       if (
         contract.workspaceId === workspaceId &&
@@ -187,6 +188,7 @@ export class LocalDossierRepository implements DossierRepository {
         contract.dossierId === id
       ) {
         unassignedCount += 1;
+        contractIds.push(contract.id);
         return {
           ...contract,
           dossierId: null,
@@ -203,7 +205,7 @@ export class LocalDossierRepository implements DossierRepository {
     };
     saveDb(db);
     if (shouldQueue) {
-      queueOutbox(workspaceId, "dossier.delete", { id, workspaceId });
+      queueOutbox(workspaceId, "dossier.delete", { id, workspaceId, contractIds });
     }
     await flushLocalDbWrites();
     return unassignedCount;

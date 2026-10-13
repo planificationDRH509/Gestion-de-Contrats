@@ -8,6 +8,8 @@ export interface MultiSelectDropdownProps {
   placeholder: string;
   searchable?: boolean;
   fullWidth?: boolean;
+  getOptionLabel?: (value: string) => string;
+  allOptionsLabel?: string;
 }
 
 function normalizeSearch(value: string) {
@@ -19,7 +21,9 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false, fullWidth = false }: MultiSelectDropdownProps) {
+const defaultOptionLabel = (value: string) => value;
+
+export function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder, searchable = false, fullWidth = false, getOptionLabel = defaultOptionLabel, allOptionsLabel = "Toutes" }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -30,10 +34,10 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
     const tokens = searchable ? normalizeSearch(searchQuery).split(/\s+/).filter(Boolean) : [];
     if (tokens.length === 0) return uniqueOptions;
     return uniqueOptions.filter(option => {
-      const normalizedOption = normalizeSearch(option);
+      const normalizedOption = normalizeSearch(getOptionLabel(option));
       return tokens.every(token => normalizedOption.includes(token));
     });
-  }, [uniqueOptions, searchQuery, searchable]);
+  }, [uniqueOptions, searchQuery, searchable, getOptionLabel]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -65,10 +69,10 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
 
   const displayText = useMemo(() => {
     if (selectedValues.length === 0) return placeholder;
-    if (uniqueOptions.length > 0 && selectedValues.length === uniqueOptions.length && uniqueOptions.every(value => selectedValues.includes(value))) return "Toutes";
-    if (selectedValues.length <= 2) return selectedValues.join(", ");
+    if (uniqueOptions.length > 0 && selectedValues.length === uniqueOptions.length && uniqueOptions.every(value => selectedValues.includes(value))) return allOptionsLabel;
+    if (selectedValues.length <= 2) return selectedValues.map(getOptionLabel).join(", ");
     return `${selectedValues.length} sélectionné(s)`;
-  }, [selectedValues, uniqueOptions, placeholder]);
+  }, [selectedValues, uniqueOptions, placeholder, getOptionLabel, allOptionsLabel]);
 
   return (
     <div ref={containerRef} className="multi-select-field" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}
@@ -167,7 +171,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
               onClick={selectAll} 
               style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: '11px', fontWeight: '800', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}
             >
-              Toutes
+              {allOptionsLabel}
             </button>
             <button 
               type="button" 
@@ -215,7 +219,7 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
                       height: '15px'
                     }}
                   />
-                  <span title={option} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option}</span>
+                  <span title={getOptionLabel(option)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getOptionLabel(option)}</span>
                 </label>
               );
             })}

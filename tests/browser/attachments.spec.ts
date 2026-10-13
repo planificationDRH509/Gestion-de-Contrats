@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { getFiscalYearForDate } from '../../src/lib/contractDateFilters';
 
 test('adds files, links and paths from the contract card and allows reader downloads', async ({page,context}) => {
   let role = 'agent';
@@ -12,9 +13,10 @@ test('adds files, links and paths from the contract card and allows reader downl
     const url = new URL(route.request().url());
     let body: unknown = [];
     if (url.pathname.endsWith('/app_users')) body = {role};
-    if (url.pathname.endsWith('/contrat')) body = [{id_contrat:'attachment-c1',nif:'123456789',workspace_id:'workspace_default',status:'saisie',duree_contrat:6,annee_fiscale:'2025-2026',salaire_en_chiffre:25000,titre:'Agent',lieu_affectation:'Port-au-Prince',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted_at:null,contract_tags:[],identification:{nif:'123456789',prenom:'Marie',nom:'Jean',sexe:'Femme',adresse:'Port-au-Prince'}}];
-    if (url.pathname.endsWith('/manage_person_attachments')) {
-      const {p_action:action,p_document:doc} = route.request().postDataJSON();
+    if (url.pathname.endsWith('/contrat')) body = [{id_contrat:'attachment-c1',nif:'123456789',workspace_id:'workspace_default',created_by:'attachment-test-user',status:'saisie',duree_contrat:6,annee_fiscale:getFiscalYearForDate(new Date()),salaire_en_chiffre:25000,titre:'Agent',lieu_affectation:'Port-au-Prince',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted_at:null,contract_tags:[],identification:{nif:'123456789',prenom:'Marie',nom:'Jean',sexe:'Femme',adresse:'Port-au-Prince'}}];
+    if (url.pathname.endsWith('/manage_identification_attachments')) {
+      const {p_action:action,p_document:doc,p_person_id:personId} = route.request().postDataJSON();
+      expect(personId).toBe('123456789');
       if (action === 'add') entries.unshift({...doc,size:doc.content ? Buffer.from(doc.content,'base64').length : null,createdAt:new Date().toISOString()});
       if (action === 'delete') entries = entries.filter(item => item.id !== doc.id);
       body = action === 'get' ? entries.find(item => item.id === doc.id) : entries.map(({content:_content,...item}) => item);
@@ -22,13 +24,21 @@ test('adds files, links and paths from the contract card and allows reader downl
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':'0-0/1'}});
   });
   await page.goto('http://127.0.0.1:5179/app/contrats');
-  await page.getByRole('button',{name:'Pièces jointes',exact:true}).first().click();
+  const attachmentButton = page.getByRole('button',{name:'Pièces jointes',exact:true}).first();
+  await expect(attachmentButton).toHaveClass(/has-attachments/);
+  await attachmentButton.click();
   const dialog = page.getByRole('dialog',{name:'Pièces jointes'});
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Nom',{exact:true})).toHaveCount(0);
   const legacyDownloadPromise = page.waitForEvent('download');
   await dialog.getByRole('button',{name:'Télécharger 123456789.pdf'}).click();
   expect((await legacyDownloadPromise).suggestedFilename()).toBe('123456789.pdf');
+  await dialog.getByRole('button',{name:'Supprimer 123456789.pdf',exact:true}).click();
+  await dialog.getByRole('button',{name:'Supprimer',exact:true}).click();
+  await expect(attachmentButton).not.toHaveClass(/has-attachments/);
+  await dialog.getByLabel('Fichier',{exact:true}).setInputFiles({name:'preuve.pdf',mimeType:'application/pdf',buffer:Buffer.from('Hello')});
+  await dialog.getByRole('button',{name:'Ajouter',exact:true}).click();
+  await expect(attachmentButton).toHaveClass(/has-attachments/);
   await dialog.getByLabel('Fichier',{exact:true}).setInputFiles({name:'preuve.txt',mimeType:'text/plain',buffer:Buffer.from('Document de test')});
   await dialog.getByRole('button',{name:'Ajouter',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Télécharger 123456789-1.pdf'})).toBeVisible();

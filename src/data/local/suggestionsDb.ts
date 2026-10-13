@@ -1,3 +1,4 @@
+import { overlayReferences, referenceWorkspace } from './referenceOverlay';
 /**
  * Suggestions database for auto-completion in contract forms.
  * Stores addresses, positions (with default salaries), and institutions (per address area).
@@ -97,7 +98,37 @@ function seedSuggestions(): SuggestionsDb {
   };
 }
 
-export function loadSuggestions(): SuggestionsDb {
+const remoteSuggestions = () => (import.meta.env.VITE_DATA_PROVIDER ?? 'local') === 'supabase';
+const scopedKey = (scope: keyof SuggestionsDb, workspaceId: string) => `${SUGGESTIONS_KEY}:${workspaceId}:${scope}`;
+function migrateLegacySuggestions(workspaceId: string) {
+  const ownerKey = `${SUGGESTIONS_KEY}:legacy-owner`;
+  if (localStorage.getItem(ownerKey) !== null) return;
+  const raw = localStorage.getItem(SUGGESTIONS_KEY);
+  if (!raw) return;
+  let old: Partial<SuggestionsDb>;
+  try { old = JSON.parse(raw); } catch { return; }
+  if (!old || typeof old !== 'object') return;
+  // Keep the old copy intact; only the workspace active at upgrade inherits it.
+  for (const scope of ['addresses', 'positions', 'institutions'] as const) {
+    if (Array.isArray(old[scope]) && localStorage.getItem(scopedKey(scope, workspaceId)) === null) {
+      localStorage.setItem(scopedKey(scope, workspaceId), JSON.stringify(old[scope]));
+    }
+  }
+  localStorage.setItem(ownerKey, workspaceId);
+}
+export function hasCachedSuggestions(scope: keyof SuggestionsDb, workspaceId: string) {
+  migrateLegacySuggestions(workspaceId);
+  return localStorage.getItem(scopedKey(scope, workspaceId)) !== null;
+}
+export function loadSuggestions(workspaceId = referenceWorkspace()): SuggestionsDb {
+  if (remoteSuggestions()) {
+    migrateLegacySuggestions(workspaceId);
+    const read = (scope: keyof SuggestionsDb) => {
+      try { const value = JSON.parse(localStorage.getItem(scopedKey(scope, workspaceId)) ?? '[]'); return Array.isArray(value) ? value : []; }
+      catch { return []; }
+    };
+    return { addresses: read('addresses'), positions: read('positions'), institutions: read('institutions') };
+  }
   const raw = localStorage.getItem(SUGGESTIONS_KEY);
   if (!raw) {
     const seeded = seedSuggestions();
@@ -119,6 +150,7 @@ export function loadSuggestions(): SuggestionsDb {
 }
 
 export function saveSuggestions(db: SuggestionsDb) {
+  if (remoteSuggestions()) { cacheSuggestions(db); return; }
   localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(db));
 
   try {
@@ -135,7 +167,13 @@ export function saveSuggestions(db: SuggestionsDb) {
   }
 }
 
-export function cacheSuggestions(partial: Partial<SuggestionsDb>) {
+export function cacheSuggestions(partial: Partial<SuggestionsDb>, workspaceId = referenceWorkspace()) {
+  if (remoteSuggestions()) {
+    for (const scope of ['addresses', 'positions', 'institutions'] as const) {
+      if (partial[scope]) localStorage.setItem(scopedKey(scope, workspaceId), JSON.stringify(partial[scope]));
+    }
+    return;
+  }
   const current = loadSuggestions();
   localStorage.setItem(
     SUGGESTIONS_KEY,
@@ -161,8 +199,8 @@ export async function syncSuggestionsFromServer(workspaceId: string) {
 }
 
 // ─── Address CRUD ──────────────────────────────────────────────
-export function getAddresses(): AddressSuggestion[] {
-  return loadSuggestions().addresses.slice().sort((a, b) => a.order - b.order);
+export function getAddresses(workspaceId = referenceWorkspace()): AddressSuggestion[] {
+  return overlayReferences('addresses', loadSuggestions(workspaceId).addresses, workspaceId).slice().sort((a, b) => a.order - b.order);
 }
 
 export function addAddress(label: string): AddressSuggestion {
@@ -192,8 +230,8 @@ export function deleteAddress(id: string) {
 }
 
 // ─── Position CRUD ──────────────────────────────────────────────
-export function getPositions(): PositionSuggestion[] {
-  return loadSuggestions().positions.slice().sort((a, b) => a.order - b.order);
+export function getPositions(workspaceId = referenceWorkspace()): PositionSuggestion[] {
+  return overlayReferences('positions', loadSuggestions(workspaceId).positions, workspaceId).slice().sort((a, b) => a.order - b.order);
 }
 
 export function addPosition(label: string, salaries: number[]): PositionSuggestion {
@@ -230,8 +268,8 @@ export function deletePosition(id: string) {
 }
 
 // ─── Institution CRUD ──────────────────────────────────────────────
-export function getInstitutions(): InstitutionSuggestion[] {
-  return loadSuggestions().institutions.slice().sort((a, b) => a.order - b.order);
+export function getInstitutions(workspaceId = referenceWorkspace()): InstitutionSuggestion[] {
+  return overlayReferences('institutions', loadSuggestions(workspaceId).institutions, workspaceId).slice().sort((a, b) => a.order - b.order);
 }
 
 export function addInstitution(
@@ -482,6 +520,7 @@ export async function learnSuggestions(address?: string, _position?: string, ass
     }
   } catch (e) {
     console.error("Failed to learn suggestions in Supabase mode", e);
+    if (provider === "supabase") return;
   }
 
   // Fallback to local logic

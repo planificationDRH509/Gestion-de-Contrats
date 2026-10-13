@@ -46,24 +46,45 @@ export function inflateDatabase(rows: Map<string, unknown>): LocalDb {
   return db;
 }
 
-const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Object property order is not a data change; array order remains significant. */
+export function equalRecords(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((value, index) => equalRecords(value, b[index]));
+  }
+  const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
+  const keys = Object.keys(left).filter(key => left[key] !== undefined);
+  return keys.length === Object.keys(right).filter(key => right[key] !== undefined).length &&
+    keys.every(key => equalRecords(left[key], right[key]));
+}
+const equal = equalRecords;
+
+export class LocalRecordConflictError extends Error {
+  constructor() {
+    super("Des modifications concurrentes concernent les mêmes données. Réessayez après résolution du conflit.");
+    this.name = "LocalRecordConflictError";
+  }
+}
 
 /** Three-way merge: unrelated edits survive, divergent edits are rejected atomically. */
 export function mergeRecord(before: unknown, after: unknown, current: unknown): unknown {
   if (equal(current, before) || equal(current, after)) return after;
-  if (before && after && current && typeof before === "object" && typeof after === "object" && typeof current === "object") {
+  if (before && after && current && typeof before === "object" && typeof after === "object" && typeof current === "object" &&
+      !Array.isArray(before) && !Array.isArray(after) && !Array.isArray(current)) {
     const base = before as Record<string, unknown>, next = after as Record<string, unknown>;
     const result = { ...current } as Record<string, unknown>;
     for (const field of new Set([...Object.keys(base), ...Object.keys(next)])) {
       if (equal(base[field], next[field])) continue;
       if (!equal(result[field], base[field]) && !equal(result[field], next[field]) && field !== "updatedAt") {
-        throw new Error("Ces données ont changé dans un autre onglet. Actualisez avant de réessayer.");
+        throw new LocalRecordConflictError();
       }
       if (field in next) result[field] = next[field]; else delete result[field];
     }
     return result;
   }
-  throw new Error("Ces données ont changé dans un autre onglet. Actualisez avant de réessayer.");
+  throw new LocalRecordConflictError();
 }
 
 async function getRows(keys?: string[]): Promise<Row[]> {

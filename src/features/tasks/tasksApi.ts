@@ -75,6 +75,10 @@ function requireTaskUser(
   };
 }
 
+function notifyTaskQueued() {
+  window.dispatchEvent(new Event("contribution-private-task-queued"));
+}
+
 function isOffline() {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
@@ -146,28 +150,33 @@ export function getTaskErrorMessage(error: unknown) {
 
 export function usePrivateTasks() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   return useQuery({
+    networkMode: "always",
     queryKey: ["private_tasks", user?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const currentUser = requireTaskUser(user);
       const cachedTasks = await readCachedPrivateTasks(
         currentUser.id,
         currentUser.taskSessionToken
       );
+      if (signal.aborted) return cachedTasks;
+      queryClient.setQueryData(["private_tasks", currentUser.id], cachedTasks);
       if (isOffline()) return cachedTasks;
 
       try {
         await flushPrivateTaskOutbox(currentUser);
         const remoteTasks = await fetchRemoteTasks(currentUser.taskSessionToken);
+        if (signal.aborted) return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
         await replaceCachedPrivateTasks(
           currentUser.id,
           currentUser.taskSessionToken,
           remoteTasks
         );
-        return remoteTasks;
+        return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
       } catch (error) {
-        if (isOfflineFailure(error) || isOffline()) return cachedTasks;
+        if (isOfflineFailure(error) || isOffline()) return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
         throw error;
       }
     },
@@ -182,15 +191,19 @@ export function usePrivateTasks() {
 
 export function useTaskRecipients() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   return useQuery({
+    networkMode: "always",
     queryKey: ["task_recipients", user?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const currentUser = requireTaskUser(user);
       const cachedRecipients = await readCachedTaskRecipients(
         currentUser.id,
         currentUser.taskSessionToken
       );
+      if (signal.aborted) return cachedRecipients;
+      queryClient.setQueryData(["task_recipients", currentUser.id], cachedRecipients);
       if (isOffline()) return cachedRecipients;
 
       try {
@@ -199,6 +212,7 @@ export function useTaskRecipients() {
           { p_session_token: currentUser.taskSessionToken }
         );
         if (error) throw error;
+        if (signal.aborted) return readCachedTaskRecipients(currentUser.id, currentUser.taskSessionToken);
         const recipients = (data ?? []).map((row) => ({
           id: row.id,
           username: row.username,
@@ -211,7 +225,7 @@ export function useTaskRecipients() {
         );
         return recipients;
       } catch (error) {
-        if (isOfflineFailure(error) || isOffline()) return cachedRecipients;
+        if (isOfflineFailure(error) || isOffline()) return readCachedTaskRecipients(currentUser.id, currentUser.taskSessionToken);
         throw error;
       }
     },
@@ -232,6 +246,7 @@ export function useTaskContractSuggestions(query: string | null) {
   };
 
   return useQuery({
+    networkMode: "always",
     queryKey: ["task_contract_suggestions", user?.workspaceId, query],
     queryFn: async () => {
       const cached = readCachedContracts(params).items
@@ -267,6 +282,7 @@ export function useCreatePrivateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    networkMode: "always",
     mutationFn: async ({
       content,
       assigneeId,
@@ -282,10 +298,7 @@ export function useCreatePrivateTask() {
       const queued = await queueOfflineTaskCreation(currentUser.taskSessionToken, {
         userId: currentUser.id, userName: currentUser.name, username: currentUser.username, content, assigneeId, kind, notes
       });
-      if (!isOffline()) {
-        try { await flushPrivateTaskOutbox(currentUser); return { ...queued, queued: false }; }
-        catch (error) { if (!isOfflineFailure(error)) throw error; }
-      }
+      notifyTaskQueued();
       return queued;
     },
     onSuccess: async (result) => {
@@ -297,7 +310,7 @@ export function useCreatePrivateTask() {
         queryClient.setQueryData(["private_tasks", user.id], cachedTasks);
         return;
       }
-      await queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
     }
   });
 }
@@ -307,6 +320,7 @@ export function useSetTaskStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    networkMode: "always",
     mutationFn: async ({
       taskId,
       status
@@ -316,10 +330,7 @@ export function useSetTaskStatus() {
     }) => {
       const currentUser = requireTaskUser(user);
       await queueOfflineTaskStatus(currentUser.id, currentUser.taskSessionToken, taskId, status);
-      if (!isOffline()) {
-        try { await flushPrivateTaskOutbox(currentUser); }
-        catch (error) { if (!isOfflineFailure(error)) throw error; }
-      }
+      notifyTaskQueued();
       return true;
     },
     onMutate: async ({ taskId, status }) => {
@@ -348,7 +359,7 @@ export function useSetTaskStatus() {
       }
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["private_tasks", user?.id]
       });
     }
@@ -360,17 +371,15 @@ export function useDeletePrivateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    networkMode: "always",
     mutationFn: async (taskId: string) => {
       const currentUser = requireTaskUser(user);
       await queueOfflineTaskDeletion(currentUser.id, currentUser.taskSessionToken, taskId);
-      if (!isOffline()) {
-        try { await flushPrivateTaskOutbox(currentUser); }
-        catch (error) { if (!isOfflineFailure(error)) throw error; }
-      }
+      notifyTaskQueued();
       return true;
     },
     onSuccess: async () => {
-      if (user?.id && user.taskSessionToken && isOffline()) {
+      if (user?.id && user.taskSessionToken) {
         const cachedTasks = await readCachedPrivateTasks(
           user.id,
           user.taskSessionToken
@@ -378,7 +387,7 @@ export function useDeletePrivateTask() {
         queryClient.setQueryData(["private_tasks", user.id], cachedTasks);
         return;
       }
-      await queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
     }
   });
 }
@@ -387,18 +396,16 @@ export function useEditPrivateTask() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: async ({ taskId, content, notes }: { taskId: string; content: string; notes: string }) => {
       const currentUser = requireTaskUser(user);
       await queueOfflineTaskEdit(currentUser.id, currentUser.taskSessionToken, taskId, content, notes);
-      if (!isOffline()) {
-        try { await flushPrivateTaskOutbox(currentUser); }
-        catch (error) { if (!isOfflineFailure(error)) throw error; }
-      }
+      notifyTaskQueued();
       return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
     },
     onSuccess: async tasks => {
       queryClient.setQueryData(["private_tasks", user?.id], tasks);
-      await queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["private_tasks", user?.id] });
     }
   });
 }

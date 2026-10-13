@@ -392,9 +392,13 @@ export function removeOutboxItem(id: string) {
 
 export function getPendingContractIds(): Set<string> {
   const ids = new Set<string>();
-  for (const item of getPendingOutbox()) {
+  const pending = getPendingOutbox();
+  for (const item of pending) {
     if (item.type === "tag.assign" || item.type === "tag.remove") {
       if (typeof item.payload.contractId === "string") ids.add(item.payload.contractId);
+    }
+    if (item.type === "dossier.delete" && Array.isArray(item.payload.contractIds)) {
+      item.payload.contractIds.forEach(id => { if (typeof id === "string") ids.add(id); });
     }
     if (!item.type.startsWith("contract.") && item.type !== "list.operation") continue;
     const payload = item.payload as Partial<Contract> & {
@@ -405,6 +409,17 @@ export function getPendingContractIds(): Set<string> {
     if (Array.isArray(payload.contractIds)) {
       payload.contractIds.forEach((id) => ids.add(id));
     }
+  }
+  // Identity edits and dossier deletions also change the local contract projection.
+  const applicantIds = new Set(pending.filter(item => item.type.startsWith("applicant.")).flatMap(item =>
+    [item.payload.id, item.payload.nif].filter((id): id is string => typeof id === "string")));
+  const dossierIds = new Set(pending.filter(item => item.type === "dossier.delete").map(item => item.payload.id));
+  if (applicantIds.size || dossierIds.size) {
+    const related = selectDb(db => db.contracts.filter(contract =>
+      (contract.applicantId && applicantIds.has(contract.applicantId)) ||
+      (contract.nif && applicantIds.has(contract.nif)) || dossierIds.has(contract.dossierId)
+    ).map(contract => contract.id));
+    related.forEach(id => ids.add(id));
   }
   return ids;
 }
@@ -421,6 +436,7 @@ export function setWorkspaceSyncMetadata(
     remoteRevision?: string | null;
     lastSyncedAt?: string | null;
     lastFullSyncedAt?: string | null;
+    lastTrashSyncedAt?: string | null;
     lastError?: string | null;
   }
 ) {
@@ -518,6 +534,7 @@ export function replaceWorkspaceCache(
   const localDossiers = db.dossiers.filter((item) => item.workspaceId === workspaceId);
   const localTags = db.tags.filter((item) => item.workspaceId === workspaceId);
   pendingTagContractIds.forEach((id) => pendingContractIds.add(id));
+  getPendingContractIds().forEach(id => pendingContractIds.add(id));
 
   db.applicants = [
     ...db.applicants.filter((item) => item.workspaceId !== workspaceId),

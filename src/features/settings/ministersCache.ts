@@ -1,10 +1,11 @@
+import { overlayReferences, overlayMinisterSelection } from '../../data/local/referenceOverlay';
 import { findContractMinister, LEGACY_MINISTER, type Minister, type MinisterRegistry } from "../../lib/ministers";
 
 const cacheKey = `contribution_ministers_v1:${import.meta.env.VITE_DATA_PROVIDER ?? "local"}`;
 export function readMinistersCache(): MinisterRegistry | undefined {
   try {
     const registry = JSON.parse(localStorage.getItem(cacheKey) ?? "null") as MinisterRegistry | null;
-    if (registry && Array.isArray(registry.ministers) && registry.ministers.some(m => m.id === registry.currentMinisterId)) return registry;
+    if (registry && Array.isArray(registry.ministers) && registry.ministers.some(m => m.id === registry.currentMinisterId)) return { ministers: overlayReferences('ministers', registry.ministers), currentMinisterId: overlayMinisterSelection(registry.currentMinisterId) };
   } catch { /* No usable cache. */ }
   return undefined;
 }

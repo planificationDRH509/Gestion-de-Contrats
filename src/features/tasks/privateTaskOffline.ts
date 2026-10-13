@@ -214,10 +214,12 @@ export async function replaceCachedPrivateTasks(
   tasks: PersonalTask[]
 ) {
   await transact(userId, sessionToken, (state) => {
-    const pendingTasks = state.tasks.filter((task) => task.id.startsWith("offline-task-"));
+    const pendingIds = new Set(state.outbox.flatMap(operation =>
+      operation.type === "create" ? operation.tempTaskId ? [operation.tempTaskId] : [] : [operation.taskId]));
+    const pendingTasks = state.tasks.filter(task => pendingIds.has(task.id));
     state.tasks = [
       ...pendingTasks,
-      ...tasks.filter((task) => !pendingTasks.some((pending) => pending.id === task.id))
+      ...tasks.filter(task => !pendingIds.has(task.id))
     ];
     state.cachedAt = new Date().toISOString();
   });

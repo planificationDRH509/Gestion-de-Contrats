@@ -8,6 +8,7 @@
 - Les écritures portent uniquement sur les enregistrements modifiés. Une comparaison atomique des versions protège les écritures concurrentes ; des changements divergents sont refusés. BroadcastChannel actualise les copies des autres onglets, et Web Locks sérialise les envois réseau lorsque disponible.
 - Les contrats et dossiers comparent les champs locaux à leur version d'origine. Les modifications indépendantes du serveur sont conservées. Les conflits de champs des contrats, de leur état et des dossiers liés peuvent être résolus depuis l'indicateur existant.
 - Les tâches disposent d'une clé locale indépendante du jeton de connexion. Les sessions renouvelées migrent les anciens caches et la déconnexion conserve les opérations en attente. Un cache indéchiffrable n'est jamais remplacé silencieusement.
+- Après 15 minutes d'inactivité, le déverrouillage vérifie d'abord l'empreinte locale du mot de passe, même avec Internet, et conserve le jeton de session existant. Le serveur intervient si cette vérification locale n'est pas disponible. La limite d'essais, les suspensions connues et les contrôles de compte en arrière-plan restent actifs.
 - Les opérations de tâches envoyées sont immuables. Les modifications faites pendant l'envoi restent dans la file. Le serveur conserve un reçu par opération pour empêcher les doublons après une réponse perdue.
 - La synchronisation des tâches fonctionne aussi lorsque leur page n'est pas ouverte. L'historique des impressions est mis en attente et envoyé avec un identifiant stable.
 - « Disponible hors ligne » nécessite un téléchargement complet. Une vérification de contenu côté serveur évite les transferts complets lorsque rien n'a changé ; elle tient compte des suppressions et des relations. Lorsqu'il y a des changements, le téléchargement reste un instantané complet.
@@ -33,3 +34,14 @@ Migrations : `20260926134411_harden_offline_sync.sql` et `20260926135601_offline
 Le contrôle Supabase a signalé neuf tables existantes sans RLS, dont `app_users`, `identification` et `contrat`. Ce problème préexistait aux migrations ci-dessus. Le corriger exige d'adapter les accès directs et l'authentification historique de l'application ; activer RLS sans cette adaptation couperait les accès actuels. Il n'est pas corrigé par le chiffrement du cache.
 
 Référence : https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public
+
+
+## Lecture et écriture locales prioritaires
+
+Les contrats actifs (recherche, filtres, pagination et sélection multiple), identités, dossiers et étiquettes sont lus dans le dernier instantané complet, y compris en ligne. Un résultat vide reste un résultat local valide. Le premier chargement sans instantané et les fiches absentes du cache peuvent encore interroger le serveur. Les listes utilisent leur cache dédié.
+
+Les créations et modifications courantes, imports, changements d’état/durée/dossier, suppressions récupérables, étiquettes, tâches et épingles sont enregistrés localement avant toute synchronisation. La réponse attend la persistance locale, pas le réseau. Les tâches déchiffrées et les référentiels en cache s’affichent pendant leur actualisation distante.
+
+La synchronisation vérifie la révision du serveur toutes les 30 secondes lorsque la page est visible, au retour de la connexion et à la réouverture de l’onglet. Elle ne retélécharge l’instantané que si nécessaire. Les modifications locales en attente, y compris leurs effets sur les contrats et les suppressions de tâches, sont conservées lors d’un téléchargement concurrent. Les conflits restent dans les files de synchronisation existantes.
+
+Restent tributaires du serveur : première connexion, administration des comptes et référentiels partagés, pièces jointes distantes, consultation de la corbeille non téléchargée et suppression définitive. Aucun nouveau libellé n’est ajouté dans l’interface.

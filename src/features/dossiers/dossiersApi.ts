@@ -49,6 +49,7 @@ export function readCachedDossierContractMetrics(workspaceId: string): DossierCo
 
 export function useDossiersList(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["dossiers", workspaceId],
     queryFn: () => provider.dossiers.list(workspaceId),
     enabled: Boolean(workspaceId),
@@ -65,6 +66,7 @@ export function useDossiersList(workspaceId: string) {
 
 export function useDossierContractMetrics(workspaceId: string) {
   return useQuery({
+    networkMode: "always",
     queryKey: ["dossiers", "metrics", workspaceId],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
@@ -129,6 +131,7 @@ export function useCreateDossier() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: (input: CreateDossierInput) => 
       provider.dossiers.create({ ...input, createdBy: user?.id } as any),
     onSuccess: (_data, variables) => {
@@ -143,6 +146,7 @@ export function useCreateDossier() {
 export function useUpdateDossier() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: (input: UpdateDossierInput) => provider.dossiers.update(input),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["dossiers", variables.workspaceId] });
@@ -156,6 +160,7 @@ export function useUpdateDossier() {
 export function useDeleteDossier() {
   const queryClient = useQueryClient();
   return useMutation({
+    networkMode: "always",
     mutationFn: ({
       id,
       workspaceId

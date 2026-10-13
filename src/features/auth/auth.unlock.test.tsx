@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./auth";
-import { ACCOUNT_SUSPENDED_MESSAGE, readAccountLockout } from "./accountLockout";
+import { ACCOUNT_SUSPENDED_MESSAGE, readAccountLockout, recordServerSuspension } from "./accountLockout";
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -69,7 +69,7 @@ describe("automatic session unlock", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    mocks.verifyOfflineCredential.mockResolvedValue(false);
+    mocks.verifyOfflineCredential.mockResolvedValue(null);
     mocks.profile.mockResolvedValue({ data: { role: "admin", is_suspended: false }, error: null });
     localStorage.setItem("contribution_auth", JSON.stringify({
       id: "user-1",
@@ -99,6 +99,67 @@ describe("automatic session unlock", () => {
       </QueryClientProvider>
     );
   }
+
+  it.each([true, false])("unlocks locally without waiting for the server (online: %s)", async online => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(online);
+    mocks.verifyOfflineCredential.mockResolvedValue(true);
+    mocks.rpc.mockImplementation(() => new Promise(() => {}));
+    mocks.profile.mockImplementation(() => new Promise(() => {}));
+    mount();
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    const started = Date.now();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("lock-state")).toHaveTextContent("unlocked"));
+    expect(mocks.verifyOfflineCredential).toHaveBeenCalledWith("user-1", "secret");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.prepareTasks).not.toHaveBeenCalled();
+    expect(mocks.saveOfflineCredential).not.toHaveBeenCalled();
+    expect(screen.getByTestId("task-token")).toHaveTextContent("old-task-token");
+    expect(Number(localStorage.getItem("contribution_last_activity"))).toBeGreaterThanOrEqual(started);
+  });
+
+  it("rejects a wrong local password online without asking the server or counting it twice", async () => {
+    mocks.verifyOfflineCredential.mockResolvedValue(false);
+    mocks.rpc.mockResolvedValue({ data: { taskSessionToken: "new-token" }, error: null });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent("Mot de passe incorrect."));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    expect(readAccountLockout("user-1").failures).toBe(1);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the server and installs a verifier when the local credential is missing", async () => {
+    mocks.rpc.mockResolvedValue({ data: { taskSessionToken: "new-task-token" }, error: null });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("lock-state")).toHaveTextContent("unlocked"));
+    expect(mocks.rpc).toHaveBeenCalledWith("authenticate_app_user", { p_user_id: "user-1", p_password: "secret" });
+    expect(mocks.verifyOfflineCredential.mock.invocationCallOrder[0]).toBeLessThan(mocks.rpc.mock.invocationCallOrder[0]);
+    expect(mocks.saveOfflineCredential).toHaveBeenCalledWith("user-1", "secret");
+    expect(screen.getByTestId("task-token")).toHaveTextContent("new-task-token");
+  });
+
+  it("stays locked offline when no local credential is available", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent("Une connexion Internet est requise"));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(readAccountLockout("user-1").failures).toBe(0);
+  });
+
+  it("never bypasses a known suspension with the correct local credential", async () => {
+    recordServerSuspension("user-1");
+    mocks.verifyOfflineCredential.mockResolvedValue(true);
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
+    await waitFor(() => expect(screen.getByTestId("unlock-message")).toHaveTextContent(ACCOUNT_SUSPENDED_MESSAGE));
+    expect(screen.getByTestId("lock-state")).toHaveTextContent("locked");
+    expect(mocks.verifyOfflineCredential).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
 
   it("fails closed without querying passwords when the authentication RPC is unavailable", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
@@ -172,6 +233,7 @@ describe("automatic session unlock", () => {
 
   it("persists suspension on the eighth offline failure and rejects the correct password afterwards", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mocks.verifyOfflineCredential.mockResolvedValue(false);
     mount();
     for (let attempt = 1; attempt <= 8; attempt++) {
       fireEvent.click(screen.getByRole("button", { name: "Déverrouiller" }));
@@ -191,8 +253,8 @@ describe("automatic session unlock", () => {
     expect(readAccountLockout("user-1").pending).toBe(true);
   });
 
-  it("serializes overlapping offline password checks", async () => {
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  it.each([true, false])("serializes overlapping local password checks (online: %s)", async online => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(online);
     let finish!: (value: boolean) => void;
     mocks.verifyOfflineCredential.mockImplementation(() => new Promise<boolean>((resolve) => { finish = resolve; }));
     mount();

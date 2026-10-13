@@ -559,6 +559,7 @@ export type Database = {
         Args: { p_session_token: string; p_workspace_id: string; p_entry: Json }
         Returns: Json
       }
+      manage_identification_attachments: { Args: { p_session_token: string; p_person_id: string; p_action: string; p_document?: Json }; Returns: Json }
       manage_person_attachments: { Args: { p_session_token: string; p_contract_id: string; p_action: string; p_document?: Json }; Returns: Json }
       read_salary_grid: { Args: { p_session_token: string }; Returns: Json }
       save_salary_grid_entry: { Args: { p_session_token: string; p_entry: Json }; Returns: Json }
@@ -579,6 +580,10 @@ export type Database = {
         Returns: string
       }
 
+      sync_reference_change: {
+        Args: { p_session_token: string; p_operation_id: string; p_workspace_id: string; p_change: Json };
+        Returns: Json;
+      };
       sync_contract_list: {
         Args: { p_session_token: string; p_workspace_id: string; p_request_id: string; p_operation: Json; p_expected_lists: Json; p_expected_memberships: Json }
         Returns: string

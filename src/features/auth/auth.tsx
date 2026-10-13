@@ -316,17 +316,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
           }
 
+          if (readAccountLockout(user.id).suspended) return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
+          // An inactivity lock protects an existing session. Verify its local
+          // credential first, without waiting for Internet or rotating the token.
+          const localMatches = user.taskSessionToken
+            ? await verifyOfflineUnlockCredential(user.id, password)
+            : null;
+
           const unlockLocally = async () => {
             if (readAccountLockout(user.id).suspended) return { success: false, error: ACCOUNT_SUSPENDED_MESSAGE };
             if (!user.taskSessionToken) return { success: false, error: "Une connexion Internet est requise." };
-            const matches = await verifyOfflineUnlockCredential(user.id, password);
-            if (matches === null) {
+            if (localMatches === null) {
               return {
                 success: false as const,
                 error: "Une connexion Internet est requise pour activer le déverrouillage hors ligne."
               };
             }
-            if (!matches) {
+            if (!localMatches) {
               const state = recordPasswordFailure(user.id, user.taskSessionToken);
               return { success: false as const, error: state.suspended ? ACCOUNT_SUSPENDED_MESSAGE : "Mot de passe incorrect." };
             }
@@ -336,7 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return { success: true as const };
           };
 
-          if (typeof navigator !== "undefined" && !navigator.onLine) {
+          if (localMatches !== null || (typeof navigator !== "undefined" && !navigator.onLine)) {
             return await unlockLocally();
           }
 

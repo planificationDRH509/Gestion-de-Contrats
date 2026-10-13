@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createSupabaseProvider } from "./supabaseProvider";
+import { createSupabaseProvider, syncSupabaseOutbox } from "./supabaseProvider";
 import { contractEditFields, mergeOfflinePatch } from "./offlineConflict";
 
 const mocks = vi.hoisted(() => ({ from: vi.fn(), update: vi.fn() }));
@@ -24,7 +24,11 @@ it("sends the refreshed creation date, destination and replacement note together
     return query;
   });
   const createdAt = "2026-10-11T12:00:00.000Z";
-  const saved = await createSupabaseProvider().contracts.update({ id: "old", dossierId: "new-folder", createdAt, annee_fiscale: "2026-2027", salaryNumber: 50000, commentaire: "Ancien contrat : 30000" });
+  const provider = createSupabaseProvider();
+  await provider.contracts.getById("old");
+  const saved = await provider.contracts.update({ id: "old", dossierId: "new-folder", createdAt, annee_fiscale: "2026-2027", salaryNumber: 50000, commentaire: "Ancien contrat : 30000" });
+  expect(mocks.update).not.toHaveBeenCalled();
+  await syncSupabaseOutbox();
   expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ created_at: createdAt, dossier_id: "new-folder", salaire_en_chiffre: 50000, commentaire: "Ancien contrat : 30000" }));
   expect(saved).toMatchObject({ createdAt, dossierId: "new-folder", salaryNumber: 50000 });
 });

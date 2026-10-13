@@ -60,7 +60,7 @@ export function cacheContractLists(workspaceId: string, lists: ContractList[]) {
   db.contractLists = [...db.contractLists.filter(list => list.workspaceId !== workspaceId),
     ...lists.filter(list => list.workspaceId === workspaceId)];
   if (!db.cachedListWorkspaces.includes(workspaceId)) db.cachedListWorkspaces.push(workspaceId);
-  saveDb(db);
+  saveDb(db, { cacheOnly: true });
 }
 
 /** Keep the same list guards as the server for edits made to offline contracts. */

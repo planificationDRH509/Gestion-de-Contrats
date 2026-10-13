@@ -1,8 +1,10 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { OutboxItem } from "../../data/types";
 import { IdentificationSpreadsheetView } from "./IdentificationSpreadsheetView";
 
+const attachments = vi.hoisted(() => vi.fn(() => null));
+vi.mock('../attachments/PersonAttachmentsDialog', () => ({PersonAttachmentsDialog: attachments}));
 const state = vi.hoisted(() => ({ pending: [] as OutboxItem[] }));
 vi.mock("../../data/local/offlineStore", () => ({ getPendingOutbox: () => state.pending }));
 vi.mock("../settings/suggestionsApi", () => ({ useAddresses: () => ({ data: [] }) }));
@@ -37,4 +39,12 @@ it("does not claim cloud synchronization in local mode", () => {
   render(<IdentificationSpreadsheetView workspaceId="w" userId="u" />);
   expect(screen.getByLabelText("Sur cet appareil")).toHaveTextContent("devices");
   expect(screen.queryByLabelText("Synchronisé sur le cloud")).not.toBeInTheDocument();
+});
+
+it("opens attachments directly from the identification without a contract", () => {
+  render(<IdentificationSpreadsheetView workspaceId="w" userId="u" />);
+  fireEvent.click(screen.getByRole('button', {name:'Pièces jointes'}));
+  expect(attachments).toHaveBeenLastCalledWith(expect.objectContaining({person:{
+    workspaceId:'w',applicantId:'a',nif:'1234567890',firstName:'Jean',lastName:'Louis'
+  }}), expect.anything());
 });

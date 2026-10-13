@@ -1,3 +1,7 @@
+import { queueReferenceChange } from '../local/referenceQueue';
+import { referenceWorkspace, type ReferenceEntry } from '../local/referenceOverlay';
+import { syncReferenceChange } from './referenceSync';
+import { cachePinnedContracts } from "../../features/contracts/pinnedContractsCache";
 import { assertContractDuration } from "../../lib/contractDuration";
 import { bindContractMinister, cachedContractMinister } from "../../features/settings/ministersCache";
 import { LEGACY_MINISTER } from "../../lib/ministers";
@@ -20,7 +24,7 @@ import {
   AddressSuggestion,
   PositionSuggestion,
   InstitutionSuggestion,
-  cacheSuggestions
+  cacheSuggestions, hasCachedSuggestions
 } from "../local/suggestionsDb";
 import {
   Applicant,
@@ -732,6 +736,10 @@ class SupabaseContractRepository implements ContractRepository {
       query = query.eq("created_by", params.userId);
     }
 
+    if (params.createdByIds?.length) {
+      query = query.in("created_by", params.createdByIds);
+    }
+
     if (params.status) {
       query = query.eq("status", params.status);
     }
@@ -1388,92 +1396,82 @@ class SupabaseAutocompleteRepository implements AutocompleteRepository {
 class OfflineFirstAutocompleteRepository implements AutocompleteRepository {
   private readonly local = new SqliteAutocompleteRepository();
   private readonly remote = new SupabaseAutocompleteRepository();
-
-  async getAddresses(workspaceId: string): Promise<AddressSuggestion[]> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      const items = await this.remote.getAddresses(workspaceId);
-      cacheSuggestions({ addresses: items });
-      return items;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.getAddresses(workspaceId);
+  async getAddresses(workspaceId: string) {
+    if (!hasCachedSuggestions('addresses', workspaceId) && navigator.onLine) {
+      try { cacheSuggestions({ addresses: await this.remote.getAddresses(workspaceId) }, workspaceId); }
+      catch (error) { if (!isOfflineFailure(error)) throw error; }
     }
+    return this.local.getAddresses(workspaceId);
   }
-
-  async getPositions(workspaceId: string): Promise<PositionSuggestion[]> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      const items = await this.remote.getPositions(workspaceId);
-      cacheSuggestions({ positions: items });
-      return items;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.getPositions(workspaceId);
+  async getPositions(workspaceId: string) {
+    if (!hasCachedSuggestions('positions', workspaceId) && navigator.onLine) {
+      try { cacheSuggestions({ positions: await this.remote.getPositions(workspaceId) }, workspaceId); }
+      catch (error) { if (!isOfflineFailure(error)) throw error; }
     }
+    return this.local.getPositions(workspaceId);
   }
-
-  async getInstitutions(workspaceId: string): Promise<InstitutionSuggestion[]> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      const items = await this.remote.getInstitutions(workspaceId);
-      cacheSuggestions({ institutions: items });
-      return items;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.getInstitutions(workspaceId);
+  async getInstitutions(workspaceId: string) {
+    if (!hasCachedSuggestions('institutions', workspaceId) && navigator.onLine) {
+      try { cacheSuggestions({ institutions: await this.remote.getInstitutions(workspaceId) }, workspaceId); }
+      catch (error) { if (!isOfflineFailure(error)) throw error; }
     }
+    return this.local.getInstitutions(workspaceId);
   }
 
-  addAddress(workspaceId: string, label: string, createdBy?: string) {
-    return this.remote.addAddress(workspaceId, label, createdBy);
+  private async save<T extends { id: string }>(scope: 'addresses' | 'positions' | 'institutions', workspaceId: string, before: T | null, after: T | null, learn = false) {
+    await queueReferenceChange(workspaceId, { scope, learn, patches: [{ id: (after ?? before)!.id,
+      before: before as ReferenceEntry | null, after: after as ReferenceEntry | null }] });
+    return after!;
   }
-  updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null) {
-    return this.remote.updateAddress(id, label, prefix, labelFeminine);
+  async addAddress(workspaceId: string, label: string, _createdBy?: string) {
+    const existing = (await this.getAddresses(workspaceId)).find(entry => normalizeInstitution(entry.label) === normalizeInstitution(label));
+    if (existing) return existing;
+    return this.save('addresses', workspaceId, null, { id: createId(), label: label.trim(), order: 0 }, true);
   }
-  deleteAddress(id: string) {
-    return this.remote.deleteAddress(id);
+  async updateAddress(id: string, label: string, prefix?: string | null, labelFeminine?: string | null) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getAddresses(workspaceId)).find(entry => entry.id === id);
+    if (!before) throw new Error('Adresse introuvable.');
+    await this.save('addresses', workspaceId, before, { ...before, label, prefix: prefix ?? null, labelFeminine: labelFeminine ?? null });
   }
-  addPosition(workspaceId: string, label: string, salaries: number[], createdBy?: string) {
-    return this.remote.addPosition(workspaceId, label, salaries, createdBy);
+  async deleteAddress(id: string) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getAddresses(workspaceId)).find(entry => entry.id === id);
+    if (before) await this.save('addresses', workspaceId, before, null);
   }
-  updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null) {
-    return this.remote.updatePosition(id, label, salaries, prefix, labelFeminine);
+  async addPosition(workspaceId: string, label: string, salaries: number[], _createdBy?: string) {
+    return this.save('positions', workspaceId, null, { id: createId(), label: label.trim(), salaries, order: 0 });
   }
-  deletePosition(id: string) {
-    return this.remote.deletePosition(id);
+  async updatePosition(id: string, label: string, salaries: number[], prefix?: string | null, labelFeminine?: string | null) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getPositions(workspaceId)).find(entry => entry.id === id);
+    if (!before) throw new Error('Poste introuvable.');
+    await this.save('positions', workspaceId, before, { ...before, label, salaries, prefix: prefix ?? null, labelFeminine: labelFeminine ?? null });
   }
-  addInstitution(
-    workspaceId: string,
-    label: string,
-    addressKeywords: string[],
-    createdBy?: string,
-    department?: string | null,
-    commune?: string | null
-  ) {
-    return this.remote.addInstitution(workspaceId, label, addressKeywords, createdBy, department, commune);
+  async deletePosition(id: string) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getPositions(workspaceId)).find(entry => entry.id === id);
+    if (before) await this.save('positions', workspaceId, before, null);
   }
-  updateInstitution(
-    id: string,
-    label: string,
-    addressKeywords: string[],
-    prefix?: string | null,
-    labelFeminine?: string | null,
-    department?: string | null,
-    commune?: string | null
-  ) {
-    return this.remote.updateInstitution(
-      id,
-      label,
-      addressKeywords,
-      prefix,
-      labelFeminine,
-      department,
-      commune
-    );
+  async addInstitution(workspaceId: string, label: string, addressKeywords: string[], _createdBy?: string, department?: string | null, commune?: string | null): Promise<InstitutionSuggestion> {
+    const existing = (await this.getInstitutions(workspaceId)).find(entry => normalizeInstitution(entry.label) === normalizeInstitution(label));
+    if (existing) return existing;
+    return this.save('institutions', workspaceId, null, { id: createId(), label: label.trim(), addressKeywords, order: 0, version: 1,
+      institutionType: inferInstitutionType(label), department: department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(department)) ?? null : null,
+      commune: commune?.trim() || null }, true);
   }
-  deleteInstitution(id: string) {
-    return this.remote.deleteInstitution(id);
+  async updateInstitution(id: string, label: string, addressKeywords: string[], _prefix?: string | null, _labelFeminine?: string | null, department?: string | null, commune?: string | null) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getInstitutions(workspaceId)).find(entry => entry.id === id);
+    if (!before) throw new Error('Institution introuvable.');
+    await this.save('institutions', workspaceId, before, { ...before, label, addressKeywords,
+      department: department ? DEPARTMENTS.find(d => normalizeInstitution(d) === normalizeInstitution(department)) ?? null : null,
+      commune: commune?.trim() || null, version: (before.version ?? 0) + 1 });
+  }
+  async deleteInstitution(id: string) {
+    const workspaceId = referenceWorkspace();
+    const before = (await this.getInstitutions(workspaceId)).find(entry => entry.id === id);
+    if (before) await this.save('institutions', workspaceId, before, null);
   }
 }
 
@@ -1560,13 +1558,28 @@ function syncPendingOutbox() {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
         const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
         if (item.actorId && item.actorId !== actor?.id) throw new Error("Reconnectez le compte ayant effectué cette modification pour la synchroniser.");
-        if (item.type === "print.create") {
+        if (item.type === "reference.change") {
+          await syncReferenceChange(item);
+        } else if (item.type === "print.create") {
           const job = item.payload as unknown as ContractPrintJob;
           const { error } = await getSupabaseClient().from("contract_print_jobs").upsert({
             id: job.id, workspace_id: job.workspaceId, contract_ids_json: JSON.stringify(job.contractIds),
             created_at: job.createdAt, printed_at: job.printedAt
           } as any, { onConflict: "id", ignoreDuplicates: true });
           if (error) throw error;
+        } else if (item.type === "pin.set") {
+          if (!actor?.taskSessionToken || actor.id !== item.payload.userId || actor.workspaceId !== item.workspaceId) {
+            throw new Error("Reconnectez le compte ayant épinglé ce contrat pour le synchroniser.");
+          }
+          const { data, error } = await getSupabaseClient().rpc("set_pinned_contract", {
+            p_session_token: actor.taskSessionToken,
+            p_contract_id: String(item.payload.contractId), p_pinned: Boolean(item.payload.pinned)
+          });
+          if (error) throw error;
+          // A later local toggle must stay visible while this request is acknowledged.
+          if (!getPendingOutbox().some(next => next.id !== item.id && next.type === "pin.set" && next.payload.userId === actor.id)) {
+            cachePinnedContracts(actor.id, data ?? []);
+          }
         } else if (item.type === "list.operation") {
           await syncQueuedList(item);
         } else if (item.type === "applicant.upsert") {
@@ -1583,6 +1596,10 @@ function syncPendingOutbox() {
           }
         } else if (item.type === "contract.create") {
           const payload = item.payload as unknown as Contract;
+          if (getPendingOutbox().some(pending => pending.type === 'reference.change' && pending.payload.scope === 'ministers' &&
+            (pending.payload.patches as { id: string; before: unknown }[]).some(patch => patch.id === payload.ministerId && !patch.before))) {
+            throw new Error('Le ministre de ce contrat doit être synchronisé avant le contrat.');
+          }
           if (getPendingOutbox().some((pending) => pending.workspaceId === item.workspaceId &&
               pending.type === "applicant.upsert" && (pending.payload.nif === payload.nif || pending.payload.id === payload.applicantId))) {
             keys.filter((key) => key.includes(":contract:")).forEach((key) => blockedKeys.add(key));
@@ -1746,8 +1763,8 @@ export function syncSupabaseOutbox() {
 }
 
 /**
- * Downloads the complete workspace dataset for offline use. Automatic calls are
- * throttled because visible queries already refresh their current page.
+ * Refreshes the local workspace used by all regular reads. Background callers
+ * verify the revision; explicit force requests download the complete snapshot.
  */
 export function syncSupabaseWorkspace(
   workspaceId: string,
@@ -1793,7 +1810,7 @@ export function syncSupabaseWorkspace(
         } else if (typeof revision.data === "string") remoteRevision = revision.data;
       }
       const currentMetadata = getWorkspaceSyncMetadata(workspaceId);
-      if (!options.force && remoteRevision && currentMetadata.lastFullSyncedAt && currentMetadata.remoteRevision === remoteRevision) {
+      if (!options.force && remoteRevision && currentMetadata.lastFullSyncedAt && currentMetadata.lastTrashSyncedAt && currentMetadata.remoteRevision === remoteRevision) {
         setWorkspaceSyncMetadata(workspaceId, { lastSyncedAt: new Date().toISOString(),
           lastError: getPendingOutbox().find(item => item.workspaceId === workspaceId && item.lastError)?.lastError ?? null });
         await flushLocalDbWrites();
@@ -1817,14 +1834,16 @@ export function syncSupabaseWorkspace(
           suggestionsRepo.getPositions(workspaceId),
           suggestionsRepo.getInstitutions(workspaceId)
         ]);
-        cacheSuggestions({ addresses, positions, institutions });
+        cacheSuggestions({ addresses, positions, institutions }, workspaceId);
       } catch (error) {
         console.warn("Les suggestions n'ont pas pu être actualisées pour le mode hors ligne.", error);
       }
 
-      const { items: contracts } = await contractsRepo.list({
-        workspaceId, all: true, sort: "createdAt_desc"
-      });
+      const [active, trash] = await Promise.all([
+        contractsRepo.list({ workspaceId, all: true, sort: "createdAt_desc" }),
+        contractsRepo.list({ workspaceId, all: true, sort: "createdAt_desc", deletionState: "deleted" })
+      ]);
+      const contracts = [...active.items, ...trash.items];
 
       replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
       await downloadContractLists(workspaceId);
@@ -1832,6 +1851,7 @@ export function syncSupabaseWorkspace(
       setWorkspaceSyncMetadata(workspaceId, {
         lastSyncedAt: syncedAt,
         lastFullSyncedAt: syncedAt,
+        lastTrashSyncedAt: syncedAt,
         remoteRevision,
         lastError: getPendingOutboxCount(workspaceId) > 0 ? getWorkspaceSyncMetadata(workspaceId).lastError : null
       });
@@ -1856,9 +1876,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
   private readonly remote = new SupabaseApplicantRepository();
 
   async list(workspaceId: string): Promise<Applicant[]> {
+    if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.list(workspaceId);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const applicants = await this.remote.list(workspaceId);
       cacheApplicants(applicants);
       return applicants;
@@ -1869,12 +1889,14 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
   }
 
   async getById(id: string): Promise<Applicant | null> {
-    if (getPendingOutbox().some(item => item.type === "applicant.upsert" && (item.payload.id === id || item.payload.nif === id))) return this.local.getById(id);
+    const cached = await this.local.getById(id);
+    if (cached) return cached;
+    if (getPendingOutbox().some(item => item.type.startsWith("applicant.") && (item.payload.id === id || item.payload.nif === id))) return this.local.getById(id);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       const applicant = await this.remote.getById(id);
       if (applicant) cacheApplicant(applicant);
-      return applicant;
+      return this.local.getById(id);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.getById(id);
@@ -1886,11 +1908,13 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     nif?: string | null,
     ninu?: string | null
   ): Promise<Applicant | null> {
+    const cached = await this.local.findByNifOrNinu(workspaceId, nif, ninu);
+    if (cached || getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return cached;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       const applicant = await this.remote.findByNifOrNinu(workspaceId, nif, ninu);
       if (applicant) cacheApplicant(applicant);
-      return applicant;
+      return this.local.findByNifOrNinu(workspaceId, nif, ninu);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.findByNifOrNinu(workspaceId, nif, ninu);
@@ -1902,6 +1926,7 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     nifs: string[],
     ninus: string[]
   ): Promise<Applicant[]> {
+    if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.findManyByNifOrNinu(workspaceId, nifs, ninus);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       const applicants = await this.remote.findManyByNifOrNinu(workspaceId, nifs, ninus);
@@ -1914,66 +1939,20 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
   }
 
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
-    if (getPendingOutbox().some((item) => item.workspaceId === input.workspaceId && item.type === "applicant.upsert" &&
-        (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)))) {
-      const result = upsertApplicantOffline(input);
-      await flushLocalDbWrites();
-      return result;
-    }
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const applicant = await this.remote.upsert(input);
-      if (input.id && input.id !== applicant.id) {
-        replaceLocalApplicantId(input.workspaceId, input.id, applicant);
-      }
-      cacheApplicant(applicant);
-      return applicant;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      const result = upsertApplicantOffline(input);
-      await flushLocalDbWrites();
-      return result;
-    }
+    const applicant = upsertApplicantOffline(input);
+    await flushLocalDbWrites();
+    return applicant;
   }
 
   async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {
-    if (inputs.length === 0) return [];
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const applicants = await this.remote.upsertMany(inputs);
-      const inputsByNif = new Map(
-        inputs.map((input) => [(input.nif || input.id || "").trim(), input])
-      );
-      applicants.forEach((applicant) => {
-        const input = inputsByNif.get(applicant.nif?.trim() || applicant.id);
-        const previousId = input?.id;
-        if (previousId && previousId !== applicant.id) {
-          replaceLocalApplicantId(input.workspaceId, previousId, applicant);
-        }
-      });
-      cacheApplicants(applicants);
-      return applicants;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      const result = inputs.map((input) => upsertApplicantOffline(input));
-      await flushLocalDbWrites();
-      return result;
-    }
+    const applicants = inputs.map(input => upsertApplicantOffline(input));
+    await flushLocalDbWrites();
+    return applicants;
   }
 
   async softDelete(id: string, workspaceId: string): Promise<void> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      await this.remote.softDelete(id, workspaceId);
-      await this.local.applySoftDelete(id, workspaceId);
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      deleteApplicantOffline(id, workspaceId);
-      await flushLocalDbWrites();
-    }
+    deleteApplicantOffline(id, workspaceId);
+    await flushLocalDbWrites();
   }
 }
 
@@ -1982,9 +1961,9 @@ class OfflineFirstDossierRepository implements DossierRepository {
   private readonly remote = new SupabaseDossierRepository();
 
   async list(workspaceId: string): Promise<Dossier[]> {
+    if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.list(workspaceId);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const dossiers = await this.remote.list(workspaceId);
       cacheDossiers(dossiers);
       return dossiers;
@@ -1995,12 +1974,13 @@ class OfflineFirstDossierRepository implements DossierRepository {
   }
 
   async getById(id: string): Promise<Dossier | null> {
+    const cached = await this.local.getById(id);
+    if (cached || getPendingOutbox().some(item => item.type === "dossier.delete" && item.payload.id === id)) return cached;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const dossier = await this.remote.getById(id);
       if (dossier) cacheDossier(dossier);
-      return dossier;
+      return this.local.getById(id);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.getById(id);
@@ -2008,42 +1988,15 @@ class OfflineFirstDossierRepository implements DossierRepository {
   }
 
   async create(input: CreateDossierInput): Promise<Dossier> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const dossier = await this.remote.create(input);
-      cacheDossier(dossier);
-      return dossier;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.create(input);
-    }
+    return this.local.create(input);
   }
 
   async update(input: UpdateDossierInput): Promise<Dossier> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const dossier = await this.remote.update(input);
-      cacheDossier(dossier);
-      return dossier;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.update(input);
-    }
+    return this.local.update(input);
   }
 
   async delete(id: string, workspaceId: string): Promise<number> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const count = await this.remote.delete(id, workspaceId);
-      await this.local.applyDelete(id, workspaceId);
-      return count;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.delete(id, workspaceId);
-    }
+    return this.local.delete(id, workspaceId);
   }
 }
 
@@ -2052,6 +2005,10 @@ class OfflineFirstContractRepository implements ContractRepository {
   private readonly remote = new SupabaseContractRepository();
 
   async list(params: ContractListParams): Promise<ContractListResult> {
+    const metadata = getWorkspaceSyncMetadata(params.workspaceId);
+    if (params.deletionState === "deleted" ? metadata.lastTrashSyncedAt : metadata.lastFullSyncedAt) {
+      return this.local.list(params);
+    }
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
       if (params.all && !params.includeIds && !params.query && params.deletionState !== "deleted") {
@@ -2059,9 +2016,12 @@ class OfflineFirstContractRepository implements ContractRepository {
         await syncSupabaseWorkspace(params.workspaceId, { verify: true });
         return this.local.list(params);
       }
-      await syncPendingOutbox();
       const remoteResult = await this.remote.list(params);
       cacheContracts(remoteResult.items);
+      if (params.deletionState === "deleted" && params.all && !params.query && !params.includeIds && !params.status && !params.dossierId && !params.onlyMine && !params.createdByIds?.length) {
+        setWorkspaceSyncMetadata(params.workspaceId, { lastTrashSyncedAt: new Date().toISOString() });
+        await flushLocalDbWrites();
+      }
 
       const pending = getPendingOutbox().some((item) => item.workspaceId === params.workspaceId &&
         (item.type.startsWith("contract.") || item.type === "tag.assign" || item.type === "tag.remove"));
@@ -2082,13 +2042,14 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 
   async getById(id: string): Promise<Contract | null> {
+    const cached = await this.local.getById(id);
+    if (cached) return cached;
     if (getPendingContractIds().has(id)) return this.local.getById(id);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const contract = await this.remote.getById(id);
       if (contract) cacheContract(contract);
-      return contract;
+      return this.local.getById(id);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.getById(id);
@@ -2096,9 +2057,10 @@ class OfflineFirstContractRepository implements ContractRepository {
   }
 
   async getByIds(ids: string[], workspaceId: string): Promise<Contract[]> {
+    const cached = await this.local.getByIds(ids, workspaceId);
+    if (cached.length === new Set(ids).size || getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return cached;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const contracts = await this.remote.getByIds(ids, workspaceId);
       cacheContracts(contracts);
       const pendingIds = getPendingContractIds();
@@ -2122,37 +2084,14 @@ class OfflineFirstContractRepository implements ContractRepository {
 
   async createMany(inputs: CreateContractInput[]): Promise<Contract[]> {
     inputs.forEach(input => assertContractDuration(input.durationMonths));
-    inputs = inputs.map((input) => ({ ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear() }));
-    inputs = inputs.map(bindContractMinister);
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      if (inputs.some((input) => getPendingOutbox().some((item) => item.workspaceId === input.workspaceId &&
-          item.type === "applicant.upsert" && (item.payload.nif === input.nif || item.payload.id === input.applicantId)))) {
-        return this.local.createMany(inputs);
-      }
-      const contracts = await this.remote.createMany(inputs);
-      cacheContracts(contracts);
-      return contracts;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.createMany(inputs);
-    }
+    return this.local.createMany(inputs.map(input => bindContractMinister({
+      ...input, id: input.id ?? createId(), annee_fiscale: input.annee_fiscale || getStoredFiscalYear()
+    })));
   }
 
   async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
     if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
-    if (getPendingContractIds().has(input.id)) return this.local.update(input, expected);
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const contract = await this.remote.update(input, expected);
-      cacheContract(contract);
-      return contract;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.update(input, expected);
-    }
+    return this.local.update(input, expected);
   }
 
   async assignToDossier(
@@ -2160,17 +2099,7 @@ class OfflineFirstContractRepository implements ContractRepository {
     contractIds: string[],
     dossierId: string | null
   ): Promise<number> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      if (contractIds.some((id) => getPendingContractIds().has(id))) return this.local.assignToDossier(workspaceId, contractIds, dossierId);
-      const count = await this.remote.assignToDossier(workspaceId, contractIds, dossierId);
-      await this.local.applyAssignToDossier(workspaceId, contractIds, dossierId);
-      return count;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.assignToDossier(workspaceId, contractIds, dossierId);
-    }
+    return this.local.assignToDossier(workspaceId, contractIds, dossierId);
   }
 
   async updateStatus(
@@ -2178,17 +2107,7 @@ class OfflineFirstContractRepository implements ContractRepository {
     contractIds: string[],
     status: ContractStatus
   ): Promise<number> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      if (contractIds.some((id) => getPendingContractIds().has(id))) return this.local.updateStatus(workspaceId, contractIds, status);
-      const count = await this.remote.updateStatus(workspaceId, contractIds, status);
-      await this.local.applyUpdateStatus(workspaceId, contractIds, status);
-      return count;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.updateStatus(workspaceId, contractIds, status);
-    }
+    return this.local.updateStatus(workspaceId, contractIds, status);
   }
 
   async updateDuration(
@@ -2197,30 +2116,11 @@ class OfflineFirstContractRepository implements ContractRepository {
     durationMonths: number
   ): Promise<number> {
     assertContractDuration(durationMonths);
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      if (contractIds.some((id) => getPendingContractIds().has(id))) return this.local.updateDuration(workspaceId, contractIds, durationMonths);
-      const count = await this.remote.updateDuration(workspaceId, contractIds, durationMonths);
-      await this.local.applyUpdateDuration(workspaceId, contractIds, durationMonths);
-      return count;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.updateDuration(workspaceId, contractIds, durationMonths);
-    }
+    return this.local.updateDuration(workspaceId, contractIds, durationMonths);
   }
 
   async softDelete(id: string, workspaceId: string, expected?: Contract): Promise<void> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      if (getPendingContractIds().has(id)) return this.local.softDelete(id, workspaceId, expected);
-      await this.remote.softDelete(id, workspaceId, expected);
-      await this.local.applySoftDelete(id, workspaceId);
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      await this.local.softDelete(id, workspaceId, expected);
-    }
+    return this.local.softDelete(id, workspaceId, expected);
   }
 
   async permanentlyDelete(id: string, workspaceId: string): Promise<void> {
@@ -2245,9 +2145,9 @@ class OfflineFirstTagRepository implements TagRepository {
   private readonly remote = new SupabaseTagRepository();
 
   async list(workspaceId: string): Promise<Tag[]> {
+    if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.list(workspaceId);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
       const tags = await this.remote.list(workspaceId);
       cacheTags(tags);
       return tags;
@@ -2258,41 +2158,15 @@ class OfflineFirstTagRepository implements TagRepository {
   }
 
   async create(input: CreateTagInput): Promise<Tag> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      const tag = await this.remote.create(input);
-      cacheTag(tag);
-      return tag;
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      return this.local.create(input);
-    }
+    return this.local.create(input);
   }
 
   async assignToContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
-    if (getPendingContractIds().has(contractId)) return this.local.assignToContract(workspaceId, contractId, tagId);
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      await this.remote.assignToContract(workspaceId, contractId, tagId);
-      await this.local.applyAssignment(workspaceId, contractId, tagId);
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      await this.local.assignToContract(workspaceId, contractId, tagId);
-    }
+    return this.local.assignToContract(workspaceId, contractId, tagId);
   }
 
   async removeFromContract(workspaceId: string, contractId: string, tagId: string): Promise<void> {
-    try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
-      await syncPendingOutbox();
-      await this.remote.removeFromContract(workspaceId, contractId, tagId);
-      await this.local.applyRemoval(workspaceId, contractId, tagId);
-    } catch (error) {
-      if (!isOfflineFailure(error)) throw error;
-      await this.local.removeFromContract(workspaceId, contractId, tagId);
-    }
+    return this.local.removeFromContract(workspaceId, contractId, tagId);
   }
 }
 

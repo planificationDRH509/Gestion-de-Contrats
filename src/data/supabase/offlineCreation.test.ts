@@ -4,7 +4,7 @@ import { LEGACY_MINISTER } from "../../lib/ministers";
 import { queueOutbox } from "../local/localOutbox";
 import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CreateContractInput, UpsertApplicantInput } from "../types";
+import type { CreateContractInput, Dossier, UpsertApplicantInput } from "../types";
 import { createSupabaseProvider, syncSupabaseOutbox, syncSupabaseWorkspace, getSupabaseSyncState } from "./supabaseProvider";
 import { cacheApplicant, cacheContracts, getPendingOutbox, isOfflineFailure, replaceWorkspaceCache, setWorkspaceSyncMetadata, upsertApplicantOffline } from "../local/offlineStore";
 import { LocalContractRepository } from "../local/localContractRepository";
@@ -78,7 +78,7 @@ describe("offline contract creation and replay", () => {
   it("rechecks a recent snapshot after failure and clears its error on recovery", async () => {
     localStorage.setItem("contribution_auth", JSON.stringify({ workspaceId: input.workspaceId, taskSessionToken: "session" }));
     setWorkspaceSyncMetadata(input.workspaceId, {
-      lastFullSyncedAt: new Date().toISOString(), remoteRevision: "revision", lastError: "Failed to fetch"
+      lastFullSyncedAt: new Date().toISOString(), lastTrashSyncedAt: new Date().toISOString(), remoteRevision: "revision", lastError: "Failed to fetch"
     });
     mock.rpc.mockResolvedValue({ data: "revision", error: null });
     await syncSupabaseWorkspace(input.workspaceId);
@@ -431,5 +431,86 @@ describe("discard pending contract edits", () => {
     queueOutbox(input.workspaceId, "contract.update", { id: "editable", commentaire: "New edit" });
     await expect(discardContractSyncChanges(contract!, [first.id])).rejects.toThrow("modifications ont changé");
     expect(getPendingOutbox()).toHaveLength(2);
+  });
+});
+
+
+describe("local-first operations with Internet available", () => {
+  it("serves filters, pagination, details and empty results from a complete snapshot without network calls", async () => {
+    const provider = createSupabaseProvider();
+    const person = { ...applicant, id: applicant.nif!, createdAt: "2026-09-01", updatedAt: "2026-09-01" };
+    const contract = { ...input, salaryText: "TRENTE MILLE", id: "cached", createdAt: "2026-09-01", updatedAt: "2026-09-01" };
+    replaceWorkspaceCache(input.workspaceId, { applicants: [person], contracts: [contract], dossiers: [], tags: [] });
+    setWorkspaceSyncMetadata(input.workspaceId, { lastFullSyncedAt: "2026-09-01" });
+    mock.from.mockImplementation(() => { throw new Error("Network must not be awaited"); });
+    expect((await provider.contracts.list({ workspaceId: input.workspaceId, query: "Jean", pageSize: 1 })).items).toHaveLength(1);
+    expect((await provider.contracts.list({ workspaceId: input.workspaceId, query: "absent" })).total).toBe(0);
+    expect(await provider.contracts.getById("cached")).toMatchObject({ id: "cached" });
+    expect(await provider.contracts.getByIds(["cached"], input.workspaceId)).toHaveLength(1);
+    expect(await provider.applicants.list(input.workspaceId)).toHaveLength(1);
+    expect(await provider.applicants.findByNifOrNinu(input.workspaceId, "absent")).toBeNull();
+    expect(await provider.applicants.findManyByNifOrNinu(input.workspaceId, [applicant.nif!], [])).toHaveLength(1);
+    expect(await provider.dossiers.list(input.workspaceId)).toEqual([]);
+    expect(await provider.tags.list(input.workspaceId)).toEqual([]);
+    expect(mock.from).not.toHaveBeenCalled();
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+
+  it("persists online edits, bulk actions, dossiers, tags and deletions before any network work", async () => {
+    const provider = createSupabaseProvider();
+    mock.from.mockImplementation(() => { throw new Error("Network must not be awaited"); });
+    const person = await provider.applicants.upsert(applicant);
+    const [contract] = await provider.contracts.createMany([{ ...input, applicantId: person.id }]);
+    const dossier = await provider.dossiers.create({ workspaceId: input.workspaceId, name: "Local" });
+    await provider.dossiers.update({ id: dossier.id, workspaceId: input.workspaceId, name: "Corrigé" });
+    await provider.contracts.assignToDossier(input.workspaceId, [contract.id], dossier.id);
+    await provider.contracts.updateDuration(input.workspaceId, [contract.id], 6);
+    await provider.contracts.update({ id: contract.id, commentaire: "Immédiat" });
+    const tag = await provider.tags.create({ workspaceId: input.workspaceId, name: "Priorité" });
+    await provider.tags.assignToContract(input.workspaceId, contract.id, tag.id);
+    expect(await provider.contracts.getById(contract.id)).toMatchObject({ durationMonths: 6, commentaire: "Immédiat", tags: [expect.objectContaining({ id: tag.id })] });
+    await provider.tags.removeFromContract(input.workspaceId, contract.id, tag.id);
+    await provider.dossiers.delete(dossier.id, input.workspaceId);
+    expect(await provider.dossiers.getById(dossier.id)).toBeNull();
+    await provider.contracts.softDelete(contract.id, input.workspaceId);
+    await provider.applicants.softDelete(person.id, input.workspaceId);
+    expect(await provider.applicants.getById(person.id)).toBeNull();
+    expect(getPendingOutbox().map(item => item.type)).toEqual(expect.arrayContaining([
+      "applicant.upsert", "contract.create", "dossier.create", "dossier.update", "contract.update",
+      "tag.create", "tag.assign", "tag.remove", "dossier.delete", "contract.delete", "applicant.delete"
+    ]));
+    expect(mock.from).not.toHaveBeenCalled();
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+
+  it("preserves identity edits and dossier detachments while a server snapshot arrives", async () => {
+    const provider = createSupabaseProvider();
+    const person = { ...applicant, id: applicant.nif!, createdAt: "2026-09-01", updatedAt: "2026-09-01" };
+    const dossier: Dossier = {
+      id: "folder", workspaceId: input.workspaceId, name: "Dossier", status: "active",
+      isEphemeral: false, priority: "normal", contractTargetCount: 0,
+      createdAt: "2026-09-01", updatedAt: "2026-09-01"
+    };
+    const contract = { ...input, salaryText: "TRENTE MILLE", id: "cached", dossierId: dossier.id, createdAt: "2026-09-01", updatedAt: "2026-09-01" };
+    const snapshot = { applicants: [person], contracts: [contract], dossiers: [dossier], tags: [] };
+    replaceWorkspaceCache(input.workspaceId, snapshot);
+    await provider.applicants.upsert({ ...applicant, id: person.id, address: "Jacmel" });
+    await provider.dossiers.delete(dossier.id, input.workspaceId);
+    replaceWorkspaceCache(input.workspaceId, snapshot);
+    cacheContracts([contract]);
+    expect(await provider.contracts.getById(contract.id)).toMatchObject({ address: "Jacmel", dossierId: null });
+  });
+
+  it("replays a personal pin only with its author's session", async () => {
+    const user = { id: "pin-user", workspaceId: input.workspaceId, taskSessionToken: "pin-session" };
+    localStorage.setItem("contribution_auth", JSON.stringify(user));
+    queueOutbox(input.workspaceId, "pin.set", { userId: user.id, contractId: "cached", pinned: true });
+    mock.rpc.mockResolvedValue({ data: ["cached"], error: null });
+    await syncSupabaseOutbox();
+    expect(mock.rpc).toHaveBeenCalledWith("set_pinned_contract", {
+      p_session_token: user.taskSessionToken, p_contract_id: "cached", p_pinned: true
+    });
+    expect(getPendingOutbox()).toEqual([]);
+    expect(JSON.parse(localStorage.getItem("contribution_pinned_contracts:pin-user")!)).toEqual(["cached"]);
   });
 });

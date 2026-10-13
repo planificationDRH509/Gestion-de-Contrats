@@ -7,10 +7,18 @@ export function outboxKeys(item: OutboxItem): string[] {
     if (typeof id === "string" && id) keys.add(`${item.workspaceId}:${kind}:${id}`);
   };
   const p = item.payload;
+  if (item.type === 'reference.change') {
+    // Shared references also serialize across workspaces.
+    keys.add(`reference:${['salary', 'prepositions', 'ministers'].includes(String(p.scope)) ? 'global' : item.workspaceId}:${p.scope}`);
+  }
   if (item.type === "list.operation") {
     add("lists", "all");
     if (Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
     if (Array.isArray(p.applicantIds)) p.applicantIds.forEach(id => add("applicant", id));
+  }
+  if (item.type === "pin.set") {
+    add("pins", p.userId);
+    add("contract", p.contractId);
   }
   if (item.type.startsWith("applicant.")) {
     add("applicant", p.id); add("applicant", p.nif);
@@ -21,6 +29,7 @@ export function outboxKeys(item: OutboxItem): string[] {
     add("applicant", p.applicantId); add("applicant", p.nif); add("dossier", p.dossierId);
   }
   if (item.type.startsWith("dossier.")) add("dossier", p.id);
+  if (item.type === "dossier.delete" && Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
   if (item.type === "tag.create") add("tag", p.id);
   if (item.type === "tag.assign" || item.type === "tag.remove") {
     add("contract", p.contractId); add("tag", p.tagId);

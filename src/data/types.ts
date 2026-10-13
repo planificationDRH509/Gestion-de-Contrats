@@ -170,7 +170,9 @@ export type OutboxItem = {
     | "tag.assign"
     | "tag.remove"
     | "list.operation"
-    | "print.create";
+    | "print.create"
+    | "pin.set"
+    | "reference.change";
   payload: Record<string, unknown>;
   createdAt: string;
   syncedAt?: string | null;
@@ -206,6 +208,7 @@ export type ContractListParams = {
   all?: boolean;
   onlyMine?: boolean;
   userId?: string;
+  createdByIds?: string[];
   status?: ContractStatus;
   dossierId?: string | null;
   fiscalYear?: string;

@@ -1,7 +1,7 @@
+import { queueReferenceChange } from '../../data/local/referenceQueue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../auth/auth';
 import { getSupabaseClient } from '../../data/supabase/supabaseClient';
-import type { Json } from '../../data/supabase/database.types';
 import { cacheInstitutionPrepositions, readInstitutionPrepositions, validateInstitutionPreposition, type InstitutionPrepositionRule } from './institutionPrepositions';
 
 const remote = (import.meta.env.VITE_DATA_PROVIDER ?? 'local') === 'supabase';
@@ -12,18 +12,23 @@ export function useInstitutionPrepositions() {
   const query = useQuery({
     queryKey, enabled:Boolean(user), initialData:readInstitutionPrepositions, initialDataUpdatedAt:0,
     staleTime:30_000, refetchOnReconnect:'always' as const, refetchOnWindowFocus:true,
-    queryFn:async () => {
+    queryFn:async ({ signal }) => {
+      const local = readInstitutionPrepositions();
+      if (local) client.setQueryData(queryKey, local);
+      if (!navigator.onLine && local) return local;
       if (!remote) return readInstitutionPrepositions();
       if (!user?.taskSessionToken) throw new Error('Session utilisateur indisponible.');
       const {data,error} = await getSupabaseClient().rpc('read_institution_prepositions', {p_session_token:user.taskSessionToken});
       if (error) throw error;
       const rules = data as unknown as InstitutionPrepositionRule[];
       rules.forEach(validateInstitutionPreposition);
+      if (signal.aborted) return readInstitutionPrepositions();
       cacheInstitutionPrepositions(rules);
-      return rules;
+      return readInstitutionPrepositions();
     }
   });
   const mutation = useMutation({
+    onMutate: () => client.cancelQueries({ queryKey }),
     networkMode:'always',
     mutationFn:async (changes:InstitutionPrepositionRule[]) => {
       if (!can('settings.manage')) throw new Error('Modification réservée aux administrateurs.');
@@ -37,16 +42,17 @@ export function useInstitutionPrepositions() {
           return {...change,prefix:change.prefix.trim(),version:rule.version+1};
         });
       }
-      if (!navigator.onLine) throw new Error('Connectez-vous pour modifier les prépositions.');
-      if (!user?.taskSessionToken) throw new Error('Session utilisateur indisponible.');
-      const {data,error} = await getSupabaseClient().rpc('save_institution_prepositions', {
-        p_session_token:user.taskSessionToken,p_rules:changes as unknown as Json
+      const current = readInstitutionPrepositions();
+      const patches = changes.map(change => {
+        const before = current.find(rule => rule.family === change.family);
+        if (!before || before.version !== change.version) throw new Error('Ces prépositions ont changé. Rechargez la liste.');
+        return { id: change.family, before, after: { ...change, prefix: change.prefix.trim(), version: change.version + 1 } };
       });
-      if (error) throw error;
-      return data as unknown as InstitutionPrepositionRule[];
+      await queueReferenceChange(user!.workspaceId, { scope: 'prepositions', patches });
+      return readInstitutionPrepositions();
     },
     onSuccess:rules => {
-      cacheInstitutionPrepositions(rules);
+      if (!remote) cacheInstitutionPrepositions(rules);
       client.setQueryData(queryKey,rules);
       void client.invalidateQueries({queryKey:['institution-prepositions']});
     }

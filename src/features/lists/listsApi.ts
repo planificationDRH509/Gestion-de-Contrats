@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "../../data/supabase/supabaseClient";
 import { sqliteApiRequest } from "../../data/local/sqliteApiClient";
-import { syncSupabaseOutbox } from "../../data/supabase/supabaseProvider";
 import { isOfflineFailure } from "../../data/local/offlineStore";
 import { cacheContractLists, hasCachedContractLists, mutateContractListOffline, readCachedContractLists } from "../../data/local/localListRepository";
+import { flushLocalDbWrites } from "../../data/local/localDb";
 import { useAuth } from "../auth/auth";
 import type { ContractList, ListOperation } from "./listModel";
 
@@ -23,15 +23,18 @@ export function useContractLists() {
         if (previous) cacheContractLists(user.workspaceId, previous);
       }
       const cached = () => readCachedContractLists(user.workspaceId);
-      if (!navigator.onLine) return cached();
+      if (hasCachedContractLists(user.workspaceId) || !navigator.onLine) {
+        await flushLocalDbWrites();
+        return cached();
+      }
       if (!user.taskSessionToken) throw new Error("TASK_SESSION_REQUIRED");
       try {
-        await syncSupabaseOutbox();
         const { data, error } = await getSupabaseClient().rpc("read_contract_lists", {
           p_session_token: user.taskSessionToken, p_workspace_id: user.workspaceId
         });
         if (error) throw error;
         cacheContractLists(user.workspaceId, data as unknown as ContractList[]);
+        await flushLocalDbWrites();
         return cached();
       } catch (error) {
         if (isOfflineFailure(error)) return cached();

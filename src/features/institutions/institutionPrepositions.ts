@@ -1,3 +1,4 @@
+import { overlayReferences } from '../../data/local/referenceOverlay';
 import { applySuggestionPrefix, joinSuggestionPrefix, normalizeSuggestionGrammarValue, stripSuggestionPrefix } from '../../lib/suggestionPrefixes';
 
 export const INSTITUTION_PREPOSITION_FAMILIES = [
@@ -38,14 +39,14 @@ export function readInstitutionPrepositions(): InstitutionPrepositionRule[] {
     const rules: unknown = JSON.parse(localStorage.getItem(cacheKey) ?? 'null');
     if (Array.isArray(rules)) {
       rules.forEach(validateInstitutionPreposition);
-      return defaultInstitutionPrepositions().map(rule => rules.find(r => r.family === rule.family) ?? rule);
+      return overlayReferences('prepositions', defaultInstitutionPrepositions().map(rule => rules.find(r => r.family === rule.family) ?? rule));
     }
   } catch { /* Use the common defaults when no valid cache is available. */ }
-  return defaultInstitutionPrepositions();
+  return overlayReferences('prepositions', defaultInstitutionPrepositions());
 }
 
 export function cacheInstitutionPrepositions(rules: InstitutionPrepositionRule[]) {
-  try { localStorage.setItem(cacheKey, JSON.stringify(rules)); } catch { /* The server remains authoritative. */ }
+  localStorage.setItem(cacheKey, JSON.stringify(rules));
 }
 
 export function institutionPrepositionFamily(value: string) {

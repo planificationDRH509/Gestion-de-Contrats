@@ -14,6 +14,7 @@ vi.mock("idb-keyval", () => ({
 }));
 
 import {
+  replaceCachedPrivateTasks,
   queueOfflineTaskCreation,
   queueOfflineTaskEdit,
   queueOfflineTaskDeletion,
@@ -165,4 +166,20 @@ describe("private task offline storage", () => {
     expect(state.outbox[0]).toMatchObject({ type: "edit", taskId: "remote-note", notes: "Texte modifié" });
   });
 
+});
+
+
+it("preserves pending edits, status changes and deletions when an older download arrives", async () => {
+  offlineStorage.clear();
+  const task = { id: "remote-task", content: "Original", notes: "", kind: "task" as const, status: "todo" as const,
+    completed: false, completedAt: null, createdAt: "2026-09-01", updatedAt: "2026-09-01",
+    createdBy: user.id, createdByName: user.name, createdByUsername: user.username };
+  await replaceCachedPrivateTasks(user.id, sessionToken, [task, { ...task, id: "deleted-task" }]);
+  await queueOfflineTaskEdit(user.id, sessionToken, task.id, "Modifié", "Notes locales");
+  await queueOfflineTaskStatus(user.id, sessionToken, task.id, "done");
+  await queueOfflineTaskDeletion(user.id, sessionToken, "deleted-task");
+  await replaceCachedPrivateTasks(user.id, sessionToken, [task, { ...task, id: "deleted-task" }]);
+  const state = await readPrivateTaskOfflineState(user.id, sessionToken);
+  expect(state.tasks).toEqual([expect.objectContaining({ id: task.id, content: "Modifié", notes: "Notes locales", status: "done" })]);
+  expect(state.outbox).toHaveLength(3);
 });
