@@ -1120,6 +1120,7 @@ export function ContractNewPage() {
               contracts={spreadsheetData?.items ?? []}
               isLoading={spreadsheetLoading}
               canDelete={can("contracts.delete")}
+              onPrintContract={can("contracts.print") ? contractId => navigate(`/app/contrats/print?ids=${encodeURIComponent(contractId)}`) : undefined}
               zoomMode={sheetZoomMode}
               zoomPercent={sheetZoomPercent}
               controls={

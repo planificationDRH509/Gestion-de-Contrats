@@ -217,6 +217,7 @@ type ContractsSpreadsheetViewProps = {
   contracts: Contract[];
   isLoading: boolean;
   canDelete: boolean;
+  onPrintContract?: (contractId: string) => void;
   showToolbar?: boolean;
   controls?: React.ReactNode;
   zoomMode?: SpreadsheetZoomMode;
@@ -290,6 +291,7 @@ export function ContractsSpreadsheetView({
   contracts,
   isLoading,
   canDelete,
+  onPrintContract,
   showToolbar = true,
   controls,
   zoomMode = "custom",
@@ -1602,6 +1604,8 @@ export function ContractsSpreadsheetView({
     };
     const status = statuses[syncState];
     const actions = [];
+    const contractId = options.contract?.id;
+    if (contractId && onPrintContract) actions.push({ icon: "print", label: "Imprimer le contrat", onClick: () => onPrintContract(contractId) });
     if (options.onCommentClick) actions.push({ icon: "chat_bubble", label: options.hasComment ? "Voir ou modifier le commentaire" : "Ajouter un commentaire", onClick: options.onCommentClick });
     actions.push({ icon: phoneVisible ? "visibility_off" : "phone", label: phoneVisible ? "Masquer le téléphone" : "Afficher le téléphone", onClick: () => setPhoneVisible(visible => !visible) });
     if (options.onAddClick) actions.push({ icon: "add", label: options.addLabel ?? "Ajouter une ligne en dessous", onClick: options.onAddClick });
