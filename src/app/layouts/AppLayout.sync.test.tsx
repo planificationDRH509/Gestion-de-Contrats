@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, fireEvent, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -8,7 +8,7 @@ vi.mock("../../data/supabase/supabaseProvider", () => ({
   getSupabaseSyncState: () => ({ pendingCount: sync.pending, isSyncing: false })
 }));
 vi.mock("../../features/auth/auth", () => ({ useAuth: () => ({ user: { id: "u", workspaceId: "w", name: "Agent" }, isLocked: false }) }));
-vi.mock("./Sidebar", () => ({ Sidebar: () => null }));
+vi.mock("./Sidebar", () => ({ Sidebar: ({ onSync }: { onSync: () => void }) => <button onClick={onSync}>Synchroniser</button> }));
 vi.mock("../components/GlobalContractSearch", () => ({ GlobalContractSearch: () => null }));
 vi.mock("../../features/auth/SessionLockScreen", () => ({ SessionLockScreen: () => null }));
 import { AppLayout } from "./AppLayout";
@@ -107,4 +107,17 @@ it("checks remote changes when the browser window regains focus", async () => {
   sync.workspace.mockClear();
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(sync.workspace).not.toHaveBeenCalled();
+});
+
+ it("keeps a forced refresh requested while a focus check is running", async () => {
+  vi.useFakeTimers(); vi.stubEnv("VITE_DATA_PROVIDER", "supabase");
+  let finish!: () => void;
+  sync.workspace.mockReturnValueOnce(new Promise<boolean>(resolve => { finish = () => resolve(false); }));
+  render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AppLayout /></MemoryRouter></QueryClientProvider>);
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  fireEvent.click(screen.getByRole("button", { name: "Synchroniser" }));
+  expect(sync.workspace).toHaveBeenCalledTimes(1);
+  await act(async () => { finish(); });
+  expect(sync.workspace).toHaveBeenCalledTimes(2);
+  expect(sync.workspace).toHaveBeenLastCalledWith("w", { force: true, verify: false });
 });

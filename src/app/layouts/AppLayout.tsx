@@ -50,6 +50,7 @@ export function AppLayout() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncState, setSyncState] = useState(() => getSupabaseSyncState(workspaceId));
   const synchronizationRunning = useRef(false);
+  const forcedSynchronizationPending = useRef(false);
   const synchronizationNeedsRetry = useRef(false);
 
   useEffect(() => {
@@ -89,7 +90,10 @@ export function AppLayout() {
       refreshSyncState();
       return;
     }
-    if (synchronizationRunning.current) return;
+    if (synchronizationRunning.current) {
+      if (force) forcedSynchronizationPending.current = true;
+      return;
+    }
     synchronizationRunning.current = true;
     try {
       // Upload first; a failure downloading the full snapshot must not hide ACKs.
@@ -132,6 +136,10 @@ export function AppLayout() {
     } finally {
       synchronizationRunning.current = false;
       refreshSyncState();
+      if (forcedSynchronizationPending.current) {
+        forcedSynchronizationPending.current = false;
+        void synchronize(true);
+      }
     }
   }, [isSupabase, queryClient, refreshSyncState, workspaceId]);
 
