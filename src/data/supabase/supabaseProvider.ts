@@ -1879,6 +1879,9 @@ export function syncSupabaseWorkspace(
         contractsRepo.list({ workspaceId, all: true, sort: "createdAt_desc", deletionState: "deleted" })
       ]);
       const contracts = [...active.items, ...trash.items];
+      console.info("Workspace snapshot downloaded", { active: active.items.length, trash: trash.items.length,
+        fiscalYears: Object.fromEntries([...new Set(active.items.map(c => c.annee_fiscale))].map(year =>
+          [year ?? "unknown", active.items.filter(c => c.annee_fiscale === year).length])) });
 
       replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
       await downloadContractLists(workspaceId);
@@ -1891,6 +1894,7 @@ export function syncSupabaseWorkspace(
         lastError: getPendingOutboxCount(workspaceId) > 0 ? getWorkspaceSyncMetadata(workspaceId).lastError : null
       });
       await flushLocalDbWrites();
+      console.info("Workspace snapshot persisted", { contracts: loadDb().contracts.filter(c => c.workspaceId === workspaceId && !c.deletedAt).length });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur de synchronisation.";
