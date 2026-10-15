@@ -10933,47 +10933,24 @@ button.history-entry-name:hover { color: var(--accent); text-decoration: underli
   transform: translateY(-160%);
 }
 .skip-to-content:focus { transform: translateY(0); }
-.sidebar-search { width: 100%; font: inherit; text-align: left; cursor: pointer; background: transparent; }
 .app-content:focus { outline: none; }
 .multi-select-field:focus-within { z-index: 30; }
 .multi-select-menu label { min-height: 40px; }
 .global-contract-search-result-content { overflow-wrap: anywhere; }
 .global-contract-search-result-content :is(strong, span) { white-space: normal; }
 .global-contract-search-results { overscroll-behavior: contain; }
-:where(button, a, input, select, textarea):focus-visible {
+:is(.app-content, .global-contract-search) :where(button, a, input, select, textarea):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 @media (max-width: 960px) {
-  .sidebar-nav {
-    display: grid;
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(76px, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-  }
-  .sidebar-nav .nav-item { scroll-snap-align: center; }
-  .sidebar-nav .sidebar-label { font-size: 11px; line-height: 1.2; }
   .global-contract-search-input-row input { font-size: 16px; }
   .multi-select-menu { width: 100% !important; min-width: 0; }
   .multi-select-menu :is(button, label) { min-height: 44px; }
   .multi-select-menu input[type="search"] { font-size: 16px !important; }
 }
 @media (min-width: 961px) {
-  .sidebar-search {
-    margin-bottom: 10px;
-    border-color: var(--border);
-    background: var(--panel-muted);
-    color: var(--ink);
-  }
-  .sidebar-search:hover { border-color: var(--accent); background: var(--accent-soft); }
-  .sidebar-nav .nav-item.active { box-shadow: inset 3px 0 0 var(--accent); }
-  .sidebar-resizer:focus-visible { background: var(--accent); outline-offset: -2px; }
-  .pagination {
+    .pagination {
     padding: 14px 0 4px;
     border-top: 1px solid var(--border);
     gap: 8px;

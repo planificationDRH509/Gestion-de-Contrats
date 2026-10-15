@@ -38,8 +38,7 @@ export function AppLayout() {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const saved = localStorage.getItem(SIDEBAR_W_KEY);
-      const width = Number(saved);
-      return saved && Number.isFinite(width) ? Math.min(MAX_W, Math.max(MIN_W, width)) : DEFAULT_W;
+      return saved ? parseInt(saved, 10) : DEFAULT_W;
     } catch {
       return DEFAULT_W;
     }
@@ -265,8 +264,6 @@ export function AppLayout() {
         collapsed={collapsed} 
         onToggle={toggle} 
         onResizeStart={startResizing}
-        width={sidebarWidth}
-        onResizeKey={delta => setSidebarWidth(width => Math.min(MAX_W, Math.max(MIN_W, width + delta)))}
         isResizing={isResizing}
         isOnline={isOnline}
         syncState={syncState}
