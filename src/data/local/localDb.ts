@@ -22,6 +22,7 @@ import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeRecor
 import type { ContractList } from "../../features/lists/listModel";
 
 export type LocalSyncMetadata = {
+  snapshotVersion?: number;
   remoteRevision?: string | null;
   lastSyncedAt?: string | null;
   lastFullSyncedAt?: string | null;
@@ -77,7 +78,7 @@ export async function refreshLocalDb(): Promise<void> {
   // Never replace a new edit made while the IndexedDB read was in flight.
   if (revision !== memoryRevision || pendingPersistenceSnapshot || persistenceDrainScheduled) return;
   memoryDb = normalizeDb(stored);
-  persistedDb = memoryDb;
+  persistedDb = stored;
 }
 
 
@@ -285,15 +286,17 @@ function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
             // edits and their outbox are never retried against an invented base.
             const stored = await readRecords();
             if (!stored) throw error;
-            persistedDb = normalizeDb(stored);
-            if (memoryDb === snapshot) memoryDb = persistedDb;
+            persistedDb = stored;
+            if (memoryDb === snapshot) memoryDb = normalizeDb(stored);
             persistenceError = null;
             continue;
           }
           const rows = flattenDatabase(persistedDb ?? snapshot);
           merged.forEach((value, key) => value === undefined ? rows.delete(key) : rows.set(key, value));
-          persistedDb = normalizeDb(inflateDatabase(rows));
-          if (memoryDb === snapshot) memoryDb = persistedDb;
+          // The merge base must describe the actual stored rows. Defaults added
+          // for display are not persisted edits and otherwise create conflicts.
+          persistedDb = inflateDatabase(rows);
+          if (memoryDb === snapshot) memoryDb = normalizeDb(persistedDb);
           // A newer snapshot keeps its original base. Merging it directly
           // against IndexedDB preserves concurrent fields without replaying a
           // batch that has already committed (notably outbox removals).
@@ -336,7 +339,7 @@ async function initializeDatabase(): Promise<void> {
   let stored: LocalDb | undefined;
   if (typeof indexedDB !== "undefined") {
     stored = await readRecords();
-    if (stored) persistedDb = normalizeDb(stored);
+    if (stored) persistedDb = stored;
     else stored = await get<LocalDb>(IDB_KEY);
   }
   memoryDb = normalizeDb(stored ?? loadLegacyDb() ?? seedDatabase());

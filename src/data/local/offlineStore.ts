@@ -463,6 +463,7 @@ export function getPendingOutboxCount(workspaceId?: string): number {
 export function setWorkspaceSyncMetadata(
   workspaceId: string,
   metadata: {
+    snapshotVersion?: number;
     remoteRevision?: string | null;
     lastSyncedAt?: string | null;
     lastFullSyncedAt?: string | null;

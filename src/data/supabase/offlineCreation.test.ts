@@ -79,7 +79,7 @@ describe("offline contract creation and replay", () => {
   it("rechecks a recent snapshot after failure and clears its error on recovery", async () => {
     localStorage.setItem("contribution_auth", JSON.stringify({ workspaceId: input.workspaceId, taskSessionToken: "session" }));
     setWorkspaceSyncMetadata(input.workspaceId, {
-      lastFullSyncedAt: new Date().toISOString(), lastTrashSyncedAt: new Date().toISOString(), remoteRevision: "revision", lastError: "Failed to fetch"
+      snapshotVersion: 1, lastFullSyncedAt: new Date().toISOString(), lastTrashSyncedAt: new Date().toISOString(), remoteRevision: "revision", lastError: "Failed to fetch"
     });
     mock.rpc.mockResolvedValue({ data: "revision", error: null });
     await syncSupabaseWorkspace(input.workspaceId);

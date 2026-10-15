@@ -1,10 +1,11 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createSupabaseProvider, syncSupabaseWorkspace } from "./supabaseProvider";
-import { replaceWorkspaceCache, getWorkspaceSyncMetadata } from "../local/offlineStore";
+import { replaceWorkspaceCache, getWorkspaceSyncMetadata, setWorkspaceSyncMetadata } from "../local/offlineStore";
 import { calculateFinancialStatistics } from "../../features/statistics/financialStatistics";
 
-const mock = vi.hoisted(() => ({ from: vi.fn() }));
-vi.mock("./supabaseClient", () => ({ getSupabaseClient: () => ({ from: mock.from }) }));
+import * as offlineStore from "../local/offlineStore";
+const mock = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock("./supabaseClient", () => ({ getSupabaseClient: () => ({ from: mock.from, rpc: mock.rpc }) }));
 const workspaceId = "statistics-parity";
 const rows = Array.from({ length: 5207 }, (_, i) => ({
   id_contrat: `contract-${i}`, workspace_id: workspaceId, nif: `person-${i}`,
@@ -29,6 +30,7 @@ function paged(data: unknown[]) {
 }
 beforeEach(() => {
   localStorage.clear();
+  mock.rpc.mockReset().mockImplementation(async (name: string) => ({ data: name === "get_offline_workspace_revision" ? "same-revision" : [], error: null }));
   online(true);
   mock.from.mockImplementation((table: string) => paged(
     table === "contrat" ? rows : table === "identification" ? people : []
@@ -69,4 +71,26 @@ it("fulfills large paginated requests despite the server response cap", async ()
     rows.map(row => row.id_contrat).sort((a, b) => a.localeCompare(b)).slice(2000, 4000)
   );
   expect(result.total).toBe(5207);
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+it("repairs an older incomplete snapshot even when its remote revision matches", async () => {
+  const provider = createSupabaseProvider();
+  mock.from.mockImplementation((table: string) => paged(table === "contrat" ? rows.slice(0, 256) : []));
+  await provider.contracts.list({ workspaceId, pageSize: 151, fiscalYear: "2025-2026" });
+  setWorkspaceSyncMetadata(workspaceId, { lastFullSyncedAt: new Date().toISOString(), lastTrashSyncedAt: new Date().toISOString(), remoteRevision: "same-revision" });
+  localStorage.setItem("contribution_auth", JSON.stringify({ workspaceId, taskSessionToken: "session" }));
+  expect((await provider.contracts.list({ workspaceId, all: true })).total).toBe(151);
+  await syncSupabaseWorkspace(workspaceId, { verify: true });
+  expect((await provider.contracts.list({ workspaceId, all: true })).total).toBe(256);
+  expect(getWorkspaceSyncMetadata(workspaceId).snapshotVersion).toBe(1);
+});
+
+it("does not mark a discarded snapshot as successfully synchronized", async () => {
+  mock.from.mockImplementation((table: string) => paged(table === "contrat" ? rows.slice(0, 256) : []));
+  vi.spyOn(offlineStore, "replaceWorkspaceCache").mockImplementationOnce(() => undefined);
+  await expect(syncSupabaseWorkspace(workspaceId, { force: true })).rejects.toThrow("Enregistrement local incomplet");
+  expect(getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt).toBeFalsy();
+  expect(getWorkspaceSyncMetadata(workspaceId).snapshotVersion).toBeUndefined();
 });

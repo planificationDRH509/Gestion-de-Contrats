@@ -1819,6 +1819,7 @@ export function syncSupabaseWorkspace(
   if (
     !options.force &&
     !options.verify &&
+    metadata.snapshotVersion === 1 &&
     !metadata.lastError &&
     !hasPendingChanges &&
     Number.isFinite(lastFullSync) &&
@@ -1845,7 +1846,7 @@ export function syncSupabaseWorkspace(
         } else if (typeof revision.data === "string") remoteRevision = revision.data;
       }
       const currentMetadata = getWorkspaceSyncMetadata(workspaceId);
-      if (!options.force && remoteRevision && currentMetadata.lastFullSyncedAt && currentMetadata.lastTrashSyncedAt && currentMetadata.remoteRevision === remoteRevision) {
+      if (!options.force && currentMetadata.snapshotVersion === 1 && remoteRevision && currentMetadata.lastFullSyncedAt && currentMetadata.lastTrashSyncedAt && currentMetadata.remoteRevision === remoteRevision) {
         setWorkspaceSyncMetadata(workspaceId, { lastSyncedAt: new Date().toISOString(),
           lastError: getPendingOutbox().find(item => item.workspaceId === workspaceId && item.lastError)?.lastError ?? null });
         await flushLocalDbWrites();
@@ -1879,14 +1880,18 @@ export function syncSupabaseWorkspace(
         contractsRepo.list({ workspaceId, all: true, sort: "createdAt_desc", deletionState: "deleted" })
       ]);
       const contracts = [...active.items, ...trash.items];
-      console.info("Workspace snapshot downloaded", { active: active.items.length, trash: trash.items.length,
-        fiscalYears: Object.fromEntries([...new Set(active.items.map(c => c.annee_fiscale))].map(year =>
-          [year ?? "unknown", active.items.filter(c => c.annee_fiscale === year).length])) });
 
       replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
       await downloadContractLists(workspaceId);
+      await flushLocalDbWrites();
+      const storedIds = new Set(loadDb().contracts.filter(c => c.workspaceId === workspaceId).map(c => c.id));
+      const pendingIds = getPendingContractIds();
+      if (contracts.some(c => !storedIds.has(c.id) && !pendingIds.has(c.id))) {
+        throw new Error("Enregistrement local incomplet : relancez la synchronisation.");
+      }
       const syncedAt = new Date().toISOString();
       setWorkspaceSyncMetadata(workspaceId, {
+        snapshotVersion: 1,
         lastSyncedAt: syncedAt,
         lastFullSyncedAt: syncedAt,
         lastTrashSyncedAt: syncedAt,
@@ -1894,7 +1899,6 @@ export function syncSupabaseWorkspace(
         lastError: getPendingOutboxCount(workspaceId) > 0 ? getWorkspaceSyncMetadata(workspaceId).lastError : null
       });
       await flushLocalDbWrites();
-      console.info("Workspace snapshot persisted", { contracts: loadDb().contracts.filter(c => c.workspaceId === workspaceId && !c.deletedAt).length });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur de synchronisation.";

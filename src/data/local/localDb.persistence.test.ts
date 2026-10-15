@@ -297,3 +297,19 @@ it("announces external changes only after reading the other tab's persisted data
     window.removeEventListener("contribution-offline-sync", observed);
   }
 });
+
+it("persists a full download over legacy rows whose defaults exist only in memory", async () => {
+  const base = (await records.readRecords())!;
+  const legacy = structuredClone(base);
+  legacy.applicants.push({ id: "legacy", workspaceId: "w", gender: "Homme", firstName: "Jean", lastName: "TEST", address: "", createdAt: "2026-01-01", updatedAt: "2026-01-01" });
+  await write(base, legacy);
+  await db.refreshLocalDb();
+  expect(db.loadDb().applicants[0].phone).toBeNull();
+  const downloaded = db.loadDb();
+  downloaded.applicants[0].phone = "12345678";
+  downloaded.applicants.push({ ...downloaded.applicants[0], id: "newly-downloaded" });
+  db.saveDb(downloaded, { cacheOnly: true });
+  await db.flushLocalDbWrites();
+  expect((await records.readRecords())!.applicants).toHaveLength(2);
+  expect(db.loadDb().applicants[0].phone).toBe("12345678");
+});
