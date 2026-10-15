@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import { createId } from "../../lib/uuid";
 import { flushLocalDbWrites, loadDb, saveDb } from "./localDb";
 import { contractEditFields, dossierEditFields } from "../supabase/offlineConflict";
@@ -66,6 +67,7 @@ export async function resolveOfflineConflict(id: string, choices: Record<string,
     }
   }
   item.payload[baseKey] = remote;
+  item.modifiedAt = newEditTimestamp();
   item.id = createId(); // In-flight acknowledgements cannot remove the resolved operation.
   item.lastError = null;
   item.failureKind = undefined;

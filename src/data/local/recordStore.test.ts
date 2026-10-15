@@ -121,3 +121,19 @@ it("ignores object key order but preserves meaningful array order", () => {
   expect(() => mergeRecord(["a", "b"], ["b", "a"], ["a", "c"]))
     .toThrow(/modifications concurrentes/);
 });
+
+it("converges dated edits from stale tabs in either persistence order", async () => {
+  const initial = empty();
+  initial.workspaces.push({ id: "dated", name: "Original", createdAt: "2026-01-01", updatedAt: "2026-01-01", modifiedAt: "2026-01-01" });
+  await writeRecords(null, initial);
+  const older = structuredClone(initial), newer = structuredClone(initial);
+  Object.assign(older.workspaces[0], { name: "Older", modifiedAt: "2026-01-02" });
+  Object.assign(newer.workspaces[0], { name: "Newest", modifiedAt: "2026-01-03" });
+  older.outbox.push({ id: "old", workspaceId: "dated", type: "contract.update", payload: { id: "c" }, createdAt: "2026-01-02", modifiedAt: "2026-01-02" });
+  newer.outbox.push({ id: "new", workspaceId: "dated", type: "contract.update", payload: { id: "c" }, createdAt: "2026-01-03", modifiedAt: "2026-01-03" });
+  await writeRecords(initial, newer);
+  await writeRecords(initial, older);
+  expect((await readRecords())?.workspaces[0].name).toBe("Newest");
+  expect((await readRecords())?.outbox).toHaveLength(2);
+  expect(mergeRecord(initial.workspaces[0], newer.workspaces[0], older.workspaces[0])).toMatchObject({ name: "Newest" });
+});

@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import { OutboxItem } from "../types";
 import { syncFailureKind } from "./syncFailures";
 import { createId } from "../../lib/uuid";
@@ -16,6 +17,7 @@ export function queueOutbox(
     workspaceId,
     type,
     payload,
+    modifiedAt: newEditTimestamp(),
     createdAt: new Date().toISOString()
   };
   // A correction replaces the unsent identity at its original position, before
@@ -28,7 +30,7 @@ export function queueOutbox(
   ) : -1;
   if (previousIndex >= 0) {
     item.correctionPending = db.outbox[previousIndex].correctionPending || Boolean(db.outbox[previousIndex].lastError && syncFailureKind(db.outbox[previousIndex], { message: db.outbox[previousIndex].lastError }) === "correction");
-    item.conflict = db.outbox[previousIndex].conflict;
+    item.conflict = undefined;
     item.createdAt = db.outbox[previousIndex].createdAt;
     item.sequence = db.outbox[previousIndex].sequence;
     db.outbox[previousIndex] = item;

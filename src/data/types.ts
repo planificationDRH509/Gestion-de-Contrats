@@ -46,6 +46,8 @@ export type Workspace = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  /** Time of the user edit, preserved across delayed uploads. */
+  modifiedAt?: string | null;
 };
 
 export type Applicant = {
@@ -60,6 +62,8 @@ export type Applicant = {
   address: string;
   createdAt: string;
   updatedAt: string;
+  /** Time of the user edit, preserved across delayed uploads. */
+  modifiedAt?: string | null;
   /** Exact cloud version for conditional writes; null is distinct from createdAt. */
   remoteUpdatedAt?: string | null;
   deletedAt?: string | null;
@@ -81,6 +85,9 @@ export type Dossier = {
   defaultDurationMonths?: number | null;
   createdAt: string;
   updatedAt: string;
+  /** Time of the user edit, preserved across delayed uploads. */
+  modifiedAt?: string | null;
+  remoteUpdatedAt?: string | null;
   deletedAt?: string | null;
   createdBy?: string | null;
 };
@@ -137,6 +144,8 @@ export type Contract = {
   annee_fiscale?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Time of the user edit, preserved across delayed uploads. */
+  modifiedAt?: string | null;
   /** Exact cloud version for conditional writes; null is distinct from createdAt. */
   remoteUpdatedAt?: string | null;
   deletedAt?: string | null;
@@ -175,6 +184,8 @@ export type OutboxItem = {
     | "reference.change";
   payload: Record<string, unknown>;
   createdAt: string;
+  /** Independent of createdAt, which also preserves dependency ordering. */
+  modifiedAt?: string;
   syncedAt?: string | null;
   lastError?: string | null;
   failureKind?: "temporary" | "correction" | "action" | "dependency";

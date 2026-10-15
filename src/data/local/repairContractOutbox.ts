@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import type { UpdateContractInput } from "../types";
 import { createId } from "../../lib/uuid";
 import { loadDb, saveDb } from "./localDb";
@@ -19,10 +20,12 @@ export function repairContractOutbox(workspaceId: string, input: UpdateContractI
   delete patch.baseContract;
   item.payload = { ...item.payload, ...patch, baseContract: base };
   item.id = createId(); // A reply for the rejected version cannot acknowledge the correction.
+  item.modifiedAt = newEditTimestamp();
+  item.conflict = undefined;
   item.lastError = null;
   item.failureKind = undefined;
   item.correctionPending = true;
-  // Keep explicit conflict choices available; editing alone must not force an overwrite.
+  // A correction is a new edit, even though it retains its dependency position.
   const changed = Object.keys(patch).filter(field => JSON.stringify(previous[field]) !== JSON.stringify(patch[field]));
   for (const later of db.outbox.slice(index + 1)) {
     if (later.workspaceId !== workspaceId || later.actorId !== actorId || later.type !== "contract.update" || later.payload.id !== input.id) continue;
@@ -32,6 +35,8 @@ export function repairContractOutbox(workspaceId: string, input: UpdateContractI
       if (field in later.payload) later.payload[field] = patch[field];
     }
     later.id = createId();
+    later.modifiedAt = newEditTimestamp();
+    later.conflict = undefined;
     later.correctionPending = true;
     later.lastError = null;
     later.failureKind = undefined;

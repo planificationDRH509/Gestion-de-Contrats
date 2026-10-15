@@ -124,3 +124,12 @@ Schéma : `supabase/migrations/20260920151424_contract_lists.sql`. Les tables so
 La migration `supabase/migrations/20260925014004_offline_contract_lists.sql` ajoute la reprise idempotente des opérations hors ligne et la détection des conflits.
 
 Vérification : `npm test` et `npm run build`. Les scripts `supabase/tests/contract_lists.sql` et `supabase/tests/offline_contract_lists.sql` testent les RPC et leurs protections dans des transactions annulées, sans conserver les données d’essai.
+
+
+### Résolution des conflits de synchronisation
+
+Les identifications, contrats et dossiers conservent `modified_at`, la date de la modification utilisateur, séparément de `updated_at`, la version d’écriture sur le serveur. Les opérations en attente conservent également `modifiedAt`, indépendamment de leur position dans la file. Une modification arrivée plus tard ne remplace donc pas une modification plus récente. Les champs non modifiés localement restent préservés ; à dates égales, le client conserve la version serveur. Les conflits déjà enregistrés sont réévalués automatiquement, et une correction reçoit une nouvelle date sans déplacer ses dépendances.
+
+Un NINU concurrent est attribué à l’identification modifiée le plus récemment, en une transaction ; les NIF et leurs contrats restent distincts. Les droits d’accès, les listes scellées, le ministre immuable et les validations métier continuent de s’appliquer. Cette règle ne remplace pas les protocoles propres aux listes et aux référentiels.
+
+Appliquer `supabase/migrations/20261015014503_automatic_latest_edit_wins.sql` avant de déployer le client correspondant. La migration ajoute les horloges et les RPC atomiques sans modifier les politiques RLS. Vérification : `supabase/tests/latest_edit_wins.sql` (fixtures annulées), tests de reprise dans `offlineCreation.test.ts`, de fusion IndexedDB et d’horodatage des anciennes corrections.

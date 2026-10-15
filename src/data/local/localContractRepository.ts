@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import { repairContractOutbox } from "./repairContractOutbox";
 import { projectInstitutionAssignment } from './referenceOverlay';
 import { sameImportContract } from "../../features/contracts/contractImportBatch";
@@ -32,7 +33,7 @@ import { sortContracts } from "../../lib/contractSorting";
 import { assertListStatus, updateListedContract } from "./localListRepository";
 
 function now() {
-  return new Date().toISOString();
+  return newEditTimestamp();
 }
 
 function matchesQuery(contract: Contract, query: string) {
@@ -186,7 +187,7 @@ export class LocalContractRepository implements ContractRepository {
       dossierId: input.dossierId ?? null,
       id: input.id ?? createId(),
       createdAt: timestamp,
-      updatedAt: timestamp,
+      modifiedAt: timestamp, updatedAt: timestamp,
       auditHistory:
         input.auditHistory ?? createContractAuditHistory(undefined, timestamp)
     };
@@ -235,7 +236,7 @@ export class LocalContractRepository implements ContractRepository {
       ...nextValues,
       ministerId: previous.ministerId,
       minister: previous.minister,
-      updatedAt: timestamp,
+      modifiedAt: timestamp, updatedAt: timestamp,
       auditHistory: appendContractAuditEntry(previous.auditHistory, {
         action: inferAuditAction(changes),
         changes,
@@ -288,7 +289,7 @@ export class LocalContractRepository implements ContractRepository {
       return {
         ...contract,
         dossierId,
-        updatedAt: timestamp,
+        modifiedAt: timestamp, updatedAt: timestamp,
         auditHistory: appendContractAuditEntry(contract.auditHistory, {
           action: "dossier",
           changes,
@@ -348,7 +349,7 @@ export class LocalContractRepository implements ContractRepository {
       return {
         ...contract,
         status,
-        updatedAt: timestamp,
+        modifiedAt: timestamp, updatedAt: timestamp,
         auditHistory: appendContractAuditEntry(contract.auditHistory, {
           action: "status",
           changes,
@@ -418,7 +419,7 @@ export class LocalContractRepository implements ContractRepository {
       return {
         ...contract,
         durationMonths,
-        updatedAt: timestamp,
+        modifiedAt: timestamp, updatedAt: timestamp,
         auditHistory: appendContractAuditEntry(contract.auditHistory, {
           action: "duration",
           changes,
@@ -467,7 +468,7 @@ export class LocalContractRepository implements ContractRepository {
       ...previous,
       deletedAt: timestamp,
       status: previous.status === "liste" ? "saisie" : previous.status,
-      updatedAt: timestamp,
+      modifiedAt: timestamp, updatedAt: timestamp,
       auditHistory: appendContractAuditEntry(previous.auditHistory, {
         action: "deletion",
         changes: [],

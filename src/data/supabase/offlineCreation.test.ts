@@ -2,7 +2,6 @@ import { discardContractSyncChanges } from "./supabaseProvider";
 import { cacheMinisters } from "../../features/settings/ministersCache";
 import { LEGACY_MINISTER } from "../../lib/ministers";
 import { isContractCorrection } from "../local/syncFailures";
-import { resolveOfflineConflict } from "../local/resolveConflict";
 import { queueOutbox, setOutboxError } from "../local/localOutbox";
 import { loadDb } from "../local/localDb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,7 +27,7 @@ function online(value: boolean) {
 }
 function reply(data: unknown, error: unknown = null) {
   const chain: any = {};
-  for (const method of ["select", "eq", "is", "in", "order", "limit", "insert", "update"]) {
+  for (const method of ["select", "eq", "is", "in", "order", "limit", "insert", "update", "ilike"]) {
     chain[method] = vi.fn(() => chain);
   }
   chain.maybeSingle = vi.fn(async () => ({ data, error }));
@@ -169,30 +168,29 @@ describe("offline contract creation and replay", () => {
     expect(contract?.salaryText).toBe("QUARANTE CINQ MILLE ET VINGT CINQ CENTIMES");
   });
 
-  it("retains a conflicting UUID locally and never overwrites the server", async () => {
+  it("automatically updates the same UUID when its local edit is newer", async () => {
     const created = await new LocalContractRepository().create(input);
-    const remote = reply({ ...contractRow(created.id), titre: "Directeur" });
-    mock.from.mockReturnValue(remote);
+    const original = { ...contractRow(created.id), titre: "Directeur" };
+    const update = reply(contractRow(created.id));
+    mock.from.mockReturnValueOnce(reply(original)).mockReturnValueOnce(reply(original)).mockReturnValueOnce(update);
     await syncSupabaseOutbox();
-    expect(getPendingOutbox()).toHaveLength(1);
-    expect(getSupabaseSyncState(input.workspaceId).lastError).toContain("Conflit sur le contrat");
-    expect(remote.insert).not.toHaveBeenCalled();
-    expect(remote.update).not.toHaveBeenCalled();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ titre: "Analyste", modified_at: expect.any(String) }));
+    expect(update.insert).not.toHaveBeenCalled();
     expect(await createSupabaseProvider().contracts.getById(created.id)).toMatchObject({ position: "Analyste" });
   });
 
-  it("blocks dependent contracts when the remote identity differs, preserving the error and local data", async () => {
+  it("resolves an older remote identity and uploads the dependent contract", async () => {
     upsertApplicantOffline(applicant);
     const created = await new LocalContractRepository().create(input);
-    const remote = reply([{ nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Autre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas" }]);
-    mock.from.mockReturnValue(remote);
+    const person = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Autre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas", modified_at: "2026-01-01" };
+    const update = reply({ ...person, prenom: "Jean" });
+    mock.from.mockReturnValueOnce(reply([person])).mockReturnValueOnce(update)
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([contractRow(created.id)]));
     await syncSupabaseOutbox();
-    expect(getPendingOutbox()).toHaveLength(2);
-    expect(mock.from.mock.calls.every(([table]) => table === "identification")).toBe(true);
-    expect(remote.update).not.toHaveBeenCalled();
-    expect(getSupabaseSyncState(input.workspaceId).lastError).toContain("Conflit d'identification");
-    replaceWorkspaceCache(input.workspaceId, { applicants: [], contracts: [], dossiers: [], tags: [] });
-    expect(await new LocalContractRepository().getById(created.id)).not.toBeNull();
+    expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ prenom: "Jean" }));
+    expect(getPendingOutbox()).toEqual([]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
   });
 
   it("does not replace a pending local version during a cache refresh", async () => {
@@ -202,9 +200,11 @@ describe("offline contract creation and replay", () => {
     expect(await repo.getById(created.id)).toMatchObject({ position: input.position });
   });
 
-  it("rejects a cached NINU attached to another NIF", () => {
+  it("moves a NINU to its newest local association without merging the NIF records", () => {
     upsertApplicantOffline({ ...applicant, ninu: "12345678901234" });
-    expect(() => upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" })).toThrow("Le NINU 12345678901234 appartient déjà à Jean LOUIS (NIF 123-456-789-0).");
+    upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" });
+    expect(loadDb().applicants.find(person => person.nif === applicant.nif)?.ninu).toBeNull();
+    expect(loadDb().applicants.find(person => person.nif === "999-999-999-9")?.ninu).toBe("12345678901234");
   });
 
   it("replaces a pending identity correction before dependent contracts without overwriting the server", async () => {
@@ -254,19 +254,19 @@ describe("offline status changes", () => {
     expect(getPendingOutbox()).toEqual([]);
   });
 
-  it("retains conflicting salary edits for explicit resolution", async () => {
+  it("keeps a newer remote salary and acknowledges the older local edit", async () => {
     const provider = createSupabaseProvider();
     const row = contractRow("editable");
     mock.from.mockReturnValue(reply(row));
     await provider.contracts.getById("editable");
-    online(false);
     await provider.contracts.update({ id: "editable", salaryNumber: 35000 });
-    online(true);
-    const read = reply({ ...row, salaire_en_chiffre: 45000 });
+    const modifiedAt = new Date(Date.parse(getPendingOutbox()[0].modifiedAt!) + 1000).toISOString();
+    const read = reply({ ...row, salaire_en_chiffre: 45000, modified_at: modifiedAt });
     mock.from.mockReset().mockReturnValue(read);
     await syncSupabaseOutbox();
     expect(read.update).not.toHaveBeenCalled();
-    expect(getPendingOutbox()[0].conflict).toMatchObject({ fields: ["salaryNumber"], remote: { salaryNumber: 45000 } });
+    expect(getPendingOutbox()).toEqual([]);
+    expect(await provider.contracts.getById("editable")).toMatchObject({ salaryNumber: 45000 });
   });
   function seed(id = "existing") {
     cacheContracts([{ ...input, salaryText: "TRENTE MILLE", id, createdAt: "2026-09-16T10:00:00Z", updatedAt: "2026-09-16T10:00:00Z" }]);
@@ -305,16 +305,17 @@ describe("offline status changes", () => {
     expect(await new LocalContractRepository().getById(id)).toMatchObject({ status: "imprime" });
   });
 
-  it("keeps a conflicting local state without overwriting the remote state", async () => {
+  it("keeps the newest remote state and removes the obsolete queued transition", async () => {
     const id = seed();
     await new LocalContractRepository().updateStatus(input.workspaceId, [id], "imprime");
-    const remote = reply({ ...contractRow(id), status: "signe" });
+    const modifiedAt = new Date(Date.parse(getPendingOutbox()[0].modifiedAt!) + 1000).toISOString();
+    const remote = reply({ ...contractRow(id), status: "signe", modified_at: modifiedAt });
     mock.from.mockReturnValue(remote);
     await syncSupabaseOutbox();
     expect(remote.update).not.toHaveBeenCalled();
-    expect(getPendingOutbox()).toHaveLength(1);
-    expect(getSupabaseSyncState(input.workspaceId).lastError).toContain("Conflit d’état");
-    expect(await createSupabaseProvider().contracts.getById(id)).toMatchObject({ status: "imprime" });
+    expect(getPendingOutbox()).toEqual([]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+    expect(await createSupabaseProvider().contracts.getById(id)).toMatchObject({ status: "signe" });
   });
 
   it("retains the operation if another writer wins between reading and updating", async () => {
@@ -370,19 +371,20 @@ describe("offline status changes", () => {
 
 
 describe("sync recovery", () => {
-  it("continues unrelated contracts after an identity conflict and keeps the error visible", async () => {
+  it("keeps the newer remote identity while continuing both dependent and unrelated contracts", async () => {
     upsertApplicantOffline(applicant);
-    const blocked = await new LocalContractRepository().create(input);
+    const dependent = await new LocalContractRepository().create(input);
     const independent = await new LocalContractRepository().create({ ...input, nif: "999-999-999-9", applicantId: "999-999-999-9" });
-    const conflict = reply([{ nif: applicant.nif, prenom: "Autre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas" }]);
-    const otherRow = { ...contractRow(independent.id), nif: independent.nif };
-    mock.from.mockReturnValueOnce(conflict).mockReturnValueOnce(reply(null))
-      .mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([otherRow]));
+    const modifiedAt = new Date(Date.parse(getPendingOutbox()[0].modifiedAt!) + 1000).toISOString();
+    const person = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Pierre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas", modified_at: modifiedAt };
+    mock.from.mockReturnValueOnce(reply([person])).mockReturnValueOnce(reply(null))
+      .mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([{ ...contractRow(dependent.id), identification: person }]))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply([{ ...contractRow(independent.id), nif: independent.nif }]));
     await syncSupabaseOutbox();
-    expect(getPendingOutbox()).toHaveLength(2);
-    expect(getPendingOutbox().some((item) => item.payload.id === independent.id)).toBe(false);
-    expect(getPendingOutbox().find((item) => item.payload.id === blocked.id)?.lastError).toContain("attente");
-    expect(getSupabaseSyncState(input.workspaceId).lastError).toContain("Conflit");
+    expect(getPendingOutbox()).toEqual([]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+    expect(await new LocalContractRepository().getById(dependent.id)).toMatchObject({ firstName: "Pierre" });
   });
 
   it("merges an offline identity edit when the server has not changed that field", async () => {
@@ -601,23 +603,20 @@ describe("contract correction replay", () => {
     expect(getPendingOutbox()).toEqual([]);
   });
 
-  it("resolves an identity conflict from the contract and resumes its dependent creation", async () => {
+  it("automatically retries an identity conflict saved by an older app version", async () => {
     const provider = createSupabaseProvider();
     const person = await provider.applicants.upsert(applicant);
     const created = await provider.contracts.create({ ...input, applicantId: person.id });
-    const remotePerson = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Pierre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas" };
-    mock.from.mockReturnValue(reply([remotePerson]));
-    await syncSupabaseOutbox();
     const identity = getPendingOutbox()[0];
-    expect(identity.conflict?.fields).toEqual(["firstName"]);
-    expect(isContractCorrection(identity, created)).toBe(true);
-    await resolveOfflineConflict(identity.id, { firstName: "remote" });
-    expect((await provider.contracts.getById(created.id))?.firstName).toBe("Pierre");
-    expect(getPendingOutbox().find(item => item.type === "contract.create")?.correctionPending).toBe(true);
-    mock.from.mockReturnValueOnce(reply([remotePerson])).mockReturnValueOnce(reply(null))
+    setOutboxError(identity.id, "Conflit d'identification", { fields: ["firstName"], remote: { firstName: "Pierre" } }, "correction");
+    const remotePerson = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Pierre", nom: "LOUIS", sexe: "Homme", adresse: "Delmas", modified_at: "2026-01-01" };
+    const update = reply({ ...remotePerson, prenom: "Jean" });
+    mock.from.mockReturnValueOnce(reply([remotePerson])).mockReturnValueOnce(update).mockReturnValueOnce(reply(null))
       .mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([contractRow(created.id)]));
     await syncSupabaseOutbox();
+    expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ prenom: "Jean" }));
     expect(getPendingOutbox()).toEqual([]);
+    expect(await provider.contracts.getById(created.id)).toMatchObject({ firstName: "Jean" });
   });
 });
 
@@ -633,4 +632,85 @@ it("places a corrected identity before the rejected update and its queued list",
   const restoredOrder = [...pending].sort((a,b) => a.createdAt.localeCompare(b.createdAt) || (a.sequence ?? 0) - (b.sequence ?? 0));
   expect(restoredOrder.map(item => item.id)).toEqual(pending.map(item => item.id));
   expect(pending[2].id).toBe(list.id);
+});
+
+it("uses a new correction clock while retaining the identity's original queue position", async () => {
+  upsertApplicantOffline(applicant);
+  const original = getPendingOutbox()[0];
+  await new LocalContractRepository().create(input);
+  upsertApplicantOffline({ ...applicant, address: "Newest address" });
+  const corrected = getPendingOutbox()[0];
+  expect(corrected.createdAt).toBe(original.createdAt);
+  expect(Date.parse(corrected.modifiedAt!)).toBeGreaterThan(Date.parse(original.modifiedAt!));
+  expect(corrected.payload.address).toBe("Newest address");
+});
+
+it("resolves a NINU collision atomically on the server", async () => {
+  upsertApplicantOffline({ ...applicant, ninu: "1234567890" });
+  const pending = getPendingOutbox()[0];
+  mock.from.mockReturnValue(reply([{ nif: "999-999-999-9", workspace_id: input.workspaceId, ninu: "1234567890", prenom: "Autre", nom: "Personne", modified_at: "2026-01-01" }]));
+  mock.rpc.mockResolvedValue({ data: { nif: applicant.nif, workspace_id: input.workspaceId, ninu: "1234567890", prenom: "Jean", nom: "LOUIS", modified_at: pending.modifiedAt }, error: null });
+  await syncSupabaseOutbox();
+  expect(mock.rpc).toHaveBeenCalledWith("sync_identification_latest", expect.objectContaining({ p_modified_at: pending.modifiedAt }));
+  expect(getPendingOutbox()).toEqual([]);
+});
+
+it("preserves a newer offline identity even if an older remote edit was uploaded afterwards", async () => {
+  upsertApplicantOffline(applicant);
+  const timestamp = getPendingOutbox()[0].modifiedAt!;
+  const row = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Old", nom: "LOUIS", sexe: "Homme", adresse: "Delmas",
+    modified_at: new Date(Date.parse(timestamp) - 1000).toISOString(), updated_at: new Date(Date.parse(timestamp) + 1000).toISOString() };
+  const update = reply({ ...row, prenom: "Jean", modified_at: timestamp });
+  mock.from.mockReturnValueOnce(reply([row])).mockReturnValueOnce(update);
+  await syncSupabaseOutbox();
+  expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ prenom: "Jean", modified_at: timestamp }));
+  expect(getPendingOutbox()).toEqual([]);
+});
+
+
+it("restores the newer remote contract when an obsolete offline deletion is acknowledged", async () => {
+  const provider = createSupabaseProvider();
+  const row = contractRow("delete-race");
+  mock.from.mockReturnValue(reply(row));
+  await provider.contracts.getById("delete-race");
+  await provider.contracts.softDelete("delete-race", input.workspaceId);
+  const modifiedAt = new Date(Date.parse(getPendingOutbox()[0].modifiedAt!) + 1000).toISOString();
+  const remote = reply({ ...row, titre: "Newer remote", modified_at: modifiedAt });
+  mock.from.mockReset().mockReturnValue(remote);
+  await syncSupabaseOutbox();
+  expect(remote.update).not.toHaveBeenCalled();
+  expect(getPendingOutbox()).toEqual([]);
+  expect(await provider.contracts.getById("delete-race")).toMatchObject({ position: "Newer remote" });
+});
+
+it("restores a soft-deleted contract when the offline edit is newer than the deletion", async () => {
+  const provider = createSupabaseProvider();
+  const row = contractRow("restore-race");
+  mock.from.mockReturnValue(reply(row));
+  await provider.contracts.getById("restore-race");
+  await provider.contracts.update({ id: "restore-race", position: "Newer local" });
+  const modifiedAt = getPendingOutbox()[0].modifiedAt!;
+  const deletedAt = new Date(Date.parse(modifiedAt) - 1000).toISOString();
+  const update = reply({ ...row, titre: "Newer local", modified_at: modifiedAt, deleted_at: null });
+  mock.from.mockReset().mockReturnValueOnce(reply({ ...row, deleted_at: deletedAt, modified_at: deletedAt })).mockReturnValueOnce(update);
+  await syncSupabaseOutbox();
+  expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ titre: "Newer local", deleted_at: null, modified_at: modifiedAt }));
+  expect(getPendingOutbox()).toEqual([]);
+});
+
+it("preserves successive dossier edits made before their first upload", async () => {
+  const provider = createSupabaseProvider();
+  const dossier = await provider.dossiers.create({ workspaceId: input.workspaceId, name: "Original" });
+  await provider.dossiers.update({ id: dossier.id, workspaceId: input.workspaceId, name: "Newest" });
+  const [creation, edit] = getPendingOutbox();
+  const row = { id: dossier.id, workspace_id: input.workspaceId, name: "Original", status: "active", priority: "normal", contract_target_count: 0,
+    created_at: new Date().toISOString(), updated_at: new Date(Date.parse(edit.modifiedAt!) + 1000).toISOString(), modified_at: creation.modifiedAt };
+  const insertion = reply(row);
+  const update = reply({ ...row, name: "Newest", modified_at: edit.modifiedAt });
+  mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(insertion).mockReturnValueOnce(reply(row)).mockReturnValueOnce(update);
+  await syncSupabaseOutbox();
+  expect(insertion.insert).toHaveBeenCalledWith(expect.objectContaining({ modified_at: creation.modifiedAt }));
+  expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ name: "Newest", modified_at: edit.modifiedAt }));
+  expect(getPendingOutbox()).toEqual([]);
+  expect(await provider.dossiers.getById(dossier.id)).toMatchObject({ name: "Newest" });
 });

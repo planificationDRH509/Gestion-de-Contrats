@@ -1,3 +1,5 @@
+import { outboxEditTime } from "../local/outboxEditTime";
+import { localEditWins } from "../latestEdit";
 import { isTransientSyncFailure, syncFailureKind, syncErrorMessage } from "../local/syncFailures";
 import { queueReferenceChange } from '../local/referenceQueue';
 import { referenceWorkspace, type ReferenceEntry } from '../local/referenceOverlay';
@@ -134,6 +136,7 @@ function mapApplicant(row: any): Applicant {
     phone: row.telephone,
     address: row.adresse,
     createdAt: row.created_at,
+    modifiedAt: row.modified_at ?? undefined,
     updatedAt: row.updated_at || row.created_at,
     remoteUpdatedAt: row.updated_at ?? null,
     deletedAt: row.deleted_at || null,
@@ -164,6 +167,7 @@ function mapContract(row: any): Contract {
     durationMonths: row.duree_contrat,
     annee_fiscale: row.annee_fiscale || null,
     createdAt: row.created_at,
+    modifiedAt: row.modified_at ?? undefined,
     updatedAt: row.updated_at || row.created_at,
     remoteUpdatedAt: row.updated_at ?? null,
     deletedAt: row.deleted_at || null,
@@ -210,7 +214,9 @@ function mapDossier(row: any): Dossier {
     roadmapSheetNumber: row.roadmap_sheet_number,
     defaultDurationMonths: row.default_duration_months,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    modifiedAt: row.modified_at ?? undefined,
+    updatedAt: row.updated_at || row.created_at,
+    remoteUpdatedAt: row.updated_at ?? null,
     deletedAt: row.deleted_at,
     createdBy: row.created_by
   };
@@ -226,46 +232,51 @@ function sameQueuedContract(remote: Contract, local: Contract): boolean {
 }
 
 class SupabaseApplicantRepository implements ApplicantRepository {
-  async syncOffline(input: UpsertApplicantInput & { baseApplicant?: Applicant | null }): Promise<Applicant> {
+  async syncOffline(input: UpsertApplicantInput & { baseApplicant?: Applicant | null }, modifiedAt: string): Promise<Applicant> {
     const nif = (input.nif || input.id || "").trim();
     if (!nif) throw new Error("NIF obligatoire pour synchroniser le postulant.");
     const matches = await this.findManyByNifOrNinu(input.workspaceId, [nif], input.ninu ? [input.ninu] : []);
     const existing = matches.find((applicant) => applicant.nif === nif);
-    const conflict = () => new Error(`Conflit d'identification pour le NIF ${nif} : les informations NIF/NINU ou personnelles diffèrent du serveur. Corrigez la fiche d'identification puis relancez la synchronisation. Les données locales sont conservées.`);
-    if (matches.some((applicant) => applicant.nif !== nif)) throw conflict();
+    if (matches.some((applicant) => applicant.nif !== nif)) {
+      const { data, error } = await getSupabaseClient().rpc("sync_identification_latest", {
+        p_record: buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName)),
+        p_modified_at: modifiedAt
+      });
+      if (error || !data) throw repositoryError("Impossible de synchroniser la fiche d’identification.", error);
+      return mapApplicant(data);
+    }
     if (existing) {
-      if (existing.deletedAt) throw conflict();
+      if (!localEditWins(modifiedAt, existing)) return existing;
       const desired = buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName));
       const fields = { prenom: "firstName", nom: "lastName", sexe: "gender", ninu: "ninu", telephone: "phone", adresse: "address" } as const;
       const normalize = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
       const changes: Record<string, unknown> = {};
-      const conflictingFields: string[] = [];
       for (const [column, field] of Object.entries(fields)) {
         const next = desired[column as keyof typeof desired];
         // Match online upsert semantics: absent optional values preserve remote data.
         if (next === undefined) continue;
         if (normalize(next) === normalize(existing[field])) continue;
         if (input.baseApplicant && normalize(next) === normalize(input.baseApplicant[field])) continue;
-        if (!input.baseApplicant || normalize(existing[field]) !== normalize(input.baseApplicant[field])) conflictingFields.push(field);
         changes[column] = next;
       }
-      if (conflictingFields.length) throw new OfflineConflict(conflictingFields, existing as unknown as Record<string, unknown>,
-        `Conflit d'identification pour le NIF ${nif} : choisissez les valeurs à conserver.`);
+      if (existing.deletedAt) changes.deleted_at = null;
       if (Object.keys(changes).length === 0) return existing;
       let update = getSupabaseClient().from("identification")
-        .update({ ...changes, updated_at: new Date().toISOString() } as any)
-        .eq("workspace_id", input.workspaceId).eq("nif", nif).is("deleted_at", null);
+        .update({ ...changes, modified_at: modifiedAt } as any)
+        .eq("workspace_id", input.workspaceId).eq("nif", nif);
       update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
         : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
       const { data, error } = await update.select("*").maybeSingle();
+      if (error?.code === "23505") throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
       if (error) throw repositoryError("Impossible de synchroniser la fiche d’identification.", error);
-      if (!data) throw conflict();
+      if (!data) throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
       return mapApplicant(data);
     }
-    // Insert only: a concurrent creation is a conflict, never an implicit UPDATE.
+    // A concurrent INSERT is retried against the newly persisted edit clock.
     const { data, error } = await getSupabaseClient().from("identification")
-      .insert(buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName)) as any)
+      .insert({ ...buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName)), modified_at: modifiedAt } as any)
       .select("*").single();
+    if (error?.code === "23505") throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
     if (error || !data) throw applicantImportError(error);
     return mapApplicant(data);
   }
@@ -284,14 +295,10 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     return data.map(mapApplicant);
   }
 
-  async getById(id: string): Promise<Applicant | null> {
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("identification")
-      .select("*")
-      .eq("nif", id)
-      .is("deleted_at", null)
-      .maybeSingle();
+  async getById(id: string, includeDeleted = false): Promise<Applicant | null> {
+    let query = getSupabaseClient().from("identification").select("*").eq("nif", id);
+    if (!includeDeleted) query = query.is("deleted_at", null);
+    const { data, error } = await query.maybeSingle();
     if (error) throw repositoryError("Impossible de charger le postulant.", error);
     if (!data) return null;
     return mapApplicant(data);
@@ -486,17 +493,19 @@ class SupabaseApplicantRepository implements ApplicantRepository {
     return (Array.isArray(data) ? data : [data]).map(mapApplicant);
   }
 
-  async softDelete(id: string, workspaceId: string): Promise<void> {
-    const client = getSupabaseClient();
-    const { error } = await client
-      .from("identification")
-      .update({ deleted_at: new Date().toISOString() } as any)
-      .eq("nif", id)
-      .eq("workspace_id", workspaceId);
-    if (error) {
-      throw repositoryError("Impossible de supprimer la fiche d'identification.", error);
-    }
+  async softDelete(id: string, workspaceId: string, modifiedAt?: string): Promise<void> {
+    const existing = modifiedAt ? await this.getById(id, true) : undefined;
+    if (modifiedAt && (!existing || !localEditWins(modifiedAt, existing))) return;
+    let update = getSupabaseClient().from("identification")
+      .update({ deleted_at: modifiedAt ?? new Date().toISOString(), modified_at: modifiedAt } as any)
+      .eq("nif", id).eq("workspace_id", workspaceId);
+    if (existing) update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
+      : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
+    const { data, error } = await update.select("*").maybeSingle();
+    if (error) throw repositoryError("Impossible de supprimer la fiche d'identification.", error);
+    if (existing && !data) throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
   }
+
 }
 
 class SupabaseDossierRepository implements DossierRepository {
@@ -514,14 +523,10 @@ class SupabaseDossierRepository implements DossierRepository {
     return data.map(mapDossier);
   }
 
-  async getById(id: string): Promise<Dossier | null> {
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("dossiers")
-      .select("*")
-      .eq("id", id)
-      .is("deleted_at", null)
-      .maybeSingle();
+  async getById(id: string, includeDeleted = false): Promise<Dossier | null> {
+    let query = getSupabaseClient().from("dossiers").select("*").eq("id", id);
+    if (!includeDeleted) query = query.is("deleted_at", null);
+    const { data, error } = await query.maybeSingle();
     if (error) throw repositoryError("Impossible de charger le dossier.", error);
     if (!data) return null;
     return mapDossier(data);
@@ -561,6 +566,7 @@ class SupabaseDossierRepository implements DossierRepository {
       focal_point: focalPoint,
       roadmap_sheet_number: roadmapSheetNumber,
       default_duration_months: input.defaultDurationMonths || null,
+      modified_at: (input as CreateDossierInput & { modifiedAt?: string }).modifiedAt,
       created_by: (input as any).createdBy
     };
 
@@ -581,15 +587,16 @@ class SupabaseDossierRepository implements DossierRepository {
     return mapDossier(data);
   }
 
-  async syncOfflineUpdate(input: UpdateDossierInput & { baseDossier?: Dossier }): Promise<Dossier> {
-    const remote = await this.getById(input.id);
-    if (!remote || remote.deletedAt) throw new Error("Ce dossier a été supprimé du serveur. La modification locale est conservée.");
-    const patch = mergeOfflinePatch<Dossier>(input, input.baseDossier, remote, dossierEditFields);
-    if (!Object.keys(patch).length) return remote;
-    return this.update({ id: input.id, workspaceId: input.workspaceId, ...patch }, remote);
+  async syncOfflineUpdate(input: UpdateDossierInput & { baseDossier?: Dossier }, modifiedAt: string): Promise<Dossier> {
+    const remote = await this.getById(input.id, true);
+    if (!remote) throw new Error("Dossier introuvable.");
+    if (!localEditWins(modifiedAt, remote)) return remote;
+    const patch = mergeOfflinePatch<Dossier>(input, input.baseDossier, remote, dossierEditFields, modifiedAt);
+    if (!Object.keys(patch).length && !remote.deletedAt) return remote;
+    return this.update({ id: input.id, workspaceId: input.workspaceId, ...patch }, remote, modifiedAt);
   }
 
-  async update(input: UpdateDossierInput, expected?: Dossier): Promise<Dossier> {
+  async update(input: UpdateDossierInput, expected?: Dossier, modifiedAt?: string): Promise<Dossier> {
     const client = getSupabaseClient();
     const existing = expected ?? await this.getById(input.id);
     if (!existing || existing.workspaceId !== input.workspaceId) {
@@ -633,9 +640,10 @@ class SupabaseDossierRepository implements DossierRepository {
           : existing.defaultDurationMonths ?? null
     };
 
-    let update = client.from("dossiers").update(payload as any).eq("id", input.id)
-      .eq("workspace_id", input.workspaceId).is("deleted_at", null);
-    if (expected) update = update.eq("updated_at", expected.updatedAt);
+    let update = client.from("dossiers").update({ ...payload, ...(modifiedAt ? { modified_at: modifiedAt, deleted_at: null } : {}) } as any).eq("id", input.id)
+      .eq("workspace_id", input.workspaceId);
+    if (expected) update = expected.remoteUpdatedAt === null ? update.is("updated_at", null)
+      : update.eq("updated_at", expected.remoteUpdatedAt ?? expected.updatedAt);
     const { data, error } = await update.select("*").maybeSingle();
     if (!error && !data) throw new Error("Le dossier a changé pendant la synchronisation. Réessayez.");
 
@@ -646,7 +654,14 @@ class SupabaseDossierRepository implements DossierRepository {
     return mapDossier(data);
   }
 
-  async delete(id: string, workspaceId: string): Promise<number> {
+  async delete(id: string, workspaceId: string, modifiedAt?: string): Promise<number> {
+    if (modifiedAt) {
+      const { data, error } = await getSupabaseClient().rpc("delete_dossier_latest", {
+        p_id: id, p_workspace_id: workspaceId, p_modified_at: modifiedAt
+      });
+      if (error) throw repositoryError("Impossible de supprimer le dossier.", error);
+      return data ?? 0;
+    }
     const client = getSupabaseClient();
 
     const { data: detachedContracts, error: detachError } = await client
@@ -694,7 +709,8 @@ class SupabaseContractRepository implements ContractRepository {
       commentaire: input.commentaire || null,
       annee_fiscale: input.annee_fiscale || getStoredFiscalYear(),
       historique_saisie: serializeContractAudit(auditHistory),
-      created_by: input.createdBy
+      created_by: input.createdBy,
+      modified_at: (input as CreateContractInput & { modifiedAt?: string }).modifiedAt
     };
   }
 
@@ -832,14 +848,10 @@ class SupabaseContractRepository implements ContractRepository {
     };
   }
 
-  async getById(id: string): Promise<Contract | null> {
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from("contrat")
-      .select("*, identification(*), contract_tags(tags(*))")
-      .eq("id_contrat", id)
-      .is("deleted_at", null)
-      .maybeSingle();
+  async getById(id: string, includeDeleted = false): Promise<Contract | null> {
+    let query = getSupabaseClient().from("contrat").select("*, identification(*), contract_tags(tags(*))").eq("id_contrat", id);
+    if (!includeDeleted) query = query.is("deleted_at", null);
+    const { data, error } = await query.maybeSingle();
     if (error) throw repositoryError("Impossible de charger le contrat.", error);
     if (!data) return null;
     return mapContract(data);
@@ -899,15 +911,16 @@ class SupabaseContractRepository implements ContractRepository {
     return rows.map(mapContract);
   }
 
-  async syncOfflineUpdate(input: UpdateContractInput & { baseContract?: Contract }): Promise<Contract> {
-    const remote = await this.getById(input.id);
-    if (!remote || remote.deletedAt) throw new Error("Ce contrat a été supprimé du serveur. La modification locale est conservée.");
-    const patch = mergeOfflinePatch<Contract>(input, input.baseContract, remote, contractEditFields);
-    if (!Object.keys(patch).length) return remote;
-    return this.update({ id: input.id, ...patch }, remote);
+  async syncOfflineUpdate(input: UpdateContractInput & { baseContract?: Contract }, modifiedAt: string): Promise<Contract> {
+    const remote = await this.getById(input.id, true);
+    if (!remote) throw new Error("Contrat introuvable.");
+    if (!localEditWins(modifiedAt, remote)) return remote;
+    const patch = mergeOfflinePatch<Contract>(input, input.baseContract, remote, contractEditFields, modifiedAt);
+    if (!Object.keys(patch).length && !remote.deletedAt) return remote;
+    return this.update({ id: input.id, ...patch }, remote, modifiedAt);
   }
 
-  async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
+  async update(input: UpdateContractInput, expected?: Contract, modifiedAt?: string): Promise<Contract> {
     if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     const client = getSupabaseClient();
     const existing = expected ?? await this.getById(input.id);
@@ -917,7 +930,7 @@ class SupabaseContractRepository implements ContractRepository {
     if (input.ministerId !== undefined && input.ministerId !== existing.ministerId) {
       throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
     }
-    const payload: Record<string, any> = {};
+    const payload: Record<string, any> = modifiedAt ? { modified_at: modifiedAt, deleted_at: null } : {};
     if (input.status !== undefined) payload.status = input.status;
     if (input.createdAt !== undefined) payload.created_at = input.createdAt;
     if (input.annee_fiscale !== undefined) payload.annee_fiscale = input.annee_fiscale;
@@ -952,7 +965,7 @@ class SupabaseContractRepository implements ContractRepository {
     payload.historique_saisie = serializeContractAudit(auditHistory);
 
     let update = client.from("contrat").update(payload as any)
-      .eq("id_contrat", input.id).eq("workspace_id", existing.workspaceId).is("deleted_at", null);
+      .eq("id_contrat", input.id).eq("workspace_id", existing.workspaceId);
     if (expected) update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
       : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
     const { data, error } = await update.select("*, identification(*), contract_tags(tags(*))").maybeSingle();
@@ -987,31 +1000,26 @@ class SupabaseContractRepository implements ContractRepository {
     workspaceId: string,
     id: string,
     status: ContractStatus,
-    previousStatus?: ContractStatus,
+    _previousStatus?: ContractStatus,
     changedAt?: string
   ): Promise<Contract> {
-    const existing = await this.getById(id);
+    const existing = await this.getById(id, true);
     if (!existing || existing.workspaceId !== workspaceId) {
       throw new Error(`Conflit d’état : le contrat ${id} a été supprimé ou n’est plus accessible. Le changement local est conservé.`);
     }
     // A lost response may mean this exact transition already reached the server.
-    if (existing.status === status) return existing;
-    if (!previousStatus || existing.status !== previousStatus) {
-      const conflict = new OfflineConflict(["status"], existing as unknown as Record<string, unknown>);
-      conflict.message = `Conflit d’état pour le contrat ${id} : état serveur « ${existing.status} », état local « ${status} ». Le changement local est conservé.`;
-      throw conflict;
-    }
+    if (existing.status === status && !existing.deletedAt) return existing;
+    if (changedAt && !localEditWins(changedAt, existing)) return existing;
     const auditHistory = appendContractAuditEntry(existing.auditHistory, {
       action: "status",
       changes: buildContractAuditChanges(existing, { status }),
       at: changedAt
     });
     let update = getSupabaseClient().from("contrat")
-      .update({ status, historique_saisie: serializeContractAudit(auditHistory), updated_at: new Date().toISOString() } as any)
+      .update({ status, deleted_at: null, historique_saisie: serializeContractAudit(auditHistory), modified_at: changedAt } as any)
       .eq("workspace_id", workspaceId)
       .eq("id_contrat", id)
-      .eq("status", previousStatus)
-      .is("deleted_at", null);
+      .eq("status", existing.status);
     update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
       : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
     const { data, error } = await update.select("*, identification(*), contract_tags(tags(*))").maybeSingle();
@@ -1061,13 +1069,11 @@ class SupabaseContractRepository implements ContractRepository {
     );
   }
 
-  async softDelete(id: string, workspaceId: string, base?: Contract): Promise<void> {
+  async softDelete(id: string, workspaceId: string, base?: Contract, modifiedAt?: string): Promise<void> {
     const client = getSupabaseClient();
     const existing = await this.getById(id);
     if (!existing || existing.deletedAt) return;
-    if (base && contractEditFields.some(field => (existing[field] ?? null) !== (base[field] ?? null))) {
-      throw new OfflineConflict(["deletedAt"], existing as unknown as Record<string, unknown>);
-    }
+    if (modifiedAt && !localEditWins(modifiedAt, existing)) return;
     const auditHistory = appendContractAuditEntry(existing?.auditHistory, {
       action: "deletion",
       changes: []
@@ -1075,15 +1081,16 @@ class SupabaseContractRepository implements ContractRepository {
     let deletion = client
       .from("contrat")
       .update({
-        deleted_at: new Date().toISOString(),
+        deleted_at: modifiedAt ?? new Date().toISOString(),
+        modified_at: modifiedAt,
         historique_saisie: serializeContractAudit(auditHistory)
       } as any)
       .eq("id_contrat", id)
       .eq("workspace_id", workspaceId);
-    if (base) deletion = existing.remoteUpdatedAt === null ? deletion.is("updated_at", null)
+    if (base || modifiedAt) deletion = existing.remoteUpdatedAt === null ? deletion.is("updated_at", null)
       : deletion.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
     const { data, error } = await deletion.select("id_contrat").maybeSingle();
-    if (!error && !data) throw new Error("Le contrat a changé pendant la suppression. Réessayez.");
+    if (!error && !data) throw new Error("Le contrat a changé pendant la synchronisation. Nouvelle tentative automatique.");
     if (error) {
       throw repositoryError("Impossible de supprimer le contrat.", error);
     }
@@ -1550,6 +1557,7 @@ function syncPendingOutbox() {
     for (const queued of getPendingOutbox()) {
       const item = getPendingOutbox().find((current) => current.id === queued.id);
       if (!item) continue;
+      const modifiedAt = outboxEditTime(item);
       const keys = outboxKeys(item);
       if (keys.some((key) => blockedKeys.has(key))) {
         keys.forEach((key) => blockedKeys.add(key));
@@ -1557,6 +1565,7 @@ function syncPendingOutbox() {
         continue;
       }
       let syncedContract: Contract | undefined;
+      const syncedContracts: Contract[] = [];
       let syncedDossier: Dossier | undefined;
       let syncedApplicant: Applicant | undefined;
       try {
@@ -1596,7 +1605,7 @@ function syncPendingOutbox() {
           await syncQueuedList(item);
         } else if (item.type === "applicant.upsert") {
           const payload = item.payload as unknown as UpsertApplicantInput;
-          const applicant = await applicants.syncOffline(payload);
+          const applicant = await applicants.syncOffline(payload, modifiedAt);
           if (payload.id && payload.id !== applicant.id) {
             replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
           }
@@ -1604,7 +1613,8 @@ function syncPendingOutbox() {
         } else if (item.type === "applicant.delete") {
           const payload = item.payload as { id?: string };
           if (payload.id) {
-            await applicants.softDelete(payload.id, item.workspaceId);
+            await applicants.softDelete(payload.id, item.workspaceId, modifiedAt);
+            syncedApplicant = await applicants.getById(payload.id, true) ?? undefined;
           }
         } else if (item.type === "contract.create") {
           const payload = item.payload as unknown as Contract;
@@ -1612,22 +1622,18 @@ function syncPendingOutbox() {
             (pending.payload.patches as { id: string; before: unknown }[]).some(patch => patch.id === payload.ministerId && !patch.before))) {
             throw new Error('Le ministre de ce contrat doit être synchronisé avant le contrat.');
           }
-          const existing = await contracts.getById(payload.id);
+          const existing = await contracts.getById(payload.id, true);
           if (existing && !sameQueuedContract(existing, payload)) {
             const base = item.payload.baseContract as Contract | undefined;
-            if (existing.workspaceId !== payload.workspaceId || existing.deletedAt || existing.createdBy !== payload.createdBy || (existing.ministerId || LEGACY_MINISTER.id) !== (payload.ministerId || LEGACY_MINISTER.id)) {
+            if (existing.workspaceId !== payload.workspaceId || existing.createdBy !== payload.createdBy || (existing.ministerId || LEGACY_MINISTER.id) !== (payload.ministerId || LEGACY_MINISTER.id)) {
               throw new Error("Ce contrat n’est plus accessible avec les mêmes références. Le contrat local est conservé.");
-            }
-            if (!base) {
-              const fields = contractEditFields.filter(field => JSON.stringify(existing[field] ?? null) !== JSON.stringify(payload[field] ?? null));
-              throw new OfflineConflict(fields, existing as unknown as Record<string, unknown>, `Conflit sur le contrat ${payload.id} : choisissez les valeurs à conserver.`);
             }
             // A previous INSERT may have committed before its response was lost.
             // Correct that same record with the original base, never INSERT again.
-            syncedContract = await contracts.syncOfflineUpdate({ ...payload, baseContract: base });
+            syncedContract = await contracts.syncOfflineUpdate({ ...payload, baseContract: base }, modifiedAt);
           } else {
             if (!existing) await contracts.checkFiscalYearDuplicate(payload);
-            syncedContract = existing ?? await contracts.create(payload);
+            syncedContract = existing ?? await contracts.create({ ...payload, modifiedAt } as typeof payload);
           }
         } else if (item.type === "contract.update") {
           const payload = item.payload as Partial<UpdateContractInput> & {
@@ -1640,42 +1646,47 @@ function syncPendingOutbox() {
             dossierId?: string | null;
           };
           if (payload.id) {
-            syncedContract = await contracts.syncOfflineUpdate(payload as UpdateContractInput);
+            syncedContract = await contracts.syncOfflineUpdate(payload as UpdateContractInput, modifiedAt);
           } else if (Array.isArray(payload.contractIds) && payload.status) {
             for (const id of payload.contractIds) {
-              syncedContract = await contracts.syncOfflineStatus(
-                item.workspaceId, id, payload.status, payload.previousStatus, payload.changedAt
-              );
+              syncedContracts.push(await contracts.syncOfflineStatus(
+                item.workspaceId, id, payload.status, payload.previousStatus, modifiedAt
+              ));
             }
           } else if (Array.isArray(payload.contractIds) && typeof payload.durationMonths === "number") {
-            await contracts.updateDuration(item.workspaceId, payload.contractIds, payload.durationMonths);
+            for (const id of payload.contractIds) {
+              const saved = await contracts.syncOfflineUpdate({ id, durationMonths: payload.durationMonths }, modifiedAt);
+              syncedContracts.push(saved);
+            }
           } else if (Array.isArray(payload.contractIds) && "dossierId" in payload) {
-            await contracts.assignToDossier(item.workspaceId, payload.contractIds, payload.dossierId ?? null);
+            for (const id of payload.contractIds) {
+              const saved = await contracts.syncOfflineUpdate({ id, dossierId: payload.dossierId ?? null }, modifiedAt);
+              syncedContracts.push(saved);
+            }
           }
         } else if (item.type === "contract.delete") {
           const payload = item.payload as { id?: string; baseContract?: Contract };
           if (payload.id) {
-            if (!payload.baseContract) {
-              const remote = await contracts.getById(payload.id);
-              if (remote) throw new OfflineConflict(["deletedAt"], remote as unknown as Record<string, unknown>);
-            }
-            await contracts.softDelete(payload.id, item.workspaceId, payload.baseContract);
+            await contracts.softDelete(payload.id, item.workspaceId, payload.baseContract, modifiedAt);
+            syncedContract = await contracts.getById(payload.id, true) ?? undefined;
           }
         } else if (item.type === "dossier.create") {
           const payload = item.payload as unknown as CreateDossierInput & { id?: string };
-          const dossier = await dossiers.create(payload);
+          const dossier = await dossiers.create({ ...payload, modifiedAt } as typeof payload);
           if (payload.id && payload.id !== dossier.id) {
             replaceLocalDossierId(item.workspaceId, payload.id, dossier);
           }
           syncedDossier = dossier;
         } else if (item.type === "dossier.update") {
           const payload = item.payload as unknown as UpdateDossierInput;
-          const dossier = await dossiers.syncOfflineUpdate(payload);
+          const dossier = await dossiers.syncOfflineUpdate(payload, modifiedAt);
           syncedDossier = dossier;
         } else if (item.type === "dossier.delete") {
-          const payload = item.payload as { id?: string; workspaceId?: string };
+          const payload = item.payload as { id?: string; workspaceId?: string; contractIds?: string[] };
           if (payload.id) {
-            await dossiers.delete(payload.id, payload.workspaceId ?? item.workspaceId);
+            await dossiers.delete(payload.id, payload.workspaceId ?? item.workspaceId, modifiedAt);
+            syncedDossier = await dossiers.getById(payload.id, true) ?? undefined;
+            if (payload.contractIds?.length) syncedContracts.push(...await contracts.getByIds(payload.contractIds, item.workspaceId));
           }
         } else if (item.type === "tag.create") {
           const payload = item.payload as unknown as CreateTagInput & { id?: string };
@@ -1697,6 +1708,7 @@ function syncPendingOutbox() {
         }
         removeOutboxItem(item.id);
         if (syncedContract) cacheContract(syncedContract);
+        syncedContracts.forEach(cacheContract);
         if (syncedDossier) cacheDossier(syncedDossier);
         if (syncedApplicant) cacheApplicant(syncedApplicant);
 

@@ -1,3 +1,4 @@
+import { editTime, localEditWins } from "../latestEdit";
 import { sealLocalValue, openLocalValue } from "./deviceVault";
 import type { LocalDb } from "./localDb";
 import { compactContractRecord } from "./derivedContractStorage";
@@ -68,13 +69,28 @@ export class LocalRecordConflictError extends Error {
   }
 }
 
-/** Three-way merge: unrelated edits survive, divergent edits are rejected atomically. */
+/** Three-way merge: dated edits converge automatically; structural conflicts stay atomic. */
 export function mergeRecord(before: unknown, after: unknown, current: unknown): unknown {
   if (equal(current, before) || equal(current, after)) return after;
+  if (!before && after && current && typeof after === "object" && typeof current === "object") {
+    const next = after as Record<string, unknown>;
+    if (editTime(next.modifiedAt) && "updatedAt" in next) {
+      return localEditWins(String(next.modifiedAt), current) ? after : current;
+    }
+  }
   if (before && after && current && typeof before === "object" && typeof after === "object" && typeof current === "object" &&
       !Array.isArray(before) && !Array.isArray(after) && !Array.isArray(current)) {
     const base = before as Record<string, unknown>, next = after as Record<string, unknown>;
     const result = { ...current } as Record<string, unknown>;
+    if (editTime(next.modifiedAt) && "updatedAt" in next) {
+      if (!localEditWins(String(next.modifiedAt), result)) return current;
+      // Apply only fields changed locally, keeping independent remote values.
+      for (const field of new Set([...Object.keys(base), ...Object.keys(next)])) {
+        if (equal(base[field], next[field])) continue;
+        if (field in next) result[field] = next[field]; else delete result[field];
+      }
+      return result;
+    }
     for (const field of new Set([...Object.keys(base), ...Object.keys(next)])) {
       if (equal(base[field], next[field])) continue;
       if (!equal(result[field], base[field]) && !equal(result[field], next[field]) && field !== "updatedAt") {

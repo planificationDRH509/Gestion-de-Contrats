@@ -4,11 +4,12 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 let db: typeof import("./localDb");
 let records: typeof import("./recordStore");
 let write: typeof records.writeRecords;
+let broadcast: { onmessage?: () => void };
 
 beforeEach(async () => {
   vi.resetModules();
   localStorage.clear();
-  vi.stubGlobal("BroadcastChannel", class { postMessage() {} });
+  vi.stubGlobal("BroadcastChannel", class { constructor() { broadcast = this; } onmessage?: () => void; postMessage() {} });
   records = await import("./recordStore");
   write = records.writeRecords;
   // Reset durable rows without deleting a database with open connections.
@@ -275,4 +276,24 @@ it("does not block Retry when two tabs update synchronization timestamps", async
   cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "4" });
   await db.flushLocalDbWrites();
   expect((await records.readRecords())!.syncMetadata.w.lastSyncedAt).toBe("4");
+});
+
+
+it("announces external changes only after reading the other tab's persisted data", async () => {
+  const base = db.loadDb();
+  const other = structuredClone(base);
+  other.workspaces[0].name = "Other tab";
+  await write(base, other);
+  const observed = vi.fn((event: Event) => {
+    if ((event as CustomEvent).detail?.external) {
+      expect(db.loadDb().workspaces[0].name).toBe("Other tab");
+    }
+  });
+  window.addEventListener("contribution-offline-sync", observed);
+  try {
+    broadcast.onmessage?.();
+    await vi.waitFor(() => expect(observed).toHaveBeenCalledWith(expect.objectContaining({ detail: { external: true } })));
+  } finally {
+    window.removeEventListener("contribution-offline-sync", observed);
+  }
 });

@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import { DossierRepository } from "../repositories/DossierRepository";
 import { CreateDossierInput, Dossier, UpdateDossierInput } from "../types";
 import { createId } from "../../lib/uuid";
@@ -12,7 +13,7 @@ import {
 } from "../../lib/dossier";
 
 function now() {
-  return new Date().toISOString();
+  return newEditTimestamp();
 }
 
 export function readCachedDossiers(workspaceId: string): Dossier[] {
@@ -78,6 +79,7 @@ export class LocalDossierRepository implements DossierRepository {
       roadmapSheetNumber: normalizeOptionalText(input.roadmapSheetNumber),
       defaultDurationMonths: input.defaultDurationMonths ?? null,
       createdAt: input.createdAt ?? timestamp,
+      modifiedAt: input.updatedAt ?? timestamp,
       updatedAt: input.updatedAt ?? timestamp,
       deletedAt: input.deletedAt ?? null,
       createdBy: input.createdBy ?? null
@@ -120,6 +122,7 @@ export class LocalDossierRepository implements DossierRepository {
       throw new Error("Un dossier avec ce nom existe déjà.");
     }
 
+    const timestamp = now();
     const updated: Dossier = {
       ...current,
       name: nextName,
@@ -150,7 +153,8 @@ export class LocalDossierRepository implements DossierRepository {
         input.defaultDurationMonths !== undefined
           ? input.defaultDurationMonths
           : current.defaultDurationMonths ?? null,
-      updatedAt: now()
+      modifiedAt: timestamp,
+      updatedAt: timestamp
     };
 
     db.dossiers[index] = updated;
@@ -192,7 +196,7 @@ export class LocalDossierRepository implements DossierRepository {
         return {
           ...contract,
           dossierId: null,
-          updatedAt: timestamp
+          modifiedAt: timestamp, updatedAt: timestamp
         };
       }
       return contract;
@@ -201,7 +205,7 @@ export class LocalDossierRepository implements DossierRepository {
     db.dossiers[index] = {
       ...db.dossiers[index],
       deletedAt: timestamp,
-      updatedAt: timestamp
+      modifiedAt: timestamp, updatedAt: timestamp
     };
     saveDb(db);
     if (shouldQueue) {

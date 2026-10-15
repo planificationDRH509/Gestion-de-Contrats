@@ -62,8 +62,10 @@ let memoryRevision = 0;
 const snapshotBases = new WeakMap<LocalDb, LocalDb>();
 export function getLocalStorageError() { return persistenceError?.message ?? null; }
 
-function notifyStorage() {
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("contribution-offline-sync"));
+function notifyStorage(external = false) {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("contribution-offline-sync", {
+    detail: { external }
+  }));
 }
 
 export async function refreshLocalDb(): Promise<void> {
@@ -346,7 +348,7 @@ async function initializeDatabase(): Promise<void> {
   localStorage.setItem(INIT_MARKER_KEY, "1");
   if (typeof BroadcastChannel !== "undefined") {
     channel = new BroadcastChannel("contribution-local-db");
-    channel.onmessage = () => { void refreshLocalDb().then(notifyStorage).catch(() => undefined); };
+    channel.onmessage = () => { void refreshLocalDb().then(() => notifyStorage(true)).catch(() => undefined); };
   }
   // Browser eviction is less likely once persistent storage has been granted.
   void navigator.storage?.persist?.().catch(() => false);

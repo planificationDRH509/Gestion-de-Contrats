@@ -1,3 +1,4 @@
+import { newEditTimestamp } from "../latestEdit";
 import { applicantConflictMessage } from "../applicantConflict";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
@@ -7,7 +8,7 @@ import { formatFirstName, formatLastName } from "../../lib/format";
 import { queueOutbox } from "./localOutbox";
 
 function now() {
-  return new Date().toISOString();
+  return newEditTimestamp();
 }
 
 export function readCachedApplicants(workspaceId: string): Applicant[] {
@@ -105,7 +106,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
         ninu: input.ninu ?? null,
         phone: input.phone !== undefined ? input.phone?.trim() || null : existing.phone ?? null,
         address: input.address,
-        updatedAt: timestamp,
+        modifiedAt: timestamp, updatedAt: timestamp,
         deletedAt: null
       };
       const index = db.applicants.findIndex((item) => item.id === existing.id);
@@ -113,7 +114,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
       if (existing.id !== nextId) {
         db.contracts = db.contracts.map((contract) =>
           contract.applicantId === existing.id || contract.nif === existing.id
-            ? { ...contract, applicantId: nextId, nif: nextId, updatedAt: timestamp }
+            ? { ...contract, applicantId: nextId, nif: nextId, modifiedAt: timestamp, updatedAt: timestamp }
             : contract
         );
       }
@@ -134,7 +135,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
       phone: input.phone?.trim() || null,
       address: input.address,
       createdAt: timestamp,
-      updatedAt: timestamp,
+      modifiedAt: timestamp, updatedAt: timestamp,
       createdBy: input.createdBy ?? null
     };
     db.applicants.push(created);
@@ -166,7 +167,7 @@ export class LocalApplicantRepository implements ApplicantRepository {
     db.applicants[index] = {
       ...db.applicants[index],
       deletedAt: timestamp,
-      updatedAt: timestamp
+      modifiedAt: timestamp, updatedAt: timestamp
     };
     saveDb(db);
     if (shouldQueue) queueOutbox(workspaceId, "applicant.delete", { id });

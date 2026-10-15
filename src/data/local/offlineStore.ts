@@ -1,3 +1,4 @@
+import { newEditTimestamp, localEditWins } from "../latestEdit";
 import { applicantConflictMessage } from "../applicantConflict";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
@@ -17,7 +18,7 @@ import { queueOutbox } from "./localOutbox";
 import { updateListedContract } from "./localListRepository";
 
 function now() {
-  return new Date().toISOString();
+  return newEditTimestamp();
 }
 
 export function isOfflineFailure(error: unknown): boolean {
@@ -50,6 +51,11 @@ export function cacheApplicant(applicant: Applicant) {
   } else {
     db.applicants.push(applicant);
   }
+  // Reflect the winning identity immediately, including unsent contracts.
+  db.contracts = db.contracts.map(contract => contract.workspaceId === applicant.workspaceId &&
+    (contract.applicantId === applicant.id || contract.nif === applicant.nif)
+    ? { ...contract, firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender,
+        ninu: applicant.ninu, address: applicant.address } : contract);
   saveDb(db, { cacheOnly: true });
 }
 
@@ -278,12 +284,22 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
         if (applicant.workspaceId !== input.workspaceId || applicant.deletedAt) return false;
         return Boolean(
           (normalizedNif && applicant.nif?.trim() === normalizedNif) ||
-            (normalizedNinu && applicant.ninu?.trim() === normalizedNinu)
+            (!normalizedNif && normalizedNinu && applicant.ninu?.trim() === normalizedNinu)
         );
       });
 
-  if (!input.id && existing && normalizedNif && existing.nif !== normalizedNif) {
-    throw new Error(applicantConflictMessage("NINU", normalizedNinu, existing));
+  // The latest association owns the NINU; keep the two NIF records separate.
+  if (normalizedNinu) {
+    for (const person of db.applicants) {
+      if (person.workspaceId !== input.workspaceId || person.id === existing?.id || person.ninu !== normalizedNinu) continue;
+      if (localEditWins(timestamp, person)) {
+        person.ninu = null;
+        person.modifiedAt = timestamp;
+        person.updatedAt = timestamp;
+        db.contracts = db.contracts.map(contract => contract.workspaceId === input.workspaceId && contract.applicantId === person.id
+          ? { ...contract, ninu: null } : contract);
+      } else input = { ...input, ninu: null };
+    }
   }
   const nextId = normalizedNif || existing?.id || input.id || createId();
   const duplicate = db.applicants.find(
@@ -291,8 +307,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
       applicant.id !== existing?.id &&
       applicant.workspaceId === input.workspaceId &&
       !applicant.deletedAt &&
-      (applicant.id === nextId ||
-        Boolean(normalizedNinu && applicant.ninu?.trim() === normalizedNinu))
+      applicant.id === nextId
   );
   if (duplicate) {
     const field = duplicate.id === nextId ? "NIF" : "NINU";
@@ -313,7 +328,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
     ninu: input.ninu ?? null,
     phone: input.phone !== undefined ? input.phone?.trim() || null : existing?.phone ?? null,
     address: input.address,
-    updatedAt: timestamp,
+    modifiedAt: timestamp, updatedAt: timestamp,
     deletedAt: null,
     createdBy: input.createdBy
   };
@@ -340,7 +355,7 @@ export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
             ...contract,
             applicantId: applicant.id,
             nif: applicant.nif,
-            updatedAt: timestamp
+            modifiedAt: timestamp, updatedAt: timestamp
           }
         : contract
     );
@@ -389,7 +404,7 @@ export function deleteApplicantOffline(id: string, workspaceId: string) {
   db.applicants[index] = {
     ...db.applicants[index],
     deletedAt: timestamp,
-    updatedAt: timestamp
+    modifiedAt: timestamp, updatedAt: timestamp
   };
   saveDb(db);
   queueOutbox(workspaceId, "applicant.delete", { id });
@@ -590,7 +605,7 @@ export function buildOfflineContract(input: CreateContractInput): Contract {
     dossierId: input.dossierId ?? null,
     id: createId(),
     createdAt: timestamp,
-    updatedAt: timestamp
+    modifiedAt: timestamp, updatedAt: timestamp
   };
 }
 

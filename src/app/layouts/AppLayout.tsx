@@ -144,6 +144,14 @@ export function AppLayout() {
     let queuedTimer: number | undefined;
     const handleSyncState = (event: Event) => {
       refreshSyncState();
+      // IndexedDB was refreshed by another tab. Its revision may already match
+      // the server, so a subsequent sync will not invalidate these queries.
+      if ((event as CustomEvent).detail?.external) {
+        void Promise.all([
+          "contracts", "contract", "contract-lists", "nif-lookup", "identification",
+          "dossiers", "tags", "suggestions", "task_contract_suggestions"
+        ].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
+      }
       if ((event as CustomEvent).detail?.queued && navigator.onLine) {
         window.clearTimeout(queuedTimer);
         queuedTimer = window.setTimeout(() => void synchronize(false), 1000);
@@ -167,6 +175,7 @@ export function AppLayout() {
     window.addEventListener("offline", handleOffline);
     window.addEventListener("contribution-offline-sync", handleSyncState);
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
 
     refreshSyncState();
     // Let the local page render before checking for changes on other devices.
@@ -182,8 +191,9 @@ export function AppLayout() {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("contribution-offline-sync", handleSyncState);
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
     };
-  }, [refreshSyncState, synchronize]);
+  }, [queryClient, refreshSyncState, synchronize]);
 
   useEffect(() => {
     try {

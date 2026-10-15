@@ -76,3 +76,35 @@ it("does not overlap synchronization when repeated online events arrive", async 
   expect(sync.workspace).toHaveBeenCalledTimes(1);
   view.unmount();
 });
+
+
+it("invalidates displayed contracts after another tab refreshes the local cache", async () => {
+  vi.stubEnv("VITE_DATA_PROVIDER", "supabase");
+  const client = new QueryClient();
+  const listKey = ["contracts", { workspaceId: "w" }];
+  client.setQueryData(listKey, { items: [], total: 0 });
+  client.setQueryData(["contract", "c"], { id: "c" });
+  const view = render(<QueryClientProvider client={client}><MemoryRouter><AppLayout /></MemoryRouter></QueryClientProvider>);
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync"));
+  });
+  expect(client.getQueryState(listKey)?.isInvalidated).toBe(false);
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync", { detail: { external: true } }));
+  });
+  expect(client.getQueryState(listKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(["contract", "c"])?.isInvalidated).toBe(true);
+  expect(sync.workspace).not.toHaveBeenCalled();
+  view.unmount();
+});
+
+it("checks remote changes when the browser window regains focus", async () => {
+  vi.useFakeTimers(); vi.stubEnv("VITE_DATA_PROVIDER", "supabase");
+  const view = render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AppLayout /></MemoryRouter></QueryClientProvider>);
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(sync.workspace).toHaveBeenCalledWith("w", { force: false, verify: true });
+  view.unmount();
+  sync.workspace.mockClear();
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(sync.workspace).not.toHaveBeenCalled();
+});

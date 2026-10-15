@@ -192,6 +192,7 @@ export type Database = {
       }
       contrat: {
         Row: {
+          modified_at: string | null
           annee_fiscale: string
           commentaire: string | null
           created_at: string
@@ -211,6 +212,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          modified_at?: string | null
           annee_fiscale: string
           commentaire?: string | null
           created_at?: string
@@ -230,6 +232,7 @@ export type Database = {
           workspace_id?: string
         }
         Update: {
+          modified_at?: string | null
           annee_fiscale?: string
           commentaire?: string | null
           created_at?: string
@@ -281,6 +284,7 @@ export type Database = {
       }
       dossiers: {
         Row: {
+          modified_at: string | null
           comment: string | null
           contract_target_count: number
           created_at: string
@@ -298,6 +302,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          modified_at?: string | null
           comment?: string | null
           contract_target_count?: number
           created_at?: string
@@ -315,6 +320,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          modified_at?: string | null
           comment?: string | null
           contract_target_count?: number
           created_at?: string
@@ -343,6 +349,7 @@ export type Database = {
       }
       identification: {
         Row: {
+          modified_at: string | null
           adresse: string
           created_at: string
           deleted_at: string | null
@@ -356,6 +363,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          modified_at?: string | null
           adresse: string
           created_at?: string
           deleted_at?: string | null
@@ -369,6 +377,7 @@ export type Database = {
           workspace_id?: string
         }
         Update: {
+          modified_at?: string | null
           adresse?: string
           created_at?: string
           deleted_at?: string | null
@@ -531,6 +540,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_dossier_latest: {
+        Args: { p_id: string; p_workspace_id: string; p_modified_at: string };
+        Returns: number;
+      };
+      sync_identification_latest: {
+        Args: { p_record: Json; p_modified_at: string };
+        Returns: Json;
+      };
       set_app_user_suspended: {
         Args: { p_session_token: string; p_user_id: string; p_is_suspended: boolean }
         Returns: boolean
