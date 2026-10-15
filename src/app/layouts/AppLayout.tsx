@@ -11,7 +11,6 @@ import {
 import { useAuth } from "../../features/auth/auth";
 import { GlobalContractSearch } from "../components/GlobalContractSearch";
 import { SessionLockScreen } from "../../features/auth/SessionLockScreen";
-import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 import { flushPrivateTaskOutbox } from "../../features/tasks/privateTaskSync";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
@@ -23,7 +22,6 @@ const MAX_W = 480;
 export function AppLayout() {
   useMinisters();
   const { user, isLocked } = useAuth();
-  const isMobile = useIsMobileViewport();
   const location = useLocation();
   const queryClient = useQueryClient();
   const mainRef = useRef<HTMLDivElement>(null);
@@ -40,7 +38,8 @@ export function AppLayout() {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const saved = localStorage.getItem(SIDEBAR_W_KEY);
-      return saved ? parseInt(saved, 10) : DEFAULT_W;
+      const width = Number(saved);
+      return saved && Number.isFinite(width) ? Math.min(MAX_W, Math.max(MIN_W, width)) : DEFAULT_W;
     } catch {
       return DEFAULT_W;
     }
@@ -261,21 +260,24 @@ export function AppLayout() {
       className={`app-shell${collapsed ? " sidebar-collapsed" : ""}${isLocked ? " session-locked" : ""}`}
       style={style}
     >
+      <a className="skip-to-content" href="#main-content">Aller au contenu</a>
       <Sidebar 
         collapsed={collapsed} 
         onToggle={toggle} 
         onResizeStart={startResizing}
+        width={sidebarWidth}
+        onResizeKey={delta => setSidebarWidth(width => Math.min(MAX_W, Math.max(MIN_W, width + delta)))}
         isResizing={isResizing}
         isOnline={isOnline}
         syncState={syncState}
         onSync={() => void synchronize(true)}
       />
       <div className="main" ref={mainRef}>
-        <main className="app-content">
+        <main className="app-content" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
-      {!isMobile ? <GlobalContractSearch /> : null}
+      {!isLocked ? <GlobalContractSearch /> : null}
       {isLocked ? <SessionLockScreen /> : null}
     </div>
   );

@@ -94,4 +94,38 @@ describe("GlobalContractSearch", () => {
     fireEvent.click(screen.getByRole("option", { name: /Élodie Pierre/i }));
     expect(screen.getByText("Détail du contrat")).toBeInTheDocument();
   });
+  it("opens from navigation, contains keyboard focus and restores it on close", () => {
+    renderSearch();
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+    act(() => window.dispatchEvent(new Event("contribution-open-search")));
+    act(() => vi.advanceTimersByTime(0));
+    const input = screen.getByRole("combobox");
+    const close = screen.getByRole("button", { name: "Fermer la recherche" });
+    expect(input).toHaveFocus();
+    fireEvent.keyDown(input, { key: "Tab", shiftKey: true });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: "Tab" });
+    expect(input).toHaveFocus();
+    close.focus();
+    fireEvent.keyDown(close, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it("does not open an old result while a new query is pending", () => {
+    renderSearch();
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "elodie" } });
+    act(() => vi.advanceTimersByTime(180));
+    expect(screen.getByRole("option")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "autre" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+    expect(screen.getByText("Page des tâches")).toBeInTheDocument();
+  });
+
 });

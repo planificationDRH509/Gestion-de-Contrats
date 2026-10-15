@@ -41,6 +41,37 @@ const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1
 });
 
+
+function CategoryTick({ x = 0, y = 0, payload }: {
+  x?: number; y?: number; payload?: { value: string };
+}) {
+  const label = String(payload?.value ?? "");
+  const words = label.split(/\s+/);
+  const lines: string[] = [];
+  for (const word of words) {
+    const last = lines.length - 1;
+    if (last >= 0 && `${lines[last]} ${word}`.length <= 20) lines[last] += ` ${word}`;
+    else lines.push(word);
+  }
+  const visible = lines.slice(0, 3).map((line, index) =>
+    line.length > 20 || (index === 2 && lines.length > 3) ? `${line.slice(0, 19)}…` : line
+  );
+  return <text x={x - 8} y={y} textAnchor="end" fill="var(--ink)" fontSize={12}>
+    <title>{label}</title>
+    {visible.map((line, index) => <tspan key={index} x={x - 8} dy={index === 0 ? 4 - (visible.length - 1) * 7 : 14}>{line}</tspan>)}
+  </text>;
+}
+
+const countAxis = {
+  allowDecimals: false,
+  domain: [0, (maximum: number) => Math.max(1, maximum)],
+  tickCount: 5,
+  tickFormatter: (value: number) => COMPACT_NUMBER_FORMATTER.format(value),
+  tick: { fill: "var(--ink-muted)", fontSize: 12 },
+  tickLine: false,
+  axisLine: false,
+} as const;
+
 type FilterType = 'all' | 'today' | 'week' | 'month' | 'quarter' | 'custom';
 
 interface PremiumCardProps {
@@ -492,7 +523,7 @@ export function StatisticsPage() {
       const displayName = isPie ? "Contrats" : (payload[0].name === 'count' ? 'Contrats' : payload[0].name);
       return (
         <ChartTooltipOverlay coordinate={coordinate}><div style={{
-          background: 'var(--glass-bg)',
+          background: 'var(--panel)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           border: '1px solid var(--border)',
@@ -503,7 +534,7 @@ export function StatisticsPage() {
           flexDirection: 'column',
           gap: '4px'
         }}>
-          <span style={{ fontSize: '11px', color: 'var(--ink-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{displayLabel}</span>
+          <span style={{ fontSize: '12px', color: 'var(--ink)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{displayLabel}</span>
           <span style={{ fontSize: '15px', color: 'var(--ink)', fontWeight: '800' }}>
             {displayName} : <span style={{ color: payload[0].color || 'var(--accent)' }}>{payload[0].value}</span>
           </span>
@@ -1076,7 +1107,93 @@ export function StatisticsPage() {
 
           </div>
 
-          {/* 4. FINANCIAL OUTLOOK */}
+          {/* 4. TEMPORAL EVOLUTION & SMART INSIGHTS */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: "32px" }}>
+
+            {/* Evolution Area Chart (8 Columns) */}
+            <PremiumCard
+              staggerClass="stagger-5"
+              glowColor="rgba(99, 102, 241, 0.08)"
+              style={{ gridColumn: "span 8" }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Dynamique Temporelle</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Évolution du volume mensuel des saisies de contrats</span>
+                </div>
+                <span style={{ fontSize: '11px', background: 'var(--accent-soft)', padding: '6px 12px', borderRadius: '10px', color: 'var(--accent)', fontWeight: '800', letterSpacing: '0.05em' }}>FRÉQUENCE</span>
+              </div>
+
+              <div style={{ height: "350px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={evolutionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border)" opacity={0.3} />
+                    <XAxis
+                      dataKey="date"
+                      minTickGap={32}
+                      interval="preserveStartEnd"
+                      stroke="var(--ink-muted)"
+                      fontSize={11}
+                      fontWeight={600}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(val) => {
+                        const isShortPeriod = filterType === 'today' || filterType === 'week' || filterType === 'month';
+                        if (isShortPeriod) {
+                          return val.split('-').slice(1).reverse().join('/');
+                        }
+                        return val;
+                      }}
+                      dy={10}
+                    />
+                    <YAxis {...countAxis} width={56} />
+
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      name="Contrats"
+                      stroke="#6366f1"
+                      fillOpacity={1}
+                      fill="url(#indigoPurple)"
+                      strokeWidth={3}
+                      dot={evolutionData.length === 1}
+                      activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </PremiumCard>
+
+            {/* Smart Insights Panel (4 Columns) */}
+            <PremiumCard
+              staggerClass="stagger-6"
+              glowColor="rgba(245, 158, 11, 0.08)"
+              style={{ gridColumn: "span 4", display: 'flex', flexDirection: 'column' }}
+            >
+              <div style={{ marginBottom: "24px" }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Analyses & Tendances</h3>
+                <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Fins calculs issus de vos filtres actifs</span>
+              </div>
+
+              <div className="insights-grid" style={{ flex: 1, justifyContent: 'center' }}>
+                {smartInsights.map((insight, idx) => (
+                  <div key={idx} className="insight-row">
+                    <div className="glowing-icon" style={{ background: insight.bg, color: insight.color, boxShadow: `0 8px 20px -6px ${insight.glow}` }}>
+                      <span className="material-symbols-rounded">{insight.icon}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', color: 'var(--ink-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{insight.title}</div>
+                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ink)', overflowWrap: 'anywhere', marginTop: '2px' }}>{insight.value}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--ink-muted)', fontWeight: '500', marginTop: '1px' }}>{insight.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </PremiumCard>
+          </div>
+
+          {/* 5. FINANCIAL OUTLOOK */}
           <section className="financial-section" aria-labelledby="financial-section-title">
             <div className="financial-section-heading">
               <div>
@@ -1167,6 +1284,8 @@ export function StatisticsPage() {
                       />
                       <XAxis
                         dataKey="shortLabel"
+                        minTickGap={32}
+                        interval="preserveStartEnd"
                         stroke="var(--ink-muted)"
                         fontSize={11}
                         fontWeight={600}
@@ -1180,7 +1299,10 @@ export function StatisticsPage() {
                         fontWeight={600}
                         tickLine={false}
                         axisLine={false}
-                        width={74}
+                        width={82}
+                        domain={[0, "auto"]}
+                        tickCount={5}
+                        tick={{ fill: "var(--ink-muted)" }}
                         tickFormatter={(value) => COMPACT_NUMBER_FORMATTER.format(value)}
                       />
                       <Tooltip content={<BudgetTooltip />} />
@@ -1239,88 +1361,8 @@ export function StatisticsPage() {
             </div>
           </section>
 
-          {/* 4. MAIN CHARTS AREA & SMART INSIGHTS PANEL */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "32px" }}>
-            
-            {/* Evolution Area Chart (8 Columns) */}
-            <PremiumCard 
-              staggerClass="stagger-5" 
-              glowColor="rgba(99, 102, 241, 0.08)"
-              style={{ gridColumn: "span 8" }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Dynamique Temporelle</h3>
-                  <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Évolution du volume mensuel des saisies de contrats</span>
-                </div>
-                <span style={{ fontSize: '11px', background: 'var(--accent-soft)', padding: '6px 12px', borderRadius: '10px', color: 'var(--accent)', fontWeight: '800', letterSpacing: '0.05em' }}>FRÉQUENCE</span>
-              </div>
-              
-              <div style={{ height: "350px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={evolutionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="var(--ink-muted)" 
-                      fontSize={11} 
-                      fontWeight={600}
-                      tickLine={false} 
-                      axisLine={false} 
-                      tickFormatter={(val) => {
-                        const isShortPeriod = filterType === 'today' || filterType === 'week' || filterType === 'month';
-                        if (isShortPeriod) {
-                          return val.split('-').slice(1).reverse().join('/');
-                        }
-                        return val;
-                      }}
-                      dy={10}
-                    />
-                    <YAxis stroke="var(--ink-muted)" fontSize={11} fontWeight={600} tickLine={false} axisLine={false} dx={-10} />
-                    
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="count" 
-                      name="Contrats" 
-                      stroke="#6366f1" 
-                      fillOpacity={1} 
-                      fill="url(#indigoPurple)" 
-                      strokeWidth={3} 
-                      activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} 
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </PremiumCard>
-
-            {/* Smart Insights Panel (4 Columns) */}
-            <PremiumCard 
-              staggerClass="stagger-6" 
-              glowColor="rgba(245, 158, 11, 0.08)"
-              style={{ gridColumn: "span 4", display: 'flex', flexDirection: 'column' }}
-            >
-              <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Analyses & Tendances</h3>
-                <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Fins calculs issus de vos filtres actifs</span>
-              </div>
-
-              <div className="insights-grid" style={{ flex: 1, justifyContent: 'center' }}>
-                {smartInsights.map((insight, idx) => (
-                  <div key={idx} className="insight-row">
-                    <div className="glowing-icon" style={{ background: insight.bg, color: insight.color, boxShadow: `0 8px 20px -6px ${insight.glow}` }}>
-                      <span className="material-symbols-rounded">{insight.icon}</span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '11px', color: 'var(--ink-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{insight.title}</div>
-                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>{insight.value}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--ink-muted)', fontWeight: '500', marginTop: '1px' }}>{insight.sub}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </PremiumCard>
-
+          {/* 6. MAIN CHARTS AREA */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: "32px" }}>
             {/* Top 10 Assignments (8 Columns) */}
             <PremiumCard 
               staggerClass="stagger-1" 
@@ -1331,24 +1373,14 @@ export function StatisticsPage() {
                 <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Top 10 Affectations</h3>
                 <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Répartition par pôle administratif majoritaire</span>
               </div>
-              <div style={{ height: "360px" }}>
+              <div style={{ height: Math.max(360, assignmentData.length * 54 + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={assignmentData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
-                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="var(--ink-muted)" 
-                      fontSize={11} 
-                      fontWeight={600}
-                      tick={{ angle: -30, textAnchor: 'end', fill: 'var(--ink)' }} 
-                      height={60} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      interval={0} 
-                    />
-                    <YAxis stroke="var(--ink-muted)" fontSize={11} fontWeight={600} tickLine={false} axisLine={false} dx={-10} />
+                  <BarChart data={assignmentData} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis type="number" {...countAxis} minTickGap={28} />
+                    <YAxis dataKey="name" type="category" width={140} interval={0} tickLine={false} axisLine={false} tick={<CategoryTick />} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-sunken)', opacity: 0.4 }} />
-                    <Bar dataKey="count" fill="url(#emeraldTeal)" radius={[8, 8, 0, 0]} barSize={32} />
+                    <Bar dataKey="count" fill="url(#emeraldTeal)" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1364,12 +1396,12 @@ export function StatisticsPage() {
                 <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>État d'Avancement</h3>
                 <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Classement par étapes du flux de signature</span>
               </div>
-              <div style={{ height: "360px" }}>
+              <div style={{ height: Math.max(360, statusData.length * 54 + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={statusData} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={statusData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontWeight: 600 }} />
+                    <XAxis type="number" {...countAxis} minTickGap={28} />
+                    <YAxis dataKey="name" type="category" width={140} interval={0} tickLine={false} axisLine={false} tick={<CategoryTick />} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-sunken)', opacity: 0.4 }} />
                     <Bar dataKey="count" fill="url(#orangeRose)" radius={[0, 8, 8, 0]} barSize={16}>
                       {statusData.map((_, index) => (
@@ -1385,18 +1417,18 @@ export function StatisticsPage() {
             <PremiumCard 
               staggerClass="stagger-3" 
               glowColor="rgba(59, 130, 246, 0.06)"
-              style={{ gridColumn: "span 3" }}
+              style={{ gridColumn: "span 6" }}
             >
               <div style={{ marginBottom: "24px" }}>
                 <h3 style={{ fontSize: '17px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Saisies par Employé</h3>
                 <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Volume de contrats créés</span>
               </div>
-              <div style={{ height: "300px" }}>
+              <div style={{ height: Math.max(300, createdByData.length * 54 + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={createdByData} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={createdByData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={11} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)', fontWeight: 600 }} />
+                    <XAxis type="number" {...countAxis} minTickGap={28} />
+                    <YAxis dataKey="name" type="category" width={140} interval={0} tickLine={false} axisLine={false} tick={<CategoryTick />} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-sunken)', opacity: 0.4 }} />
                     <Bar dataKey="count" fill="url(#royalBlue)" radius={[0, 6, 6, 0]} barSize={16}>
                       {createdByData.map((_, index) => (
@@ -1412,18 +1444,19 @@ export function StatisticsPage() {
             <PremiumCard 
               staggerClass="stagger-4" 
               glowColor="rgba(139, 92, 246, 0.06)"
-              style={{ gridColumn: "span 3" }}
+              style={{ gridColumn: "span 6" }}
             >
               <div style={{ marginBottom: "24px" }}>
                 <h3 style={{ fontSize: '17px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Top 8 Postes</h3>
                 <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Fonctions les plus représentées</span>
               </div>
-              <div style={{ height: "300px" }}>
+              <div style={{ height: Math.max(300, positionData.length * 54 + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={positionData} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={positionData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="var(--ink-muted)" fontSize={10} width={100} tickLine={false} axisLine={false} tick={{ fill: 'var(--ink)' }} />
+                    <XAxis type="number" {...countAxis} minTickGap={28} />
+                    <YAxis dataKey="name" type="category" width={140} interval={0} tickLine={false} axisLine={false} tick={<CategoryTick />} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--surface-sunken)" }} />
                     <Bar dataKey="count" fill="url(#cyanBlue)" radius={[0, 6, 6, 0]} barSize={12}>
                       {positionData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[(index + 1) % COLORS.length]} />
@@ -1438,19 +1471,20 @@ export function StatisticsPage() {
             <PremiumCard 
               staggerClass="stagger-5" 
               glowColor="rgba(20, 184, 166, 0.06)"
-              style={{ gridColumn: "span 3" }}
+              style={{ gridColumn: "span 6" }}
             >
               <div style={{ marginBottom: "24px" }}>
                 <h3 style={{ fontSize: '17px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Durées des Contrats</h3>
                 <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 500 }}>Distribution selon les termes</span>
               </div>
-              <div style={{ height: "300px" }}>
+              <div style={{ height: Math.max(300, durationData.length * 54 + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={durationData} margin={{ top: 10, right: 0, left: -30, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border)" opacity={0.3} />
-                    <XAxis dataKey="name" stroke="var(--ink-muted)" fontSize={11} fontWeight={600} tickLine={false} axisLine={false} dy={8} />
-                    <YAxis stroke="var(--ink-muted)" fontSize={11} fontWeight={600} tickLine={false} axisLine={false} dx={-8} />
-                    <Bar dataKey="count" fill="#14b8a6" radius={[6, 6, 0, 0]} barSize={24} />
+                  <BarChart data={durationData} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--border)" opacity={0.4} />
+                    <XAxis type="number" {...countAxis} minTickGap={28} />
+                    <YAxis dataKey="name" type="category" width={140} interval={0} tickLine={false} axisLine={false} tick={<CategoryTick />} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--surface-sunken)" }} />
+                    <Bar dataKey="count" fill="#14b8a6" radius={[0, 6, 6, 0]} barSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1460,7 +1494,7 @@ export function StatisticsPage() {
             <PremiumCard 
               staggerClass="stagger-6" 
               glowColor="rgba(236, 72, 153, 0.06)"
-              style={{ gridColumn: "span 3", display: 'flex', flexDirection: 'column' }}
+              style={{ gridColumn: "span 6", display: 'flex', flexDirection: 'column' }}
             >
               <div style={{ marginBottom: "24px" }}>
                 <h3 style={{ fontSize: '17px', fontWeight: '900', color: 'var(--ink)', margin: 0, fontFamily: 'var(--font-heading)' }}>Mixité Générale</h3>

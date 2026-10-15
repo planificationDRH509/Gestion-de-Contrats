@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth, AuthUser } from "../../features/auth/auth";
 import { syncSuggestionsFromServer } from "../../data/local/suggestionsDb";
 import type { SupabaseSyncState } from "../../data/supabase/supabaseProvider";
@@ -9,13 +9,15 @@ interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   onResizeStart?: () => void;
+  onResizeKey?: (direction: number) => void;
+  width?: number;
   isResizing?: boolean;
   isOnline?: boolean;
   syncState: SupabaseSyncState;
   onSync: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, onResizeStart, onResizeKey, width = 280, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
   const { user, logout, can } = useAuth();
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
@@ -36,6 +38,8 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
             onClick={onToggle}
             title={collapsed ? "Afficher le menu" : "Réduire le menu"}
             type="button"
+            aria-label={collapsed ? "Afficher le menu" : "Réduire le menu"}
+            aria-expanded={!collapsed}
           >
             <span className="material-symbols-rounded">
               {collapsed ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"}
@@ -54,7 +58,14 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
         </div>
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Navigation principale">
+        <button type="button" className="nav-item sidebar-search" aria-label="Rechercher un contrat"
+          data-tooltip={collapsed ? "Rechercher" : undefined} data-tooltip-placement="right"
+          onClick={() => window.dispatchEvent(new Event("contribution-open-search"))}>
+          <span className="material-symbols-rounded nav-icon" aria-hidden="true">search</span>
+          <span className="sidebar-label sidebar-label-full">Rechercher</span>
+          <span className="sidebar-label sidebar-label-short">Recherche</span>
+        </button>
         <NavItem 
           to="/app/contrats" 
           icon="description" 
@@ -116,17 +127,33 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
       <div 
         className="sidebar-resizer" 
         onMouseDown={onResizeStart}
+        role="separator"
+        aria-label="Largeur du menu"
+        aria-orientation="vertical"
+        aria-valuemin={200}
+        aria-valuemax={480}
+        aria-valuenow={width}
+        tabIndex={collapsed ? -1 : 0}
+        onKeyDown={event => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            onResizeKey?.(event.key === "ArrowRight" ? 20 : -20);
+          }
+        }}
       />
     </aside>
   );
 }
 
 function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, icon: string, label: string, shortLabel?: string, collapsed: boolean, end?: boolean }) {
+  const { pathname } = useLocation();
+  const inContracts = to === "/app/contrats" && pathname.startsWith("/app/contrats/") && pathname !== "/app/contrats/nouveau";
   return (
     <NavLink
       to={to}
+      aria-label={label}
       end={end}
-      className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+      className={({ isActive }) => `nav-item ${isActive || inContracts ? "active" : ""}`}
       data-tooltip={collapsed ? label : undefined}
       data-tooltip-placement="right"
       data-tooltip-desktop="true"
@@ -140,6 +167,27 @@ function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, 
 
 function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, syncState: SupabaseSyncState, onSync: () => void, onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuRef.current?.querySelector<HTMLButtonElement>(".user-card-btn")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menuOpen]);
   const [showSyncing, setShowSyncing] = useState(false);
 
   useEffect(() => {
@@ -196,7 +244,7 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
       )}
       
       {!collapsed ? (
-        <div className="user-menu-shell">
+        <div className="user-menu-shell" ref={menuRef}>
           <button 
             className="user-card-btn"
             onClick={() => setMenuOpen(!menuOpen)}

@@ -16,8 +16,8 @@ export function Pagination({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="pagination">
-      <span className="helper-text">
+    <nav className="pagination" aria-label="Pagination des contrats">
+      <span className="helper-text" role="status">
         Page {page} / {totalPages} · {total} contrats
       </span>
       {pageSizeOptions?.length && onPageSizeChange ? (
@@ -34,7 +34,12 @@ export function Pagination({
           </select>
         </label>
       ) : null}
+      <button type="button" className="btn btn-outline pagination-edge" aria-label="Première page" title="Première page"
+        onClick={() => onPageChange(1)} disabled={page <= 1}>
+        <span className="material-symbols-rounded" aria-hidden="true">first_page</span>
+      </button>
       <button
+        type="button"
         className="btn btn-outline"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
@@ -42,12 +47,17 @@ export function Pagination({
         Précédent
       </button>
       <button
+        type="button"
         className="btn btn-outline"
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={page >= totalPages}
       >
         Suivant
       </button>
-    </div>
+      <button type="button" className="btn btn-outline pagination-edge" aria-label="Dernière page" title="Dernière page"
+        onClick={() => onPageChange(totalPages)} disabled={page >= totalPages}>
+        <span className="material-symbols-rounded" aria-hidden="true">last_page</span>
+      </button>
+    </nav>
   );
 }

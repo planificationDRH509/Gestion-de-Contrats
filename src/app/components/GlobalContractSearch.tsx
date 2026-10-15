@@ -33,6 +33,7 @@ function contractIdentity(contract: Contract) {
 export function GlobalContractSearch() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const dialogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -54,7 +55,7 @@ export function GlobalContractSearch() {
 
   useEffect(() => {
     const handleShortcut = (event: globalThis.KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "f") {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || !["f", "k"].includes(event.key.toLowerCase())) {
         return;
       }
       event.preventDefault();
@@ -65,14 +66,27 @@ export function GlobalContractSearch() {
       });
     };
 
+    const open = () => setIsOpen(true);
+    window.addEventListener("contribution-open-search", open);
     window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleShortcut);
+      window.removeEventListener("contribution-open-search", open);
+    };
   }, []);
 
   useEffect(() => {
     if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const main = document.querySelector<HTMLElement>(".main");
+    const previousOverflow = main?.style.overflow;
+    if (main) main.style.overflow = "hidden";
     const timeout = window.setTimeout(() => inputRef.current?.focus(), 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+      if (main) main.style.overflow = previousOverflow ?? "";
+      previousFocus?.focus();
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -83,6 +97,10 @@ export function GlobalContractSearch() {
   useEffect(() => {
     setActiveIndex(0);
   }, [normalizedQuery]);
+
+  useEffect(() => {
+    if (isOpen) document.getElementById(`global-contract-result-${results[activeIndex]?.id}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, isOpen, results]);
 
   const close = () => {
     setIsOpen(false);
@@ -103,7 +121,7 @@ export function GlobalContractSearch() {
       return;
     }
 
-    if (results.length === 0) return;
+    if (query.trim() !== normalizedQuery || isFetching || isError || results.length === 0) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -125,7 +143,17 @@ export function GlobalContractSearch() {
   return (
     <div className="global-contract-search-layer" role="presentation" onMouseDown={close}>
       <section
+        ref={dialogRef}
         className="global-contract-search"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") { event.stopPropagation(); close(); }
+          if (event.key !== "Tab") return;
+          const items = dialogRef.current?.querySelectorAll<HTMLElement>('input, button:not([disabled]):not([role="option"])');
+          if (!items?.length) return;
+          const first = items[0], last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Recherche rapide de contrats"
@@ -145,7 +173,7 @@ export function GlobalContractSearch() {
             aria-autocomplete="list"
             aria-expanded="true"
             aria-controls="global-contract-search-results"
-            aria-activedescendant={results[activeIndex] ? `global-contract-result-${results[activeIndex].id}` : undefined}
+            aria-activedescendant={!waitingForDebounce && !isFetching && hasQuery && results[activeIndex] ? `global-contract-result-${results[activeIndex].id}` : undefined}
             autoComplete="off"
           />
           {(isFetching || waitingForDebounce) && hasQuery ? (
@@ -156,7 +184,7 @@ export function GlobalContractSearch() {
           </button>
         </div>
 
-        <div id="global-contract-search-results" className="global-contract-search-results" role="listbox">
+        <div id="global-contract-search-results" className="global-contract-search-results" role="listbox" aria-label="Contrats trouvés" aria-busy={waitingForDebounce || isFetching}>
           {!hasQuery ? (
             <div className="global-contract-search-help">
               <span className="material-symbols-rounded" aria-hidden="true">manage_search</span>
@@ -167,13 +195,14 @@ export function GlobalContractSearch() {
           ) : !waitingForDebounce && !isFetching && results.length === 0 ? (
             <div className="global-contract-search-state">Aucun contrat trouvé pour « {query.trim()} ».</div>
           ) : (
-            results.map((contract, index) => (
+            (!hasQuery || waitingForDebounce || isFetching ? [] : results).map((contract, index) => (
               <button
                 key={contract.id}
                 id={`global-contract-result-${contract.id}`}
                 type="button"
                 className={`global-contract-search-result${index === activeIndex ? " is-active" : ""}`}
                 role="option"
+                tabIndex={-1}
                 aria-selected={index === activeIndex}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => openContract(contract)}

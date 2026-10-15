@@ -122,7 +122,6 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           color: selectedValues.length > 0 ? 'var(--ink)' : 'var(--ink-muted)',
           fontSize: '13.5px',
           fontWeight: selectedValues.length > 0 ? '700' : '500',
-          outline: 'none',
           transition: 'all 0.25s ease'
         }}
       >
@@ -141,7 +140,8 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
           top: 'calc(100% + 8px)',
           left: 0,
           zIndex: 999,
-          width: '280px',
+          width: 'min(320px, calc(100vw - 40px))',
+          maxWidth: 'calc(100vw - 40px)',
           maxHeight: '300px',
           background: 'var(--surface-card)',
           border: '1px solid var(--border)',
@@ -228,10 +228,11 @@ export function MultiSelectDropdown({ label, options, selectedValues, onChange, 
                       accentColor: 'var(--accent)',
                       cursor: 'pointer',
                       width: '15px',
-                      height: '15px'
+                      height: '15px',
+                      flexShrink: 0
                     }}
                   />
-                  <span title={getOptionLabel(option)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getOptionLabel(option)}</span>
+                  <span title={getOptionLabel(option)} style={{ overflowWrap: 'anywhere', lineHeight: 1.4 }}>{getOptionLabel(option)}</span>
                 </label>
               );
             })}
