@@ -38,5 +38,28 @@ export function useInstitutionCatalogue() {
       void client.invalidateQueries({queryKey:['statistics']});
     }
   });
-  return {...query, entries:query.data ?? [], save:mutation.mutateAsync, saving:mutation.isPending};
+  const deletion = useMutation({
+    networkMode: 'always',
+    onMutate: () => client.cancelQueries({ queryKey: ['suggestions','institutions',workspaceId] }),
+    mutationFn: async (entry: InstitutionSuggestion) => {
+      if (!can('settings.manage')) throw new Error('Suppression réservée aux administrateurs.');
+      const before = getInstitutions().find(item => item.id === entry.id);
+      if (!before || (before.version ?? 1) !== (entry.version ?? 1)) throw new Error('Cette institution a changé. Rechargez la liste.');
+      if ((import.meta.env.VITE_DATA_PROVIDER ?? 'local') !== 'supabase') {
+        await sqliteApiRequest('/institutions', { method: 'DELETE', body: { workspaceId, id: entry.id, version: entry.version ?? 1 } });
+      } else {
+        await queueReferenceChange(workspaceId, { scope: 'institutions', patches: [{ id: entry.id, before, after: null }] });
+      }
+      return entry.id;
+    },
+    onSuccess: id => {
+      const current = client.getQueryData<InstitutionSuggestion[]>(['suggestions','institutions',workspaceId]) ?? getInstitutions();
+      const next = current.filter(entry => entry.id !== id);
+      if ((import.meta.env.VITE_DATA_PROVIDER ?? 'local') !== 'supabase') cacheSuggestions({ institutions: next });
+      client.setQueryData(['suggestions','institutions',workspaceId], next);
+      void client.invalidateQueries({ queryKey: ['suggestions','institutions'] });
+    }
+  });
+  return {...query, entries:query.data ?? [], save:mutation.mutateAsync, saving:mutation.isPending,
+    remove:deletion.mutateAsync, deleting:deletion.isPending};
 }

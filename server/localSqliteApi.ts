@@ -2837,6 +2837,20 @@ async function handleApiRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === `${API_PREFIX}/institutions` && method === "DELETE") {
+    const actor = operatorFromRequest(req);
+    if (actor.role !== 'admin') throw new HttpError(403, 'Suppression réservée aux administrateurs.');
+    const body = await parseBody(req);
+    const workspaceId = asString(body.workspaceId);
+    const id = asString(body.id);
+    if (!workspaceId || !id || !Number.isInteger(body.version)) throw new HttpError(400, 'Données invalides.');
+    const result = db.prepare("DELETE FROM autocompletion WHERE id=? AND workspace_id=? AND type='institution' AND version=?")
+      .run(id, workspaceId, Number(body.version));
+    if (Number(result.changes) !== 1) throw new HttpError(409, 'Cette institution a changé. Rechargez la liste.');
+    sendJson(res, 200, { id });
+    return;
+  }
+
   if (pathname === `${API_PREFIX}/institutions` && method === "POST") {
     const actor = operatorFromRequest(req);
     if (actor.role !== 'admin') throw new HttpError(403, 'Modification réservée aux administrateurs.');

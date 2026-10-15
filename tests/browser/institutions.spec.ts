@@ -142,3 +142,81 @@ test('prepositions are edited once per family and persist without changing insti
   expect(await page.evaluate(() => document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:'/tmp/contribution-institution-prepositions-mobile.png',fullPage:true});
 });
+
+for (const offline of [false, true]) {
+  test(`deletes an institution after confirmation (${offline ? 'offline' : 'online'})`, async ({ page, context }) => {
+    let entries = structuredClone(initial);
+    let synced = false;
+    await page.addInitScript(() => {
+      localStorage.setItem('contribution_auth', JSON.stringify({ id: 'institution-delete-test', username: 'admin', name: 'Test', workspaceId: 'workspace_default', role: 'admin', taskSessionToken: 'test-token' }));
+      localStorage.setItem('contribution_last_activity', String(Date.now()));
+    });
+    await page.route('**/*.supabase.co/**', async route => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = [];
+      if (path.endsWith('/app_users')) body = { role: 'admin' };
+      if (path.endsWith('/autocompletion')) body = entries;
+      if (path.endsWith('/sync_reference_change')) {
+        const { p_change: change } = route.request().postDataJSON();
+        expect(change.scope).toBe('institutions');
+        expect(change.patches).toHaveLength(1);
+        expect(change.patches[0]).toMatchObject({ id: 'bureau', before: { id: 'bureau', version: 1 }, after: null });
+        entries = entries.filter(entry => entry.id !== 'bureau');
+        synced = true;
+        body = null;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body), headers: { 'content-range': `0-${entries.length-1}/${entries.length}` } });
+    });
+    await page.goto('http://127.0.0.1:5179/app/parametres/institutions');
+    const remove = page.getByRole('button', { name: 'Supprimer Bureau Central', exact: true });
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: 'Supprimer l’institution ?' });
+    await expect(dialog).toContainText('Bureau Central');
+    await dialog.getByRole('button', { name: 'Annuler' }).click();
+    await expect(remove).toBeVisible();
+    if (offline) await context.setOffline(true);
+    await remove.click();
+    if (!offline) await page.screenshot({ path: '/tmp/institution-delete-dialog.png' });
+    await dialog.getByRole('button', { name: 'Supprimer', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(remove).toHaveCount(0);
+    await expect(page.locator('tbody tr')).toHaveCount(3);
+    if (offline) { expect(synced).toBe(false); await context.setOffline(false); }
+    await expect.poll(() => synced).toBe(true);
+    await page.reload();
+    await expect(page.locator('tbody tr')).toHaveCount(3);
+    await expect(remove).toHaveCount(0);
+  });
+}
+
+test('readers cannot delete institutions', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('contribution_auth', JSON.stringify({ id: 'institution-reader', username: 'reader', name: 'Test', workspaceId: 'workspace_default', role: 'reader', taskSessionToken: 'test-token' }));
+    localStorage.setItem('contribution_last_activity', String(Date.now()));
+  });
+  await page.route('**/*.supabase.co/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path.endsWith('/app_users') ? { role: 'reader' } : path.endsWith('/autocompletion') ? initial : [];
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.goto('http://127.0.0.1:5179/app/parametres/institutions');
+  await expect(page.locator('tbody tr')).toHaveCount(4);
+  await expect(page.getByRole('button', { name: /^Supprimer / })).toHaveCount(0);
+});
+
+test('local institution deletion checks role and version', async ({ request }) => {
+  const id = crypto.randomUUID();
+  const workspaceId = 'workspace_default';
+  const headers = { 'x-operator-id': 'institution-delete-test', 'x-operator-name': 'Test', 'x-operator-role': 'admin' };
+  const entry = { id, label: `Institution test ${id}`, institutionType: 'Autre', addressKeywords: [], version: 0 };
+  const created = await request.post('http://127.0.0.1:5179/api/local/institutions', { headers, data: { workspaceId, entry } });
+  expect(created.ok()).toBe(true);
+  const denied = await request.delete('http://127.0.0.1:5179/api/local/institutions', { headers: { ...headers, 'x-operator-role': 'reader' }, data: { workspaceId, id, version: 1 } });
+  expect(denied.status()).toBe(403);
+  const stale = await request.delete('http://127.0.0.1:5179/api/local/institutions', { headers, data: { workspaceId, id, version: 0 } });
+  expect(stale.status()).toBe(409);
+  const deleted = await request.delete('http://127.0.0.1:5179/api/local/institutions', { headers, data: { workspaceId, id, version: 1 } });
+  expect(deleted.ok()).toBe(true);
+  const catalogue = await request.get(`http://127.0.0.1:5179/api/local/autocompletion?workspaceId=${workspaceId}`);
+  expect((await catalogue.json()).institutions.some((item: { id: string }) => item.id === id)).toBe(false);
+});

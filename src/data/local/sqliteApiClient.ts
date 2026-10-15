@@ -2,7 +2,7 @@ const API_BASE = "/api/local";
 const AUTH_KEY = "contribution_auth";
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
 };
 

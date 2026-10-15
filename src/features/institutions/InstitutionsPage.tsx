@@ -9,7 +9,7 @@ import { useInstitutionPrepositions } from './institutionPrepositionsApi';
 
 export function InstitutionsPage() {
   const {can} = useAuth();
-  const {entries,save,saving,isLoading,error,refetch} = useInstitutionCatalogue();
+  const {entries,save,saving,remove,deleting,isLoading,error,refetch} = useInstitutionCatalogue();
   const prepositions = useInstitutionPrepositions();
   const [prepositionDraft,setPrepositionDraft] = useState<InstitutionPrepositionRule[] | null>(null);
   const [search,setSearch] = useState('');
@@ -17,6 +17,7 @@ export function InstitutionsPage() {
   const [commune,setCommune] = useState('');
   const [type,setType] = useState('');
   const [editing,setEditing] = useState<InstitutionSuggestion | null>(null);
+  const [removing,setRemoving] = useState<InstitutionSuggestion | null>(null);
   const [failure,setFailure] = useState('');
   const editor = useRef<HTMLFormElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -52,6 +53,12 @@ export function InstitutionsPage() {
     try { await save(editing); setEditing(null); }
     catch(e) { setFailure(e instanceof Error ? e.message : (e as {message?:string}).message ?? 'Enregistrement impossible.'); }
   }
+  async function deleteInstitution() {
+    if (!removing || deleting) return;
+    setFailure('');
+    try { await remove(removing); setRemoving(null); }
+    catch(e) { setFailure(e instanceof Error ? e.message : 'Suppression impossible.'); }
+  }
   return <section className="institutions-page">
     <div className="institutions-heading"><h1>Institutions</h1>{canEdit && <div className="institutions-actions">
       <button className="btn" disabled={prepositions.isFetching || Boolean(prepositions.error)} onClick={() => {previousFocus.current=document.activeElement as HTMLElement;setFailure('');setPrepositionDraft(prepositions.rules.map(rule => ({...rule})));}}>Prépositions</button>
@@ -68,9 +75,10 @@ export function InstitutionsPage() {
     {error && <div role="alert">Institutions indisponibles. <button className="btn" onClick={() => void refetch()}>Réessayer</button></div>}
     {canEdit && prepositions.error && <div role="alert">Prépositions indisponibles. <button className="btn" onClick={() => void prepositions.refetch()}>Réessayer</button></div>}
     <div className="institutions-table"><table><thead><tr><th>Institution</th><th>Département</th><th>Commune</th><th>Type</th>{canEdit && <th aria-label="Actions" />}</tr></thead><tbody>
-      {rows.map(entry => <tr key={entry.id}><td>{entry.label}</td><td>{entry.department || '—'}</td><td>{entry.commune || '—'}</td><td>{institutionType(entry) || '—'}</td>{canEdit && <td><button className="btn" aria-label={`Modifier ${entry.label}`} onClick={() => edit(entry)}>Modifier</button></td>}</tr>)}
+      {rows.map(entry => <tr key={entry.id}><td>{entry.label}</td><td>{entry.department || '—'}</td><td>{entry.commune || '—'}</td><td>{institutionType(entry) || '—'}</td>{canEdit && <td><button className="btn" aria-label={`Modifier ${entry.label}`} onClick={() => edit(entry)}>Modifier</button><button type="button" className="btn institution-delete" aria-label={`Supprimer ${entry.label}`} title="Supprimer l’institution" onClick={() => { setRemoving(entry); setFailure(''); }}><span className="material-symbols-rounded" aria-hidden="true">delete</span></button></td>}</tr>)}
       {!isLoading && !rows.length && <tr><td colSpan={canEdit ? 5 : 4}>Aucune institution</td></tr>}
     </tbody></table></div>
+    {removing && <DeleteInstitutionDialog entry={removing} pending={deleting} failure={failure} onCancel={() => setRemoving(null)} onConfirm={() => void deleteInstitution()} />}
     {editing && <div className="institutions-overlay"><form ref={editor} className="institutions-editor" role="dialog" aria-modal="true" aria-labelledby="institution-edit-title" onSubmit={submit} onKeyDown={event => {
       if(event.key === 'Escape' && !saving) setEditing(null);
       if(event.key === 'Tab') {
@@ -104,4 +112,21 @@ export function InstitutionsPage() {
       <div className="institutions-actions"><button type="button" className="btn" disabled={prepositions.saving} onClick={() => setPrepositionDraft(null)}>Annuler</button><button className="btn btn-primary" disabled={prepositions.saving}>{prepositions.saving ? 'Enregistrement…' : 'Enregistrer'}</button></div>
     </form></div>}
   </section>;
+}
+
+function DeleteInstitutionDialog({ entry, pending, failure, onCancel, onConfirm }: {
+  entry: InstitutionSuggestion; pending: boolean; failure: string; onCancel: () => void; onConfirm: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  return <dialog ref={dialog} className="institution-delete-dialog" aria-labelledby="institution-delete-title"
+    onCancel={event => { event.preventDefault(); if (!pending) onCancel(); }}>
+    <h2 id="institution-delete-title">Supprimer l’institution ?</h2>
+    <p>{entry.label}</p>
+    {failure && <p role="alert" className="form-error">{failure}</p>}
+    <div className="institutions-actions">
+      <button type="button" className="btn" autoFocus disabled={pending} onClick={onCancel}>Annuler</button>
+      <button type="button" className="btn institution-delete" disabled={pending} onClick={onConfirm}>{pending ? 'Suppression…' : 'Supprimer'}</button>
+    </div>
+  </dialog>;
 }
