@@ -16,7 +16,7 @@ type Props = {
   onViewDossier: (dossierId: string) => void;
 };
 type View = "active" | "archived" | "classified" | "all";
-type Scope = "all" | "mine" | "others";
+type Scope = "mine" | "others";
 type Sort = "recent" | "deadline" | "name" | "priority";
 
 function Icon({ name }: { name: string }) {
@@ -52,7 +52,7 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
   const update = useUpdateDossier();
   const remove = useDeleteDossier();
   const [view, setView] = useState<View>("active");
-  const [scope, setScope] = useState<Scope>("all");
+  const [scope, setScope] = useState<Scope>("mine");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -63,9 +63,11 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
   const [createdId, setCreatedId] = useState<string | null>(null);
   const busy = update.isPending || remove.isPending;
   const selected = dossiers.find(dossier => dossier.id === selectedId);
-  const isMine = (dossier: Dossier) => Boolean(user?.id) && (dossier.createdBy
-    ? dossier.createdBy === user?.id : Boolean(metrics[dossier.id]?.authorIds?.includes(user!.id)));
-  const scoped = dossiers.filter(dossier => scope === "all" || (scope === "mine" ? isMine(dossier) : !isMine(dossier)));
+  const isMine = (dossier: Dossier) => Boolean(user?.id && metrics[dossier.id]?.authorIds?.includes(user.id));
+  const personal = dossiers.filter(isMine);
+  const others = dossiers.filter(dossier => !isMine(dossier));
+  const scoped = scope === "mine" ? personal : others;
+  const isLoading = list.isLoading || metricsQuery.isLoading;
   const byView: Record<View, Dossier[]> = {
     active: scoped.filter(dossier => dossier.status !== "classified" && !isDossierArchived(dossier)),
     archived: scoped.filter(dossier => isDossierArchived(dossier)),
@@ -101,7 +103,7 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
   }
   function closeDetails() { setSelectedId(null); setConfirmDelete(false); setError(""); }
   function showDetails(id: string) { setSelectedId(id); setConfirmDelete(false); setError(""); }
-  function resetFilters() { setQuery(""); setScope("all"); setView("active"); }
+  function resetFilters() { setQuery(""); setView("active"); }
   async function changeStatus(dossier: Dossier) {
     if (!canManage || busy) return;
     try {
@@ -127,6 +129,16 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
       {canCreate && <button className="btn btn-primary" onClick={() => setForm("create")}><Icon name="add" />Nouveau dossier</button>}
     </header>
     <div className="dossiers-navigation">
+      <div className="dossiers-tabs" role="group" aria-label="Dossiers personnels ou autres">
+        {([{ id: "mine", label: "Mes dossiers", count: personal.length }, { id: "others", label: "Autres dossiers", count: others.length }] as const).map(item =>
+          <button key={item.id} type="button" aria-pressed={scope === item.id}
+            className={scope === item.id ? "is-active" : ""} onClick={() => setScope(item.id)}>
+            {item.label}<span>{isLoading || metricsQuery.isError ? "—" : item.count}</span>
+          </button>
+        )}
+      </div>
+    </div>
+    <div className="dossiers-navigation">
       <div className="dossiers-tabs" role="group" aria-label="État des dossiers">
         {views.map(item => <button key={item.id} type="button" aria-pressed={view === item.id}
           className={view === item.id ? "is-active" : ""} onClick={() => setView(item.id)}>
@@ -139,9 +151,6 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
         <input type="search" aria-label="Rechercher un dossier" placeholder="Rechercher un dossier…" value={query} onChange={e => setQuery(e.target.value)} />
         {query && <button className="dossiers-icon-button" onClick={() => setQuery("")} aria-label="Effacer la recherche"><Icon name="close" /></button>}
       </div>
-      <select className="select" aria-label="Propriétaire des dossiers" value={scope} onChange={e => setScope(e.target.value as Scope)}>
-        <option value="all">Tout le monde</option><option value="mine">Mes dossiers</option><option value="others">Autres dossiers</option>
-      </select>
       <select className="select" aria-label="Trier les dossiers" value={sort} onChange={e => setSort(e.target.value as Sort)}>
         <option value="recent">Récemment modifiés</option><option value="deadline">Échéance proche</option>
         <option value="priority">Priorité urgente</option><option value="name">Nom : A à Z</option>
@@ -152,14 +161,14 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
     </div>}
     {list.isError && <div className="dossiers-error" role="alert">Impossible d’actualiser les dossiers. <button onClick={() => void list.refetch()}>Réessayer</button></div>}
     {metricsQuery.isError && <div className="dossiers-error" role="alert">Suivi des contrats indisponible. <button onClick={() => void metricsQuery.refetch()}>Réessayer</button></div>}
-    <div className="dossiers-collection" aria-busy={list.isLoading}>
+    <div className="dossiers-collection" aria-busy={isLoading}>
       <div className="dossiers-table-head" aria-hidden="true"><span>Dossier</span><span>Contrats</span><span>Échéance</span><span /></div>
-      {list.isLoading ? <div className="dossiers-loading" role="status">Chargement des dossiers…</div>
+      {isLoading ? <div className="dossiers-loading" role="status">Chargement des dossiers…</div>
         : displayed.length === 0 ? <div className="dossiers-empty">
           <Icon name={query ? "search_off" : "folder_open"} />
           <h2>{query ? "Aucun résultat" : view === "archived" ? "Aucun dossier archivé" : view === "classified" ? "Aucun dossier classé" : "Aucun dossier"}</h2>
-          {(query || scope !== "all" || view !== "active") && <button className="btn btn-outline" onClick={resetFilters}>Réinitialiser les filtres</button>}
-          {!query && scope === "all" && view === "active" && canCreate && <button className="btn btn-primary" onClick={() => setForm("create")}>Créer un dossier</button>}
+          {(query || view !== "active") && <button className="btn btn-outline" onClick={resetFilters}>Réinitialiser les filtres</button>}
+          {!query && view === "active" && canCreate && <button className="btn btn-primary" onClick={() => setForm("create")}>Créer un dossier</button>}
         </div> : <ul className="dossiers-rows">
           {displayed.map(dossier => {
             const count = metrics[dossier.id];
@@ -187,7 +196,7 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
           })}
         </ul>}
     </div>
-    {!list.isLoading && displayed.length > 0 && <div className="dossiers-result-count" role="status">{displayed.length} dossier{displayed.length > 1 ? "s" : ""}{search && ` pour « ${query.trim()} »`}</div>}
+    {!isLoading && displayed.length > 0 && <div className="dossiers-result-count" role="status">{displayed.length} dossier{displayed.length > 1 ? "s" : ""}{search && ` pour « ${query.trim()} »`}</div>}
 
     {selected && !form && <DossierDialog title={selected.name} drawer busy={busy} onClose={closeDetails}>
       <div className="dossiers-detail-body">
@@ -223,7 +232,7 @@ export function DossiersInlinePanel({ workspaceId, canManage, onDossierCreated, 
         const isCreation = form === "create";
         setForm(null); closeDetails();
         setNotice(isCreation ? `Dossier « ${saved.name} » créé.` : "Dossier mis à jour.");
-        if (isCreation) { resetFilters(); setSort("recent"); setCreatedId(saved.id); onDossierCreated?.(saved.id); }
+        if (isCreation) { resetFilters(); setScope("others"); setSort("recent"); setCreatedId(saved.id); onDossierCreated?.(saved.id); }
       }} />}
   </section>;
 }

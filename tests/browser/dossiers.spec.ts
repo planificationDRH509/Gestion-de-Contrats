@@ -24,6 +24,9 @@ test('Dossiers stays usable on desktop and mobile with accessible dialogs', asyn
   await page.goto('http://127.0.0.1:5179/app/contrats');
   await page.getByRole('button', { name: 'Dossiers', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Dossiers', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Mes dossiers/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.dossiers-row')).toHaveCount(0);
+  await page.getByRole('button', { name: /Autres dossiers/ }).click();
   await expect(page.locator('.dossiers-row')).toHaveCount(4);
   await page.screenshot({ path: '/tmp/contribution-dossiers-desktop.png', fullPage: true });
   await page.getByRole('searchbox', { name: 'Rechercher un dossier' }).fill('renouvellements');
@@ -47,7 +50,7 @@ test('Dossiers stays usable on desktop and mobile with accessible dialogs', asyn
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Nouveau dossier', exact: true })).toHaveCount(0);
-  expect(await page.getByLabel('Propriétaire des dossiers').evaluate(el => el.clientWidth)).toBeGreaterThan(150);
+  await expect(page.getByRole('button', { name: /Autres dossiers/ })).toBeVisible();
   await page.screenshot({ path: '/tmp/contribution-dossiers-mobile.png', fullPage: true });
   await detailButton.click();
   expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);

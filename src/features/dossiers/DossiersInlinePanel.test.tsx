@@ -56,27 +56,48 @@ describe("Dossiers workspace", () => {
     expect(screen.queryByRole("button", { name: /Créer un dossier|Nouveau dossier/ })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aucun dossier" })).toBeInTheDocument();
   });
-  it("combines ownership, state and accent-insensitive search without hiding colleagues by default", async () => {
+  it("shows personal contract dossiers by default and separates colleagues with state and search filters", async () => {
     setup();
-    expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ })).toHaveLength(3);
-    await userEvent.selectOptions(screen.getByLabelText("Propriétaire des dossiers"), "mine");
+    expect(screen.getByRole("button", { name: /Mes dossiers/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ })).toHaveLength(2);
     await userEvent.type(screen.getByRole("searchbox"), "jeremie");
     expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ })).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Ouvrir les contrats de Santé – Jérémie" }));
     expect(mocks.view).toHaveBeenCalledWith("Santé – Jérémie");
     await userEvent.click(screen.getByRole("button", { name: "Effacer la recherche" }));
-    await userEvent.selectOptions(screen.getByLabelText("Propriétaire des dossiers"), "others");
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
     await userEvent.click(screen.getByRole("button", { name: /Archivés/ }));
     expect(screen.getByRole("button", { name: "Ouvrir les contrats de Archives" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Classés/ }));
     expect(screen.getByRole("button", { name: "Ouvrir les contrats de Terminé" })).toBeInTheDocument();
   });
+  it("uses contract authors even when a colleague created the dossier and excludes empty own dossiers", async () => {
+    mocks.list.mockReturnValue({ data: [
+      dossier("Partagé", { createdBy: "other" }), dossier("Vide"), dossier("Collègue")
+    ], isLoading: false });
+    mocks.metrics.mockReturnValue({ data: {
+      "Partagé": { assignedCount: 2, doneCount: 0, authorIds: ["other", "me"] },
+      "Collègue": { assignedCount: 1, doneCount: 0, authorIds: ["other"] }
+    } });
+    setup();
+    expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Ouvrir les contrats de Partagé" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
+    expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Ouvrir les contrats de Partagé" })).not.toBeInTheDocument();
+  });
+  it("waits for contract authors before displaying either collection", async () => {
+    mocks.metrics.mockReturnValue({ isLoading: true });
+    setup();
+    expect(screen.getByText("Chargement des dossiers…")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
+    expect(screen.queryByRole("button", { name: /Ouvrir les contrats/ })).not.toBeInTheDocument();
+  });
   it("sorts deadlines with undated dossiers last and reports the real progress", async () => {
     setup();
     await userEvent.selectOptions(screen.getByLabelText("Trier les dossiers"), "deadline");
     expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ }).map(button => button.textContent)).toEqual([
-      expect.stringContaining("Santé"), expect.stringContaining("Recrutement"), expect.stringContaining("Ancien")
+      expect.stringContaining("Santé"), expect.stringContaining("Ancien")
     ]);
     expect(screen.getByRole("progressbar")).toHaveAttribute("value", "3");
     expect(screen.getByRole("progressbar")).toHaveAttribute("max", "10");
@@ -90,6 +111,7 @@ describe("Dossiers workspace", () => {
       dossier("Sans date", { createdAt: "", updatedAt: "" })
     ], isLoading: false });
     setup();
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
     expect(screen.getByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Ouvrir les contrats/ }).map(button => button.textContent)).toEqual([
       expect.stringContaining("Récent"), expect.stringContaining("Ancien"), expect.stringContaining("Sans date")
@@ -139,10 +161,12 @@ describe("Dossiers workspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Détails de Santé – Jérémie" }));
     await userEvent.click(screen.getByRole("button", { name: "Classer" }));
     expect(mocks.update).toHaveBeenCalledWith({ id: "Santé – Jérémie", workspaceId: "w", status: "classified" });
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
     await userEvent.click(screen.getByRole("button", { name: /Classés/ }));
     await userEvent.click(screen.getByRole("button", { name: "Détails de Terminé" }));
     await userEvent.click(screen.getByRole("button", { name: "Remettre en traitement" }));
     expect(mocks.update).toHaveBeenCalledWith({ id: "Terminé", workspaceId: "w", status: "active" });
+    await userEvent.click(screen.getByRole("button", { name: /Mes dossiers/ }));
     await userEvent.click(screen.getByRole("button", { name: /En traitement/ }));
     await userEvent.click(screen.getByRole("button", { name: "Détails de Santé – Jérémie" }));
     await userEvent.click(screen.getByRole("button", { name: "Supprimer le dossier" }));
