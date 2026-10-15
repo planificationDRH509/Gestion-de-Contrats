@@ -15,9 +15,12 @@ test('edits the grid, adapts gender and marks unapproved salaries in both entry 
     let body: unknown=[];
     if(url.includes('/app_users')) body={role:'admin'};
     if(url.includes('/rpc/read_salary_grid')) body=entries;
-    if(url.includes('/rpc/save_salary_grid_entry')) {
-      const {p_entry:entry}=route.request().postDataJSON();
-      entries=entries.map((e: {id: string}) => e.id===entry.id ? {...entry,version:entry.version+1} : e);
+    if(url.includes('/rpc/sync_reference_change')) {
+      const {p_change:change}=route.request().postDataJSON();
+      for (const patch of change.patches) {
+        entries = entries.filter((e: {id: string}) => e.id !== patch.id);
+        if (patch.after) entries.push(patch.after);
+      }
       body=entries;
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':'0-0/0'}});
@@ -87,3 +90,53 @@ test('edits the grid, adapts gender and marks unapproved salaries in both entry 
   await rowSalary.fill('42000');
   await expect(rowSalary).not.toHaveAttribute('aria-invalid','true');
 });
+
+for (const offline of [false, true]) {
+  test(`deletes a title after confirmation and persists after reload (${offline ? 'offline' : 'online'})`, async ({ page, context }) => {
+    const entry = structuredClone(seed.find((item: { masculine: string }) => item.masculine === 'Pharmacien'));
+    let entries = [entry];
+    let synced = false;
+    await page.addInitScript(() => {
+      localStorage.setItem('contribution_auth', JSON.stringify({ id: 'salary-delete-test', username: 'admin', name: 'Test', workspaceId: 'workspace_default', role: 'admin', taskSessionToken: 'test-token' }));
+      localStorage.setItem('contribution_last_activity', String(Date.now()));
+    });
+    await page.route('**/*.supabase.co/**', async route => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = [];
+      if (path.endsWith('/app_users')) body = { role: 'admin' };
+      if (path.endsWith('/read_salary_grid')) body = entries;
+      if (path.endsWith('/sync_reference_change')) {
+        const { p_change: change } = route.request().postDataJSON();
+        expect(change.scope).toBe('salary');
+        expect(change.patches).toEqual([{ id: entry.id, before: entry, after: null }]);
+        synced = true;
+        entries = [];
+        body = entries;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body), headers: { 'content-range': '0-0/0' } });
+    });
+    await page.goto('http://127.0.0.1:5179/app/parametres/grille-salariale');
+    const remove = page.getByRole('button', { name: 'Supprimer Pharmacien', exact: true });
+    await expect(remove).toBeVisible();
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: 'Supprimer le titre ?' });
+    await expect(dialog).toContainText('Pharmacien / Pharmacienne');
+    if (!offline) await page.screenshot({ path: '/tmp/salary-grid-delete-dialog.png' });
+    await dialog.getByRole('button', { name: 'Annuler' }).click();
+    await expect(remove).toBeVisible();
+    if (offline) await context.setOffline(true);
+    await remove.click();
+    await dialog.getByRole('button', { name: 'Supprimer', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(remove).toHaveCount(0);
+    await expect(page.locator('tbody')).toContainText('Aucun titre');
+    if (offline) {
+      expect(synced).toBe(false);
+      await context.setOffline(false);
+    }
+    await expect.poll(() => synced).toBe(true);
+    await page.reload();
+    await expect(page.locator('tbody')).toContainText('Aucun titre');
+    await expect(remove).toHaveCount(0);
+  });
+}

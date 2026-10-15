@@ -49,5 +49,25 @@ export function useSalaryGrid() {
     },
     onSuccess: entries => { if (!remote) cache(entries); client.setQueryData(queryKey, entries); void client.invalidateQueries({queryKey:['salary-grid']}); }
   });
-  return { ...query, entries: query.data ?? [], save: mutation.mutateAsync, saving: mutation.isPending };
+  const deletion = useMutation({
+    onMutate: () => client.cancelQueries({ queryKey }),
+    networkMode: 'always',
+    mutationFn: async (entry: SalaryGridEntry) => {
+      if (!can('settings.manage')) throw new Error('Suppression réservée aux administrateurs.');
+      const entries = cached() ?? (remote ? [] : seed);
+      const previous = entries.find(item => item.id === entry.id);
+      if (!previous || previous.version !== entry.version) throw new Error('Cette ligne a changé. Rechargez la grille.');
+      if (!remote) return entries.filter(item => item.id !== entry.id);
+      await queueReferenceChange(user!.workspaceId, { scope: 'salary', patches: [{ id: entry.id, before: previous, after: null }] });
+      return cached() ?? [];
+    },
+    onSuccess: entries => {
+      if (!remote) cache(entries);
+      client.setQueryData(queryKey, entries);
+      void client.invalidateQueries({ queryKey: ['salary-grid'] });
+    }
+  });
+  return { ...query, entries: query.data ?? [], save: mutation.mutateAsync, saving: mutation.isPending,
+    remove: deletion.mutateAsync, deleting: deletion.isPending };
+
 }

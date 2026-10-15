@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/auth';
 import { useSalaryGrid } from './salaryGridApi';
 import { normalizeTitle, SalaryGridEntry } from './salaryGrid';
@@ -6,10 +6,11 @@ import './salaryGrid.css';
 
 export function SalaryGridPage() {
   const { can } = useAuth();
-  const { entries, isLoading, error, save, saving, refetch } = useSalaryGrid();
+  const { entries, isLoading, error, save, saving, remove, deleting, refetch } = useSalaryGrid();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [editing, setEditing] = useState<SalaryGridEntry | null>(null);
+  const [removing, setRemoving] = useState<SalaryGridEntry | null>(null);
   const [amounts, setAmounts] = useState('');
   const [failure, setFailure] = useState('');
   const categories = [...new Set(entries.map(e => e.category))].sort((a,b) => a.localeCompare(b,'fr'));
@@ -26,6 +27,14 @@ export function SalaryGridPage() {
       setEditing(null);
     } catch (e) { setFailure(e instanceof Error ? e.message : (e as {message?:string}).message ?? 'Enregistrement impossible.'); }
   }
+  async function deleteTitle() {
+    if (!removing || deleting) return;
+    setFailure('');
+    try {
+      await remove(removing);
+      setRemoving(null);
+    } catch (e) { setFailure(e instanceof Error ? e.message : 'Suppression impossible.'); }
+  }
   return <section className="salary-grid-page">
     <div className="salary-grid-heading"><h1>Grille Salariale</h1>{can('settings.manage') && <button className="btn btn-primary" onClick={() => edit({id:crypto.randomUUID(), masculine:'',feminine:'',category:'Personnel administratif',jobType:'Technique',salaries:[],aliases:[],source:'',sourceRows:[],notes:'',active:true,version:0})}>Ajouter un titre</button>}</div>
     <div className="salary-grid-toolbar">
@@ -36,9 +45,10 @@ export function SalaryGridPage() {
     {isLoading && <p role="status">Chargement…</p>}
     {error && <div role="alert">Grille indisponible. <button className="btn" onClick={() => void refetch()}>Réessayer</button></div>}
     <div className="salary-grid-table"><table><thead><tr><th>Titre masculin</th><th>Titre féminin</th><th>Type de personnel</th><th>Type de poste</th><th>Salaires (HTG)</th><th>Statut</th>{can('settings.manage') && <th aria-label="Actions" />}</tr></thead><tbody>
-      {rows.map(entry => <tr key={entry.id} className={entry.active ? '' : 'salary-grid-inactive'}><td>{entry.masculine}</td><td>{entry.feminine}</td><td>{entry.category}</td><td>{entry.jobType}</td><td className="salary-grid-money">{entry.salaries.map(s => s.toLocaleString('fr-HT')).join(' / ')}</td><td>{entry.active ? 'Actif' : 'À valider / inactif'}</td>{can('settings.manage') && <td><button className="btn" aria-label={`Modifier ${entry.masculine}`} onClick={() => edit(entry)}>Modifier</button></td>}</tr>)}
+      {rows.map(entry => <tr key={entry.id} className={entry.active ? '' : 'salary-grid-inactive'}><td>{entry.masculine}</td><td>{entry.feminine}</td><td>{entry.category}</td><td>{entry.jobType}</td><td className="salary-grid-money">{entry.salaries.map(s => s.toLocaleString('fr-HT')).join(' / ')}</td><td>{entry.active ? 'Actif' : 'À valider / inactif'}</td>{can('settings.manage') && <td><button className="btn" aria-label={`Modifier ${entry.masculine}`} onClick={() => edit(entry)}>Modifier</button><button type="button" className="btn salary-grid-delete" aria-label={`Supprimer ${entry.masculine}`} title="Supprimer le titre" onClick={() => { setRemoving(entry); setFailure(''); }}><span className="material-symbols-rounded" aria-hidden="true">delete</span></button></td>}</tr>)}
       {!isLoading && !rows.length && <tr><td colSpan={can('settings.manage') ? 7 : 6}>Aucun titre</td></tr>}
     </tbody></table></div>
+    {removing && <DeleteTitleDialog entry={removing} pending={deleting} failure={failure} onCancel={() => setRemoving(null)} onConfirm={() => void deleteTitle()} />}
     {editing && <div className="salary-grid-overlay"><form className="salary-grid-editor" role="dialog" aria-modal="true" aria-labelledby="salary-grid-edit-title" onSubmit={submit} onKeyDown={event => { if(event.key==='Escape' && !saving) setEditing(null); }}>
       <h2 id="salary-grid-edit-title">{editing.version ? 'Modifier le titre' : 'Ajouter un titre'}</h2>
       <label>Titre masculin<input autoFocus required className="input" value={editing.masculine} onChange={e => setEditing({...editing,masculine:e.target.value})} /></label>
@@ -55,4 +65,21 @@ export function SalaryGridPage() {
       <div className="salary-grid-actions"><button type="button" className="btn" disabled={saving} onClick={() => setEditing(null)}>Annuler</button><button className="btn btn-primary" disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button></div>
     </form></div>}
   </section>;
+}
+
+function DeleteTitleDialog({ entry, pending, failure, onCancel, onConfirm }: {
+  entry: SalaryGridEntry; pending: boolean; failure: string; onCancel: () => void; onConfirm: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  return <dialog ref={dialog} className="salary-grid-delete-dialog" aria-labelledby="salary-grid-delete-title"
+    onCancel={event => { event.preventDefault(); if (!pending) onCancel(); }}>
+    <h2 id="salary-grid-delete-title">Supprimer le titre ?</h2>
+    <p>{entry.masculine} / {entry.feminine}</p>
+    {failure && <p role="alert" className="form-error">{failure}</p>}
+    <div className="salary-grid-actions">
+      <button type="button" className="btn" autoFocus disabled={pending} onClick={onCancel}>Annuler</button>
+      <button type="button" className="btn salary-grid-delete" disabled={pending} onClick={onConfirm}>{pending ? 'Suppression…' : 'Supprimer'}</button>
+    </div>
+  </dialog>;
 }
