@@ -16,7 +16,7 @@ beforeEach(async () => {
   await write(null, { workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [],
     contractTags: [], contractLists: [], cachedListWorkspaces: [], printJobs: [], outbox: [], syncMetadata: {} });
   const existing = (await records.readRecords())!;
-  await write(existing, { ...existing, workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [], contractTags: [], outbox: [], contractLists: [], cachedListWorkspaces: [] });
+  await write(existing, { ...existing, workspaces: [], applicants: [], contracts: [], dossiers: [], dossierAliases: [], tags: [], contractTags: [], outbox: [], contractLists: [], cachedListWorkspaces: [] });
   db = await import("./localDb");
   await db.initializeLocalDb();
   const initial = db.loadDb();
@@ -25,6 +25,47 @@ beforeEach(async () => {
   await db.flushLocalDbWrites();
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("remembers an ignored import after a reload without retrying it or keeping a phantom contract", async () => {
+  const { LocalContractRepository } = await import("./localContractRepository");
+  const { getPendingOutbox } = await import("./offlineStore");
+  const { skipDuplicateContract } = await import("./skipDuplicateContract");
+  const contract = await new LocalContractRepository().create({ workspaceId: "w", applicantId: "123-456-789-0", nif: "123-456-789-0",
+    gender: "Homme", firstName: "Jean", lastName: "Louis", address: "Delmas", status: "saisie", position: "Agent", assignment: "Centre",
+    salaryNumber: 30000, salaryText: "TRENTE MILLE", durationMonths: 12, annee_fiscale: "2026-2027", skipFiscalYearDuplicate: true });
+  skipDuplicateContract(getPendingOutbox()[0], { ...contract, id: "server-existing" });
+  await db.flushLocalDbWrites();
+  vi.resetModules();
+  const reloaded = await import("./localDb");
+  await reloaded.initializeLocalDb();
+  const { readSkippedContractIds } = await import("./skipDuplicateContract");
+  expect(readSkippedContractIds("w").has(contract.id)).toBe(true);
+  expect(readSkippedContractIds("other").size).toBe(0);
+  expect(reloaded.loadDb().contracts).toEqual([]);
+  const receipt = reloaded.loadDb().outbox[0];
+  expect(receipt).toMatchObject({ skippedDuplicateId: "server-existing", syncedAt: expect.any(String), payload: { id: contract.id, salaryNumber: 30000 } });
+  expect((await import("./offlineStore")).getPendingOutbox()).toEqual([]);
+});
+
+it("persists reconciled folder IDs across reloads and resolves stale writes from another tab", async () => {
+  const { LocalDossierRepository } = await import("./localDossierRepository");
+  const { replaceLocalDossierId } = await import("./offlineStore");
+  const dossier = await new LocalDossierRepository().create({ workspaceId: "w", name: "Import" });
+  const stale = db.loadDb();
+  replaceLocalDossierId("w", dossier.id, { ...dossier, id: "server-dossier" });
+  await db.flushLocalDbWrites();
+  const other = structuredClone(stale);
+  other.outbox.push({ id: "late-contract", workspaceId: "w", type: "contract.create", createdAt: "2026-10-16", payload: { id: "late-contract", dossierId: dossier.id } });
+  await write(stale, other);
+  vi.resetModules();
+  const reloaded = await import("./localDb");
+  await reloaded.initializeLocalDb();
+  const { getPendingOutbox } = await import("./offlineStore");
+  const { LocalDossierRepository: ReloadedDossiers } = await import("./localDossierRepository");
+  expect(await new ReloadedDossiers().getById(dossier.id)).toMatchObject({ id: "server-dossier" });
+  expect(getPendingOutbox().find(item => item.id === "late-contract")?.payload.dossierId).toBe("server-dossier");
+  expect(reloaded.loadDb().dossierAliases).toEqual([{ id: dossier.id, workspaceId: "w", dossierId: "server-dossier" }]);
+});
 
 it.each(['add', 'remove'] as const)('keeps list membership and contract status consistent across two tabs: %s', async action => {
   const { LocalContractRepository } = await import('./localContractRepository');

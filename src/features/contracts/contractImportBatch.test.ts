@@ -3,6 +3,8 @@ import { LocalApplicantRepository } from "../../data/local/localApplicantReposit
 import { LocalContractRepository } from "../../data/local/localContractRepository";
 import { LocalDossierRepository } from "../../data/local/localDossierRepository";
 import { runContractImport, type ImportRunInput } from "./contractImportRun";
+import { getPendingOutbox } from "../../data/local/offlineStore";
+import { skipDuplicateContract } from "../../data/local/skipDuplicateContract";
 import { loadImportBatch, undoContractImport } from "./contractImportBatch";
 import type { ContractImportDraft } from "./contractImport";
 const provider = () => ({ applicants: new LocalApplicantRepository(), contracts: new LocalContractRepository(), dossiers: new LocalDossierRepository() });
@@ -11,6 +13,21 @@ const input = (rows: ContractImportDraft[]): ImportRunInput => ({ workspaceId: "
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("import batch undo", () => {
+  it("does not undo the existing server contract or its identity when an imported duplicate was skipped", async () => {
+    const p = provider();
+    const imported = await runContractImport(p, input([row(0)]));
+    const local = imported.contracts[0];
+    skipDuplicateContract(getPendingOutbox().find(item => item.type === "contract.create" && item.payload.id === local.id)!, { ...local, id: "existing-server" });
+    const remove = vi.spyOn(p.contracts, "softDelete");
+    const update = vi.spyOn(p.contracts, "update");
+    const upsert = vi.spyOn(p.applicants, "upsert");
+    const result = await undoContractImport(p, "w", "u", "batch");
+    expect(result.errors).toEqual([]);
+    expect(remove).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect((await runContractImport(p, input([row(0)]))).skipped).toEqual([{ contractId: row(0).contractId, skipped: true }]);
+  });
   it("removes new contracts and restores moved/replaced contracts and their previous identification", async () => {
     const p = provider();
     const initial = await runContractImport(p, { ...input([row(0), row(1)]), batchId: undefined });

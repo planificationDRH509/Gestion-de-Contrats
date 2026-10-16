@@ -187,6 +187,10 @@ export type OutboxItem = {
   /** Independent of createdAt, which also preserves dependency ordering. */
   modifiedAt?: string;
   syncedAt?: string | null;
+  /** Completed without insertion because this NIF/fiscal year already exists. */
+  skippedDuplicateId?: string;
+  /** Explicit cancellation retained so an import journal cannot recreate it. */
+  ignoredAt?: string;
   lastError?: string | null;
   failureKind?: "temporary" | "correction" | "action" | "dependency";
   /** Keep the row in the correction area until its server acknowledgement. */
@@ -254,14 +258,14 @@ export type ContractListResult = {
 export type CreateContractInput = Omit<
   Contract,
   "id" | "createdAt" | "updatedAt" | "deletedAt" | "salaryText"
-> & { id?: string; salaryText?: string };
+> & { id?: string; salaryText?: string; skipFiscalYearDuplicate?: boolean };
 
 export type UpdateContractInput = Partial<CreateContractInput> & { id: string; createdAt?: string };
 
 export type UpsertApplicantInput = Omit<
   Applicant,
   "id" | "createdAt" | "updatedAt" | "deletedAt"
-> & { id?: string; expectedUpdatedAt?: string };
+> & { id?: string; expectedUpdatedAt?: string; importContractId?: string };
 
 export type CreateDossierInput = {
   workspaceId: string;

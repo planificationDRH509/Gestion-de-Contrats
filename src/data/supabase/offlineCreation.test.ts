@@ -1,4 +1,4 @@
-import { discardContractSyncChanges } from "./supabaseProvider";
+import { deleteSyncResolutionContract, discardContractSyncChanges } from "./supabaseProvider";
 import { cacheMinisters } from "../../features/settings/ministersCache";
 import { LEGACY_MINISTER } from "../../lib/ministers";
 import { isContractCorrection } from "../local/syncFailures";
@@ -50,6 +50,78 @@ beforeEach(() => {
 });
 
 describe("offline contract creation and replay", () => {
+  it("uses the reviewed server version when deleting a synchronization conflict", async () => {
+    const reviewed = { ...loadDb().contracts[0], id: "reviewed-contract", updatedAt: "2026-10-01T10:00:00Z",
+      remoteUpdatedAt: "2026-10-01T10:00:00Z" };
+    const deletion = reply(null);
+    mock.from.mockReturnValue(deletion);
+
+    await expect(deleteSyncResolutionContract(reviewed, "2026-10-02T10:00:00Z")).rejects.toThrow("Le contrat a changé");
+    expect(mock.from).toHaveBeenCalledTimes(1);
+    expect(deletion.update).toHaveBeenCalledWith(expect.objectContaining({
+      deleted_at: "2026-10-02T10:00:00Z", modified_at: "2026-10-02T10:00:00Z"
+    }));
+    expect(deletion.eq).toHaveBeenCalledWith("updated_at", reviewed.remoteUpdatedAt);
+    expect(deletion.eq).toHaveBeenCalledWith("workspace_id", reviewed.workspaceId);
+    expect(deletion.is).toHaveBeenCalledWith("deleted_at", null);
+  });
+
+  it("replays later imports using a folder ID reconciled during a previous upload", async () => {
+    const provider = createSupabaseProvider();
+    const folder = await provider.dossiers.create({ workspaceId: input.workspaceId, name: "Import" });
+    const first = await provider.contracts.create({ ...input, dossierId: folder.id });
+    const folderRow = { id: "server-dossier", workspace_id: input.workspaceId, name: "Import", status: "active", created_at: "2026-01-01" };
+    const firstInsert = reply([{ ...contractRow(first.id), dossier_id: "server-dossier" }]);
+    mock.from.mockReturnValueOnce(reply(folderRow)).mockReturnValueOnce(reply(null))
+      .mockReturnValueOnce(reply([])).mockReturnValueOnce(firstInsert);
+    await syncSupabaseOutbox();
+    expect(firstInsert.insert).toHaveBeenCalledWith([expect.objectContaining({ dossier_id: "server-dossier" })]);
+    expect(getPendingOutbox()).toEqual([]);
+    const second = await provider.contracts.create({ ...input, dossierId: folder.id, nif: "999-999-999-9", applicantId: "999-999-999-9" });
+    setOutboxError(getPendingOutbox()[0].id, "Impossible de créer les contrats. Dossier inaccessible");
+    const secondInsert = reply([{ ...contractRow(second.id), nif: second.nif, dossier_id: "server-dossier" }]);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(secondInsert);
+    await syncSupabaseOutbox();
+    expect(secondInsert.insert).toHaveBeenCalledWith([expect.objectContaining({ dossier_id: "server-dossier" })]);
+    expect(getPendingOutbox()).toEqual([]);
+    expect(await provider.contracts.getById(second.id)).toMatchObject({ dossierId: "server-dossier" });
+  });
+
+  it("still waits for an earlier rejected identity while uploading independent contracts", async () => {
+    upsertApplicantOffline(applicant);
+    const contracts = new LocalContractRepository();
+    const dependent = await contracts.create(input);
+    const independent = await contracts.create({ ...input, nif: "999-999-999-9", applicantId: "999-999-999-9" });
+    const insertion = reply([{ ...contractRow(independent.id), nif: independent.nif }]);
+    mock.from.mockReturnValueOnce(reply(null, { code: "23514", message: "Identité refusée" }))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(insertion);
+    await syncSupabaseOutbox();
+    expect(insertion.insert).toHaveBeenCalledWith([expect.objectContaining({ id_contrat: independent.id })]);
+    expect(getPendingOutbox()).toMatchObject([
+      { type: "applicant.upsert", lastError: expect.stringContaining("Identité refusée") },
+      { type: "contract.create", payload: { id: dependent.id }, failureKind: "dependency" }
+    ]);
+  });
+
+  it("uploads a contract and its list before a later identity edit that is rejected", async () => {
+    const user = { id: "author", name: "Author", username: "author", role: "admin" as const,
+      workspaceId: input.workspaceId, taskSessionToken: "session" };
+    localStorage.setItem("contribution_auth", JSON.stringify(user));
+    const created = await new LocalContractRepository().create(input);
+    const listId = await mutateContractListOffline(user, { action: "create", durationMonths: 12, contractIds: [created.id] });
+    upsertApplicantOffline({ ...applicant, address: "Jacmel" });
+    expect(getPendingOutbox().map(item => item.type)).toEqual(["contract.create", "list.operation", "applicant.upsert"]);
+    const insertion = reply([contractRow(created.id)]);
+    mock.from.mockImplementation(table => table === "identification"
+      ? reply(null, { code: "23514", message: "Identité refusée" })
+      : reply(null));
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(insertion);
+    await syncSupabaseOutbox();
+    expect(insertion.insert).toHaveBeenCalled();
+    expect(mock.rpc).toHaveBeenCalledWith("sync_contract_list", expect.objectContaining({ p_operation: expect.objectContaining({ createId: listId }) }));
+    expect(getPendingOutbox()).toEqual([expect.objectContaining({ type: "applicant.upsert", lastError: expect.stringContaining("Identité refusée") })]);
+  });
+
   it("replays the minister captured at creation even after the active minister changes", async () => {
     const successor = { ...LEGACY_MINISTER, id: "successor", fullName: "Marie TEST", gender: "Femme" as const, nif: "111-222-333-4", ninu: "1112223334" };
     cacheMinisters({ ministers: [LEGACY_MINISTER, successor], currentMinisterId: successor.id });
@@ -525,13 +597,103 @@ describe("sync recovery", () => {
     expect(getPendingOutbox()).toHaveLength(0);
   });
 
-  it("retains a creation when the same NIF/year was created on the cloud while offline", async () => {
-    const contract = await new LocalContractRepository().create(input);
+  it("ignores an imported creation when the same NIF/year was created on the cloud while offline", async () => {
+    const contract = await new LocalContractRepository().create({ ...input, skipFiscalYearDuplicate: true });
     const duplicates = reply([contractRow("another-device")]);
     mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(duplicates);
     await syncSupabaseOutbox();
     expect(duplicates.insert).not.toHaveBeenCalled();
-    expect(getPendingOutbox().find((item) => item.payload.id === contract.id)?.lastError).toContain("existe déjà");
+    expect(getPendingOutbox()).toEqual([]);
+    expect(loadDb().contracts.find(item => item.id === contract.id)).toBeUndefined();
+    expect(loadDb().contracts.find(item => item.id === "another-device")).toBeDefined();
+    expect(loadDb().outbox.find(item => item.payload.id === contract.id)).toMatchObject({ skippedDuplicateId: "another-device", lastError: null, syncedAt: expect.any(String) });
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+  });
+
+  it("ignores the imported identity changes too when the cloud already has the contract", async () => {
+    upsertApplicantOffline({ ...applicant, firstName: "Nouveau", address: "Jacmel", importContractId: "duplicate-import" });
+    await new LocalContractRepository().create({ ...input, id: "duplicate-import", skipFiscalYearDuplicate: true });
+    const identity = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Jean", nom: "LOUIS", sexe: "Homme", adresse: "Delmas", created_at: "2026-01-01" };
+    const originalIdentity = reply(identity);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([contractRow("server-existing")]))
+      .mockReturnValueOnce(originalIdentity);
+    await syncSupabaseOutbox();
+    expect(originalIdentity.update).not.toHaveBeenCalled();
+    expect(originalIdentity.insert).not.toHaveBeenCalled();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(loadDb().contracts.some(c => c.id === "duplicate-import")).toBe(false);
+    expect(loadDb().applicants.find(a => a.nif === applicant.nif)).toMatchObject({ firstName: "Jean", address: "Delmas" });
+  });
+
+  it("waits for an import's contract to be queued before uploading its identity, then completes both", async () => {
+    localStorage.setItem(`contract_import_request:${input.workspaceId}:in-progress`, JSON.stringify({ ...input, id: "in-progress" }));
+    upsertApplicantOffline({ ...applicant, importContractId: "in-progress" });
+    await syncSupabaseOutbox();
+    expect(mock.from).not.toHaveBeenCalled();
+    expect(getPendingOutbox()).toMatchObject([{ type: "applicant.upsert" }]);
+    await new LocalContractRepository().create({ ...input, id: "in-progress", skipFiscalYearDuplicate: true });
+    const identity = { nif: applicant.nif, workspace_id: input.workspaceId, prenom: "Jean", nom: "LOUIS", sexe: "Homme", adresse: "Delmas" };
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply([])).mockReturnValueOnce(reply(identity))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(reply([contractRow("in-progress")]));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+  });
+
+  it("does not leave an abandoned import's identity waiting forever", async () => {
+    upsertApplicantOffline({ ...applicant, importContractId: "abandoned" });
+    setWorkspaceSyncMetadata(input.workspaceId, { lastError: "Ancienne erreur" });
+    await syncSupabaseOutbox();
+    expect(mock.from).not.toHaveBeenCalled();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+  });
+
+  it("keeps a manual creation visible for correction when it collides with a cloud contract", async () => {
+    const contract = await new LocalContractRepository().create(input);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([contractRow("another-device")]));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toMatchObject([{ payload: { id: contract.id }, lastError: expect.stringContaining("existe déjà") }]);
+    expect(loadDb().contracts.some(item => item.id === contract.id)).toBe(true);
+  });
+
+  it("recovers an older blocked import, continues the other contracts and excludes its references from queued lists", async () => {
+    const user = { id: "author", name: "Author", username: "author", role: "admin" as const,
+      workspaceId: input.workspaceId, taskSessionToken: "session" };
+    localStorage.setItem("contribution_auth", JSON.stringify(user));
+    const repo = new LocalContractRepository();
+    const duplicate = await repo.create(input);
+    const independent = await repo.create({ ...input, nif: "999-999-999-9", applicantId: "999-999-999-9" });
+    localStorage.setItem(`contract_import_batch:${input.workspaceId}:author:old-batch`, JSON.stringify({
+      workspaceId: input.workspaceId, userId: "author", entries: [{ before: null, after: duplicate }]
+    }));
+    setOutboxError(getPendingOutbox()[0].id, "Un contrat existe déjà pour le NIF dans l’année fiscale.");
+    const listId = await mutateContractListOffline(user, { action: "create", durationMonths: 12, contractIds: [duplicate.id, independent.id] });
+    await mutateContractListOffline(user, { action: "visa", listId: listId!, visaNumber: "V-1", version: loadDb().contractLists.find(list => list.id === listId)!.version });
+    queueOutbox(input.workspaceId, "tag.assign", { contractId: duplicate.id, tagId: "tag" });
+    const insertion = reply([{ ...contractRow(independent.id), nif: independent.nif }]);
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([contractRow("server-existing")]))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([])).mockReturnValueOnce(insertion);
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(insertion.insert).toHaveBeenCalledWith([expect.objectContaining({ id_contrat: independent.id })]);
+    expect(mock.rpc).toHaveBeenCalledTimes(2);
+    expect(mock.rpc.mock.calls[0][1]).toMatchObject({ p_operation: { contractIds: [independent.id] }, p_expected_memberships: { [independent.id]: null } });
+    expect(mock.rpc.mock.calls[0][1].p_expected_memberships).not.toHaveProperty(duplicate.id);
+    expect(mock.rpc.mock.calls[1][1].p_expected_lists[listId!].members.map((member: { id: string }) => member.id)).toEqual([independent.id]);
+    expect(loadDb().contractLists.find(list => list.id === listId)?.members.map(member => member.id)).toEqual([independent.id]);
+    expect(getSupabaseSyncState(input.workspaceId).lastError).toBeNull();
+    await syncSupabaseOutbox();
+    expect(mock.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("continues to report an unrelated server rejection for an imported creation", async () => {
+    const contract = await new LocalContractRepository().create({ ...input, skipFiscalYearDuplicate: true });
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply(null, { code: "42501", message: "Dossier inaccessible" }));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toMatchObject([{ payload: { id: contract.id }, lastError: expect.stringContaining("Dossier inaccessible") }]);
   });
 });
 

@@ -1,0 +1,32 @@
+.sync-issues-dialog { width: min(740px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: 14px; color: var(--ink); background: var(--panel); box-shadow: var(--shadow-premium); }
+.sync-issues-dialog::backdrop { background: rgb(0 0 0 / .28); backdrop-filter: blur(2px); }
+.sync-issues-heading, .sync-issues-footer { position: sticky; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 20px 24px; background: var(--panel); }
+.sync-issues-heading { top: 0; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.sync-issues-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
+.sync-issues-heading > span, .sync-issues-footer > span { color: var(--ink-muted); font-size: 12px; }
+.sync-issues-body { padding: 8px 24px; }
+.sync-issues-list { margin: 0; padding: 0; list-style: none; }
+.sync-issue { padding: 20px 0; }
+.sync-issues-list > li + li { border-top: 1px solid var(--border); }
+.sync-issue h3 { margin: 0; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.sync-issue p { margin: 8px 0 14px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.sync-issue-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sync-issue-actions .btn { min-height: 32px; padding: 7px 10px; font-size: 11px; }
+.sync-issue-actions .sync-issue-danger { color: var(--danger); }
+.sync-issues-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.sync-issues-dialog button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sync-issues-error { padding: 10px 12px; border-radius: 8px; color: var(--danger); background: var(--danger-soft); font-size: 12px; overflow-wrap: anywhere; }
+.sync-issue .sync-issues-error { margin-bottom: 0; }
+.sync-issues-empty { padding: 24px 0; color: var(--ink-muted); font-size: 13px; text-align: center; }
+.sync-issues-status { font-size: 12px; color: var(--ink-muted); }
+.sync-issues-footer { bottom: 0; justify-content: flex-end; border-top: 1px solid var(--border); }
+.sync-issues-footer > span { margin-right: auto; }
+.sidebar.collapsed .offline-sync-card { justify-content: center; padding: 9px 0; }
+@media (max-width: 540px) {
+  .sync-issues-heading, .sync-issues-footer { padding: 16px; }
+  .sync-issues-body { padding: 0 16px; }
+  .sync-issues-footer { flex-wrap: wrap; }
+}
+@media print {
+  .sync-issues-dialog, .sync-issues-dialog::backdrop { display: none !important; }
+}

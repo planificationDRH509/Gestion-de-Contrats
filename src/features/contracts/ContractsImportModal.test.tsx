@@ -6,6 +6,7 @@ import { ContractsImportModal } from "./ContractsImportModal";
 import { loadContractImportDraft, saveContractImportDraft, saveImportMapping } from "./contractImportDraft";
 import { buildImportEditableRows, inferImportMapping, parsePastedContractTable } from "./contractImport";
 import type { Applicant, Contract } from "../../data/types";
+import { loadDb, saveDb } from "../../data/local/localDb";
 
 const mocks = vi.hoisted(() => ({ registry: undefined as MinisterRegistry | undefined, applicants: [] as Applicant[], contracts: [] as Contract[], mutate: vi.fn(), undo: vi.fn() }));
 vi.mock("../settings/ministersApi", () => ({ useMinisters: () => ({ registry: mocks.registry }) }));
@@ -81,15 +82,65 @@ describe("import review", () => {
     expect(loadContractImportDraft("w", "u")?.editableRows[0].importedContractId).toBeTruthy();
     expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
   });
-  it("checks historical contracts beyond the displayed page and blocks the current fiscal year", () => {
+  it("ignores historical same-year contracts beyond the displayed page without showing an error", () => {
     mocks.contracts = [{ id: "outside-page", workspaceId: "w", applicantId: "123-456-789-0", nif: "123-456-789-0", firstName: "Jean", lastName: "Louis", gender: "Homme", address: "Jacmel", status: "saisie", position: "Directeur", assignment: "Nord", salaryNumber: 40000, salaryText: "", durationMonths: 6, annee_fiscale: "2026-2027", createdAt: "2026-10-01", updatedAt: "2026-10-01" }];
     render(<ContractsImportModal {...props} existingContracts={[]} />); paste();
     fireEvent.click(screen.getByRole("button", { name: "Voir les différences de la ligne 2" }));
     expect(screen.getByText("Directeur", { selector: "p" })).toBeInTheDocument();
-    expect(screen.getByLabelText("NIF, ligne 2")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("NIF, ligne 2")).not.toHaveAttribute("aria-invalid");
     expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
     fireEvent.click(screen.getByLabelText("Sélectionner la ligne 2"));
     expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
+  });
+
+  it("stops displaying a saved duplicate error when the row is now ignored", () => {
+    mocks.contracts = [{ id: "old", workspaceId: "w", applicantId: "123-456-789-0", nif: "123-456-789-0", firstName: "Jean", lastName: "Louis", gender: "Homme", address: "Delmas", status: "saisie", position: "Agent", assignment: "MSPP", salaryNumber: 30000, salaryText: "", durationMonths: 12, annee_fiscale: "2026-2027", createdAt: "2026-10-01", updatedAt: "2026-10-01" }];
+    const table = parsePastedContractTable(text);
+    const mapping = inferImportMapping(table.headers);
+    const rows = buildImportEditableRows(table, mapping);
+    rows[0].importError = "Un contrat existe déjà pour le NIF dans l’année fiscale.";
+    saveContractImportDraft("w", "u", { clipboardText: text, mapping, editableRows: rows, selectedRowIds: rows.map(row => row.id), bulkField: "assignment", bulkValue: "", selectedDossierId: "", responsibleUserId: "u" });
+    render(<ContractsImportModal {...props} />);
+    expect(screen.queryByText(/Un contrat existe déjà/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("NIF, ligne 2")).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByRole("button", { name: "Importer 1 contrat(s)" })).toBeEnabled();
+  });
+
+  it("persists a duplicate discovered during import as excluded without counting it as imported or failed", async () => {
+    mocks.mutate.mockImplementation(async input => {
+      input.onRowResult({ contractId: input.rows[0].contractId, skipped: true });
+      const contract = { id: input.rows[1].contractId };
+      input.onRowResult({ contractId: input.rows[1].contractId, contract });
+      return { contracts: [contract], failures: [], skipped: [{ contractId: input.rows[0].contractId, skipped: true }] };
+    });
+    render(<ContractsImportModal {...props} />); paste();
+    fireEvent.click(screen.getByRole("button", { name: "Importer 2 contrat(s)" }));
+    await waitFor(() => expect(screen.getByText("1 importée(s)")).toBeInTheDocument());
+    expect(screen.queryByText("1 à corriger")).not.toBeInTheDocument();
+    const saved = loadContractImportDraft("w", "u")!;
+    expect(saved.editableRows[0]).toMatchObject({ excluded: true });
+    expect(saved.editableRows[0].importError).toBeUndefined();
+    expect(saved.editableRows[0].importedContractId).toBeUndefined();
+    expect(saved.editableRows[1].importedContractId).toBeTruthy();
+  });
+
+  it("reconciles a saved receipt when background synchronization ignores the duplicate", async () => {
+    const table = parsePastedContractTable(text);
+    const mapping = inferImportMapping(table.headers);
+    const rows = buildImportEditableRows(table, mapping);
+    rows[0].importedContractId = rows[0].contractId;
+    saveContractImportDraft("w", "u", { clipboardText: text, mapping, editableRows: rows, selectedRowIds: [], bulkField: "assignment", bulkValue: "", selectedDossierId: "", responsibleUserId: "u" });
+    render(<ContractsImportModal {...props} />);
+    expect(screen.getByText("1 importée(s)")).toBeInTheDocument();
+    const db = loadDb();
+    db.outbox.push({ id: "ignored", workspaceId: "w", type: "contract.create", payload: { id: rows[0].contractId },
+      createdAt: "2026-10-16", syncedAt: "2026-10-16", skippedDuplicateId: "server-existing" });
+    saveDb(db);
+    fireEvent(window, new CustomEvent("contribution-offline-sync"));
+    await waitFor(() => expect(screen.queryByText("1 importée(s)")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByText("Fermer", { selector: "button" }));
+    expect(loadContractImportDraft("w", "u")?.editableRows[0]).toMatchObject({ excluded: true });
+    expect(loadContractImportDraft("w", "u")?.editableRows[0].importedContractId).toBeUndefined();
   });
 
   it("persists the duplicate choice and submits keep even when new values are invalid", async () => {

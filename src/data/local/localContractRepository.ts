@@ -1,4 +1,5 @@
 import { newEditTimestamp } from "../latestEdit";
+import { resolveDossierId } from "./dossierAliases";
 import { repairContractOutbox } from "./repairContractOutbox";
 import { projectInstitutionAssignment } from './referenceOverlay';
 import { sameImportContract } from "../../features/contracts/contractImportBatch";
@@ -86,7 +87,8 @@ export function readCachedContracts(params: ContractListParams): ContractListRes
     }
 
     if (params.dossierId !== undefined) {
-      items = items.filter((contract) => (contract.dossierId ?? null) === params.dossierId);
+      const dossierId = resolveDossierId(db, params.workspaceId, params.dossierId);
+      items = items.filter((contract) => (contract.dossierId ?? null) === dossierId);
     }
 
     if (params.tagId) {
@@ -173,6 +175,8 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async create(input: CreateContractInput): Promise<Contract> {
+    const { skipFiscalYearDuplicate, ...values } = input;
+    input = values;
     assertContractDuration(input.durationMonths);
     input = readMinistersCache() || input.ministerId ? bindContractMinister(input) : migrateLegacyContract(input);
     input = { ...input, annee_fiscale: input.annee_fiscale || getStoredFiscalYear() };
@@ -184,7 +188,7 @@ export class LocalContractRepository implements ContractRepository {
       salaryText: numberToFrenchWords(input.salaryNumber),
       firstName: formatFirstName(input.firstName),
       lastName: formatLastName(input.lastName),
-      dossierId: input.dossierId ?? null,
+      dossierId: resolveDossierId(db, input.workspaceId, input.dossierId),
       id: input.id ?? createId(),
       createdAt: timestamp,
       modifiedAt: timestamp, updatedAt: timestamp,
@@ -194,7 +198,7 @@ export class LocalContractRepository implements ContractRepository {
     assertListStatus(db, contract, contract.status);
     db.contracts.push(contract);
     saveDb(db);
-    queueOutbox(input.workspaceId, "contract.create", contract);
+    queueOutbox(input.workspaceId, "contract.create", { ...contract, ...(skipFiscalYearDuplicate ? { skipFiscalYearDuplicate: true } : {}) });
     await flushLocalDbWrites();
     return contract;
   }
@@ -216,6 +220,7 @@ export class LocalContractRepository implements ContractRepository {
       throw new Error("Contrat introuvable");
     }
     const previous = db.contracts[contractIndex];
+    if (input.dossierId !== undefined) input = { ...input, dossierId: resolveDossierId(db, previous.workspaceId, input.dossierId) };
     if (expected && (previous.workspaceId !== expected.workspaceId || previous.updatedAt !== expected.updatedAt || !sameImportContract(withTags(previous, db), expected))) throw new Error("Le contrat a changé. Actualisez le lot avant de réessayer.");
     if (input.ministerId !== undefined && input.ministerId !== previous.ministerId) throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
     const timestamp = now();
@@ -271,6 +276,7 @@ export class LocalContractRepository implements ContractRepository {
 
     const db = loadDb();
     const previousContracts = db.contracts.filter(c => c.workspaceId === workspaceId && !c.deletedAt && contractIds.includes(c.id));
+    dossierId = resolveDossierId(db, workspaceId, dossierId);
     const idSet = new Set(contractIds);
     let updatedCount = 0;
 

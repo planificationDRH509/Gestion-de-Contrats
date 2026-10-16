@@ -1,5 +1,6 @@
 import type { DataProvider } from "../../data/dataProvider";
 import type { Applicant, Contract, UpdateContractInput } from "../../data/types";
+import { readSkippedContractIds } from "../../data/local/skipDuplicateContract";
 
 export type ImportBatchEntry = {
   rowId: string;
@@ -72,6 +73,12 @@ export async function undoContractImport(provider: Pick<DataProvider, "contracts
   for (const entry of [...batch.entries].reverse()) {
     if (!entry.after || entry.undone) continue;
     try {
+      if (!entry.before && readSkippedContractIds(workspaceId).has(entry.after.id)) {
+        entry.undone = true;
+        saveBatch(batch);
+        undoneRowIds.push(entry.rowId);
+        continue;
+      }
       const current = await provider.contracts.getById(entry.after.id);
       const applicant = entry.beforeApplicant && entry.afterApplicant ? await provider.applicants.getById(entry.afterApplicant.id) : null;
       const applicantRestored = Boolean(applicant && entry.beforeApplicant && sameApplicant(applicant, entry.beforeApplicant));

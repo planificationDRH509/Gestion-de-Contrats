@@ -5,6 +5,7 @@ import { findContractMinister } from "../../lib/ministers";
 import "./contractsImport.css";
 import { createPortal } from "react-dom";
 import { confirmImportReceipt, readImportRequest } from "./contractImportRun";
+import { readSkippedContractIds } from "../../data/local/skipDuplicateContract";
 import { createId } from "../../lib/uuid";
 import { DossierSelectOptions } from "../dossiers/DossierSelectOptions";
 import { useSalaryGrid } from "../salary-grid/salaryGridApi";
@@ -214,6 +215,20 @@ export function ContractsImportModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    const reconcile = () => {
+      const skipped = readSkippedContractIds(workspaceId);
+      setEditableRows(rows => rows.some(row => row.contractId && skipped.has(row.contractId) && (!row.excluded || row.importedContractId || row.importError))
+        ? rows.map(row => row.contractId && skipped.has(row.contractId)
+          ? { ...row, excluded: true, importedContractId: undefined, importError: undefined } : row)
+        : rows);
+    };
+    reconcile();
+    window.addEventListener("contribution-offline-sync", reconcile);
+    return () => window.removeEventListener("contribution-offline-sync", reconcile);
+  }, [isOpen, workspaceId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     const save = () => { if (!restoringRef.current) persistDraft(); };
     const onVisibility = () => { if (document.visibilityState === "hidden") save(); };
     window.addEventListener("pagehide", save);
@@ -286,9 +301,9 @@ export function ContractsImportModal({
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const hasAttempt = (row: ContractImportEditableRow) => Boolean(row.contractId && readImportRequest(workspaceId, row.contractId));
   const completedIds = new Set(editableRows.filter(row => row.importedContractId).map(row => row.id));
-  const includedRows = validatedRows.filter((row) => !row.excluded && !completedIds.has(row.id));
+  const includedRows = validatedRows.filter((row) => !row.excluded && !row.skipped && !completedIds.has(row.id));
   const selectedRows = validatedRows.filter(
-    (row) => selectedRowIdSet.has(row.id) && !row.excluded && !completedIds.has(row.id)
+    (row) => selectedRowIdSet.has(row.id) && !row.excluded && !row.skipped && !completedIds.has(row.id)
   );
   const selectedValidRows = selectedRows.filter((row) => row.values && row.errors.length === 0);
   const errorRowCount = includedRows.filter((row) => row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError).length;
@@ -296,7 +311,7 @@ export function ContractsImportModal({
     () =>
       new Set(
         validatedRows
-          .filter((row) => !row.excluded && !completedIds.has(row.id) && (row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError))
+          .filter((row) => !row.excluded && !row.skipped && !completedIds.has(row.id) && (row.errors.length > 0 || editableRows.find(item => item.id === row.id)?.importError))
           .map((row) => row.id)
       ),
     [validatedRows, editableRows]
@@ -304,7 +319,7 @@ export function ContractsImportModal({
   const isOverflow = table.rows.length > MAX_IMPORT_ROWS;
   const differenceRowIds = new Set(resolvedRows.filter(row => !row.excluded && !row.importedContractId && (differencesById.get(row.id)?.length ?? 0) > 0).map(row => row.id));
   const previewRows = resolvedRows.filter(row => viewFilter === "all" ||
-    (viewFilter === "remaining" && !row.importedContractId && !row.excluded) ||
+    (viewFilter === "remaining" && !row.importedContractId && !row.excluded && !validationById.get(row.id)?.skipped) ||
     (viewFilter === "errors" && errorRowIds.has(row.id)) ||
     (viewFilter === "differences" && differenceRowIds.has(row.id)) ||
     (viewFilter === "imported" && completedIds.has(row.id)));
@@ -537,9 +552,10 @@ export function ContractsImportModal({
           setSelectedDossierId(id);
           persistDraft({ ...draftRef.current, selectedDossierId: id });
         },
-        onRowResult: ({ contractId, contract, error }) => {
+        onRowResult: ({ contractId, contract, error, skipped }) => {
+          skipped ||= readSkippedContractIds(workspaceId).has(contractId);
           const rows = draftRef.current.editableRows.map(row => row.contractId === contractId
-            ? { ...row, importedContractId: contract?.id, importError: error } : row);
+            ? { ...row, excluded: skipped || row.excluded, importedContractId: skipped ? undefined : contract?.id, importError: skipped ? undefined : error } : row);
           setEditableRows(rows);
           const saved = persistDraft({ ...draftRef.current, editableRows: rows });
           if (saved && contract) confirmImportReceipt(workspaceId, contractId);
@@ -812,7 +828,8 @@ export function ContractsImportModal({
                   {visibleEditableRows.map((row) => {
                     const validation = validationById.get(row.id);
                     const duplicate = findImportDuplicate(row, history.data ?? [], targetFiscalYear);
-                    const fieldErrors = new Set([...(validation?.errorFields ?? []), ...getImportErrorFields(row.importError ? [row.importError] : [])]);
+                    const rowError = validation?.skipped ? undefined : row.importError;
+                    const fieldErrors = new Set([...(validation?.errorFields ?? []), ...getImportErrorFields(rowError ? [rowError] : [])]);
                     const locked = row.excluded || Boolean(row.importedContractId) || hasAttempt(row);
                     const clearButton = (field: ContractImportEditableField) => (
                       <button className="contracts-import-clear" type="button" disabled={locked}
@@ -828,7 +845,7 @@ export function ContractsImportModal({
                       mandateContract ?? { workspaceId, durationMonths: validation?.values?.durationMonths ?? NaN, annee_fiscale: targetFiscalYear },
                       mandateContract ? findContractMinister(mandateContract, ministerRegistry) : currentMinister
                     ) : null;
-                    const stateClass = row.excluded
+                    const stateClass = row.excluded || validation?.skipped
                       ? "excluded"
                       : validation?.errors.length || row.importError
                         ? "invalid"
@@ -1016,10 +1033,10 @@ export function ContractsImportModal({
                           </td></tr>
                         ) : null}
                         {mandateWarning && <tr className="warning"><td colSpan={15}><div className="contract-mandate-warning" role="alert">Ligne {row.sourceRowNumber} · {mandateWarning}</div></td></tr>}
-                        {Boolean(validation?.errors.length || row.importError) && !row.importedContractId ? (
+                        {Boolean(validation?.errors.length || rowError) && !row.importedContractId ? (
                           <tr className={stateClass}>
                             <td colSpan={15} className="contracts-import-row-state">
-                              <span>Ligne {row.sourceRowNumber} · {row.importError || validation?.errors.join(" ")}</span>
+                              <span>Ligne {row.sourceRowNumber} · {rowError || validation?.errors.join(" ")}</span>
                             </td>
                           </tr>
                         ) : null}

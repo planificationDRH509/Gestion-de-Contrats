@@ -4,6 +4,7 @@ import { useAuth, AuthUser } from "../../features/auth/auth";
 import { syncSuggestionsFromServer } from "../../data/local/suggestionsDb";
 import type { SupabaseSyncState } from "../../data/supabase/supabaseProvider";
 import { APP_ROLE_LABELS } from "../../features/auth/permissions";
+import { SyncIssuesModal } from "../../features/sync/SyncIssuesModal";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -16,7 +17,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnline = true, syncState, onSync }: SidebarProps) {
-  const { user, logout, can } = useAuth();
+  const { user, logout, can, isLocked } = useAuth();
   const mode = (import.meta.env.VITE_DATA_PROVIDER ?? "local").toLowerCase();
 
   useEffect(() => {
@@ -108,6 +109,7 @@ export function Sidebar({ collapsed, onToggle, onResizeStart, isResizing, isOnli
         collapsed={collapsed} 
         mode={mode} 
         isOnline={isOnline}
+        isLocked={isLocked}
         syncState={syncState}
         onSync={onSync}
         onLogout={logout} 
@@ -138,9 +140,12 @@ function NavItem({ to, icon, label, shortLabel, collapsed, end }: { to: string, 
   );
 }
 
-function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, syncState: SupabaseSyncState, onSync: () => void, onLogout: () => void }) {
+function SidebarFooter({ user, collapsed, mode, isOnline, isLocked, syncState, onSync, onLogout }: { user: AuthUser, collapsed: boolean, mode: string, isOnline: boolean, isLocked: boolean, syncState: SupabaseSyncState, onSync: () => void, onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSyncing, setShowSyncing] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+
+  useEffect(() => setIssuesOpen(false), [user.id, user.workspaceId, isLocked]);
 
   useEffect(() => {
     if (!syncState.isSyncing) {
@@ -163,20 +168,25 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
         </div>
       )}
 
-      {mode === "supabase" && !collapsed && isOnline && (
+      {mode === "supabase" && (
         <button
           type="button"
           className="offline-sync-card"
-          onClick={onSync}
-          disabled={!isOnline || syncState.isSyncing}
-          title={syncState.lastError ?? "Actualiser les données disponibles hors ligne"}
+          onClick={() => setIssuesOpen(true)}
+          disabled={isLocked}
+          title="Synchronisation"
+          aria-label="Afficher la synchronisation"
+          aria-haspopup="dialog"
+          aria-expanded={issuesOpen && !isLocked}
         >
-          <span className={`material-symbols-rounded${showSyncing ? " is-spinning" : ""}`}>
-            {showSyncing ? "sync" : syncState.lastError ? "sync_problem" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
+          <span aria-hidden="true" className={`material-symbols-rounded${isOnline && showSyncing ? " is-spinning" : ""}`}>
+            {!isOnline ? "cloud_off" : showSyncing ? "sync" : syncState.lastError ? "sync_problem" : syncState.pendingCount > 0 ? "cloud_upload" : "offline_pin"}
           </span>
-          <span className="offline-sync-copy">
+          {!collapsed && <span className="offline-sync-copy">
             <strong>
-              {showSyncing
+              {!isOnline
+                ? "Hors ligne"
+                : showSyncing
                 ? "Synchronisation…"
                 : syncState.lastError
                   ? "Synchronisation à vérifier"
@@ -184,16 +194,16 @@ function SidebarFooter({ user, collapsed, mode, isOnline, syncState, onSync, onL
                   ? `${syncState.pendingCount} modification${syncState.pendingCount > 1 ? "s" : ""} en attente`
                   : syncState.lastFullSyncedAt ? "Disponible hors ligne" : "Télécharger hors ligne"}
             </strong>
-            <small style={syncState.lastError ? { whiteSpace: "normal" } : undefined}>
-              {syncState.lastError
-                ? syncState.lastError
-                : syncState.lastSyncedAt
-                ? `Mis à jour ${new Date(syncState.lastSyncedAt).toLocaleString("fr-HT", { dateStyle: "short", timeStyle: "short" })}`
-                : "Cliquez pour télécharger les données"}
-            </small>
-          </span>
+            {syncState.lastSyncedAt && <small>
+              {`Mis à jour ${new Date(syncState.lastSyncedAt).toLocaleString("fr-HT", { dateStyle: "short", timeStyle: "short" })}`}
+            </small>}
+          </span>}
         </button>
       )}
+
+      {issuesOpen && !isLocked && <SyncIssuesModal key={`${user.id}:${user.workspaceId}`} workspaceId={user.workspaceId}
+        isOnline={isOnline} isSyncing={syncState.isSyncing} pendingCount={syncState.pendingCount}
+        onSync={onSync} onClose={() => setIssuesOpen(false)} />}
       
       {!collapsed ? (
         <div className="user-menu-shell">

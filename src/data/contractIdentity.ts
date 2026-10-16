@@ -4,6 +4,13 @@ import { getStoredFiscalYear } from "../features/settings/settingsApi";
 
 export const identityDigits = (value?: string | null) => (value ?? "").replace(/\D/g, "");
 
+export class FiscalYearDuplicateError extends Error {
+  constructor(readonly duplicate: Contract, input: CreateContractInput, fiscalYear: string) {
+    super(`Un contrat existe déjà pour le NIF ${input.nif || input.applicantId} (${[duplicate.firstName, duplicate.lastName].filter(Boolean).join(" ")}) dans l’année fiscale ${fiscalYear}. La création est bloquée (contrat ${duplicate.id}).`);
+    this.name = "FiscalYearDuplicateError";
+  }
+}
+
 export function assertNoFiscalYearDuplicate(input: CreateContractInput, contracts: Contract[]) {
   const nif = identityDigits(input.nif || input.applicantId);
   if (!nif) return;
@@ -12,5 +19,5 @@ export function assertNoFiscalYearDuplicate(input: CreateContractInput, contract
     contract.id !== input.id && !contract.deletedAt &&
     identityDigits(contract.nif || contract.applicantId) === nif &&
     getContractFiscalYear(contract) === fiscalYear);
-  if (duplicate) throw new Error(`Un contrat existe déjà pour le NIF ${input.nif || input.applicantId} (${[duplicate.firstName, duplicate.lastName].filter(Boolean).join(" ")}) dans l’année fiscale ${fiscalYear}. La création est bloquée (contrat ${duplicate.id}).`);
+  if (duplicate) throw new FiscalYearDuplicateError(duplicate, input, fiscalYear);
 }

@@ -16,7 +16,8 @@ import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError, loadDb, saveD
 import { withBrowserLock } from "../../lib/browserLock";
 import { outboxKeys, outboxWriteKeys, discardableContractChanges } from "../local/outboxDependencies";
 import { setOutboxError } from "../local/localOutbox";
-import { assertNoFiscalYearDuplicate } from "../contractIdentity";
+import { assertNoFiscalYearDuplicate, FiscalYearDuplicateError } from "../contractIdentity";
+import { isImportedContractCreation, readSkippedContractIds, skipDuplicateContract } from "../local/skipDuplicateContract";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { ContractRepository } from "../repositories/ContractRepository";
 import { DossierRepository } from "../repositories/DossierRepository";
@@ -874,7 +875,7 @@ class SupabaseContractRepository implements ContractRepository {
   async checkFiscalYearDuplicate(input: CreateContractInput): Promise<void> {
     if (!(input.nif || input.applicantId)) return;
     const { data, error } = await getSupabaseClient().from("contrat")
-      .select("*").eq("workspace_id", input.workspaceId)
+      .select("*, identification(*), contract_tags(tags(*))").eq("workspace_id", input.workspaceId)
       .eq("nif", input.applicantId || input.nif || "").is("deleted_at", null);
     if (error || !data) throw repositoryError("Impossible de vérifier les doublons avant synchronisation.", error);
     assertNoFiscalYearDuplicate(input, data.map(mapContract));
@@ -1577,7 +1578,10 @@ function syncPendingOutbox() {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
         const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
         if (item.actorId && item.actorId !== actor?.id) throw new Error("Reconnectez le compte ayant effectué cette modification pour la synchroniser.");
-        if ((item.type === "contract.create" || item.type === "contract.update") && getPendingOutbox().some(pending =>
+        // Only earlier identity writes are prerequisites. Later edits must keep
+        // their position, especially when a list operation separates them.
+        const pendingBefore = getPendingOutbox();
+        if ((item.type === "contract.create" || item.type === "contract.update") && pendingBefore.slice(0, pendingBefore.findIndex(pending => pending.id === item.id)).some(pending =>
           pending.workspaceId === item.workspaceId && pending.type === "applicant.upsert" &&
           (item.payload.nif && pending.payload.nif === item.payload.nif || item.payload.applicantId && pending.payload.id === item.payload.applicantId))) {
           keys.filter(key => key.includes(":contract:")).forEach(key => blockedKeys.add(key));
@@ -1610,11 +1614,44 @@ function syncPendingOutbox() {
           await syncQueuedList(item);
         } else if (item.type === "applicant.upsert") {
           const payload = item.payload as unknown as UpsertApplicantInput;
-          const applicant = await applicants.syncOffline(payload, modifiedAt);
-          if (payload.id && payload.id !== applicant.id) {
-            replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
+          const creation = payload.importContractId && getPendingOutbox().find(pending =>
+            pending.workspaceId === item.workspaceId && pending.actorId === item.actorId &&
+            pending.type === "contract.create" && pending.payload.id === payload.importContractId && isImportedContractCreation(pending));
+          if (payload.importContractId && !creation) {
+            // The importer persists identity and contract in separate steps.
+            // Wait for the contract; drop only an already skipped/abandoned row.
+            if (readSkippedContractIds(item.workspaceId).has(payload.importContractId) ||
+              (!localStorage.getItem(`contract_import_request:${item.workspaceId}:${payload.importContractId}`) &&
+                !loadDb().contracts.some(contract => contract.workspaceId === item.workspaceId && contract.id === payload.importContractId))) {
+              removeOutboxItem(item.id);
+              setWorkspaceSyncMetadata(item.workspaceId, {
+                lastError: getPendingOutbox().find(pending => pending.workspaceId === item.workspaceId && pending.lastError)?.lastError ?? null
+              });
+              await flushLocalDbWrites();
+              notifySyncState();
+            }
+            continue;
           }
-          syncedApplicant = applicant;
+          let duplicate: Contract | undefined;
+          if (creation && !await contracts.getById(payload.importContractId!, true)) {
+            try { await contracts.checkFiscalYearDuplicate(creation.payload as unknown as Contract); }
+            catch (error) {
+              if (!(error instanceof FiscalYearDuplicateError)) throw error;
+              duplicate = error.duplicate;
+            }
+          }
+          if (creation && duplicate) {
+            // Ignore the row before uploading its identity changes as well.
+            syncedApplicant = await applicants.getById(payload.id || payload.nif || "") ?? undefined;
+            skipDuplicateContract(creation, duplicate);
+            syncedContract = duplicate;
+          } else {
+            const applicant = await applicants.syncOffline(payload, modifiedAt);
+            if (payload.id && payload.id !== applicant.id) {
+              replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
+            }
+            syncedApplicant = applicant;
+          }
         } else if (item.type === "applicant.delete") {
           const payload = item.payload as { id?: string };
           if (payload.id) {
@@ -1724,6 +1761,16 @@ function syncPendingOutbox() {
         await flushLocalDbWrites();
         notifySyncState();
       } catch (error) {
+        if (error instanceof FiscalYearDuplicateError && isImportedContractCreation(item)) {
+          skipDuplicateContract(item, error.duplicate);
+          cacheContract(error.duplicate);
+          setWorkspaceSyncMetadata(item.workspaceId, {
+            lastError: getPendingOutbox().find(pending => pending.workspaceId === item.workspaceId && pending.lastError)?.lastError ?? null
+          });
+          await flushLocalDbWrites();
+          notifySyncState();
+          continue;
+        }
         // A failed transport says nothing about the queued data. Stop this pass
         // and let the caller retry, without marking the operation as rejected.
         if (isTransientSyncFailure(error)) {
@@ -1800,6 +1847,33 @@ export async function discardContractSyncChanges(contract: Contract, expectedIds
 
 export function syncSupabaseOutbox() {
   return syncPendingOutbox();
+}
+
+/** Raw server reads for explicit resolutions; never return an optimistic cache. */
+export async function readSyncResolutionRecord(kind: "contract" | "applicant" | "dossier" | "tag", id: string, workspaceId: string): Promise<Contract | Applicant | Dossier | Tag | null> {
+  let record: Contract | Applicant | Dossier | Tag | null;
+  if (kind === "contract") record = await new SupabaseContractRepository().getById(id, true);
+  else if (kind === "applicant") record = await new SupabaseApplicantRepository().getById(id, true);
+  else if (kind === "dossier") record = await new SupabaseDossierRepository().getById(id, true);
+  else {
+    const { data, error } = await getSupabaseClient().from("tags").select("*").eq("id", id).eq("workspace_id", workspaceId).maybeSingle();
+    if (error) throw repositoryError("Impossible de charger le tag.", error);
+    record = data ? mapTag(data) : null;
+  }
+  if (record && record.workspaceId !== workspaceId) throw new Error("Donnée inaccessible dans cet espace.");
+  return record;
+}
+
+/** Uses the normal guarded trash operation, never permanent deletion. */
+export async function deleteSyncResolutionContract(contract: Contract, modifiedAt: string) {
+  if (contract.deletedAt) return;
+  let query = getSupabaseClient().from("contrat").update({ deleted_at: modifiedAt, modified_at: modifiedAt,
+    historique_saisie: serializeContractAudit(appendContractAuditEntry(contract.auditHistory, { action: "deletion", changes: [] })) } as any)
+    .eq("id_contrat", contract.id).eq("workspace_id", contract.workspaceId).is("deleted_at", null);
+  query = contract.remoteUpdatedAt === null ? query.is("updated_at", null) : query.eq("updated_at", contract.remoteUpdatedAt ?? contract.updatedAt);
+  const { data, error } = await query.select("id_contrat").maybeSingle();
+  if (error) throw repositoryError("Impossible de supprimer le contrat.", error);
+  if (!data) throw new Error("Le contrat a changé. Actualisez avant de le supprimer.");
 }
 
 /**

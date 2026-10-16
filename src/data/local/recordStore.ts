@@ -34,7 +34,7 @@ export function flattenDatabase(db: LocalDb): Map<string, unknown> {
 }
 
 export function inflateDatabase(rows: Map<string, unknown>): LocalDb {
-  const db: LocalDb = { workspaces: [], applicants: [], contracts: [], dossiers: [], tags: [],
+  const db: LocalDb = { workspaces: [], applicants: [], contracts: [], dossiers: [], dossierAliases: [], tags: [],
     contractTags: [], contractLists: [], cachedListWorkspaces: [], printJobs: [], outbox: [], syncMetadata: {} };
   for (const [key, value] of rows) {
     const split = key.indexOf(":");

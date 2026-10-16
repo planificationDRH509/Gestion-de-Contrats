@@ -1,14 +1,15 @@
 import { loadImportBatch, recordImportEntry } from "./contractImportBatch";
 import type { DataProvider } from "../../data/dataProvider";
 import type { Contract, CreateContractInput, UpdateContractInput, UpsertApplicantInput } from "../../data/types";
-import { identityDigits } from "../../data/contractIdentity";
+import { identityDigits, FiscalYearDuplicateError } from "../../data/contractIdentity";
+import { readSkippedContractIds } from "../../data/local/skipDuplicateContract";
 import { getContractFiscalYear } from "../../lib/contractDateFilters";
 import { createId } from "../../lib/uuid";
 import { migrateLegacyContract, readMinistersCache } from "../settings/ministersCache";
 import { findImportDuplicate, getContractImportIdentityIssues, type ContractImportDraft } from "./contractImport";
 
 export type ContractImportProgress = { phase: "applicants" | "contracts"; completed: number; total: number };
-export type ImportRowResult = { contractId: string; contract?: Contract; error?: string };
+export type ImportRowResult = { contractId: string; contract?: Contract; error?: string; skipped?: boolean };
 export type ImportRunInput = {
   workspaceId: string;
   batchId?: string;
@@ -45,12 +46,15 @@ function saveRequest(input: ImportRequest) {
   catch { throw new Error("Impossible de sauvegarder la reprise de l’import. Libérez de l’espace avant de réessayer."); }
 }
 
-function duplicateUpdateApplied(contract: Contract | null | undefined, request: ImportRequest) {
+async function duplicateUpdateApplied(provider: ImportProvider, contract: Contract | null | undefined, request: ImportRequest) {
   const patch = request.duplicateUpdate;
-  return Boolean(contract && !contract.deletedAt && patch && contract.workspaceId === request.workspaceId &&
-    Date.parse(contract.createdAt) === Date.parse(patch.createdAt!) &&
-    contract.dossierId === patch.dossierId &&
-    (patch.commentaire === undefined || contract.commentaire === patch.commentaire));
+  if (!contract || contract.deletedAt || !patch || contract.workspaceId !== request.workspaceId ||
+    Date.parse(contract.createdAt) !== Date.parse(patch.createdAt!) ||
+    (patch.commentaire !== undefined && contract.commentaire !== patch.commentaire)) return false;
+  if (contract.dossierId === patch.dossierId) return true;
+  if (!patch.dossierId) return false;
+  const dossier = await provider.dossiers.getById(patch.dossierId);
+  return dossier?.workspaceId === request.workspaceId && dossier.id === contract.dossierId;
 }
 
 function previousContractNote(contract: Contract) {
@@ -82,7 +86,14 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
   const rows = input.rows.map(row => ({ ...row, contractId: row.contractId || createId() }));
   const contracts: Contract[] = [];
   const failures: ImportRowResult[] = [];
-  if (!rows.length) return { contracts, failures };
+  const skipped: ImportRowResult[] = [];
+  const ignore = (contractId: string) => {
+    const result = { contractId, skipped: true };
+    skipped.push(result);
+    confirmImportReceipt(workspaceId, contractId);
+    onRowResult?.(result);
+  };
+  if (!rows.length) return { contracts, failures, skipped };
   const [applicants, previousContracts] = await Promise.all([
     provider.applicants.findManyByNifOrNinu(workspaceId, rows.map(row => row.nif), rows.flatMap(row => row.ninu ? [row.ninu] : [])),
     loadImportContracts(provider, workspaceId)
@@ -93,7 +104,9 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
   if (attemptedIds.length) {
     for (const contract of await provider.contracts.getByIds(attemptedIds, workspaceId)) recovered.set(contract.id, contract);
   }
+  const skippedContractIds = readSkippedContractIds(workspaceId);
   const pending = rows.filter(row => {
+    if (skippedContractIds.has(row.contractId)) { ignore(row.contractId); return false; }
     const request = readImportRequest(workspaceId, row.contractId);
     if (request?.duplicateUpdate) return true; // An existing ID alone is never an update receipt.
     const contract = recovered.get(row.contractId);
@@ -109,15 +122,18 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
     return false;
   });
   const issues = getContractImportIdentityIssues(pending.map(row => row.duplicateResolution?.action === "keep" ? { nif: "", ninu: null } : row), applicants);
-  const counts = new Map<string, number>();
-  pending.forEach(row => { const key = identityDigits(row.nif); counts.set(key, (counts.get(key) ?? 0) + 1); });
+  const seenNifs = new Set<string>();
   const blockedIds = new Set<string>();
   pending.forEach((row, index) => {
     const key = identityDigits(row.nif);
     const errors = [...issues[index].errors];
-    if ((counts.get(key) ?? 0) > 1) errors.push(`Le NIF ${row.nif} est répété dans la sélection.`);
     const duplicate = previousContracts.find(contract => !contract.deletedAt && identityDigits(contract.nif || contract.applicantId) === key && getContractFiscalYear(contract) === fiscalYear && contract.id !== row.contractId);
-    if (duplicate && duplicate.id !== row.duplicateResolution?.contractId) errors.push(`Le NIF ${row.nif} possède déjà un contrat pour ${fiscalYear} (${duplicate.id}).`);
+    if ((duplicate && !row.duplicateResolution) || (key && seenNifs.has(key))) {
+      blockedIds.add(row.contractId);
+      ignore(row.contractId);
+      return;
+    }
+    if (key) seenNifs.add(key);
     if (row.duplicateResolution && (!duplicate || duplicate.id !== row.duplicateResolution.contractId)) errors.push("Le contrat en doublon a changé. Choisissez à nouveau le contrat à conserver.");
     const request = readImportRequest(workspaceId, row.contractId);
     if (request && (request.annee_fiscale !== fiscalYear || identityDigits(request.nif) !== key)) errors.push("Les références de cette ligne ne correspondent plus à la tentative précédente.");
@@ -140,7 +156,7 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
         let saved: Contract | null;
         try { saved = await provider.contracts.getById(request.duplicateUpdate?.id ?? row.contractId); }
         catch (error) { uncertainOutcome = true; throw error; }
-        if (saved && (!request.duplicateUpdate || duplicateUpdateApplied(saved, request))) {
+        if (saved && (!request.duplicateUpdate || await duplicateUpdateApplied(provider, saved, request))) {
           contracts.push(saved);
           receipt(row.contractId, saved);
           continue;
@@ -198,7 +214,8 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
       }
       if (request.applicantUpdate) {
         try {
-          const savedApplicant = await provider.applicants.upsert(request.applicantUpdate);
+          const savedApplicant = await provider.applicants.upsert({ ...request.applicantUpdate,
+            ...(!request.duplicateUpdate ? { importContractId: row.contractId } : {}) });
           record(row.contractId, { afterApplicant: savedApplicant });
         }
         catch (error) {
@@ -216,7 +233,7 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
           contract = await provider.contracts.update(request.duplicateUpdate);
         } else {
           const { applicantUpdate: _applicant, duplicateUpdate: _duplicate, ...createInput } = request;
-          contract = await provider.contracts.create(createInput);
+          contract = await provider.contracts.create({ ...createInput, skipFiscalYearDuplicate: true });
         }
       }
       catch (error) {
@@ -226,15 +243,24 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
           uncertainOutcome = true;
           throw error;
         }
-        if (!saved || (request.duplicateUpdate && !duplicateUpdateApplied(saved, request))) {
+        if (!saved || (request.duplicateUpdate && !await duplicateUpdateApplied(provider, saved, request))) {
           if (!request.duplicateUpdate) localStorage.removeItem(journalKey(workspaceId, row.contractId));
           throw error;
         }
         contract = saved;
       }
+      if (readSkippedContractIds(workspaceId).has(contract.id)) {
+        ignore(row.contractId);
+        continue;
+      }
       contracts.push(contract);
       receipt(row.contractId, contract);
     } catch (error) {
+      if (error instanceof FiscalYearDuplicateError && !request?.duplicateUpdate) {
+        ignore(row.contractId);
+        onProgress?.({ phase: "contracts", completed: contracts.length + skipped.length, total: rows.length });
+        continue;
+      }
       const failure = { contractId: row.contractId, error: `Ligne ${row.sourceRowNumber ?? ""} — ${error instanceof Error ? error.message : "Échec de l’enregistrement."}` };
       if (request?.duplicateUpdate) uncertainOutcome = true;
       failures.push(failure);
@@ -245,12 +271,13 @@ export async function runContractImport(provider: ImportProvider, input: ImportR
   if (createdDossierId && contracts.length === 0 && !uncertainOutcome) {
     try {
       const contents = await provider.contracts.list({ workspaceId, dossierId: createdDossierId, all: true, dateFilterMode: "all" });
-      if (contents.total === 0 && contents.items.length === 0) {
+      const createdDossier = await provider.dossiers.getById(createdDossierId);
+      if (createdDossier?.id === createdDossierId && contents.total === 0 && contents.items.length === 0) {
         await provider.dossiers.delete(createdDossierId, workspaceId);
         localStorage.removeItem(dossierJournalKey);
         input.onDossierCreated?.("");
       }
     } catch { /* Keep the dossier when emptiness cannot be established. */ }
   }
-  return { contracts, failures };
+  return { contracts, failures, skipped };
 }

@@ -14,6 +14,7 @@ export function outboxKeys(item: OutboxItem): string[] {
     const patches = p.patches as { id: string }[] | undefined;
     if (p.scope === 'ministers' || !patches?.length) keys.add(scope);
     else patches.forEach(patch => keys.add(`${scope}:${patch.id}`));
+    if (p.scope === 'ministers') patches?.forEach(patch => keys.add(`reference:global:ministers:minister:${patch.id}`));
   }
   if (item.type === "list.operation") {
     const operation = p.operation as { listId?: string; createId?: string } | undefined;
@@ -26,6 +27,7 @@ export function outboxKeys(item: OutboxItem): string[] {
     add("pin", `${p.userId}:${p.contractId}`);
     add("contract", p.contractId);
   }
+  if (item.type === "print.create" && Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
   if (item.type.startsWith("applicant.")) {
     add("applicant", p.id); add("applicant", p.nif);
   }
@@ -33,6 +35,7 @@ export function outboxKeys(item: OutboxItem): string[] {
     add("contract", p.id);
     if (Array.isArray(p.contractIds)) p.contractIds.forEach((id) => add("contract", id));
     add("applicant", p.applicantId); add("applicant", p.nif); add("dossier", p.dossierId);
+    if (typeof p.ministerId === "string" && p.ministerId) keys.add(`reference:global:ministers:minister:${p.ministerId}`);
   }
   if (item.type.startsWith("dossier.")) add("dossier", p.id);
   if (item.type === "dossier.delete" && Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
@@ -45,6 +48,7 @@ export function outboxKeys(item: OutboxItem): string[] {
 
 /** A failed write does not invalidate the shared records it merely references. */
 export function outboxWriteKeys(item: OutboxItem): string[] {
+  if (item.type === "print.create") return [];
   const keys = outboxKeys(item);
   const prefix = `${item.workspaceId}:`;
   if (item.type.startsWith("contract.") || item.type === "tag.assign" || item.type === "tag.remove") {

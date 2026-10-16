@@ -265,11 +265,13 @@ describe("contractImport", () => {
 });
 
 describe("import duplicate preflight", () => {
-  it("blocks only duplicate NIFs in the selected rows", () => {
+  it("ignores later duplicate NIFs among the selected rows without flagging errors", () => {
     const table = parsePastedContractTable("NIF\tNom\tPrénom\tSexe\tSalaire\tPoste\tAffectation\n1234567890\tLouis\tJean\tHomme\t30000\tAgent\tMSPP\n1234567890\tLouis\tJean\tHomme\t30000\tAgent\tMSPP");
     const rows = buildImportEditableRows(table, inferImportMapping(table.headers));
     const all = validateImportEditableRows(rows);
-    expect(all.every(row => row.errorFields.includes("nif"))).toBe(true);
+    expect(all.every(row => row.errors.length === 0)).toBe(true);
+    expect(all[0].values).not.toBeNull();
+    expect(all[1]).toMatchObject({ values: null, skipped: true });
     const selected = validateImportEditableRows(rows, { selectedRowIds: [rows[0].id] });
     expect(selected[0].errors).toEqual([]);
   });

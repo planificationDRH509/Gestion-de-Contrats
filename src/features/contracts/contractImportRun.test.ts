@@ -7,6 +7,7 @@ import { LocalDossierRepository } from "../../data/local/localDossierRepository"
 const createLocalProvider = () => ({ applicants: new LocalApplicantRepository(), contracts: new LocalContractRepository(), dossiers: new LocalDossierRepository() });
 import { runContractImport, readImportRequest, type ImportRunInput } from "./contractImportRun";
 import { loadDb } from "../../data/local/localDb";
+import { getPendingOutbox, replaceLocalDossierId } from "../../data/local/offlineStore";
 import type { ContractImportDraft } from "./contractImport";
 
 const row = (index: number): ContractImportDraft => ({
@@ -21,6 +22,78 @@ const input = (rows = [row(0)]): ImportRunInput => ({
 beforeEach(() => localStorage.clear());
 
 describe("resumable import", () => {
+  it("keeps importing into the canonical folder when its ID changes after the first row", async () => {
+    const provider = createLocalProvider();
+    let originalId = "";
+    const result = await runContractImport(provider, { ...input(Array.from({ length: 12 }, (_, index) => ({ ...row(index), nif: `123-456-${String(index).padStart(3, "0")}-0` }))),
+      onDossierCreated: id => { originalId = id; },
+      onRowResult: result => {
+        if (result.contract?.id !== "import-0") return;
+        const dossier = loadDb().dossiers.find(d => d.id === originalId)!;
+        replaceLocalDossierId("w", originalId, { ...dossier, id: "server-dossier" });
+      }
+    });
+    expect(result.failures).toEqual([]);
+    expect(result.contracts).toHaveLength(12);
+    expect(loadDb().contracts.filter(c => c.workspaceId === "w").map(c => c.dossierId)).toEqual(Array(12).fill("server-dossier"));
+    expect(getPendingOutbox().filter(item => item.type === "contract.create").map(item => item.payload.dossierId)).toEqual(Array(12).fill("server-dossier"));
+    expect(await provider.dossiers.getById(originalId)).toMatchObject({ id: "server-dossier" });
+    expect((await provider.contracts.list({ workspaceId: "w", dossierId: originalId, all: true })).total).toBe(12);
+  });
+
+  it("resumes a saved row request using the folder reconciled during the previous attempt", async () => {
+    const provider = createLocalProvider();
+    const upsert = provider.applicants.upsert.bind(provider.applicants);
+    const edit = vi.spyOn(provider.applicants, "upsert").mockImplementation(value => {
+      if (value.nif === row(1).nif) throw new Error("Interruption");
+      return upsert(value);
+    });
+    const first = await runContractImport(provider, input([row(0), row(1)]));
+    expect(first.failures).toHaveLength(1);
+    const dossier = loadDb().dossiers.find(d => d.id === first.contracts[0].dossierId)!;
+    expect(readImportRequest("w", "import-1")?.dossierId).toBe(dossier.id);
+    replaceLocalDossierId("w", dossier.id, { ...dossier, id: "server-dossier" });
+    edit.mockImplementation(upsert);
+    const retry = await runContractImport(provider, input([row(0), row(1)]));
+    expect(retry.failures).toEqual([]);
+    expect(retry.contracts.map(c => c.dossierId)).toEqual(["server-dossier", "server-dossier"]);
+    expect(loadDb().contracts.filter(c => c.workspaceId === "w")).toHaveLength(2);
+  });
+
+  it("recognizes a lost duplicate-update receipt even when the folder ID was reconciled", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input())).contracts;
+    const original = provider.contracts.update.bind(provider.contracts);
+    const update = vi.spyOn(provider.contracts, "update").mockImplementation(async value => {
+      await original(value);
+      throw new Error("Connection lost");
+    });
+    const attempt = { ...input([{ ...row(0), contractId: "replacement", duplicateResolution: { contractId: old.id, action: "keep" as const } }]),
+      onDossierCreated: (id: string) => {
+        const dossier = loadDb().dossiers.find(d => d.id === id)!;
+        replaceLocalDossierId("w", id, { ...dossier, id: "server-dossier" });
+      }
+    };
+    const result = await runContractImport(provider, attempt);
+    expect(result.failures).toEqual([]);
+    expect(result.contracts[0].dossierId).toBe("server-dossier");
+    expect((await runContractImport(provider, attempt)).failures).toEqual([]);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not delete a reused server folder when all rows fail after folder reconciliation", async () => {
+    const provider = createLocalProvider();
+    const remove = vi.spyOn(provider.dossiers, "delete");
+    vi.spyOn(provider.contracts, "create").mockRejectedValue(new Error("Refusé"));
+    const result = await runContractImport(provider, { ...input(), onDossierCreated: id => {
+      const dossier = loadDb().dossiers.find(d => d.id === id)!;
+      replaceLocalDossierId("w", id, { ...dossier, id: "server-dossier" });
+    } });
+    expect(result.failures).toHaveLength(1);
+    expect(remove).not.toHaveBeenCalled();
+    expect(await provider.dossiers.getById("server-dossier")).not.toBeNull();
+  });
+
   it("keeps the old data, moves the duplicate and refreshes its creation date", async () => {
     const provider = createLocalProvider();
     const [old] = (await runContractImport(provider, input())).contracts;
@@ -88,7 +161,8 @@ describe("resumable import", () => {
     const result = await runContractImport(p, input([{ ...row(0), contractId: "duplicate" }, row(1)]));
     expect(result.contracts).toHaveLength(1);
     expect(result.contracts[0].nif).toBe(row(1).nif);
-    expect(result.failures[0].contractId).toBe("duplicate");
+    expect(result.failures).toEqual([]);
+    expect(result.skipped).toEqual([{ contractId: "duplicate", skipped: true }]);
   });
 
   it("keeps the same minister for the whole import when the selection changes midway", async () => {
@@ -162,18 +236,36 @@ describe("resumable import", () => {
     expect(createSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks selected duplicates and same-year contracts before any new write", async () => {
+  it("ignores repeated rows and existing same-year contracts without modifying the existing contract", async () => {
     const provider = createLocalProvider();
     const dossier = vi.spyOn(provider.dossiers, "create");
     const applicant = vi.spyOn(provider.applicants, "upsert");
-    expect((await runContractImport(provider, input([row(0), { ...row(0), contractId: "other" }]))).failures[0].error).toContain("répété");
-    expect(dossier).not.toHaveBeenCalled();
-    expect(applicant).not.toHaveBeenCalled();
-    await runContractImport(provider, input());
+    const first = await runContractImport(provider, input([row(0), { ...row(0), contractId: "other" }]));
+    expect(first.failures).toEqual([]);
+    expect(first.contracts).toHaveLength(1);
+    expect(first.skipped).toEqual([{ contractId: "other", skipped: true }]);
     dossier.mockClear(); applicant.mockClear();
-    expect((await runContractImport(provider, input([{ ...row(0), contractId: "another-import" }]))).failures[0].error).toContain("2026-2027");
+    const second = await runContractImport(provider, input([{ ...row(0), contractId: "another-import", salaryNumber: 50000 }]));
+    expect(second.failures).toEqual([]);
+    expect(second.contracts).toEqual([]);
+    expect(second.skipped).toEqual([{ contractId: "another-import", skipped: true }]);
+    expect(await provider.contracts.getById(first.contracts[0].id)).toMatchObject(first.contracts[0]);
     expect(dossier).not.toHaveBeenCalled();
     expect(applicant).not.toHaveBeenCalled();
+  });
+
+  it("ignores a same-year duplicate discovered after a stale preflight and continues the import", async () => {
+    const provider = createLocalProvider();
+    const [old] = (await runContractImport(provider, input())).contracts;
+    vi.spyOn(provider.contracts, "list").mockResolvedValueOnce({ items: [], total: 0, page: 1, pageSize: 10 });
+    const onRowResult = vi.fn();
+    const result = await runContractImport(provider, { ...input([{ ...row(0), contractId: "late-duplicate" }, row(1)]), onRowResult });
+    expect(result.failures).toEqual([]);
+    expect(result.contracts.map(c => c.id)).toEqual(["import-1"]);
+    expect(result.skipped).toEqual([{ contractId: "late-duplicate", skipped: true }]);
+    expect(onRowResult).toHaveBeenCalledWith({ contractId: "late-duplicate", skipped: true });
+    expect((await provider.contracts.getById(old.id))?.salaryNumber).toBe(30000);
+    expect(readImportRequest("w", "late-duplicate")).toBeNull();
   });
 
   it("removes only its own verified empty dossier when every contract fails", async () => {

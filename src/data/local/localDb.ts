@@ -20,6 +20,7 @@ import {
 import { get, del } from "idb-keyval";
 import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeDatabaseRecord, equalRecords, LocalRecordConflictError } from "./recordStore";
 import type { ContractList } from "../../features/lists/listModel";
+import { resolveDossierId, resolveOutboxDossier, type DossierAlias } from "./dossierAliases";
 
 export type LocalSyncMetadata = {
   snapshotVersion?: number;
@@ -36,6 +37,7 @@ export type LocalDb = {
   workspaces: Workspace[];
   applicants: Applicant[];
   dossiers: Dossier[];
+  dossierAliases?: DossierAlias[];
   contracts: Contract[];
   tags: Tag[];
   contractTags: Array<{ contractId: string; tagId: string; createdAt: string }>;
@@ -150,6 +152,7 @@ function seedDatabase(): LocalDb {
     cachedListWorkspaces: [],
     applicants: [applicant],
     dossiers: [],
+    dossierAliases: [],
     contracts: [contract],
     tags: [],
     contractTags: [],
@@ -162,6 +165,7 @@ function seedDatabase(): LocalDb {
 function normalizeDb(value: LocalDb): LocalDb {
   return {
     ...value,
+    dossierAliases: Array.isArray(value.dossierAliases) ? value.dossierAliases : [],
     contractLists: Array.isArray(value.contractLists) ? value.contractLists : [],
     cachedListWorkspaces: Array.isArray(value.cachedListWorkspaces) ? value.cachedListWorkspaces : [],
     workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
@@ -190,7 +194,7 @@ function normalizeDb(value: LocalDb): LocalDb {
       ? value.contracts.map((contract) => ({
           ...migrateLegacyContract(contract),
           salaryText: numberToFrenchWords(contract.salaryNumber),
-          dossierId: contract.dossierId ?? null,
+          dossierId: resolveDossierId(value, contract.workspaceId, contract.dossierId),
           durationMonths: contract.durationMonths ?? 12,
           tags: Array.isArray(contract.tags)
             ? contract.tags.map((tag) => ({
@@ -227,7 +231,7 @@ function normalizeDb(value: LocalDb): LocalDb {
         }));
       }
       return [item];
-    }) : [],
+    }).map(item => resolveOutboxDossier(value, item)) : [],
     syncMetadata:
       value.syncMetadata && typeof value.syncMetadata === "object"
         ? value.syncMetadata

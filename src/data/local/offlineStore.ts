@@ -233,9 +233,16 @@ export function replaceLocalTagId(workspaceId: string, fromId: string, toTag: Ta
 }
 
 export function replaceLocalDossierId(workspaceId: string, fromId: string, toDossier: Dossier) {
+  if (toDossier.workspaceId !== workspaceId) throw new Error("Dossier inaccessible.");
   if (!fromId || fromId === toDossier.id) return;
 
   const db = loadDb();
+  // Keep this mapping durably: later import rows and saved retry requests still
+  // carry fromId, including after a reload or a write from another tab.
+  db.dossierAliases = [
+    ...(db.dossierAliases ?? []).filter(alias => !(alias.workspaceId === workspaceId && alias.id === fromId)),
+    { id: fromId, workspaceId, dossierId: toDossier.id }
+  ];
   db.dossiers = db.dossiers.filter(
     (dossier) => !(dossier.workspaceId === workspaceId && dossier.id === fromId)
   );
@@ -246,30 +253,7 @@ export function replaceLocalDossierId(workspaceId: string, fromId: string, toDos
     db.dossiers.push(toDossier);
   }
 
-  db.contracts = db.contracts.map((contract) =>
-    contract.workspaceId === workspaceId && contract.dossierId === fromId
-      ? { ...contract, dossierId: toDossier.id }
-      : contract
-  );
-  db.outbox = db.outbox.map((item) => {
-    if (
-      item.workspaceId !== workspaceId ||
-      (item.type !== "contract.create" && item.type !== "contract.update")
-    ) {
-      return item;
-    }
-    const payload = item.payload as { dossierId?: string | null };
-    if (payload.dossierId !== fromId) {
-      return item;
-    }
-    return {
-      ...item,
-      payload: {
-        ...item.payload,
-        dossierId: toDossier.id
-      }
-    };
-  });
+  // Database normalization resolves contracts and queued references together.
   saveDb(db);
 }
 

@@ -106,6 +106,22 @@ test('an empty print selection never falls back to printing the application', as
   await expect(page.locator('button:visible, a:visible')).toHaveCount(0);
 });
 
+test('an open synchronization dialog leaves the contract PDF unchanged', async ({ page }, testInfo) => {
+  const options = { preferCSSPageSize: true, printBackground: true, tagged: false };
+  const clean = await page.pdf({ ...options, path: testInfo.outputPath('before-sync-dialog.pdf') });
+  await page.getByRole('button', { name: 'Afficher la synchronisation' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Synchronisation' });
+  await expect(dialog).toBeVisible();
+  await page.emulateMedia({ media: 'print' });
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('button:visible')).toHaveCount(0);
+  await expect(page.locator('.contract-sheet:visible')).toHaveCount(8);
+  const opened = await page.pdf({ ...options, path: testInfo.outputPath('with-sync-dialog.pdf') });
+  expect(pdfFingerprint(opened)).toBe(pdfFingerprint(clean));
+  await page.emulateMedia({ media: 'screen' });
+  await expect(dialog).toBeVisible();
+});
+
 test('loading and missing contracts never print application messages', async ({ page }) => {
   let respond!: () => void;
   const responseReady = new Promise<void>(resolve => { respond = resolve; });

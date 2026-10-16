@@ -106,6 +106,7 @@ export type ContractImportValidatedEditableRow = {
   id: string;
   sourceRowNumber: number;
   excluded: boolean;
+  skipped?: boolean;
   values: ContractImportDraft | null;
   errors: string[];
   errorFields: ContractImportEditableField[];
@@ -639,7 +640,7 @@ export function validateImportEditableRows(
   } = {}
 ): ContractImportValidatedEditableRow[] {
   const existingNifs = new Set((options.existingNifs ?? []).map(normalizeNifKey).filter(Boolean));
-  const importNifCounts = new Map<string, number>();
+  const firstNifRow = new Map<string, string>();
   const active = (row: ContractImportEditableRow) => !row.excluded && !row.importedContractId &&
     (!options.selectedRowIds || options.selectedRowIds.includes(row.id));
   const identityIssues = getContractImportIdentityIssues(
@@ -654,12 +655,16 @@ export function validateImportEditableRows(
     const nif = normalizeNif(row.nif);
     if (!nif) return;
     const key = normalizeNifKey(nif);
-    importNifCounts.set(key, (importNifCounts.get(key) ?? 0) + 1);
+    if (!firstNifRow.has(key)) firstNifRow.set(key, row.id);
   });
 
   return rows.map((row, index) => {
     const duplicate = findImportDuplicate(row, options.existingContracts ?? [], options.fiscalYear ?? "");
     const resolution = duplicate?.id === row.duplicateResolution?.contractId ? row.duplicateResolution : undefined;
+    const skipped = active(row) && ((Boolean(duplicate) && !row.duplicateResolution) ||
+      Boolean(normalizeNif(row.nif) && firstNifRow.get(normalizeNifKey(row.nif)) !== row.id));
+    if (skipped) return { id: row.id, sourceRowNumber: row.sourceRowNumber, excluded: row.excluded,
+      skipped: true, values: null, errors: [], errorFields: [], warnings: [] };
     const result = row.excluded || row.importedContractId
       ? { values: null, errors: [] }
       : resolution?.action === "keep" && duplicate
@@ -670,15 +675,11 @@ export function validateImportEditableRows(
     const nif = normalizeNif(row.nif);
     if (active(row) && nif) {
       const key = normalizeNifKey(nif);
-      if ((importNifCounts.get(key) ?? 0) > 1) {
-        result.errors.push(`Le NIF ${nif} est répété dans les lignes sélectionnées.`);
-      }
       if (existingNifs.has(key)) {
         warnings.push("Doublon possible: NIF déjà présent dans les contrats affichés.");
       }
     }
     if (active(row) && options.fiscalYear) {
-      if (duplicate && !resolution) result.errors.push(`Le NIF ${row.nif} possède déjà un contrat pour ${options.fiscalYear} (${duplicate.id}).`);
       if (row.duplicateResolution && !resolution) result.errors.push("Le contrat en doublon a changé. Choisissez à nouveau le contrat à conserver.");
     }
     const errors = Array.from(new Set([...result.errors, ...issues.errors]));

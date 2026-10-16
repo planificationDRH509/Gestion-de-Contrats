@@ -1,4 +1,5 @@
 import { newEditTimestamp } from "../latestEdit";
+import { resolveDossierId } from "./dossierAliases";
 import { DossierRepository } from "../repositories/DossierRepository";
 import { CreateDossierInput, Dossier, UpdateDossierInput } from "../types";
 import { createId } from "../../lib/uuid";
@@ -26,7 +27,7 @@ export function readCachedDossiers(workspaceId: string): Dossier[] {
 
 export function readCachedDossier(id: string): Dossier | null {
   return selectDb(
-    (db) => db.dossiers.find((dossier) => dossier.id === id && !dossier.deletedAt) ?? null
+    (db) => db.dossiers.find((dossier) => dossier.id === resolveDossierId(db, dossier.workspaceId, id) && !dossier.deletedAt) ?? null
   );
 }
 
@@ -100,6 +101,7 @@ export class LocalDossierRepository implements DossierRepository {
 
   async applyUpdate(input: UpdateDossierInput, shouldQueue = false): Promise<Dossier> {
     const db = loadDb();
+    input = { ...input, id: resolveDossierId(db, input.workspaceId, input.id)! };
     const index = db.dossiers.findIndex(
       (dossier) =>
         dossier.id === input.id &&
@@ -173,6 +175,7 @@ export class LocalDossierRepository implements DossierRepository {
 
   async applyDelete(id: string, workspaceId: string, shouldQueue = false): Promise<number> {
     const db = loadDb();
+    id = resolveDossierId(db, workspaceId, id)!;
     const index = db.dossiers.findIndex(
       (dossier) =>
         dossier.id === id &&
