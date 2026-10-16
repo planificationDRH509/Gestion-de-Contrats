@@ -19,8 +19,44 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  print-contracts:
+    runs-on: ubuntu-latest
+    env:
+      VITE_BASE_PATH: /
+      VITE_DATA_PROVIDER: supabase
+      VITE_SUPABASE_URL: https://print-tests.supabase.co
+      VITE_SUPABASE_ANON_KEY: print-tests-anon-key
+      PLAYWRIGHT_CHROMIUM_CHANNEL: chromium
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install print test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify contract print isolation
+        run: npm run test:print
+
+      - name: Preserve failed print checks
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-print-failures
+          path: test-results/
+          retention-days: 7
+
   build:
     runs-on: ubuntu-latest
+    needs: print-contracts
     env:
       VITE_BASE_PATH: /Gestion-de-Contrats/
       VITE_DATA_PROVIDER: supabase

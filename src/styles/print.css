@@ -19,8 +19,28 @@
     background: white;
   }
 
+  /* AGENTS.md: a contract print may contain only contract documents.
+     Exclude unknown future UI and portals by default, including Ctrl/Cmd+P. */
+  body:has(.print-stack, .contract-document) {
+    visibility: hidden !important;
+  }
+
+  body:has(.print-stack, .contract-document)
+    *:not(.contract-document, .contract-document *, :has(.contract-document)) {
+    display: none !important;
+  }
+
+  body:has(.print-stack, .contract-document)::before,
+  body:has(.print-stack, .contract-document)::after,
+  body:has(.print-stack, .contract-document) :has(.contract-document)::before,
+  body:has(.print-stack, .contract-document) :has(.contract-document)::after {
+    content: none !important;
+    display: none !important;
+  }
+
   .sidebar,
   .topbar,
+  .skip-to-content,
   .no-print,
   .auth-shell {
     display: none !important;
@@ -67,6 +87,7 @@
   }
 
   .contract-document {
+    visibility: visible !important;
     width: 8.5in;
     margin: 0;
     padding: 0;

@@ -192,11 +192,11 @@ export function ContractsPrintPage() {
   }, [printableContracts, workspaceId, changeContractsStatus, user, can, pageSelection, ministersReady]);
 
   if (isLoading) {
-    return <div className="card">Chargement des contrats…</div>;
+    return <div className="card print-stack no-print">Chargement des contrats…</div>;
   }
 
   if (!data || data.length === 0) {
-    return <div className="card">Aucun contrat à imprimer.</div>;
+    return <div className="card print-stack no-print">Aucun contrat à imprimer.</div>;
   }
 
   return (

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "test:browser": "npm run build && playwright test"
+    "test:browser": "npm run build && playwright test",
+    "test:print": "npm run build && playwright test tests/browser/contracts-print.spec.ts tests/browser/contracts-print-isolation.spec.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
