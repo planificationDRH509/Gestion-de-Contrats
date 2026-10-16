@@ -47,6 +47,7 @@ export class LocalTagRepository implements TagRepository {
         tag.name.localeCompare(name, undefined, { sensitivity: "accent" }) === 0
     );
     if (existing) {
+      await flushLocalDbWrites();
       return existing;
     }
 

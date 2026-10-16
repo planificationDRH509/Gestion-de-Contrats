@@ -135,6 +135,23 @@ it('rejects reference writes by another workspace or a reader', async () => {
   expect(getPendingOutbox()).toHaveLength(0);
 });
 
+it.each(['addresses', 'positions', 'institutions', 'salary', 'prepositions'] as const)(
+  'isolates a rejected %s entry while preserving its dependent edit', async scope => {
+    const first = { id: 'first', label: 'First', version: 1 };
+    const second = { id: 'second', label: 'Second', version: 1 };
+    await queueReferenceChange('w', { scope, patches: [{ id: first.id, before: null, after: first }] });
+    await queueReferenceChange('w', { scope, patches: [{ id: first.id, before: first, after: { ...first, label: 'Edited' } }] });
+    await queueReferenceChange('w', { scope, patches: [{ id: second.id, before: null, after: second }] });
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Référence modifiée ailleurs.' } })
+      .mockResolvedValue({ data: ['salary', 'prepositions'].includes(scope) ? [second] : second, error: null });
+    await syncSupabaseOutbox();
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc.mock.calls[1][1].p_change.patches[0].id).toBe(second.id);
+    expect(getPendingOutbox()).toHaveLength(2);
+    expect(getPendingOutbox()[1].failureKind).toBe('dependency');
+  }
+);
+
 it('reads a fully cached trash without asking the server', async () => {
   const contract = { id: 'deleted', workspaceId: 'w', firstName: 'Jean', lastName: 'Test', assignment: 'Centre', status: 'saisie', salaryNumber: 1, createdAt: '2026-01-01', updatedAt: '2026-01-01', deletedAt: '2026-01-02' };
   cacheContracts([contract as never]);

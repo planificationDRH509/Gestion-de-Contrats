@@ -24,7 +24,7 @@ export async function syncQueuedList(item: OutboxItem): Promise<void> {
     p_expected_lists: payload.expectedLists as Json,
     p_expected_memberships: payload.expectedMemberships as Json
   });
-  if (error) throw new Error(error.message);
+  if (error) throw error;
 }
 
 export async function downloadContractLists(workspaceId: string): Promise<void> {

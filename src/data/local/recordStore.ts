@@ -103,6 +103,69 @@ export function mergeRecord(before: unknown, after: unknown, current: unknown): 
   throw new LocalRecordConflictError();
 }
 
+function mergeById<T extends { id: string }>(before: T[], after: T[], current: T[]): T[] {
+  const base = new Map(before.map(item => [item.id, item]));
+  const next = new Map(after.map(item => [item.id, item]));
+  const result = new Map(current.map(item => [item.id, item]));
+  for (const id of new Set([...base.keys(), ...next.keys()])) {
+    if (equal(base.get(id), next.get(id))) continue;
+    const value = mergeRecord(base.get(id), next.get(id), result.get(id)) as T | undefined;
+    if (value === undefined) result.delete(id); else result.set(id, value);
+  }
+  return [...result.values()];
+}
+
+function mergeContractRelations(before: unknown, after: unknown, current: unknown): unknown {
+  if (!before || !after || !current) return mergeRecord(before, after, current);
+  const base = before as LocalDb["contracts"][number];
+  const next = after as typeof base, stored = current as typeof base;
+  const fields = new Set([...Object.keys(base), ...Object.keys(next)] as (keyof typeof base)[]);
+  const changed = [...fields].filter(field => !equal(base[field], next[field]));
+  // Membership and tag operations deliberately do not advance the contract edit
+  // clock. Merge their own fields instead of dropping them behind a dated edit.
+  const relationEdit = base.modifiedAt === next.modifiedAt && changed.every(field =>
+    ["status", "tags", "auditHistory", "updatedAt"].includes(field));
+  let result = relationEdit ? { ...stored } : mergeRecord(before, after, current) as typeof base;
+  if (relationEdit) {
+    if (changed.includes("status")) {
+      if (["deletedAt", "durationMonths", "workspaceId"].some(field =>
+        !equal(base[field as keyof typeof base], stored[field as keyof typeof base]))) {
+        throw new LocalRecordConflictError();
+      }
+      result.status = mergeRecord(base.status, next.status, stored.status) as typeof base.status;
+    }
+    if (changed.includes("tags")) result.tags = mergeById(base.tags ?? [], next.tags ?? [], stored.tags ?? []);
+    if (changed.includes("updatedAt")) {
+      result.updatedAt = editTime(next.updatedAt) > editTime(stored.updatedAt) ? next.updatedAt : stored.updatedAt;
+    }
+  }
+  // Audit entries are append-only; concurrent independent edits must keep both.
+  if (base.auditHistory && next.auditHistory && stored.auditHistory &&
+      [base.auditHistory, next.auditHistory, stored.auditHistory].every(history => Array.isArray(history.entries)) &&
+      base.auditHistory.entries.every(entry =>
+        next.auditHistory!.entries.some(item => equal(item, entry)) && stored.auditHistory!.entries.some(item => equal(item, entry))) &&
+      !equal(base.auditHistory, next.auditHistory) && !equal(base.auditHistory, stored.auditHistory)) {
+    result = { ...result, auditHistory: { ...stored.auditHistory,
+      entries: mergeById(base.auditHistory.entries, next.auditHistory.entries, stored.auditHistory.entries) } };
+  } else if (relationEdit && changed.includes("auditHistory")) {
+    result.auditHistory = mergeRecord(base.auditHistory, next.auditHistory, stored.auditHistory) as typeof base.auditHistory;
+  }
+  return result;
+}
+
+/** Sync status is disposable bookkeeping, never a conflict in the user's data. */
+export function mergeDatabaseRecord(key: string, before: unknown, after: unknown, current: unknown): unknown {
+  try {
+    return key.startsWith("contracts:") ? mergeContractRelations(before, after, current) : mergeRecord(before, after, current);
+  } catch (error) {
+    // Two tabs can update the same timestamp while a contract and its outbox are
+    // saved in this transaction. Keep the persisted status conservatively; never
+    // reject those user edits or claim a newer downloaded revision on a conflict.
+    if (key.startsWith("syncMetadata:") && error instanceof LocalRecordConflictError) return current;
+    throw error;
+  }
+}
+
 async function getRows(keys?: string[]): Promise<Row[]> {
   const db = await database();
   return new Promise((resolve, reject) => {
@@ -135,13 +198,13 @@ export async function readRecords(): Promise<LocalDb | undefined> {
 }
 
 /** Data and outbox changes commit atomically; only changed records are rewritten. */
-export async function writeRecords(before: LocalDb | null, after: LocalDb): Promise<Map<string, unknown>> {
+export async function writeRecords(before: LocalDb | null, after: LocalDb, cacheKeys?: ReadonlySet<string>): Promise<Map<string, unknown>> {
   const previous = before ? flattenDatabase(before) : new Map<string, unknown>();
   const next = flattenDatabase(after);
-  return writeRows(previous, next);
+  return writeRows(previous, next, cacheKeys);
 }
 
-async function writeRows(previous: Map<string, unknown>, next: Map<string, unknown>): Promise<Map<string, unknown>> {
+async function writeRows(previous: Map<string, unknown>, next: Map<string, unknown>, cacheKeys?: ReadonlySet<string>): Promise<Map<string, unknown>> {
   const changes: Change[] = [...new Set([...previous.keys(), ...next.keys()])]
     .filter(key => !equal(previous.get(key), next.get(key)))
     .map(key => ({ key, before: previous.get(key), after: next.get(key) }));
@@ -149,9 +212,22 @@ async function writeRows(previous: Map<string, unknown>, next: Map<string, unkno
   for (let attempt = 0; attempt < 5; attempt++) {
     const current = new Map((await getRows(changes.map(change => change.key))).map(row => [row.key, row]));
     const merged = new Map<string, unknown>();
+    const decrypted = new Map(await Promise.all(changes.map(async change =>
+      [change.key, await openLocalValue(current.get(change.key)?.value)] as const)));
+    let discardCache = false;
+    for (const change of changes) {
+      try {
+        merged.set(change.key, mergeDatabaseRecord(change.key, change.before, change.after, decrypted.get(change.key)));
+      } catch (error) {
+        if (!(error instanceof LocalRecordConflictError) || !cacheKeys?.has(change.key)) throw error;
+        discardCache = true;
+      }
+    }
+    // A rejected download cannot advertise its revision or overwrite unrelated
+    // cache rows. Keep all user changes in the same atomic data/outbox commit.
     const prepared = await Promise.all(changes.map(async change => {
       const value = compactContractRecord(change.key,
-        mergeRecord(change.before, change.after, await openLocalValue(current.get(change.key)?.value)));
+        discardCache && cacheKeys?.has(change.key) ? decrypted.get(change.key) : merged.get(change.key));
       merged.set(change.key, value);
       return { key: change.key, value: value === undefined ? undefined : await sealLocalValue(value), revision: crypto.randomUUID() };
     }));

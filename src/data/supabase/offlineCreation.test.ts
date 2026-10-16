@@ -27,7 +27,7 @@ function online(value: boolean) {
 }
 function reply(data: unknown, error: unknown = null) {
   const chain: any = {};
-  for (const method of ["select", "eq", "is", "in", "order", "limit", "insert", "update", "ilike"]) {
+  for (const method of ["select", "eq", "is", "in", "order", "limit", "insert", "upsert", "update", "ilike"]) {
     chain[method] = vi.fn(() => chain);
   }
   chain.maybeSingle = vi.fn(async () => ({ data, error }));
@@ -371,6 +371,131 @@ describe("offline status changes", () => {
 
 
 describe("sync recovery", () => {
+  it.each([false, true])('synchronizes a new tag and its assignment with insert-only permissions (lost reply: %s)', async loseReply => {
+    const provider = createSupabaseProvider();
+    cacheContracts([{ ...input, salaryText: 'TRENTE MILLE', id: 'tagged-contract', createdAt: '2026-01-01', updatedAt: '2026-01-01' }]);
+    const tag = await provider.tags.create({ workspaceId: input.workspaceId, name: 'Nouveau tag' });
+    await provider.tags.assignToContract(input.workspaceId, 'tagged-contract', tag.id);
+    let savedTag: unknown = null;
+    const links = new Set<string>();
+    let lostReply = false;
+    mock.from.mockImplementation(table => {
+      const chain = reply(savedTag);
+      if (table === 'tags') {
+        chain.insert.mockImplementation((payload: Record<string, unknown>) => {
+          savedTag = { ...payload, created_at: '2026-01-01', updated_at: '2026-01-01', deleted_at: null };
+          return reply(savedTag);
+        });
+      } else if (table === 'contract_tags') {
+        chain.upsert.mockImplementation((payload: { contract_id: string; tag_id: string }, options?: { ignoreDuplicates?: boolean }) => {
+          if (!options?.ignoreDuplicates) return reply(null, { code: '42501', message: 'permission denied for table contract_tags' });
+          links.add(`${payload.contract_id}:${payload.tag_id}`);
+          if (loseReply && !lostReply) {
+            lostReply = true;
+            return reply(null, { message: 'Failed to fetch' });
+          }
+          return reply(null);
+        });
+      } else throw new Error(`Unexpected table ${table}`);
+      return chain;
+    });
+    if (loseReply) {
+      await expect(syncSupabaseOutbox()).rejects.toThrow(/ajouter le tag/);
+      expect(getPendingOutbox()).toMatchObject([{ type: 'tag.assign', failureKind: 'temporary' }]);
+    }
+    await syncSupabaseOutbox();
+    expect(savedTag).toMatchObject({ id: tag.id, name: 'Nouveau tag' });
+    expect(links).toEqual(new Set([`tagged-contract:${tag.id}`]));
+    expect(getPendingOutbox()).toEqual([]);
+    expect((await provider.contracts.getById('tagged-contract'))!.tags).toMatchObject([{ id: tag.id }]);
+  });
+
+  it.each([
+    { code: '40001', message: 'could not serialize access due to concurrent update' },
+    { code: '40P01', message: 'deadlock detected' },
+    { code: '55P03', message: 'could not obtain lock on row' }
+  ])('keeps PostgreSQL contention temporary when replaying a list: $code', async error => {
+    const user = { id: 'author', name: 'Author', username: 'author', role: 'admin' as const,
+      workspaceId: input.workspaceId, taskSessionToken: 'session' };
+    localStorage.setItem('contribution_auth', JSON.stringify(user));
+    await mutateContractListOffline(user, { action: 'create', durationMonths: 12 });
+    const requestId = getPendingOutbox()[0].id;
+    mock.rpc.mockResolvedValue({ data: null, error });
+    await expect(syncSupabaseOutbox()).rejects.toEqual(error);
+    expect(getPendingOutbox()[0].lastError).toBeFalsy();
+    expect(getPendingOutbox()[0].failureKind).toBe('temporary');
+    mock.rpc.mockResolvedValue({ data: null, error: null });
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([]);
+    expect(mock.rpc.mock.calls.map(call => call[1].p_request_id)).toEqual([requestId, requestId]);
+  });
+  it("keeps a failed dossier's contracts pending while synchronizing another dossier's contract", async () => {
+    queueOutbox(input.workspaceId, "dossier.create", { id: "failed-dossier", workspaceId: input.workspaceId, name: "Failed" });
+    const dependent = await new LocalContractRepository().create({ ...input, dossierId: "failed-dossier" });
+    const independent = await new LocalContractRepository().create({ ...input, dossierId: "other-dossier", nif: "999-999-999-9", applicantId: "999-999-999-9" });
+    mock.from.mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply(null, { code: "23514", message: "Dossier refusé" }))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply([{ ...contractRow(independent.id), nif: independent.nif, dossier_id: "other-dossier" }]));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toHaveLength(2);
+    expect(getPendingOutbox()[1]).toMatchObject({ payload: { id: dependent.id }, failureKind: "dependency" });
+  });
+
+  it("isolates a failed pin without skipping later toggles of that pin", async () => {
+    localStorage.setItem("contribution_auth", JSON.stringify({ id: "author", workspaceId: input.workspaceId, taskSessionToken: "session" }));
+    queueOutbox(input.workspaceId, "pin.set", { userId: "author", contractId: "rejected", pinned: true });
+    queueOutbox(input.workspaceId, "pin.set", { userId: "author", contractId: "rejected", pinned: false });
+    queueOutbox(input.workspaceId, "pin.set", { userId: "author", contractId: "independent", pinned: true });
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { message: "Contrat introuvable" } })
+      .mockResolvedValue({ data: ["independent"], error: null });
+    await syncSupabaseOutbox();
+    expect(mock.rpc).toHaveBeenCalledTimes(2);
+    expect(mock.rpc).toHaveBeenLastCalledWith("set_pinned_contract", expect.objectContaining({ p_contract_id: "independent" }));
+    expect(getPendingOutbox()).toHaveLength(2);
+    expect(getPendingOutbox()[1].failureKind).toBe("dependency");
+  });
+
+  it("isolates a rejected contract from other contracts in the same dossier and identity", async () => {
+    const repo = new LocalContractRepository();
+    const rejected = await repo.create({ ...input, dossierId: "shared-dossier" });
+    const independent = await repo.create({ ...input, dossierId: "shared-dossier", annee_fiscale: "2026-2027" });
+    mock.from.mockReturnValueOnce(reply(null, { code: "23514", message: "Contrat refusé" }))
+      .mockReturnValueOnce(reply(null)).mockReturnValueOnce(reply([]))
+      .mockReturnValueOnce(reply([{ ...contractRow(independent.id), dossier_id: "shared-dossier", annee_fiscale: "2026-2027" }]));
+    await syncSupabaseOutbox();
+    expect(getPendingOutbox()).toEqual([expect.objectContaining({ payload: expect.objectContaining({ id: rejected.id }), lastError: expect.stringContaining("Contrat refusé") })]);
+  });
+
+  it("blocks the rejected contract's list without blocking an independent list", async () => {
+    const user = { id: "author", name: "Author", username: "author", role: "admin" as const,
+      workspaceId: input.workspaceId, taskSessionToken: "session" };
+    localStorage.setItem("contribution_auth", JSON.stringify(user));
+    const rejected = await new LocalContractRepository().create(input);
+    const dependent = await mutateContractListOffline(user, { action: "create", durationMonths: 12, contractIds: [rejected.id] });
+    const independent = await mutateContractListOffline(user, { action: "create", durationMonths: 6 });
+    mock.from.mockReturnValue(reply(null, { code: "23514", message: "Contrat refusé" }));
+    await syncSupabaseOutbox();
+    expect(mock.rpc).toHaveBeenCalledWith("sync_contract_list", expect.objectContaining({
+      p_operation: expect.objectContaining({ createId: independent })
+    }));
+    expect(getPendingOutbox()).toHaveLength(2);
+    expect(getPendingOutbox()[1]).toMatchObject({ payload: { operation: { createId: dependent } }, failureKind: "dependency" });
+  });
+
+  it("does not propagate a rejected tag assignment through a shared tag", async () => {
+    queueOutbox(input.workspaceId, "tag.assign", { contractId: "rejected", tagId: "shared" });
+    queueOutbox(input.workspaceId, "tag.remove", { contractId: "rejected", tagId: "shared" });
+    queueOutbox(input.workspaceId, "tag.assign", { contractId: "independent", tagId: "shared" });
+    const saved = reply(null);
+    mock.from.mockReturnValueOnce(reply(null, { code: "23514", message: "Affectation refusée" })).mockReturnValue(saved);
+    await syncSupabaseOutbox();
+    expect(saved.upsert).toHaveBeenCalledWith({ contract_id: "independent", tag_id: "shared" }, {
+      onConflict: "contract_id,tag_id", ignoreDuplicates: true
+    });
+    expect(getPendingOutbox()).toHaveLength(2);
+    expect(getPendingOutbox()[1].failureKind).toBe("dependency");
+  });
+
   it("keeps the newer remote identity while continuing both dependent and unrelated contracts", async () => {
     upsertApplicantOffline(applicant);
     const dependent = await new LocalContractRepository().create(input);

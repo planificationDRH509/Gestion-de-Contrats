@@ -8,6 +8,19 @@ vi.hoisted(() => { vi.stubEnv('VITE_DATA_PROVIDER', 'local'); });
 const user = {id:'u',role:'agent',workspaceId:'w'} as AuthUser;
 const contract = {id:'c',workspaceId:'w',applicantId:'person',nif:'123-456-789-0'} as Contract;
 describe('person attachments', () => {
+  it('keeps concurrent additions, retries and deletions isolated for the same person', async () => {
+    const person = { ...contract, applicantId: crypto.randomUUID() };
+    const drafts = Array.from({ length: 20 }, (_, i) => ({ id: `file-${i}`, kind: 'file' as const, name: 'preuve.pdf', content: 'SGVsbG8=' }));
+    await Promise.all(drafts.flatMap(draft => [manageAttachments(user, person, 'add', draft), manageAttachments(user, person, 'add', draft)]));
+    expect(await manageAttachments(user, person, 'list')).toHaveLength(20);
+    await Promise.all([
+      ...drafts.slice(0, 8).map(draft => manageAttachments(user, person, 'delete', { id: draft.id })),
+      manageAttachments(user, person, 'add', { id: 'new', kind: 'link', name: 'New', location: 'https://example.com/new' })
+    ]);
+    const items = await manageAttachments(user, person, 'list');
+    expect(items).toHaveLength(13);
+    expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new' }), expect.objectContaining({ id: 'file-19' })]));
+  });
   it('shares documents across contracts for the same person, excluding content from listings', async () => {
     const id = crypto.randomUUID();
     const draft = {id,kind:'file' as const,name:'test.txt',content:'SGVsbG8='};

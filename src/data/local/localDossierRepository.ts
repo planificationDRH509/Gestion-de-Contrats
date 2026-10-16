@@ -61,6 +61,7 @@ export class LocalDossierRepository implements DossierRepository {
         dossier.name.toLocaleLowerCase() === name.toLocaleLowerCase()
     );
     if (existing) {
+      await flushLocalDbWrites();
       return existing;
     }
 
@@ -179,6 +180,7 @@ export class LocalDossierRepository implements DossierRepository {
         !dossier.deletedAt
     );
     if (index === -1) {
+      await flushLocalDbWrites();
       return 0;
     }
 

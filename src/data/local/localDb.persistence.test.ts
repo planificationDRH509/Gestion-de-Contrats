@@ -26,6 +26,125 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it.each(['add', 'remove'] as const)('keeps list membership and contract status consistent across two tabs: %s', async action => {
+  const { LocalContractRepository } = await import('./localContractRepository');
+  const { mutateContractListOffline } = await import('./localListRepository');
+  const { appendContractAuditEntry } = await import('../../lib/contractAudit');
+  const user = { id: 'u', name: 'Admin', username: 'admin', role: 'admin' as const, workspaceId: 'w' };
+  const contract = await new LocalContractRepository().create({ workspaceId: 'w', applicantId: '123-456-789-0', nif: '123-456-789-0',
+    gender: 'Homme', firstName: 'Jean', lastName: 'Louis', address: 'Delmas', status: 'saisie', position: 'Agent', assignment: 'Centre',
+    salaryNumber: 30000, salaryText: 'TRENTE MILLE', durationMonths: 12, annee_fiscale: '2025-2026' });
+  if (action === 'remove') await mutateContractListOffline(user, { action: 'create', durationMonths: 12, contractIds: [contract.id] });
+  const base = db.loadDb();
+  const other = structuredClone(base);
+  const externalAt = new Date(Date.parse(contract.modifiedAt!) + 1000).toISOString();
+  Object.assign(other.contracts.find(c => c.id === contract.id)!, { salaryNumber: 40000,
+    modifiedAt: externalAt, updatedAt: externalAt,
+    auditHistory: appendContractAuditEntry(base.contracts.find(c => c.id === contract.id)!.auditHistory,
+      { action: 'modification', at: externalAt, changes: [{ field: 'salaryNumber', previousValue: 30000, newValue: 40000 }] }) });
+  await write(base, other);
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(Date.parse(contract.modifiedAt!) + 2000);
+    await mutateContractListOffline(user, action === 'add'
+      ? { action: 'create', durationMonths: 12, contractIds: [contract.id] }
+      : { action: 'assign', contractIds: [contract.id] });
+    const stored = (await records.readRecords())!;
+    expect(stored.contractLists.some(l => l.members.some(m => m.id === contract.id))).toBe(action === 'add');
+    const saved = stored.contracts.find(c => c.id === contract.id)!;
+    expect(saved).toMatchObject({ status: action === 'add' ? 'liste' : 'saisie', salaryNumber: 40000, modifiedAt: externalAt });
+    expect(saved.auditHistory!.entries.flatMap(e => e.changes).map(c => c.field)).toEqual(expect.arrayContaining(['salaryNumber', 'status']));
+    expect(stored.outbox.filter(item => item.type === 'list.operation')).toHaveLength(action === 'add' ? 1 : 2);
+  } finally { vi.useRealTimers(); }
+});
+
+it.each(['assign', 'remove'] as const)('keeps tag changes after another tab edits the contract: %s', async action => {
+  const { LocalContractRepository } = await import('./localContractRepository');
+  const { LocalTagRepository } = await import('./localTagRepository');
+  const contracts = new LocalContractRepository(), tags = new LocalTagRepository();
+  const contract = await contracts.create({ workspaceId: 'w', applicantId: '123-456-789-0', nif: '123-456-789-0',
+    gender: 'Homme', firstName: 'Jean', lastName: 'Louis', address: 'Delmas', status: 'saisie', position: 'Agent', assignment: 'Centre',
+    salaryNumber: 30000, salaryText: 'TRENTE MILLE', durationMonths: 12, annee_fiscale: '2025-2026' });
+  const tag = await tags.create({ workspaceId: 'w', name: 'Urgent' });
+  if (action === 'remove') await tags.assignToContract('w', contract.id, tag.id);
+  const base = db.loadDb(), other = structuredClone(base);
+  Object.assign(other.contracts.find(c => c.id === contract.id)!, { salaryNumber: 40000,
+    modifiedAt: new Date(Date.parse(contract.modifiedAt!) + 1000).toISOString() });
+  await write(base, other);
+  if (action === 'remove') await tags.removeFromContract('w', contract.id, tag.id);
+  else await tags.assignToContract('w', contract.id, tag.id);
+  expect((await records.readRecords())!.contractTags.filter(link => link.contractId === contract.id)).toHaveLength(action === 'assign' ? 1 : 0);
+  expect((await contracts.getById(contract.id))!.tags?.map(t => t.id)).toEqual(action === 'assign' ? [tag.id] : []);
+  expect((await contracts.list({ workspaceId: 'w', tagId: tag.id })).items.map(c => c.id)).toEqual(action === 'assign' ? [contract.id] : []);
+  expect((await contracts.getById(contract.id))!.salaryNumber).toBe(40000);
+});
+
+const legacyPerson = { id: "concurrent", workspaceId: "w", gender: "Homme", firstName: "Original", lastName: "Louis",
+  nif: "123-456-789-0", ninu: null, address: "Delmas", createdAt: "2026-01-01", updatedAt: "2026-01-01" };
+it.each([
+  { table: "workspaces", field: "name", row: { id: "concurrent", name: "Original", createdAt: "1", updatedAt: "1" } },
+  { table: "applicants", field: "firstName", row: legacyPerson },
+  { table: "contracts", field: "firstName", row: { ...legacyPerson, applicantId: legacyPerson.nif, status: "saisie",
+    position: "Analyste", assignment: "Planification", salaryNumber: 30000, salaryText: "TRENTE MILLE", durationMonths: 12 } },
+  { table: "dossiers", field: "name", row: { id: "concurrent", workspaceId: "w", name: "Original", status: "active", createdAt: "1", updatedAt: "1" } },
+  { table: "tags", field: "name", row: { id: "concurrent", workspaceId: "w", name: "Original", color: "blue", createdAt: "1", updatedAt: "1" } },
+  { table: "contractLists", field: "visaNumber", row: { id: "concurrent", workspaceId: "w", durationMonths: 12,
+    visaNumber: "Original", sealedAt: null, version: 1, members: [], history: [], createdAt: "1" } }
+] as const)(
+  "does not let a stale $table download block an unrelated user save in the same batch", async ({ table, field, row }) => {
+    const initial = db.loadDb();
+    // Undated legacy/cache records use structural conflict detection.
+    Object.assign(initial, { [table]: [row] });
+    db.saveDb(initial);
+    await db.flushLocalDbWrites();
+    const base = db.loadDb();
+    const other = structuredClone(base);
+    Object.assign(other[table][0], { [field]: "Other tab" });
+    await write(base, other);
+    const cache = db.loadDb();
+    Object.assign(cache[table][0], { [field]: "Stale download" });
+    cache.syncMetadata.w = { remoteRevision: "stale-download", snapshotVersion: 1 };
+    db.saveDb(cache, { cacheOnly: true });
+    const user = db.loadDb();
+    user.printJobs.push({ id: "print", workspaceId: "w", contractIds: ["c"], createdAt: "1" });
+    user.outbox.push({ id: "q", workspaceId: "w", type: "print.create", payload: { id: "print" }, createdAt: "1" });
+    db.saveDb(user);
+    await db.flushLocalDbWrites();
+    const stored = (await records.readRecords())!;
+    expect(stored[table][0]).toMatchObject({ [field]: "Other tab" });
+    expect(stored.syncMetadata.w?.remoteRevision).not.toBe("stale-download");
+    expect(stored.printJobs).toHaveLength(1);
+    expect(stored.outbox).toHaveLength(1);
+    expect(db.loadDb()[table][0]).toMatchObject({ [field]: "Other tab" });
+    expect(db.getLocalStorageError()).toBeNull();
+  }
+);
+
+it.each(["dossier.create", "tag.create", "dossier.delete"] as const)(
+  "durably retries %s after a storage failure without duplicating the action", async type => {
+    const { LocalDossierRepository } = await import("./localDossierRepository");
+    const { LocalTagRepository } = await import("./localTagRepository");
+    const dossiers = new LocalDossierRepository();
+    const dossier = type === "dossier.delete" ? await dossiers.create({ workspaceId: "w", name: "To delete" }) : null;
+    const mutate = () => type === "dossier.create" ? dossiers.create({ workspaceId: "w", name: "Retry" })
+      : type === "tag.create" ? new LocalTagRepository().create({ workspaceId: "w", name: "Retry" })
+      : dossiers.delete(dossier!.id, "w");
+    vi.spyOn(records, "writeRecords")
+      .mockRejectedValueOnce(new DOMException("Full", "QuotaExceededError"))
+      .mockRejectedValueOnce(new DOMException("Full", "QuotaExceededError"));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(mutate()).rejects.toThrow();
+      expect((await records.readRecords())!.outbox.filter(item => item.type === type)).toHaveLength(0);
+    }
+    await mutate();
+    const stored = (await records.readRecords())!;
+    expect(stored.outbox.filter(item => item.type === type)).toHaveLength(1);
+    if (type === "dossier.delete") expect(stored.dossiers[0].deletedAt).toBeTruthy();
+    else expect(type === "tag.create" ? stored.tags : stored.dossiers).toHaveLength(1);
+    expect(db.getLocalStorageError()).toBeNull();
+  }
+);
+
 it("reloads a conflicting download and allows the next retry to persist", async () => {
   const base = db.loadDb();
   const other = structuredClone(base);
@@ -312,4 +431,78 @@ it("persists a full download over legacy rows whose defaults exist only in memor
   await db.flushLocalDbWrites();
   expect((await records.readRecords())!.applicants).toHaveLength(2);
   expect(db.loadDb().applicants[0].phone).toBe("12345678");
+});
+
+it.each([false, true])("finishes an import despite concurrent sync status (resume a previously blocked lot: %s)", async resume => {
+  const { runContractImport } = await import("../../features/contracts/contractImportRun");
+  const { LocalApplicantRepository } = await import("./localApplicantRepository");
+  const { LocalContractRepository } = await import("./localContractRepository");
+  const { LocalDossierRepository } = await import("./localDossierRepository");
+  const cache = await import("./offlineStore");
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "2026-10-15T10:00:00Z", lastError: null });
+  await db.flushLocalDbWrites();
+  const provider = { applicants: new LocalApplicantRepository(), contracts: new LocalContractRepository(), dossiers: new LocalDossierRepository() };
+  const create = vi.spyOn(provider.contracts, "create");
+  let emulateOldConflict = resume;
+  vi.spyOn(records, "writeRecords").mockImplementation(async (before, after) => {
+    if (emulateOldConflict && before) {
+      // Reproduce the previous app's blocked transaction, including its original
+      // merge base and all the requests retained for the remaining rows.
+      records.mergeRecord(before.syncMetadata.w, after.syncMetadata.w, (await records.readRecords())!.syncMetadata.w);
+    }
+    return write(before, after);
+  });
+  const upsert = provider.applicants.upsert.bind(provider.applicants);
+  let count = 0;
+  vi.spyOn(provider.applicants, "upsert").mockImplementation(async value => {
+    if (++count === 9) {
+      const base = (await records.readRecords())!;
+      const other = structuredClone(base);
+      other.syncMetadata.w.lastSyncedAt = "2026-10-15T10:00:03Z";
+      await write(base, other);
+      cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "2026-10-15T10:00:02Z" });
+    }
+    return upsert({ ...value, id: value.nif! });
+  });
+  const input = {
+    workspaceId: "w", responsibleUserId: "u", fiscalYear: "2026-2027", dossierId: null,
+    rows: Array.from({ length: 20 }, (_, index) => ({
+      contractId: `import-${index}`, sourceRowNumber: index + 2, nif: String(1234567890 + index), ninu: null,
+      firstName: "Jean", lastName: "TEST", gender: "Homme" as const, address: "Delmas", phone: null,
+      position: "Agent", assignment: "MSPP", salaryNumber: 30000, salaryText: "", durationMonths: 12, commentaire: null
+    }))
+  };
+  let result = await runContractImport(provider, input);
+  if (resume) {
+    expect(result.contracts).toHaveLength(8);
+    expect(result.failures).toHaveLength(12);
+    expect(result.failures.every(item => item.error?.includes("modifications concurrentes"))).toBe(true);
+    emulateOldConflict = false;
+    result = await runContractImport(provider, input);
+  }
+  expect(result.failures).toEqual([]);
+  expect(result.contracts).toHaveLength(20);
+  expect(create).toHaveBeenCalledTimes(20);
+  const stored = (await records.readRecords())!;
+  expect(stored.contracts).toHaveLength(20);
+  expect(stored.outbox.filter(item => item.type === "contract.create")).toHaveLength(20);
+  expect(stored.syncMetadata.w.lastSyncedAt).toBe("2026-10-15T10:00:03Z");
+  expect(db.getLocalStorageError()).toBeNull();
+});
+
+it("keeps an independent edit when a stale in-memory snapshot changes synchronization status", async () => {
+  const cache = await import("./offlineStore");
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "2026-10-15T10:00:00Z" });
+  await db.flushLocalDbWrites();
+  const stale = db.loadDb();
+  cache.setWorkspaceSyncMetadata("w", { lastSyncedAt: "2026-10-15T10:00:03Z" });
+  stale.syncMetadata.w.lastSyncedAt = "2026-10-15T10:00:02Z";
+  stale.workspaces[0].name = "My edit";
+  stale.outbox.push({ id: "q", workspaceId: "w", type: "contract.delete", payload: { id: "c" }, createdAt: "1" });
+  expect(() => db.saveDb(stale)).not.toThrow();
+  await db.flushLocalDbWrites();
+  const stored = (await records.readRecords())!;
+  expect(stored.workspaces[0].name).toBe("My edit");
+  expect(stored.outbox).toHaveLength(1);
+  expect(stored.syncMetadata.w.lastSyncedAt).toBe("2026-10-15T10:00:03Z");
 });

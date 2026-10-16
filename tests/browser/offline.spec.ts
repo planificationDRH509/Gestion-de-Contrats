@@ -17,6 +17,10 @@ test('opens the production application again with the network disabled', async (
   await page.reload();
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.locator('input[type="password"]')).toBeVisible();
+  try {
+    await page.reload();
+    await expect(page.locator('input[type="password"]')).toBeVisible();
+  } finally {
+    await context.setOffline(false);
+  }
 });

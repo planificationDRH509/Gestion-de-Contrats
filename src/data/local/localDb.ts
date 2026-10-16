@@ -18,7 +18,7 @@ import {
   normalizeOptionalText
 } from "../../lib/dossier";
 import { get, del } from "idb-keyval";
-import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeRecord, equalRecords, LocalRecordConflictError } from "./recordStore";
+import { readRecords, writeRecords, flattenDatabase, inflateDatabase, mergeDatabaseRecord, equalRecords, LocalRecordConflictError } from "./recordStore";
 import type { ContractList } from "../../features/lists/listModel";
 
 export type LocalSyncMetadata = {
@@ -54,6 +54,7 @@ let persistenceQueue: Promise<void> = Promise.resolve();
 let pendingPersistenceSnapshot: LocalDb | null = null;
 let pendingPersistenceBase: LocalDb | null = null;
 let pendingCacheOnly = true;
+let pendingUserKeys = new Set<string>();
 let activePersistenceSnapshot: LocalDb | null = null;
 let persistenceDrainScheduled = false;
 let persistedDb: LocalDb | null = null;
@@ -257,11 +258,13 @@ function loadLegacyDb(): LocalDb | null {
   }
 }
 
-function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
+function queueIndexedDbWrite(db: LocalDb, cacheOnly = false, userKeys?: Set<string>): Promise<void> {
   if (!pendingPersistenceSnapshot) {
     pendingPersistenceBase = activePersistenceSnapshot ?? persistedDb;
     pendingCacheOnly = cacheOnly;
+    pendingUserKeys = cacheOnly ? new Set() : userKeys ?? new Set(flattenDatabase(db).keys());
   } else pendingCacheOnly = pendingCacheOnly && cacheOnly;
+  if (!cacheOnly) userKeys?.forEach(key => pendingUserKeys.add(key));
   pendingPersistenceSnapshot = db;
   if (persistenceDrainScheduled) return persistenceQueue;
   persistenceDrainScheduled = true;
@@ -270,7 +273,9 @@ function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
       const snapshot = pendingPersistenceSnapshot;
       const base = pendingPersistenceBase;
       const cacheOnly = pendingCacheOnly;
+      const userKeys = pendingUserKeys;
       pendingPersistenceSnapshot = null;
+      pendingUserKeys = new Set();
       activePersistenceSnapshot = snapshot;
       try {
         if (typeof indexedDB === "undefined") {
@@ -279,7 +284,9 @@ function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
         } else {
           let merged: Map<string, unknown>;
           try {
-            merged = await writeRecords(base, snapshot);
+            const cacheKeys = new Set([...flattenDatabase(base ?? snapshot).keys(), ...flattenDatabase(snapshot).keys()]
+              .filter(key => !userKeys.has(key)));
+            merged = await writeRecords(base, snapshot, cacheOnly ? undefined : cacheKeys);
           } catch (error) {
             if (!cacheOnly || !(error instanceof LocalRecordConflictError)) throw error;
             // Only explicitly downloaded cache snapshots may be discarded. User
@@ -307,6 +314,7 @@ function queueIndexedDbWrite(db: LocalDb, cacheOnly = false): Promise<void> {
         pendingPersistenceSnapshot = pendingPersistenceSnapshot ?? snapshot;
         pendingPersistenceBase = base;
         pendingCacheOnly = cacheOnly && pendingCacheOnly;
+        userKeys.forEach(key => pendingUserKeys.add(key));
         persistenceError = error instanceof Error ? error : new Error("Enregistrement local impossible.");
         notifyStorage();
         throw persistenceError;
@@ -363,6 +371,7 @@ function getMemoryDb(): LocalDb {
     memoryDb = null;
     persistedDb = null;
     pendingPersistenceSnapshot = null;
+    pendingUserKeys = new Set();
     persistenceError = null;
   }
 
@@ -399,15 +408,23 @@ export function saveDb(db: LocalDb, options: { cacheOnly?: boolean } = {}) {
     const before = flattenDatabase(base), after = flattenDatabase(db), current = flattenDatabase(memoryDb);
     for (const key of new Set([...before.keys(), ...after.keys()])) {
       if (equalRecords(before.get(key), after.get(key))) continue;
-      const value = mergeRecord(before.get(key), after.get(key), current.get(key));
+      const value = mergeDatabaseRecord(key, before.get(key), after.get(key), current.get(key));
       if (value === undefined) current.delete(key); else current.set(key, value);
     }
     db = inflateDatabase(current);
   }
+  // Track the rows changed by the caller, before coalescing with downloads.
+  // A cache conflict may discard downloads, but never a user row or its outbox.
+  let userKeys: Set<string> | undefined;
+  if (!options.cacheOnly) {
+    const before = memoryDb ? flattenDatabase(memoryDb) : new Map<string, unknown>();
+    const after = flattenDatabase(db);
+    userKeys = new Set([...before.keys(), ...after.keys()].filter(key => !equalRecords(before.get(key), after.get(key))));
+  }
   memoryRevision += 1;
   memoryDb = normalizeDb(cloneDb(db));
   localStorage.setItem(INIT_MARKER_KEY, "1");
-  void queueIndexedDbWrite(memoryDb, options.cacheOnly);
+  void queueIndexedDbWrite(memoryDb, options.cacheOnly, userKeys);
 }
 
 export async function flushLocalDbWrites(): Promise<void> {

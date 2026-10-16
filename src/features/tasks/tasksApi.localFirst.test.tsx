@@ -32,6 +32,24 @@ beforeEach(async () => {
 });
 afterEach(() => { cleanup(); client.clear(); onlineManager.setOnline(true); });
 
+it.each(['TASK_NOT_FOUND', 'TASK_CONTENT_INVALID'])('refreshes unrelated remote tasks while preserving a rejected local edit: %s', async message => {
+  const { queueOfflineTaskEdit } = await import('./privateTaskOffline');
+  await queueOfflineTaskEdit('local-user', 'session', task.id, 'Local edit', '');
+  mocks.rpc.mockImplementation(async name => name === 'sync_private_task'
+    ? { data: null, error: { code: 'P0001', message } }
+    : { data: [{ id: 'new-remote-task', content: 'New remote task', status: 'todo', created_at: '2026-01-01',
+      updated_at: '2026-01-01', created_by: 'local-user', created_by_name: 'Jean', created_by_username: 'jean' }], error: null });
+  const { result } = renderHook(() => usePrivateTasks(), { wrapper });
+  await waitFor(() => expect(result.current.isFetching).toBe(false));
+  expect(mocks.rpc).toHaveBeenCalledWith('list_private_tasks', { p_session_token: 'session' });
+  expect(result.current.data).toEqual([
+    expect.objectContaining({ id: task.id, content: 'Local edit' }),
+    expect.objectContaining({ id: 'new-remote-task', content: 'New remote task' })
+  ]);
+  expect(result.current.error).toMatchObject({ message });
+  expect((await readPrivateTaskOfflineState('local-user', 'session')).outbox).toHaveLength(1);
+});
+
 it("renders the encrypted cache while the online refresh never responds", async () => {
   const { result } = renderHook(() => usePrivateTasks(), { wrapper });
   await waitFor(() => expect(result.current.data).toEqual([task]));

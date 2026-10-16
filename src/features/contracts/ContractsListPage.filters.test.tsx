@@ -175,6 +175,7 @@ describe("contract list filters", () => {
     await userEvent.type(screen.getByRole("searchbox", { name: "Rechercher par nom, NIF ou NINU" }), "Jean");
     await userEvent.click(screen.getByRole("button", { name: "Aujourd'hui" }));
     await userEvent.click(screen.getByRole("button", { name: /Dossiers/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Autres dossiers/ }));
     await userEvent.click(screen.getByRole("button", { name: "Ouvrir les contrats de Campagne" }));
     expectParams({ dossierId: "dossier-test", onlyMine: false, query: undefined, dateFilterMode: undefined, fiscalYear: getFiscalYearForDate(new Date()), page: 1 });
     expect(screen.getByRole("button", { name: "Tous les contrats" })).toBeInTheDocument();

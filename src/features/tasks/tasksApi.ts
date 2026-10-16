@@ -166,7 +166,12 @@ export function usePrivateTasks() {
       if (isOffline()) return cachedTasks;
 
       try {
-        await flushPrivateTaskOutbox(currentUser);
+        let syncError: unknown;
+        try { await flushPrivateTaskOutbox(currentUser); }
+        catch (error) {
+          if (isOfflineFailure(error) || isOffline()) throw error;
+          syncError = error;
+        }
         const remoteTasks = await fetchRemoteTasks(currentUser.taskSessionToken);
         if (signal.aborted) return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
         await replaceCachedPrivateTasks(
@@ -174,7 +179,13 @@ export function usePrivateTasks() {
           currentUser.taskSessionToken,
           remoteTasks
         );
-        return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
+        const tasks = await readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
+        if (syncError !== undefined) {
+          // Refresh independent tasks while still surfacing the rejected edit.
+          queryClient.setQueryData(["private_tasks", currentUser.id], tasks);
+          throw syncError;
+        }
+        return tasks;
       } catch (error) {
         if (isOfflineFailure(error) || isOffline()) return readCachedPrivateTasks(currentUser.id, currentUser.taskSessionToken);
         throw error;

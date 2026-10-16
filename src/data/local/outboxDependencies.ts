@@ -1,6 +1,6 @@
 import type { Contract, OutboxItem } from "../types";
 
-/** Shared keys preserve ordering only for records touched by a failed action. */
+/** Records an action reads or changes: failures of these records must run first. */
 export function outboxKeys(item: OutboxItem): string[] {
   const keys = new Set<string>();
   const add = (kind: string, id: unknown) => {
@@ -8,16 +8,22 @@ export function outboxKeys(item: OutboxItem): string[] {
   };
   const p = item.payload;
   if (item.type === 'reference.change') {
-    // Shared references also serialize across workspaces.
-    keys.add(`reference:${['salary', 'prepositions', 'ministers'].includes(String(p.scope)) ? 'global' : item.workspaceId}:${p.scope}`);
+    const scope = `reference:${['salary', 'prepositions', 'ministers'].includes(String(p.scope)) ? 'global' : item.workspaceId}:${p.scope}`;
+    // Ministers share the active selection. Other references have independent
+    // entry versions; a rejected entry must not hold the entire catalogue.
+    const patches = p.patches as { id: string }[] | undefined;
+    if (p.scope === 'ministers' || !patches?.length) keys.add(scope);
+    else patches.forEach(patch => keys.add(`${scope}:${patch.id}`));
   }
   if (item.type === "list.operation") {
-    add("lists", "all");
+    const operation = p.operation as { listId?: string; createId?: string } | undefined;
+    Object.keys(p.expectedLists ?? {}).forEach(id => add("list", id));
+    add("list", operation?.listId); add("list", operation?.createId);
     if (Array.isArray(p.contractIds)) p.contractIds.forEach(id => add("contract", id));
     if (Array.isArray(p.applicantIds)) p.applicantIds.forEach(id => add("applicant", id));
   }
   if (item.type === "pin.set") {
-    add("pins", p.userId);
+    add("pin", `${p.userId}:${p.contractId}`);
     add("contract", p.contractId);
   }
   if (item.type.startsWith("applicant.")) {
@@ -35,6 +41,18 @@ export function outboxKeys(item: OutboxItem): string[] {
     add("contract", p.contractId); add("tag", p.tagId);
   }
   return [...keys];
+}
+
+/** A failed write does not invalidate the shared records it merely references. */
+export function outboxWriteKeys(item: OutboxItem): string[] {
+  const keys = outboxKeys(item);
+  const prefix = `${item.workspaceId}:`;
+  if (item.type.startsWith("contract.") || item.type === "tag.assign" || item.type === "tag.remove") {
+    return keys.filter(key => key.startsWith(`${prefix}contract:`));
+  }
+  if (item.type === "list.operation") return keys.filter(key => !key.startsWith(`${prefix}applicant:`));
+  if (item.type === "pin.set") return keys.filter(key => key.startsWith(`${prefix}pin:`));
+  return keys;
 }
 
 export function contractSyncInfo(contract: Contract, pending: OutboxItem[], cloudEnabled = true) {

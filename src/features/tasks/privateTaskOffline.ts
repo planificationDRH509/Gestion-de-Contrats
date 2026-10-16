@@ -6,7 +6,7 @@ import type {
   TaskStatus
 } from "../../data/types";
 
-export type PrivateTaskOfflineOperation = { sent?: boolean } & (
+export type PrivateTaskOfflineOperation = { sent?: boolean; missing?: boolean } & (
   | {
       id: string;
       type: "create";
@@ -320,6 +320,13 @@ export async function queueOfflineTaskDeletion(
   await transact(userId, sessionToken, (state) => {
     state.tasks = state.tasks.filter((task) => task.id !== taskId);
 
+    // A confirmed missing task needs no further server deletion. Keep its local
+    // edits until the user explicitly deletes it, then release the whole chain.
+    if (state.outbox.some(operation => privateTaskOperationTarget(operation) === taskId && operation.missing)) {
+      state.outbox = state.outbox.filter(operation => privateTaskOperationTarget(operation) !== taskId);
+      return;
+    }
+
     const creation = state.outbox.find(operation => operation.type === "create" && operation.tempTaskId === taskId);
     if (taskId.startsWith("offline-task-") && !creation?.sent) {
       state.outbox = state.outbox.filter((operation) => {
@@ -342,11 +349,28 @@ export async function queueOfflineTaskDeletion(
 }
 
 /** Freeze the request before sending: a lost response must replay the exact payload. */
-export async function claimPrivateTaskOperation(userId: string, token: string) {
+export async function claimPrivateTaskOperation(userId: string, token: string, blockedTasks: ReadonlySet<string> = new Set()) {
   return transact(userId, token, state => {
-    const operation = state.outbox[0];
+    const operation = state.outbox.find(item => !blockedTasks.has(privateTaskOperationTarget(item)));
     if (operation) operation.sent = true;
     return operation;
+  });
+}
+
+export function privateTaskOperationTarget(operation: PrivateTaskOfflineOperation): string {
+  return operation.type === 'create' ? operation.tempTaskId ?? operation.id : operation.taskId;
+}
+
+export async function markPrivateTaskMissing(userId: string, token: string, operationId: string) {
+  await transact(userId, token, state => {
+    const operation = state.outbox.find(item => item.id === operationId);
+    if (!operation || (operation.type !== "edit" && operation.type !== "status")) return;
+    operation.missing = true;
+    // Deletion can also be queued while the rejected request is in flight.
+    if (state.outbox.some(item => item.type === "delete" && item.taskId === operation.taskId)) {
+      state.outbox = state.outbox.filter(item => privateTaskOperationTarget(item) !== operation.taskId);
+      state.tasks = state.tasks.filter(task => task.id !== operation.taskId);
+    }
   });
 }
 

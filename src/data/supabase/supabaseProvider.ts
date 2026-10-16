@@ -14,7 +14,7 @@ import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
 import { flushLocalDbWrites, refreshLocalDb, getLocalStorageError, loadDb, saveDb } from "../local/localDb";
 import { withBrowserLock } from "../../lib/browserLock";
-import { outboxKeys, discardableContractChanges } from "../local/outboxDependencies";
+import { outboxKeys, outboxWriteKeys, discardableContractChanges } from "../local/outboxDependencies";
 import { setOutboxError } from "../local/localOutbox";
 import { assertNoFiscalYearDuplicate } from "../contractIdentity";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
@@ -1226,7 +1226,11 @@ class SupabaseTagRepository implements TagRepository {
     const client = getSupabaseClient();
     const { error } = await (client
       .from("contract_tags")
-      .upsert({ contract_id: contractId, tag_id: tagId } as any) as any);
+      // Associations are insert/delete only. Ignoring an existing pair also
+      // makes retries safe when the first acknowledgement was lost.
+      .upsert({ contract_id: contractId, tag_id: tagId } as any, {
+        onConflict: "contract_id,tag_id", ignoreDuplicates: true
+      }) as any);
 
     if (error) {
       throw repositoryError("Impossible d'ajouter le tag au contrat.", error);
@@ -1559,8 +1563,9 @@ function syncPendingOutbox() {
       if (!item) continue;
       const modifiedAt = outboxEditTime(item);
       const keys = outboxKeys(item);
+      const writes = outboxWriteKeys(item);
       if (keys.some((key) => blockedKeys.has(key))) {
-        keys.forEach((key) => blockedKeys.add(key));
+        writes.forEach((key) => blockedKeys.add(key));
         setOutboxError(item.id, "En attente de la résolution d’une action liée à ce contrat.", undefined, "dependency");
         continue;
       }
@@ -1732,7 +1737,7 @@ function syncPendingOutbox() {
         await flushLocalDbWrites();
         setWorkspaceSyncMetadata(item.workspaceId, { lastError: message });
         notifySyncState();
-        keys.forEach((key) => blockedKeys.add(key));
+        writes.forEach((key) => blockedKeys.add(key));
         console.error("Impossible de synchroniser une action locale.", error);
       }
     }

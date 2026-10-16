@@ -109,12 +109,15 @@ describe("durable offline lists", () => {
     expect(getPendingOutbox()).toHaveLength(0);
   });
 
-  it("retains conflicts and blocks dependent list changes", async () => {
-    await create(); await create();
+  it("retains conflicts and blocks only dependent list changes", async () => {
+    const id = (await create())!;
+    await mutateContractListOffline(user, { action: "visa", listId: id, version: get(id).version, visaNumber: "V-1" });
+    await create();
     sync.replay.mockRejectedValueOnce(new Error("Conflit de liste"));
     await syncSupabaseOutbox();
-    expect(sync.replay).toHaveBeenCalledOnce();
+    expect(sync.replay).toHaveBeenCalledTimes(2);
     expect(getPendingOutbox()).toHaveLength(2);
     expect(getPendingOutbox()[0].lastError).toBe("Conflit de liste");
+    expect(getPendingOutbox()[1]).toMatchObject({ payload: { operation: { action: "visa", listId: id } }, failureKind: "dependency" });
   });
 });

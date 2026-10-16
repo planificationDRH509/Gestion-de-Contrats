@@ -44,6 +44,7 @@ export function PersonAttachmentsDialog({person, onClose}: {person: AttachmentPe
       if (kind === 'file') draft.content = await readAttachmentFile(file!);
       else draft.location = location.trim();
       const items = await manageAttachments(user, person, 'add', draft);
+      await queryClient.cancelQueries({queryKey: key});
       queryClient.setQueryData(key, items);
       pendingDraft.current = null;
       setName(''); setLocation(''); setFile(null);
@@ -75,7 +76,11 @@ export function PersonAttachmentsDialog({person, onClose}: {person: AttachmentPe
               })}><span className="material-symbols-rounded">{item.kind === 'file' ? 'download' : copied === item.id ? 'check' : 'content_copy'}</span></button>}
             {can('contracts.edit') && <button type="button" className="icon-btn" disabled={busy} aria-label={`Supprimer ${item.name}`} title="Supprimer" onClick={() => setDeleting(item.id)}><span className="material-symbols-rounded">delete</span></button>}
           </div>
-          {deleting === item.id && <div className="attachment-delete"><span>Supprimer cette pièce jointe ?</span><button className="btn btn-outline" disabled={busy} onClick={() => setDeleting(null)}>Annuler</button><button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {queryClient.setQueryData(key,await manageAttachments(user!,person,'delete',{id:item.id})); setDeleting(null);})}>Supprimer</button></div>}
+          {deleting === item.id && <div className="attachment-delete"><span>Supprimer cette pièce jointe ?</span><button className="btn btn-outline" disabled={busy} onClick={() => setDeleting(null)}>Annuler</button><button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {
+            const items = await manageAttachments(user!,person,'delete',{id:item.id});
+            await queryClient.cancelQueries({queryKey: key});
+            queryClient.setQueryData(key,items); setDeleting(null);
+          })}>Supprimer</button></div>}
         </div>)}
       </div>
       {can('contracts.edit') && <form className="attachments-form" onSubmit={submit}>

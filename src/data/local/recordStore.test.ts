@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, expect, it, vi } from "vitest";
 import { clear } from "idb-keyval";
-import { readRecords, writeRecords, mergeRecord } from "./recordStore";
+import { readRecords, writeRecords, mergeRecord, mergeDatabaseRecord } from "./recordStore";
 import type { LocalDb } from "./localDb";
 import { openLocalValue, sealLocalValue } from "./deviceVault";
 
@@ -136,4 +136,65 @@ it("converges dated edits from stale tabs in either persistence order", async ()
   expect((await readRecords())?.workspaces[0].name).toBe("Newest");
   expect((await readRecords())?.outbox).toHaveLength(2);
   expect(mergeRecord(initial.workspaces[0], newer.workspaces[0], older.workspaces[0])).toMatchObject({ name: "Newest" });
+});
+
+it.each([true, false])("keeps membership and audit entries in either persistence order: relation first %s", relationFirst => {
+  const history = { version: 2, createdAt: '2026-01-01', createdBy: { name: 'Test' }, entries: [] };
+  const base = { id: 'c', status: 'saisie', salaryNumber: 30000, modifiedAt: '2026-01-01', updatedAt: '2026-01-01', auditHistory: history };
+  const membership = { ...base, status: 'liste', updatedAt: '2026-01-02', auditHistory: { ...history, entries: [{ id: 'membership' }] } };
+  const edit = { ...base, salaryNumber: 40000, modifiedAt: '2026-01-03', updatedAt: '2026-01-03',
+    auditHistory: { ...history, entries: [{ id: 'salary' }] } };
+  const next = relationFirst ? edit : membership, current = relationFirst ? membership : edit;
+  const merged = mergeDatabaseRecord('contracts:c', base, next, current) as typeof membership;
+  expect(merged).toMatchObject({ status: 'liste', salaryNumber: 40000, modifiedAt: '2026-01-03', updatedAt: '2026-01-03' });
+  expect(merged.auditHistory.entries.map(entry => entry.id).sort()).toEqual(['membership', 'salary']);
+  expect(mergeDatabaseRecord('contracts:c', base, next, merged)).toEqual(merged);
+});
+
+it("merges independent tag additions and removals without restoring a removed tag", () => {
+  const base = { id: 'c', tags: [{ id: 'removed' }], modifiedAt: '2026-01-01', updatedAt: '2026-01-01' };
+  const removal = { ...base, tags: [], updatedAt: '2026-01-02' };
+  const addition = { ...base, tags: [...base.tags, { id: 'added' }], updatedAt: '2026-01-03' };
+  for (const [next, current] of [[removal, addition], [addition, removal]]) {
+    expect(mergeDatabaseRecord('contracts:c', base, next, current)).toMatchObject({ tags: [{ id: 'added' }] });
+  }
+});
+
+it.each([{ durationMonths: 6 }, { deletedAt: '2026-01-03' }, { status: 'final' }])(
+  "does not partially commit a list after an incompatible concurrent contract edit: %j", async change => {
+    const initial = empty();
+    initial.contracts = [{ id: 'c', workspaceId: 'w', status: 'saisie', durationMonths: 12,
+      modifiedAt: '2026-01-01', updatedAt: '2026-01-01' } as LocalDb['contracts'][number]];
+    await writeRecords(null, initial);
+    const other = structuredClone(initial);
+    Object.assign(other.contracts[0], change, { modifiedAt: '2026-01-03' });
+    await writeRecords(initial, other);
+    const next = structuredClone(initial);
+    Object.assign(next.contracts[0], { status: 'liste', updatedAt: '2026-01-02' });
+    next.contractLists.push({ id: 'list', workspaceId: 'w', durationMonths: 12, visaNumber: null,
+      sealedAt: null, version: 1, createdAt: '2026-01-02', history: [], members: [
+        { id: 'c', firstName: 'Jean', lastName: 'Louis', nif: '', position: 'Agent', salaryNumber: 30000, durationMonths: 12 }
+      ] });
+    next.outbox.push({ id: 'q', workspaceId: 'w', type: 'list.operation', payload: {}, createdAt: '2026-01-02' });
+    await expect(writeRecords(initial, next)).rejects.toThrow(/modifications concurrentes/);
+    const stored = (await readRecords())!;
+    expect(stored.contractLists).toEqual([]);
+    expect(stored.outbox).toEqual([]);
+    expect(stored.contracts[0]).toMatchObject(change);
+  }
+);
+
+it("keeps concurrent sync status conservative without accepting genuine data conflicts", () => {
+  const before = { lastSyncedAt: "1", remoteRevision: "1", lastError: null };
+  const after = { lastSyncedAt: "2", remoteRevision: "2", lastError: null };
+  const current = { lastSyncedAt: "3", remoteRevision: "3", lastError: "Pending action" };
+  expect(mergeDatabaseRecord("syncMetadata:w", before, after, current)).toEqual(current);
+  expect(mergeDatabaseRecord("syncMetadata:w", undefined, after, current)).toEqual(current);
+  expect(mergeDatabaseRecord("syncMetadata:w", before, after, undefined)).toBeUndefined();
+  expect(mergeDatabaseRecord("syncMetadata:w", before, { ...before, lastError: "Local error" },
+    { ...before, lastSyncedAt: "3" })).toEqual({ ...before, lastSyncedAt: "3", lastError: "Local error" });
+  for (const key of ["contracts:c", "applicants:a", "outbox:q", "contractLists:l"]) {
+    expect(() => mergeDatabaseRecord(key, { value: "original" }, { value: "local" }, { value: "other" }))
+      .toThrow(/modifications concurrentes/);
+  }
 });
