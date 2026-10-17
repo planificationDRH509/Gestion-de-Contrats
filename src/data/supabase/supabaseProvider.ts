@@ -1,5 +1,5 @@
 import { outboxEditTime } from "../local/outboxEditTime";
-import { localEditWins } from "../latestEdit";
+import { editTime, latestEditAt, localEditWins } from "../latestEdit";
 import { isTransientSyncFailure, syncFailureKind, syncErrorMessage } from "../local/syncFailures";
 import { queueReferenceChange } from '../local/referenceQueue';
 import { referenceWorkspace, type ReferenceEntry } from '../local/referenceOverlay';
@@ -8,7 +8,7 @@ import { cachePinnedContracts } from "../../features/contracts/pinnedContractsCa
 import { assertContractDuration } from "../../lib/contractDuration";
 import { bindContractMinister, cachedContractMinister } from "../../features/settings/ministersCache";
 import { LEGACY_MINISTER } from "../../lib/ministers";
-import { applicantDatabaseConflictMessage } from "../applicantConflict";
+import { applicantConflictMessage, applicantDatabaseConflictMessage } from "../applicantConflict";
 import { DEPARTMENTS, inferInstitutionType, normalizeInstitution } from '../../lib/institutions';
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import { OfflineConflict, mergeOfflinePatch, contractEditFields, dossierEditFields } from "./offlineConflict";
@@ -57,6 +57,10 @@ import { LocalPrintJobRepository } from "../local/localPrintJobRepository";
 import { SqliteAutocompleteRepository } from "../local/sqliteAutocompleteRepository";
 import {
   cacheApplicant,
+  captureIdentityCacheRevision,
+  hasApplicantIdentityChangedSince,
+  hasContractIdentityChangedSince,
+  recordApplicantSyncAcknowledgement,
   cacheApplicants,
   cacheContract,
   cacheContracts,
@@ -235,49 +239,58 @@ function sameQueuedContract(remote: Contract, local: Contract): boolean {
 class SupabaseApplicantRepository implements ApplicantRepository {
   async syncOffline(input: UpsertApplicantInput & { baseApplicant?: Applicant | null }, modifiedAt: string): Promise<Applicant> {
     const nif = (input.nif || input.id || "").trim();
+    const sourceNif = (input.id || nif).trim();
     if (!nif) throw new Error("NIF obligatoire pour synchroniser le postulant.");
-    const matches = await this.findManyByNifOrNinu(input.workspaceId, [nif], input.ninu ? [input.ninu] : []);
-    const existing = matches.find((applicant) => applicant.nif === nif);
-    if (matches.some((applicant) => applicant.nif !== nif)) {
-      const { data, error } = await getSupabaseClient().rpc("sync_identification_latest", {
-        p_record: buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName)),
-        p_modified_at: modifiedAt
-      });
-      if (error || !data) throw repositoryError("Impossible de synchroniser la fiche d’identification.", error);
-      return mapApplicant(data);
+    const matches = await this.findManyByNifOrNinu(input.workspaceId, [sourceNif, nif], input.ninu ? [input.ninu] : []);
+    const source = matches.find((applicant) => applicant.nif === sourceNif);
+    const target = matches.find((applicant) => applicant.nif === nif);
+    const renamed = sourceNif !== nif;
+    // A lost response after a primary-key rename must not INSERT a second person.
+    // The immutable creation metadata identifies the renamed source on replay.
+    const renamedSource = renamed && !source && target && input.baseApplicant &&
+      target.createdAt === input.baseApplicant.createdAt && target.createdBy === input.baseApplicant.createdBy &&
+      Boolean(target.modifiedAt) && editTime(target.modifiedAt) === editTime(modifiedAt)
+      ? target : undefined;
+    const existing = source ?? renamedSource ?? (!renamed ? target : undefined);
+    if (existing && !localEditWins(modifiedAt, existing)) return existing;
+    if (target && target !== existing) throw new Error(applicantConflictMessage("NIF", nif, target));
+    if (renamed && !existing && input.baseApplicant !== null) {
+      throw new Error("La fiche d’identification à modifier est introuvable. Actualisez les données avant de réessayer.");
     }
+    const otherNinu = input.ninu?.trim() && matches.find((applicant) =>
+      applicant.id !== existing?.id && applicant.ninu?.trim() === input.ninu!.trim());
+    if (otherNinu) throw new Error(applicantConflictMessage("NINU", input.ninu!.trim(), otherNinu));
     if (existing) {
-      if (!localEditWins(modifiedAt, existing)) return existing;
       const desired = buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName));
       const fields = { prenom: "firstName", nom: "lastName", sexe: "gender", ninu: "ninu", telephone: "phone", adresse: "address" } as const;
       const normalize = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
       const changes: Record<string, unknown> = {};
       for (const [column, field] of Object.entries(fields)) {
+        // Insert defaults must never become implicit deletions during an edit.
+        if (input[field] === undefined) continue;
         const next = desired[column as keyof typeof desired];
-        // Match online upsert semantics: absent optional values preserve remote data.
-        if (next === undefined) continue;
         if (normalize(next) === normalize(existing[field])) continue;
         if (input.baseApplicant && normalize(next) === normalize(input.baseApplicant[field])) continue;
         changes[column] = next;
       }
+      if (nif !== existing.nif) changes.nif = nif;
       if (existing.deletedAt) changes.deleted_at = null;
       if (Object.keys(changes).length === 0) return existing;
       let update = getSupabaseClient().from("identification")
         .update({ ...changes, modified_at: modifiedAt } as any)
-        .eq("workspace_id", input.workspaceId).eq("nif", nif);
+        .eq("workspace_id", input.workspaceId).eq("nif", existing.nif || existing.id);
       update = existing.remoteUpdatedAt === null ? update.is("updated_at", null)
         : update.eq("updated_at", existing.remoteUpdatedAt ?? existing.updatedAt);
       const { data, error } = await update.select("*").maybeSingle();
-      if (error?.code === "23505") throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
+      if (error?.code === "23505") throw applicantImportError(error);
       if (error) throw repositoryError("Impossible de synchroniser la fiche d’identification.", error);
       if (!data) throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
       return mapApplicant(data);
     }
-    // A concurrent INSERT is retried against the newly persisted edit clock.
     const { data, error } = await getSupabaseClient().from("identification")
       .insert({ ...buildApplicantInsertPayload(input, formatFirstName(input.firstName), formatLastName(input.lastName)), modified_at: modifiedAt } as any)
       .select("*").single();
-    if (error?.code === "23505") throw new Error("La fiche d’identification a changé pendant la synchronisation. Nouvelle tentative automatique.");
+    if (error?.code === "23505") throw applicantImportError(error);
     if (error || !data) throw applicantImportError(error);
     return mapApplicant(data);
   }
@@ -915,10 +928,24 @@ class SupabaseContractRepository implements ContractRepository {
   async syncOfflineUpdate(input: UpdateContractInput & { baseContract?: Contract }, modifiedAt: string): Promise<Contract> {
     const remote = await this.getById(input.id, true);
     if (!remote) throw new Error("Contrat introuvable.");
-    if (!localEditWins(modifiedAt, remote)) return remote;
-    const patch = mergeOfflinePatch<Contract>(input, input.baseContract, remote, contractEditFields, modifiedAt);
+    let effectiveModifiedAt = modifiedAt;
+    if (!localEditWins(modifiedAt, remote)) {
+      const base = input.baseContract;
+      const requestedNif = input.applicantId || input.nif;
+      const cascadedRename = Boolean(base && requestedNif && requestedNif !== (base.applicantId || base.nif) &&
+        requestedNif === (remote.applicantId || remote.nif));
+      // Renaming identification cascades to contrat and advances its server clock.
+      // Rebase only when no contractual values diverged from the reviewed base;
+      // this also preserves later queued edits after our own cascade replay.
+      const unchangedBase = base && !remote.deletedAt && base.workspaceId === remote.workspaceId &&
+        contractEditFields.every(field => cascadedRename && (field === "nif" || field === "applicantId") ||
+          JSON.stringify(base[field] ?? null) === JSON.stringify(remote[field] ?? null));
+      if (!unchangedBase) return remote;
+      effectiveModifiedAt = new Date(Math.max(Date.now(), editTime(latestEditAt(remote)) + 1)).toISOString();
+    }
+    const patch = mergeOfflinePatch<Contract>(input, input.baseContract, remote, contractEditFields, effectiveModifiedAt);
     if (!Object.keys(patch).length && !remote.deletedAt) return remote;
-    return this.update({ id: input.id, ...patch }, remote, modifiedAt);
+    return this.update({ id: input.id, ...patch }, remote, effectiveModifiedAt);
   }
 
   async update(input: UpdateContractInput, expected?: Contract, modifiedAt?: string): Promise<Contract> {
@@ -1574,6 +1601,8 @@ function syncPendingOutbox() {
       const syncedContracts: Contract[] = [];
       let syncedDossier: Dossier | undefined;
       let syncedApplicant: Applicant | undefined;
+      let syncedApplicantFromId: string | undefined;
+      let syncedApplicantSourceId: string | undefined;
       try {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
         const actor = JSON.parse(localStorage.getItem("contribution_auth") ?? "null");
@@ -1647,9 +1676,8 @@ function syncPendingOutbox() {
             syncedContract = duplicate;
           } else {
             const applicant = await applicants.syncOffline(payload, modifiedAt);
-            if (payload.id && payload.id !== applicant.id) {
-              replaceLocalApplicantId(item.workspaceId, payload.id, applicant);
-            }
+            syncedApplicantSourceId = payload.id || undefined;
+            syncedApplicantFromId = payload.nif || payload.id || undefined;
             syncedApplicant = applicant;
           }
         } else if (item.type === "applicant.delete") {
@@ -1752,7 +1780,16 @@ function syncPendingOutbox() {
         if (syncedContract) cacheContract(syncedContract);
         syncedContracts.forEach(cacheContract);
         if (syncedDossier) cacheDossier(syncedDossier);
-        if (syncedApplicant) cacheApplicant(syncedApplicant);
+        if (syncedApplicant) {
+          if (syncedApplicantSourceId && syncedApplicantSourceId !== syncedApplicant.id) {
+            replaceLocalApplicantId(item.workspaceId, syncedApplicantSourceId, syncedApplicant);
+          }
+          if (syncedApplicantFromId && syncedApplicantFromId !== syncedApplicant.id) {
+            replaceLocalApplicantId(item.workspaceId, syncedApplicantFromId, syncedApplicant);
+          }
+          cacheApplicant(syncedApplicant);
+          recordApplicantSyncAcknowledgement(syncedApplicant, [syncedApplicantSourceId, syncedApplicantFromId]);
+        }
 
         setWorkspaceSyncMetadata(item.workspaceId, {
           lastSyncedAt: new Date().toISOString(),
@@ -1938,6 +1975,7 @@ export function syncSupabaseWorkspace(
       const tagsRepo = new SupabaseTagRepository();
       const suggestionsRepo = new SupabaseAutocompleteRepository();
 
+      const identityRevision = captureIdentityCacheRevision();
       const [applicants, dossiers, tags] = await Promise.all([
         applicantsRepo.list(workspaceId),
         dossiersRepo.list(workspaceId),
@@ -1960,7 +1998,7 @@ export function syncSupabaseWorkspace(
       ]);
       const contracts = [...active.items, ...trash.items];
 
-      replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags });
+      replaceWorkspaceCache(workspaceId, { applicants, contracts, dossiers, tags }, identityRevision);
       await downloadContractLists(workspaceId);
       await flushLocalDbWrites();
       const storedIds = new Set(loadDb().contracts.filter(c => c.workspaceId === workspaceId).map(c => c.id));
@@ -2001,9 +2039,16 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.list(workspaceId);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
+      const pendingBefore = getPendingOutbox().filter(item => item.workspaceId === workspaceId && item.type.startsWith("applicant."))
+        .flatMap(item => [item.payload.id, item.payload.nif]);
       const applicants = await this.remote.list(workspaceId);
-      cacheApplicants(applicants);
-      return applicants;
+      cacheApplicants(applicants, revision);
+      const remoteIds = new Set(applicants.map(applicant => applicant.id));
+      const pendingIds = new Set([...pendingBefore, ...getPendingOutbox().filter(item => item.workspaceId === workspaceId && item.type.startsWith("applicant."))
+        .flatMap(item => [item.payload.id, item.payload.nif])]);
+      return (await this.local.list(workspaceId)).filter(applicant => remoteIds.has(applicant.id) ||
+        pendingIds.has(applicant.id) || hasApplicantIdentityChangedSince(applicant, revision));
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.list(workspaceId);
@@ -2016,8 +2061,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     if (getPendingOutbox().some(item => item.type.startsWith("applicant.") && (item.payload.id === id || item.payload.nif === id))) return this.local.getById(id);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
       const applicant = await this.remote.getById(id);
-      if (applicant) cacheApplicant(applicant);
+      if (applicant) cacheApplicant(applicant, revision);
       return this.local.getById(id);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
@@ -2034,8 +2080,9 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     if (cached || getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return cached;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
       const applicant = await this.remote.findByNifOrNinu(workspaceId, nif, ninu);
-      if (applicant) cacheApplicant(applicant);
+      if (applicant) cacheApplicant(applicant, revision);
       return this.local.findByNifOrNinu(workspaceId, nif, ninu);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
@@ -2051,9 +2098,10 @@ class OfflineFirstApplicantRepository implements ApplicantRepository {
     if (getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return this.local.findManyByNifOrNinu(workspaceId, nifs, ninus);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
       const applicants = await this.remote.findManyByNifOrNinu(workspaceId, nifs, ninus);
-      cacheApplicants(applicants);
-      return applicants;
+      cacheApplicants(applicants, revision);
+      return this.local.findManyByNifOrNinu(workspaceId, nifs, ninus);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.findManyByNifOrNinu(workspaceId, nifs, ninus);
@@ -2138,21 +2186,28 @@ class OfflineFirstContractRepository implements ContractRepository {
         await syncSupabaseWorkspace(params.workspaceId, { verify: true });
         return this.local.list(params);
       }
+      const revision = captureIdentityCacheRevision();
+      const pendingBefore = getPendingContractIds();
       const remoteResult = await this.remote.list(params);
-      cacheContracts(remoteResult.items);
+      cacheContracts(remoteResult.items, revision);
       if (params.deletionState === "deleted" && params.all && !params.query && !params.includeIds && !params.status && params.dossierId === undefined && !params.onlyMine && !params.createdByIds?.length && !params.fiscalYear && (!params.dateFilterMode || params.dateFilterMode === "all") && !params.tagId && !params.assignments?.length && !params.positions?.length && !params.durations?.length && !params.excludeIds?.length) {
         setWorkspaceSyncMetadata(params.workspaceId, { lastTrashSyncedAt: new Date().toISOString() });
         await flushLocalDbWrites();
       }
 
-      const pending = getPendingOutbox().some((item) => item.workspaceId === params.workspaceId &&
-        (item.type.startsWith("contract.") || item.type === "tag.assign" || item.type === "tag.remove"));
-      if (!pending) return remoteResult;
+      const protectedIds = new Set([...pendingBefore, ...getPendingContractIds()]);
+      const workspaceContracts = loadDb().contracts.filter(contract => contract.workspaceId === params.workspaceId);
+      workspaceContracts.filter(contract => hasContractIdentityChangedSince(contract, revision))
+        .forEach(contract => protectedIds.add(contract.id));
+      const hasProtectedContract = workspaceContracts.some(contract => protectedIds.has(contract.id)) ||
+        remoteResult.items.some(contract => protectedIds.has(contract.id));
+      // Render the version accepted by the cache, including identity-only edits.
+      const accepted = await this.local.list({ ...params, all: true, includeIds: remoteResult.items.map(contract => contract.id) });
+      if (!hasProtectedContract) return { ...remoteResult, items: accepted.items };
       if (params.all && params.query) {
-        const pendingIds = getPendingContractIds();
         const local = await this.local.list(params);
-        const byId = new Map(remoteResult.items.filter((item) => !pendingIds.has(item.id)).map((item) => [item.id, item]));
-        local.items.filter((item) => pendingIds.has(item.id)).forEach((item) => byId.set(item.id, item));
+        const byId = new Map(accepted.items.filter(item => !protectedIds.has(item.id)).map(item => [item.id, item]));
+        local.items.filter(item => protectedIds.has(item.id)).forEach(item => byId.set(item.id, item));
         const items = sortContracts([...byId.values()], params.sort);
         return { ...remoteResult, items, total: items.length };
       }
@@ -2169,8 +2224,9 @@ class OfflineFirstContractRepository implements ContractRepository {
     if (getPendingContractIds().has(id)) return this.local.getById(id);
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
       const contract = await this.remote.getById(id);
-      if (contract) cacheContract(contract);
+      if (contract) cacheContract(contract, revision);
       return this.local.getById(id);
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
@@ -2183,13 +2239,13 @@ class OfflineFirstContractRepository implements ContractRepository {
     if (cached.length === new Set(ids).size || getWorkspaceSyncMetadata(workspaceId).lastFullSyncedAt) return cached;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new TypeError("offline");
+      const revision = captureIdentityCacheRevision();
       const contracts = await this.remote.getByIds(ids, workspaceId);
-      cacheContracts(contracts);
+      cacheContracts(contracts, revision);
+      const remoteIds = new Set(contracts.map(contract => contract.id));
       const pendingIds = getPendingContractIds();
-      const pending = await this.local.getByIds(ids.filter((id) => pendingIds.has(id)), workspaceId);
-      const byId = new Map(contracts.filter((contract) => !pendingIds.has(contract.id)).map((contract) => [contract.id, contract]));
-      pending.forEach((contract) => byId.set(contract.id, contract));
-      return Array.from(byId.values());
+      return (await this.local.getByIds(ids, workspaceId)).filter(contract => remoteIds.has(contract.id) ||
+        pendingIds.has(contract.id) || hasContractIdentityChangedSince(contract, revision));
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
       return this.local.getByIds(ids, workspaceId);

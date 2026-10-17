@@ -41,7 +41,7 @@ describe("LocalApplicantRepository offline mutations", () => {
     expect(await repository.getById(created.id)).toBeNull();
     expect((await repository.getById(updated.id))?.lastName).toBe("PIERRE");
     expect((await repository.getById(updated.id))?.phone).toBe("+509 37 12 3456");
-    expect(loadDb().outbox.filter((item) => item.type === "applicant.upsert")).toHaveLength(2);
+    expect(loadDb().outbox.filter((item) => item.type === "applicant.upsert")).toHaveLength(1);
 
     await repository.softDelete(updated.id, workspaceId);
 

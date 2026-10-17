@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractFormSchema, ContractFormSchema } from "./contractSchema";
-import { useApplicantUpsert, useContract, useUpdateContract } from "./contractsApi";
+import { useContract, useUpdateContract } from "./contractsApi";
 import {
   clearUnsavedDraft,
   contractFormDraftKey,
@@ -57,7 +57,6 @@ export function ContractEditPage() {
   const isMobile = useIsMobileViewport();
   const { data, isLoading } = useContract(contractId);
   const updateContract = useUpdateContract();
-  const upsertApplicant = useApplicantUpsert();
   const createDossier = useCreateDossier();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -105,6 +104,7 @@ export function ContractEditPage() {
     handleSubmit,
     setValue,
     watch,
+    getValues,
     reset,
     setFocus,
     formState: { errors, isSubmitting, isDirty }
@@ -203,7 +203,7 @@ export function ContractEditPage() {
     if (draftHydratedRef.current && isDirty) return;
     draftHydratedRef.current = false;
     const savedDraft = loadDraftValue<ContractFormSchema>(unsavedDraftKey);
-    reset({
+    const hydratedValues = {
       gender: (data.gender as string) || "Homme",
       firstName: data.firstName || "",
       lastName: data.lastName || "",
@@ -217,7 +217,9 @@ export function ContractEditPage() {
       dossierId: data.dossierId || "",
       durationMonths: data.durationMonths || 12,
       ...savedDraft
-    });
+    };
+    const hydratedSalary = parseMoney(hydratedValues.salaryNumber || "0");
+    reset({ ...hydratedValues, salaryText: hydratedSalary ? numberToFrenchWords(hydratedSalary).toUpperCase() : "" });
     draftHydratedRef.current = true;
   }, [data, isDirty, reset, unsavedDraftKey]);
 
@@ -231,10 +233,12 @@ export function ContractEditPage() {
   }, [formValues, unsavedDraftKey, userId, workspaceId]);
 
   useEffect(() => {
-    const numeric = parseMoney(salaryNumber || "0");
+    // A reset earlier in this effect cycle may already have replaced the
+    // watched value. Derive from the current form to avoid clearing it again.
+    const numeric = parseMoney(getValues("salaryNumber") || "0");
     const computed = numeric ? numberToFrenchWords(numeric).toUpperCase() : "";
     setValue("salaryText", computed, { shouldValidate: true, shouldDirty: true });
-  }, [salaryNumber, setValue]);
+  }, [salaryNumber, getValues, setValue]);
 
   const dossierIdValue = watch("dossierId");
 
@@ -345,8 +349,8 @@ export function ContractEditPage() {
       const formattedFirstName = formatFirstName(values.firstName);
       const formattedLastName = formatLastName(values.lastName);
 
-      const applicant = await upsertApplicant.mutateAsync({
-        id: data.applicantId ?? undefined,
+      const applicant = {
+        id: data.applicantId || data.nif || undefined,
         workspaceId: user.workspaceId,
         gender: values.gender as "Homme" | "Femme",
         firstName: formattedFirstName,
@@ -354,11 +358,12 @@ export function ContractEditPage() {
         nif: values.nif?.trim() || null,
         ninu: values.ninu?.trim() || null,
         address: values.address
-      });
+      };
 
       await updateContract.mutateAsync({
         id: data.id,
-        applicantId: applicant.id,
+        workspaceId: user.workspaceId,
+        applicant,
         dossierId: values.dossierId?.trim() ? values.dossierId : null,
         status: data.status,
         gender: values.gender as "Homme" | "Femme",
@@ -453,7 +458,7 @@ export function ContractEditPage() {
               {...register("nif", {
                 onChange: (e) => {
                   setMsppModalOpen(false);
-                  formatNifInputElement(e.target);
+                  setValue("nif", formatNifInputElement(e.target), { shouldDirty: true, shouldValidate: true });
                 }
               })}
               style={errors.nif ? { borderColor: "red" } : undefined}
@@ -521,7 +526,7 @@ export function ContractEditPage() {
                 onChange: (e) => {
                   let val = e.target.value.replace(/\D/g, "");
                   if (val.length > 10) val = val.slice(0, 10);
-                  e.target.value = val;
+                  setValue("ninu", val, { shouldDirty: true, shouldValidate: true });
                   if (val.length === 10) {
                      setFocus("address");
                   }

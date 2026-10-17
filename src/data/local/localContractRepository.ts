@@ -1,6 +1,6 @@
 import { newEditTimestamp } from "../latestEdit";
 import { resolveDossierId } from "./dossierAliases";
-import { repairContractOutbox } from "./repairContractOutbox";
+import { repairContractOutboxInDb } from "./repairContractOutbox";
 import { projectInstitutionAssignment } from './referenceOverlay';
 import { sameImportContract } from "../../features/contracts/contractImportBatch";
 import { assertContractDuration } from "../../lib/contractDuration";
@@ -15,12 +15,13 @@ import {
   ContractListResult,
   ContractStatus,
   CreateContractInput,
-  UpdateContractInput
+  UpdateContractInput,
+  UpsertApplicantInput
 } from "../types";
 import { createId } from "../../lib/uuid";
 import { loadDb, saveDb, selectDb, flushLocalDbWrites, type LocalDb } from "./localDb";
-import { queueOutbox } from "./localOutbox";
-import { getPendingContractIds, removeCachedContract } from "./offlineStore";
+import { appendOutbox, notifyOutboxQueued, queueOutbox } from "./localOutbox";
+import { applyApplicantOffline, recordApplicantIdentityEdit, getPendingContractIds, removeCachedContract } from "./offlineStore";
 import { getContractFiscalYear, matchesContractDateFilter } from "../../lib/contractDateFilters";
 import { formatFirstName, formatLastName } from "../../lib/format";
 import { matchesContractSearch } from "../../lib/personSearch";
@@ -161,6 +162,65 @@ export function readCachedContractsByIds(ids: string[], workspaceId: string): Co
   );
 }
 
+function applyContractUpdate(db: LocalDb, input: UpdateContractInput, expected?: Contract, queueBase?: Contract): Contract {
+  if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
+  const contractIndex = db.contracts.findIndex((contract) => contract.id === input.id);
+  if (contractIndex === -1) {
+    throw new Error("Contrat introuvable");
+  }
+  const previous = db.contracts[contractIndex];
+  if (input.dossierId !== undefined) input = { ...input, dossierId: resolveDossierId(db, previous.workspaceId, input.dossierId) };
+  if (expected && (previous.workspaceId !== expected.workspaceId || previous.updatedAt !== expected.updatedAt || !sameImportContract(withTags(previous, db), expected))) throw new Error("Le contrat a changé. Actualisez le lot avant de réessayer.");
+  if (input.ministerId !== undefined && input.ministerId !== previous.ministerId) throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
+  const timestamp = now();
+  const nextValues: Partial<Contract> = {
+    ...input,
+    salaryText: numberToFrenchWords(input.salaryNumber ?? previous.salaryNumber),
+    firstName: input.firstName ? formatFirstName(input.firstName) : previous.firstName,
+    lastName: input.lastName ? formatLastName(input.lastName) : previous.lastName,
+    dossierId:
+      input.dossierId !== undefined
+        ? input.dossierId
+        : previous.dossierId ?? null
+  };
+  const changes = buildContractAuditChanges(queueBase ?? previous, nextValues);
+  const updated: Contract = {
+    ...previous,
+    ...input,
+    ...nextValues,
+    ministerId: previous.ministerId,
+    minister: previous.minister,
+    modifiedAt: timestamp, updatedAt: timestamp,
+    auditHistory: appendContractAuditEntry(previous.auditHistory, {
+      action: inferAuditAction(changes),
+      changes,
+      at: timestamp
+    })
+  };
+  assertNoFiscalYearDuplicate(updated, db.contracts);
+  updateListedContract(db, previous, updated);
+  db.contracts[contractIndex] = updated;
+  if (!repairContractOutboxInDb(db, updated.workspaceId, input)) appendOutbox(db, updated.workspaceId, "contract.update", { ...input, baseContract: queueBase ?? previous });
+  return updated;
+}
+
+/** Save identity and contract changes atomically, including their queued writes. */
+export async function updateContractWithApplicantOffline(input: UpdateContractInput, applicantInput: UpsertApplicantInput): Promise<Contract> {
+  const db = loadDb();
+  const previous = db.contracts.find(contract => contract.id === input.id && contract.workspaceId === applicantInput.workspaceId);
+  if (!previous || input.workspaceId && input.workspaceId !== previous.workspaceId) throw new Error("Contrat introuvable");
+  if (applicantInput.id !== (previous.applicantId || previous.nif)) throw new Error("La fiche d’identification du contrat a changé. Actualisez le contrat.");
+  const original = structuredClone(previous);
+  const applicant = applyApplicantOffline(db, applicantInput);
+  const updated = applyContractUpdate(db, { ...input, applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
+    firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address }, undefined, original);
+  saveDb(db);
+  recordApplicantIdentityEdit(applicantInput, applicant, db);
+  notifyOutboxQueued();
+  await flushLocalDbWrites();
+  return updated;
+}
+
 export class LocalContractRepository implements ContractRepository {
   async list(params: ContractListParams): Promise<ContractListResult> {
     return readCachedContracts(params);
@@ -213,45 +273,10 @@ export class LocalContractRepository implements ContractRepository {
   }
 
   async update(input: UpdateContractInput, expected?: Contract): Promise<Contract> {
-    if (input.durationMonths !== undefined) assertContractDuration(input.durationMonths);
     const db = loadDb();
-    const contractIndex = db.contracts.findIndex((contract) => contract.id === input.id);
-    if (contractIndex === -1) {
-      throw new Error("Contrat introuvable");
-    }
-    const previous = db.contracts[contractIndex];
-    if (input.dossierId !== undefined) input = { ...input, dossierId: resolveDossierId(db, previous.workspaceId, input.dossierId) };
-    if (expected && (previous.workspaceId !== expected.workspaceId || previous.updatedAt !== expected.updatedAt || !sameImportContract(withTags(previous, db), expected))) throw new Error("Le contrat a changé. Actualisez le lot avant de réessayer.");
-    if (input.ministerId !== undefined && input.ministerId !== previous.ministerId) throw new Error("Le ministre d’un contrat existant ne peut pas être remplacé.");
-    const timestamp = now();
-    const nextValues: Partial<Contract> = {
-      ...input,
-      salaryText: numberToFrenchWords(input.salaryNumber ?? previous.salaryNumber),
-      firstName: input.firstName ? formatFirstName(input.firstName) : previous.firstName,
-      lastName: input.lastName ? formatLastName(input.lastName) : previous.lastName,
-      dossierId:
-        input.dossierId !== undefined
-          ? input.dossierId
-          : previous.dossierId ?? null
-    };
-    const changes = buildContractAuditChanges(previous, nextValues);
-    const updated: Contract = {
-      ...previous,
-      ...input,
-      ...nextValues,
-      ministerId: previous.ministerId,
-      minister: previous.minister,
-      modifiedAt: timestamp, updatedAt: timestamp,
-      auditHistory: appendContractAuditEntry(previous.auditHistory, {
-        action: inferAuditAction(changes),
-        changes,
-        at: timestamp
-      })
-    };
-    updateListedContract(db, previous, updated);
-    db.contracts[contractIndex] = updated;
+    const updated = applyContractUpdate(db, input, expected);
     saveDb(db);
-    if (!repairContractOutbox(updated.workspaceId, input)) queueOutbox(updated.workspaceId, "contract.update", { ...input, baseContract: previous });
+    notifyOutboxQueued();
     await flushLocalDbWrites();
     return updated;
   }

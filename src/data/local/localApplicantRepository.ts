@@ -1,11 +1,9 @@
 import { newEditTimestamp } from "../latestEdit";
-import { applicantConflictMessage } from "../applicantConflict";
 import { ApplicantRepository } from "../repositories/ApplicantRepository";
 import { Applicant, UpsertApplicantInput } from "../types";
-import { createId } from "../../lib/uuid";
 import { flushLocalDbWrites, loadDb, saveDb, selectDb } from "./localDb";
-import { formatFirstName, formatLastName } from "../../lib/format";
 import { queueOutbox } from "./localOutbox";
+import { upsertApplicantOffline } from "./offlineStore";
 
 function now() {
   return newEditTimestamp();
@@ -76,73 +74,9 @@ export class LocalApplicantRepository implements ApplicantRepository {
   }
 
   async upsert(input: UpsertApplicantInput): Promise<Applicant> {
-    const db = loadDb();
-    const timestamp = now();
-    const existing = input.id
-      ? db.applicants.find((applicant) => applicant.id === input.id)
-      : await this.findByNifOrNinu(input.workspaceId, input.nif, input.ninu);
-
-    if (input.expectedUpdatedAt !== undefined && (!existing || existing.workspaceId !== input.workspaceId || existing.updatedAt !== input.expectedUpdatedAt)) throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
-    if (existing) {
-      const nextId = input.nif?.trim() || existing.id;
-      const duplicate = db.applicants.find(
-        (applicant) =>
-          applicant.id !== existing.id &&
-          !applicant.deletedAt &&
-          (applicant.id === nextId ||
-            Boolean(input.ninu?.trim() && applicant.ninu?.trim() === input.ninu.trim()))
-      );
-      if (duplicate) {
-        const field = duplicate.id === nextId ? "NIF" : "NINU";
-        throw new Error(applicantConflictMessage(field, field === "NIF" ? nextId : input.ninu!.trim(), duplicate));
-      }
-      const updated: Applicant = {
-        ...existing,
-        id: nextId,
-        gender: input.gender,
-        firstName: formatFirstName(input.firstName),
-        lastName: formatLastName(input.lastName),
-        nif: input.nif ?? null,
-        ninu: input.ninu ?? null,
-        phone: input.phone !== undefined ? input.phone?.trim() || null : existing.phone ?? null,
-        address: input.address,
-        modifiedAt: timestamp, updatedAt: timestamp,
-        deletedAt: null
-      };
-      const index = db.applicants.findIndex((item) => item.id === existing.id);
-      db.applicants[index] = updated;
-      if (existing.id !== nextId) {
-        db.contracts = db.contracts.map((contract) =>
-          contract.applicantId === existing.id || contract.nif === existing.id
-            ? { ...contract, applicantId: nextId, nif: nextId, modifiedAt: timestamp, updatedAt: timestamp }
-            : contract
-        );
-      }
-      saveDb(db);
-      queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
-      await flushLocalDbWrites();
-      return updated;
-    }
-
-    const created: Applicant = {
-      id: input.nif?.trim() || input.id || createId(),
-      workspaceId: input.workspaceId,
-      gender: input.gender,
-      firstName: formatFirstName(input.firstName),
-      lastName: formatLastName(input.lastName),
-      nif: input.nif ?? null,
-      ninu: input.ninu ?? null,
-      phone: input.phone?.trim() || null,
-      address: input.address,
-      createdAt: timestamp,
-      modifiedAt: timestamp, updatedAt: timestamp,
-      createdBy: input.createdBy ?? null
-    };
-    db.applicants.push(created);
-    saveDb(db);
-    queueOutbox(input.workspaceId, "applicant.upsert", input as Record<string, unknown>);
+    const applicant = upsertApplicantOffline(input);
     await flushLocalDbWrites();
-    return created;
+    return applicant;
   }
 
   async upsertMany(inputs: UpsertApplicantInput[]): Promise<Applicant[]> {

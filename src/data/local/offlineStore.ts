@@ -1,4 +1,4 @@
-import { newEditTimestamp, localEditWins } from "../latestEdit";
+import { newEditTimestamp } from "../latestEdit";
 import { applicantConflictMessage } from "../applicantConflict";
 import { numberToFrenchWords } from "../../lib/numberToFrenchWords";
 import {
@@ -13,8 +13,8 @@ import {
 } from "../types";
 import { createId } from "../../lib/uuid";
 import { formatFirstName, formatLastName } from "../../lib/format";
-import { loadDb, saveDb, selectDb } from "./localDb";
-import { queueOutbox } from "./localOutbox";
+import { loadDb, saveDb, selectDb, type LocalDb } from "./localDb";
+import { appendOutbox, notifyOutboxQueued, queueOutbox } from "./localOutbox";
 import { updateListedContract } from "./localListRepository";
 
 function now() {
@@ -37,14 +37,47 @@ export function isOfflineFailure(error: unknown): boolean {
   return cause !== undefined && cause !== error ? isOfflineFailure(cause) : false;
 }
 
+// Requests can finish after their local edit has already been acknowledged.
+// Request-local generations preserve those edits without comparing a contract's
+// clock to the separate identification clock. No request survives a reload.
+let identityCacheRevision = 0;
+const identityEditRevisions = new Map<string, number>();
+export function captureIdentityCacheRevision(): number { return identityCacheRevision; }
+const identityCacheKey = (workspaceId: string, kind: string, id: string) => `${workspaceId}:${kind}:${id}`;
+function identityChangedSince(workspaceId: string, kind: string, id: string, revision?: number) {
+  return revision !== undefined && (identityEditRevisions.get(identityCacheKey(workspaceId, kind, id)) ?? 0) > revision;
+}
+export function hasApplicantIdentityChangedSince(applicant: Pick<Applicant, "workspaceId" | "id">, revision?: number) {
+  return identityChangedSince(applicant.workspaceId, "applicant", applicant.id, revision);
+}
+export function hasContractIdentityChangedSince(contract: Pick<Contract, "workspaceId" | "id">, revision?: number) {
+  return identityChangedSince(contract.workspaceId, "contract", contract.id, revision);
+}
+export function recordApplicantIdentityEdit(input: UpsertApplicantInput, applicant: Applicant, db: LocalDb) {
+  const revision = ++identityCacheRevision;
+  const ids = new Set([input.id, input.nif, applicant.id, applicant.nif].filter((id): id is string => Boolean(id)));
+  for (const id of ids) identityEditRevisions.set(identityCacheKey(input.workspaceId, "applicant", id), revision);
+  for (const contract of db.contracts) {
+    if (contract.workspaceId === input.workspaceId &&
+      (contract.applicantId && ids.has(contract.applicantId) || contract.nif && ids.has(contract.nif))) {
+      identityEditRevisions.set(identityCacheKey(input.workspaceId, "contract", contract.id), revision);
+    }
+  }
+}
+
+/** An ACK also fences reads that began while the local edit was still pending. */
+export function recordApplicantSyncAcknowledgement(applicant: Applicant, sourceIds: Array<string | undefined>) {
+  recordApplicantIdentityEdit({ ...applicant, id: sourceIds[0], nif: sourceIds[1] ?? applicant.nif }, applicant, loadDb());
+}
+
 function hasPendingApplicant(db: ReturnType<typeof loadDb>, applicant: Applicant) {
   return db.outbox.some((item) => !item.syncedAt && item.workspaceId === applicant.workspaceId &&
     item.type.startsWith("applicant.") && (item.payload.id === applicant.id || item.payload.nif === applicant.nif));
 }
 
-export function cacheApplicant(applicant: Applicant) {
+export function cacheApplicant(applicant: Applicant, identityRevision?: number) {
   const db = loadDb();
-  if (hasPendingApplicant(db, applicant)) return;
+  if (hasPendingApplicant(db, applicant) || hasApplicantIdentityChangedSince(applicant, identityRevision)) return;
   const index = db.applicants.findIndex((item) => item.id === applicant.id);
   if (index >= 0) {
     db.applicants[index] = applicant;
@@ -59,12 +92,12 @@ export function cacheApplicant(applicant: Applicant) {
   saveDb(db, { cacheOnly: true });
 }
 
-export function cacheApplicants(applicants: Applicant[]) {
+export function cacheApplicants(applicants: Applicant[], identityRevision?: number) {
   if (applicants.length === 0) return;
   const db = loadDb();
   const byId = new Map(db.applicants.map((applicant, index) => [applicant.id, index]));
   for (const applicant of applicants) {
-    if (hasPendingApplicant(db, applicant)) continue;
+    if (hasPendingApplicant(db, applicant) || hasApplicantIdentityChangedSince(applicant, identityRevision)) continue;
     const index = byId.get(applicant.id);
     if (index === undefined) {
       db.applicants.push(applicant);
@@ -81,30 +114,54 @@ export function replaceLocalApplicantId(
   fromId: string,
   applicant: Applicant
 ) {
+  if (applicant.workspaceId !== workspaceId) throw new Error("Fiche d’identification inaccessible.");
   const db = loadDb();
-  db.applicants = db.applicants.filter(
-    (item) => !(item.workspaceId === workspaceId && item.id === fromId)
-  );
-  const existingIndex = db.applicants.findIndex((item) => item.id === applicant.id);
+  let rebased = false;
+  // An ACK for A→B may arrive while a newer A→C edit is waiting. Its source
+  // becomes B, but its intended target C and newer local identity must survive.
+  for (const pending of db.outbox) {
+    if (pending.syncedAt || pending.workspaceId !== workspaceId) continue;
+    if (pending.type === "applicant.upsert" && pending.payload.id === fromId) {
+      pending.payload.id = applicant.id;
+      const base = pending.payload.baseApplicant as Record<string, unknown> | null;
+      if (base) pending.payload.baseApplicant = { ...base, id: applicant.id, nif: applicant.nif };
+      pending.id = createId();
+      rebased = true;
+    }
+    if ((pending.type === "contract.create" || pending.type === "contract.update") &&
+      (pending.payload.applicantId === fromId || pending.payload.nif === fromId)) {
+      if (pending.payload.applicantId === fromId) pending.payload.applicantId = applicant.id;
+      if (pending.payload.nif === fromId) pending.payload.nif = applicant.nif ?? applicant.id;
+      pending.id = createId();
+      rebased = true;
+    }
+  }
+  if (hasPendingApplicant(db, applicant)) {
+    saveDb(db);
+    if (rebased) notifyOutboxQueued();
+    return;
+  }
+  db.applicants = db.applicants.filter(item => !(item.workspaceId === workspaceId && item.id === fromId));
+  const existingIndex = db.applicants.findIndex(item => item.workspaceId === workspaceId && item.id === applicant.id);
   if (existingIndex >= 0) db.applicants[existingIndex] = applicant;
   else db.applicants.push(applicant);
-  db.contracts = db.contracts.map((contract) =>
-    contract.workspaceId === workspaceId &&
+  db.contracts = db.contracts.map(contract => contract.workspaceId === workspaceId &&
     (contract.applicantId === fromId || contract.nif === fromId)
-      ? { ...contract, applicantId: applicant.id, nif: applicant.nif ?? applicant.id }
-      : contract
-  );
+    ? { ...contract, applicantId: applicant.id, nif: applicant.nif ?? applicant.id,
+      ninu: applicant.ninu, firstName: applicant.firstName, lastName: applicant.lastName,
+      gender: applicant.gender, address: applicant.address } : contract);
   saveDb(db);
+  if (rebased) notifyOutboxQueued();
 }
 
-export function cacheContracts(contracts: Contract[]) {
+export function cacheContracts(contracts: Contract[], identityRevision?: number) {
   if (contracts.length === 0) return;
   const db = loadDb();
   const byId = new Map(db.contracts.map((contract, index) => [contract.id, index]));
   const pendingIds = getPendingContractIds();
   const tagById = new Map(db.tags.map((tag, index) => [tag.id, index]));
   for (const contract of contracts) {
-    if (pendingIds.has(contract.id)) continue;
+    if (pendingIds.has(contract.id) || hasContractIdentityChangedSince(contract, identityRevision)) continue;
     const index = byId.get(contract.id);
     if (index === undefined) {
       db.contracts.push(contract);
@@ -141,8 +198,8 @@ export function cacheContracts(contracts: Contract[]) {
   saveDb(db, { cacheOnly: true });
 }
 
-export function cacheContract(contract: Contract) {
-  cacheContracts([contract]);
+export function cacheContract(contract: Contract, identityRevision?: number) {
+  cacheContracts([contract], identityRevision);
 }
 
 export function removeCachedContract(id: string, workspaceId: string) {
@@ -259,116 +316,89 @@ export function replaceLocalDossierId(workspaceId: string, fromId: string, toDos
 
 export function upsertApplicantOffline(input: UpsertApplicantInput): Applicant {
   const db = loadDb();
+  const applicant = applyApplicantOffline(db, input);
+  saveDb(db);
+  recordApplicantIdentityEdit(input, applicant, db);
+  notifyOutboxQueued();
+  return applicant;
+}
+
+/** Mutate only the supplied snapshot so related contract edits can commit together. */
+export function applyApplicantOffline(db: LocalDb, input: UpsertApplicantInput): Applicant {
   const timestamp = now();
   const normalizedNif = input.nif?.trim() || "";
-  const normalizedNinu = input.ninu?.trim() || "";
+  if (db.applicants.some(applicant => applicant.workspaceId !== input.workspaceId &&
+    (applicant.id === input.id || normalizedNif && applicant.id === normalizedNif))) {
+    throw new Error("Fiche d’identification inaccessible.");
+  }
   const existing = input.id
-    ? db.applicants.find((applicant) => applicant.id === input.id)
-    : db.applicants.find((applicant) => {
-        if (applicant.workspaceId !== input.workspaceId || applicant.deletedAt) return false;
-        return Boolean(
-          (normalizedNif && applicant.nif?.trim() === normalizedNif) ||
-            (!normalizedNif && normalizedNinu && applicant.ninu?.trim() === normalizedNinu)
-        );
-      });
-
-  // The latest association owns the NINU; keep the two NIF records separate.
-  if (normalizedNinu) {
-    for (const person of db.applicants) {
-      if (person.workspaceId !== input.workspaceId || person.id === existing?.id || person.ninu !== normalizedNinu) continue;
-      if (localEditWins(timestamp, person)) {
-        person.ninu = null;
-        person.modifiedAt = timestamp;
-        person.updatedAt = timestamp;
-        db.contracts = db.contracts.map(contract => contract.workspaceId === input.workspaceId && contract.applicantId === person.id
-          ? { ...contract, ninu: null } : contract);
-      } else input = { ...input, ninu: null };
-    }
+    ? db.applicants.find(applicant => applicant.workspaceId === input.workspaceId && applicant.id === input.id)
+    : db.applicants.find(applicant => applicant.workspaceId === input.workspaceId && !applicant.deletedAt &&
+        (normalizedNif ? applicant.nif?.trim() === normalizedNif
+          : Boolean(input.ninu?.trim() && applicant.ninu?.trim() === input.ninu.trim())));
+  if (input.expectedUpdatedAt !== undefined && (!existing || existing.updatedAt !== input.expectedUpdatedAt)) {
+    throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
   }
   const nextId = normalizedNif || existing?.id || input.id || createId();
-  const duplicate = db.applicants.find(
-    (applicant) =>
-      applicant.id !== existing?.id &&
-      applicant.workspaceId === input.workspaceId &&
-      !applicant.deletedAt &&
-      applicant.id === nextId
-  );
+  const ninu = input.ninu === undefined ? existing?.ninu ?? null : input.ninu?.trim() || null;
+  const duplicate = db.applicants.find(applicant => applicant.workspaceId === input.workspaceId &&
+    applicant.id !== existing?.id && (applicant.id === nextId ||
+      Boolean(ninu && applicant.ninu?.trim() === ninu)));
   if (duplicate) {
     const field = duplicate.id === nextId ? "NIF" : "NINU";
-    throw new Error(applicantConflictMessage(field, field === "NIF" ? nextId : input.ninu!.trim(), duplicate));
+    throw new Error(applicantConflictMessage(field, field === "NIF" ? nextId : ninu!, duplicate));
   }
-
   const applicant: Applicant = {
-    ...(existing ?? {
-      id: normalizedNif || input.id || createId(),
-      workspaceId: input.workspaceId,
-      createdAt: timestamp
-    }),
-    id: nextId,
-    gender: input.gender,
-    firstName: formatFirstName(input.firstName),
-    lastName: formatLastName(input.lastName),
-    nif: input.nif ?? null,
-    ninu: input.ninu ?? null,
-    phone: input.phone !== undefined ? input.phone?.trim() || null : existing?.phone ?? null,
-    address: input.address,
-    modifiedAt: timestamp, updatedAt: timestamp,
-    deletedAt: null,
-    createdBy: input.createdBy
+    ...(existing ?? { id: nextId, workspaceId: input.workspaceId, createdAt: timestamp }),
+    id: nextId, gender: input.gender, firstName: formatFirstName(input.firstName),
+    lastName: formatLastName(input.lastName), nif: normalizedNif || existing?.nif || null,
+    ninu, phone: input.phone !== undefined ? input.phone?.trim() || null : existing?.phone ?? null,
+    address: input.address, modifiedAt: timestamp, updatedAt: timestamp, deletedAt: null,
+    createdBy: input.createdBy ?? existing?.createdBy
   };
-
-  if (input.expectedUpdatedAt !== undefined && (!existing || existing.workspaceId !== input.workspaceId || existing.updatedAt !== input.expectedUpdatedAt)) throw new Error("La fiche d’identification a changé. Actualisez le lot avant de réessayer.");
+  const identity = { applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
+    firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address };
   if (existing) {
     db.contracts = db.contracts.map(contract => {
-      if (contract.workspaceId !== input.workspaceId || !(contract.applicantId === existing.id || (existing.nif && contract.nif === existing.nif))) return contract;
-      const next = { ...contract, applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
-        firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address };
+      if (contract.workspaceId !== input.workspaceId ||
+        !(contract.applicantId === existing.id || existing.nif && contract.nif === existing.nif)) return contract;
+      const next = { ...contract, ...identity };
       updateListedContract(db, contract, next);
       return next;
     });
   }
-
-  const index = db.applicants.findIndex((item) => item.id === applicant.id);
-  if (existing && existing.id !== applicant.id) {
-    const oldIndex = db.applicants.findIndex((item) => item.id === existing.id);
-    if (oldIndex >= 0) db.applicants.splice(oldIndex, 1);
-    db.contracts = db.contracts.map((contract) =>
-      contract.workspaceId === input.workspaceId &&
-      (contract.applicantId === existing.id || contract.nif === existing.id)
-        ? {
-            ...contract,
-            applicantId: applicant.id,
-            nif: applicant.nif,
-            modifiedAt: timestamp, updatedAt: timestamp
-          }
-        : contract
-    );
-  }
-  if (index >= 0) {
-    db.applicants[index] = applicant;
-  } else {
-    db.applicants.push(applicant);
-  }
+  const index = db.applicants.findIndex(item => item.workspaceId === input.workspaceId && item.id === existing?.id);
+  if (index >= 0) db.applicants[index] = applicant;
+  else db.applicants.push(applicant);
   let actorId: string | undefined;
   try { actorId = JSON.parse(localStorage.getItem("contribution_auth") ?? "null")?.id; } catch { /* no session */ }
-  const pendingIdentity = db.outbox.find((item) => !item.syncedAt && item.workspaceId === input.workspaceId && item.actorId === actorId &&
-    (item.correctionPending || !db.outbox.some(entry => entry.type === "list.operation" && entry.workspaceId === input.workspaceId)) &&
-    item.type === "applicant.upsert" && (item.payload.nif === input.nif || (input.id && item.payload.id === input.id)));
-  if (pendingIdentity?.correctionPending) {
-    for (const pending of db.outbox) {
-      if (pending.workspaceId !== input.workspaceId || pending.actorId !== actorId ||
+  const pendingIndex = db.outbox.findIndex(item => !item.syncedAt && item.workspaceId === input.workspaceId && item.actorId === actorId &&
+    (item.correctionPending || !db.outbox.some(entry => entry.workspaceId === input.workspaceId && entry.type === "list.operation")) &&
+    item.type === "applicant.upsert" && (item.payload.nif === applicant.nif ||
+      Boolean(input.id && (item.payload.id === input.id || item.payload.nif === input.id))));
+  const pendingIdentity = db.outbox[pendingIndex];
+  if (pendingIdentity) {
+    // When an unsent identity is replaced before its dependent contracts, those
+    // operations must reference the new key and identity projection as well.
+    const oldIds = new Set([existing?.id, pendingIdentity.payload.id, pendingIdentity.payload.nif].filter(Boolean));
+    for (const pending of db.outbox.slice(pendingIndex + 1)) {
+      if (pending.syncedAt || pending.workspaceId !== input.workspaceId || pending.actorId !== actorId ||
         !["contract.create", "contract.update"].includes(pending.type) ||
-        !(pending.payload.applicantId && pending.payload.applicantId === pendingIdentity.payload.id || pending.payload.nif && pending.payload.nif === pendingIdentity.payload.nif)) continue;
-      if (pending.type === "contract.create" && !pending.payload.baseContract) pending.payload.baseContract = { ...pending.payload };
-      Object.assign(pending.payload, { applicantId: applicant.id, nif: applicant.nif, ninu: applicant.ninu,
-        firstName: applicant.firstName, lastName: applicant.lastName, gender: applicant.gender, address: applicant.address });
+        !(oldIds.has(pending.payload.applicantId) || oldIds.has(pending.payload.nif))) continue;
+      for (const [key, value] of Object.entries(identity)) {
+        if (key in pending.payload || pending.type === "contract.create") pending.payload[key] = value;
+      }
       pending.id = createId();
-      pending.correctionPending = true;
+      pending.lastError = null;
+      pending.failureKind = undefined;
+      pending.conflict = undefined;
+      if (pendingIdentity.correctionPending) pending.correctionPending = true;
     }
   }
-  saveDb(db);
-  queueOutbox(input.workspaceId, "applicant.upsert", {
-    ...input,
+  appendOutbox(db, input.workspaceId, "applicant.upsert", {
+    ...input, id: input.id ?? existing?.id, nif: applicant.nif,
+    // Sending the retained value also protects callers with a partial identity.
+    ninu: applicant.ninu, phone: applicant.phone,
     baseApplicant: pendingIdentity ? pendingIdentity.payload.baseApplicant ?? null : existing ?? null
   });
   return applicant;
@@ -499,7 +529,8 @@ export function replaceWorkspaceCache(
     contracts: Contract[];
     dossiers: Dossier[];
     tags: Tag[];
-  }
+  },
+  identityRevision?: number
 ) {
   const db = loadDb();
   const pending = db.outbox.filter(
@@ -507,6 +538,9 @@ export function replaceWorkspaceCache(
   );
 
   const pendingApplicantIds = new Set<string>();
+  const pendingRenamedApplicantIds = new Set(pending.filter(item => item.type === "applicant.upsert" &&
+    typeof item.payload.id === "string" && typeof item.payload.nif === "string" && item.payload.id !== item.payload.nif)
+    .map(item => item.payload.id as string));
   const pendingContractIds = new Set<string>();
   const pendingDossierIds = new Set<string>();
   const pendingTagIds = new Set<string>();
@@ -545,6 +579,13 @@ export function replaceWorkspaceCache(
 
   const localApplicants = db.applicants.filter((item) => item.workspaceId === workspaceId);
   const localContracts = db.contracts.filter((item) => item.workspaceId === workspaceId);
+  // A refresh started before a completed identity edit must not resurrect its
+  // previous NIF or overwrite its contracts after the queue has been drained.
+  const guardedApplicant = (applicant: Applicant) => identityChangedSince(workspaceId, "applicant", applicant.id, identityRevision);
+  const localApplicantIds = new Set(localApplicants.map(applicant => applicant.id));
+  const obsoleteRenameSource = (applicant: Applicant) => pendingRenamedApplicantIds.has(applicant.id) && !localApplicantIds.has(applicant.id);
+  localApplicants.filter(guardedApplicant).forEach(applicant => pendingApplicantIds.add(applicant.id));
+  localContracts.filter(contract => hasContractIdentityChangedSince(contract, identityRevision)).forEach(contract => pendingContractIds.add(contract.id));
   const previousWorkspaceContractIds = new Set(localContracts.map((contract) => contract.id));
   const localDossiers = db.dossiers.filter((item) => item.workspaceId === workspaceId);
   const localTags = db.tags.filter((item) => item.workspaceId === workspaceId);
@@ -553,7 +594,7 @@ export function replaceWorkspaceCache(
 
   db.applicants = [
     ...db.applicants.filter((item) => item.workspaceId !== workspaceId),
-    ...overlayPending(snapshot.applicants, localApplicants, pendingApplicantIds)
+    ...overlayPending(snapshot.applicants.filter(applicant => !guardedApplicant(applicant) && !obsoleteRenameSource(applicant)), localApplicants, pendingApplicantIds)
   ];
   db.contracts = [
     ...db.contracts.filter((item) => item.workspaceId !== workspaceId),

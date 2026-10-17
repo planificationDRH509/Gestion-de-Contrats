@@ -17,7 +17,8 @@ export type { ContractImportProgress } from "./contractImportRun";
 import {
   readCachedContract,
   readCachedContracts,
-  readCachedContractsByIds
+  readCachedContractsByIds,
+  updateContractWithApplicantOffline
 } from "../../data/local/localContractRepository";
 import { readCachedApplicants } from "../../data/local/localApplicantRepository";
 import { flushLocalDbWrites } from "../../data/local/localDb";
@@ -223,11 +224,19 @@ export function useCreateContract() {
 }
 
 export function useUpdateContract() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     networkMode: "always",
-    mutationFn: (input: UpdateContractInput) => provider.contracts.update(input),
-    onMutate: async (updatedContract) => {
+    mutationFn: async ({ applicant, ...input }: UpdateContractInput & { applicant?: UpsertApplicantInput }) => {
+      if (!applicant) return provider.contracts.update(input);
+      const identity = { ...applicant, createdBy: user?.id };
+      if (usesSupabase) return updateContractWithApplicantOffline(input, identity);
+      const saved = await provider.applicants.upsert(identity);
+      return provider.contracts.update({ ...input, applicantId: saved.id, nif: saved.nif, ninu: saved.ninu,
+        firstName: saved.firstName, lastName: saved.lastName, gender: saved.gender, address: saved.address });
+    },
+    onMutate: async ({ applicant: _applicant, ...updatedContract }) => {
       await queryClient.cancelQueries({ queryKey: ["contracts"] });
       await queryClient.cancelQueries({ queryKey: ["contract", updatedContract.id] });
 
@@ -264,7 +273,11 @@ export function useUpdateContract() {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
-      queryClient.invalidateQueries({ queryKey: ["contract", variables.id] });
+      queryClient.invalidateQueries({ queryKey: variables.applicant ? ["contract"] : ["contract", variables.id] });
+      if (variables.applicant) {
+        queryClient.invalidateQueries({ queryKey: ["identification"] });
+        queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
+      }
       queryClient.invalidateQueries({
         queryKey: ["dossiers", "metrics", variables.workspaceId]
       });
@@ -541,6 +554,9 @@ export function useApplicantUpsert() {
       queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
       queryClient.invalidateQueries({ queryKey: ["identification"] });
       queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
     }
   });
 }

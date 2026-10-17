@@ -115,14 +115,15 @@ describe("spreadsheet editing", () => {
     expect(phone).toHaveValue("+509 37 00 00 00");
     fireEvent.change(phone, { target: { value: "+509 38 11 22 33" } });
     fireEvent.blur(phone);
-    await waitFor(() => expect(mocks.applicant).toHaveBeenCalledWith(expect.objectContaining({ phone: "+509 38 11 22 33" })));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ applicant: expect.objectContaining({ phone: "+509 38 11 22 33" }) })));
     await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+    expect(mocks.applicant).not.toHaveBeenCalled();
     fireEvent.click(screen.getAllByRole("button", { name: "Actions de la ligne" })[0]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Masquer le téléphone" }));
     const name = document.querySelector<HTMLInputElement>('[data-sheet-row="existingRow_existing"][data-sheet-col="1"]')!;
     fireEvent.change(name, { target: { value: "Jacques" } });
     fireEvent.blur(name);
-    await waitFor(() => expect(mocks.applicant).toHaveBeenLastCalledWith(expect.objectContaining({ firstName: "Jacques", phone: "+509 38 11 22 33" })));
+    await waitFor(() => expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ applicant: expect.objectContaining({ firstName: "Jacques", phone: "+509 38 11 22 33" }) })));
   });
 
   it("navigates to the visible phone before saving and keeps duration arrows working", async () => {
@@ -503,4 +504,24 @@ it("keeps a newer unsaved correction visible if an earlier save is acknowledged"
   setup();
   expect(row()).toBeVisible();
   expect(row().querySelector('[data-sheet-col="1"]')).toHaveValue("Nouvelle saisie");
+});
+
+it("retains the recovery draft while the updated projection is not yet durably saved", async () => {
+  let finishSave!: (contract: Contract) => void;
+  mocks.update.mockImplementationOnce(() => new Promise<Contract>(resolve => { finishSave = resolve; }));
+  const view = setup([existing]);
+  await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  const salary = document.querySelector<HTMLInputElement>('[data-sheet-row="existingRow_existing"][data-sheet-col="8"]')!;
+  fireEvent.change(salary, { target: { value: "50000" } });
+  fireEvent.blur(salary);
+  await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ salaryNumber: 50000 })));
+
+  // The cache announces the in-memory value before its IndexedDB write resolves.
+  const projected = { ...existing, salaryNumber: 50000 };
+  view.rerender(<ContractsSpreadsheetView workspaceId="w" userId="me" contracts={[projected]} isLoading={false} canDelete />);
+  const draftKey = "contract_unsaved_draft:spreadsheet:w:me";
+  expect(JSON.parse(localStorage.getItem(draftKey)!).value.draftById.existing.salaryNumber).toBe("50000");
+
+  await act(async () => { finishSave(projected); });
+  await waitFor(() => expect(localStorage.getItem(draftKey)).toBeNull());
 });

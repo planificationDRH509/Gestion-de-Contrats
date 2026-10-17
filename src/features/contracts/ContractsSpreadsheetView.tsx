@@ -548,6 +548,9 @@ export function ContractsSpreadsheetView({
     const nonEmptyRows = newRows.filter((row) => !isDraftEmpty(normalizeDraft(row.draft)));
     const changedDraftById = Object.fromEntries(
       Object.entries(draftById).filter(([contractId, draft]) => {
+        // The local projection changes before IndexedDB commits. Keep the
+        // recovery draft until the save promise confirms durable storage.
+        if (savingRows[contractId]) return true;
         const contract = contractsMap.get(contractId);
         if (!contract) return true;
         const base = toDraft(contract);
@@ -567,7 +570,7 @@ export function ContractsSpreadsheetView({
       stagedRowKeys: [...stagedRowKeys],
       pastedRowKeys: [...pastedRowKeys]
     });
-  }, [contractsMap, applicantPhones, draftById, newRows, stagedRowKeys, pastedRowKeys, unsavedDraftKey, userId, workspaceId, returnedContractIds]);
+  }, [contractsMap, applicantPhones, draftById, newRows, stagedRowKeys, pastedRowKeys, unsavedDraftKey, userId, workspaceId, returnedContractIds, savingRows]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -1274,8 +1277,8 @@ export function ContractsSpreadsheetView({
       const formattedFirstName = formatFirstName(editedDraft.firstName);
       const formattedLastName = formatLastName(editedDraft.lastName);
 
-      const applicant = await upsertApplicant.mutateAsync({
-        id: contract.applicantId ?? undefined,
+      const applicant = {
+        id: contract.applicantId || contract.nif || undefined,
         workspaceId,
         gender: editedDraft.gender as Gender,
         firstName: formattedFirstName,
@@ -1284,12 +1287,12 @@ export function ContractsSpreadsheetView({
         ninu: editedDraft.ninu || null,
         ...(editedDraft.phone !== undefined ? { phone: editedDraft.phone || null } : {}),
         address: editedDraft.address
-      });
+      };
 
       await updateContract.mutateAsync({
         id: contract.id,
         workspaceId,
-        applicantId: applicant.id,
+        applicant,
         dossierId: contract.dossierId ?? null,
         status: contract.status,
         gender: editedDraft.gender as Gender,

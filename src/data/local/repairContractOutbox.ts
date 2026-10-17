@@ -1,12 +1,21 @@
 import { newEditTimestamp } from "../latestEdit";
 import type { UpdateContractInput } from "../types";
 import { createId } from "../../lib/uuid";
-import { loadDb, saveDb } from "./localDb";
+import { loadDb, saveDb, type LocalDb } from "./localDb";
 import { syncFailureKind } from "./syncFailures";
 
 /** Repair the rejected operation in its original place, keeping the contract UUID. */
 export function repairContractOutbox(workspaceId: string, input: UpdateContractInput): boolean {
   const db = loadDb();
+  const repaired = repairContractOutboxInDb(db, workspaceId, input);
+  if (repaired) {
+    saveDb(db);
+    window.dispatchEvent(new CustomEvent("contribution-offline-sync", { detail: { queued: true } }));
+  }
+  return repaired;
+}
+
+export function repairContractOutboxInDb(db: LocalDb, workspaceId: string, input: UpdateContractInput): boolean {
   let actorId: string | undefined;
   try { actorId = JSON.parse(localStorage.getItem("contribution_auth") ?? "null")?.id; } catch { /* no session */ }
   const index = db.outbox.findIndex(item => !item.syncedAt && item.workspaceId === workspaceId && item.actorId === actorId &&
@@ -41,7 +50,5 @@ export function repairContractOutbox(workspaceId: string, input: UpdateContractI
     later.lastError = null;
     later.failureKind = undefined;
   }
-  saveDb(db);
-  window.dispatchEvent(new CustomEvent("contribution-offline-sync", { detail: { queued: true } }));
   return true;
 }

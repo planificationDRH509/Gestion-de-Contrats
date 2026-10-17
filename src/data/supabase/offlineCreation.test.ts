@@ -272,11 +272,11 @@ describe("offline contract creation and replay", () => {
     expect(await repo.getById(created.id)).toMatchObject({ position: input.position });
   });
 
-  it("moves a NINU to its newest local association without merging the NIF records", () => {
+  it("rejects a NINU owned by another identity without clearing its owner", () => {
     upsertApplicantOffline({ ...applicant, ninu: "12345678901234" });
-    upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" });
-    expect(loadDb().applicants.find(person => person.nif === applicant.nif)?.ninu).toBeNull();
-    expect(loadDb().applicants.find(person => person.nif === "999-999-999-9")?.ninu).toBe("12345678901234");
+    expect(() => upsertApplicantOffline({ ...applicant, nif: "999-999-999-9", ninu: "12345678901234" })).toThrow(/NINU/);
+    expect(loadDb().applicants.find(person => person.nif === applicant.nif)?.ninu).toBe("12345678901234");
+    expect(loadDb().applicants.find(person => person.nif === "999-999-999-9")).toBeUndefined();
   });
 
   it("replaces a pending identity correction before dependent contracts without overwriting the server", async () => {
@@ -932,14 +932,12 @@ it("uses a new correction clock while retaining the identity's original queue po
   expect(corrected.payload.address).toBe("Newest address");
 });
 
-it("resolves a NINU collision atomically on the server", async () => {
+it("rejects a NINU collision without moving another identity's NINU", async () => {
   upsertApplicantOffline({ ...applicant, ninu: "1234567890" });
-  const pending = getPendingOutbox()[0];
   mock.from.mockReturnValue(reply([{ nif: "999-999-999-9", workspace_id: input.workspaceId, ninu: "1234567890", prenom: "Autre", nom: "Personne", modified_at: "2026-01-01" }]));
-  mock.rpc.mockResolvedValue({ data: { nif: applicant.nif, workspace_id: input.workspaceId, ninu: "1234567890", prenom: "Jean", nom: "LOUIS", modified_at: pending.modifiedAt }, error: null });
   await syncSupabaseOutbox();
-  expect(mock.rpc).toHaveBeenCalledWith("sync_identification_latest", expect.objectContaining({ p_modified_at: pending.modifiedAt }));
-  expect(getPendingOutbox()).toEqual([]);
+  expect(mock.rpc).not.toHaveBeenCalled();
+  expect(getPendingOutbox()).toEqual([expect.objectContaining({ lastError: expect.stringContaining("NINU 1234567890 appartient déjà") })]);
 });
 
 it("preserves a newer offline identity even if an older remote edit was uploaded afterwards", async () => {

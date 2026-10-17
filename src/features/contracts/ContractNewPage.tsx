@@ -817,7 +817,7 @@ export function ContractNewPage() {
                     lastProcessedNif.current = null;
                     setNifAlert({ type: null, message: "" });
                     setFieldsLockedByNif(false);
-                    formatNifInputElement(e.target);
+                    setValue("nif", formatNifInputElement(e.target), { shouldDirty: true, shouldValidate: true });
                   }
                 })}
                 style={errors.nif ? { borderColor: "red" } : undefined}
@@ -903,7 +903,7 @@ export function ContractNewPage() {
                 onChange: (e) => {
                   let val = e.target.value.replace(/\D/g, "");
                   if (val.length > 10) val = val.slice(0, 10);
-                  e.target.value = val;
+                  setValue("ninu", val, { shouldDirty: true, shouldValidate: true });
                   if (val.length === 10) {
                     focusFormField("address");
                   }

@@ -116,6 +116,10 @@ export function useCreateIdentification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
       queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
     },
   });
 }
@@ -143,6 +147,10 @@ export function useUpdateIdentification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["identification"] });
       queryClient.invalidateQueries({ queryKey: ["contract-lists"] });
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["contract"] });
+      queryClient.invalidateQueries({ queryKey: ["nif-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["contract-import", "identity-matches"] });
     },
   });
 }
